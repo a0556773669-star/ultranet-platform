@@ -1,0 +1,21 @@
+{
+    "name": "ultranet-platform",
+    "private": true,
+    "version": "0.1.0",
+    "scripts": {
+          "dev": "turbo run dev",
+          "build": "turbo run build",
+          "lint": "turbo run lint",
+          "typecheck": "turbo run typecheck"
+    },
+    "devDependencies": {
+          "turbo": "^2.1.0",
+          "typescript": "^5.5.0",
+          "eslint": "^9.9.0",
+          "prettier": "^3.3.0"
+    },
+    "packageManager": "pnpm@9.7.0",
+    "engines": {
+          "node": ">=20"
+    }
+}
