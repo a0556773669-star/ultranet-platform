@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import { Providers } from "./providers";
 
 export const metadata: Metadata = {
     title: "אולטרנט | מערכת ניהול",
@@ -13,6 +14,6 @@ export default function RootLayout({
 }) {
     return (
           <html lang="he" dir="rtl">
-            <body>{children}</body></html>
+            <body><Providers>{children}</Providers></body></html>
         );
 }
