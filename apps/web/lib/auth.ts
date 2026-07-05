@@ -82,12 +82,17 @@ export const authOptions: NextAuthOptions = {
     callbacks: {
           async signIn({ user, account }) {
                   if (account?.provider !== "google") return true;
+            try {
                   const db = getAdminFirestore();
                   const snap = await db
                     .collection("n_users")
                     .where("email", "==", (user.email ?? "").toLowerCase())
                     .get();
                   return !snap.empty;
+            } catch (err) {
+                console.error("[google signIn] failed:", err instanceof Error ? err.stack : err);
+                return false;
+            }
           },
           async jwt({ token, user }) {
                   if (user) {
