@@ -88,7 +88,14 @@ export const authOptions: NextAuthOptions = {
                     .collection("n_users")
                     .where("email", "==", (user.email ?? "").toLowerCase())
                     .get();
-                  return !snap.empty;
+                  if (snap.empty) return false;
+                  const doc = snap.docs[0];
+                  if (!doc) return false;
+                  const data = doc.data() as { role?: string; branchId?: string; name?: string };
+                  (user as { role?: string; branchId?: string; name?: string | null }).role = data.role;
+                  (user as { role?: string; branchId?: string; name?: string | null }).branchId = data.branchId;
+                  if (data.name) (user as { name?: string | null }).name = data.name;
+                  return true;
             } catch (err) {
                 console.error("[google signIn] failed:", err instanceof Error ? err.stack : err);
                 return false;
