@@ -10,19 +10,19 @@ function getSecret(): string {
 export function signDeviceToken(email: string): string {
   const normalized = email.trim().toLowerCase();
   const expires = Date.now() + MAX_AGE_MS;
-  const payload = normalized + "." + expires;
+  const payload = normalized + "|" + expires;
   const sig = crypto.createHmac("sha256", getSecret()).update(payload).digest("hex");
-  return payload + "." + sig;
+  return payload + "|" + sig;
 }
 
 export function verifyDeviceToken(token: string | undefined | null, email: string): boolean {
   if (!token) return false;
-  const parts = token.split(".");
+  const parts = token.split("|");
   if (parts.length !== 3) return false;
   const tokenEmail = parts[0];
   const expiresStr = parts[1];
   const sig = parts[2];
-  const payload = tokenEmail + "." + expiresStr;
+  const payload = tokenEmail + "|" + expiresStr;
   const expectedSig = crypto.createHmac("sha256", getSecret()).update(payload).digest("hex");
   if (sig !== expectedSig) return false;
   const expires = Number(expiresStr);
