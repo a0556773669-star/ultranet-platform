@@ -33,6 +33,43 @@ export const authOptions: NextAuthOptions = {
                             } as unknown as { id: string; name: string; email: string };
                   },
           }),
+          CredentialsProvider({
+            id: "email-code",
+            name: "קוד באימייל",
+            credentials: {
+              email: { label: "אימייל", type: "email" },
+              code: { label: "קוד", type: "text" },
+            },
+            async authorize(credentials) {
+              if (!credentials?.email || !credentials?.code) return null;
+              const email = credentials.email.trim().toLowerCase();
+              const db = getAdminFirestore();
+
+              const approvedSnap = await db.collection("n_approved_emails").doc(email).get();
+              if (!approvedSnap.exists) return null;
+              const approved = approvedSnap.data() as {
+                role?: string;
+                branchId?: string;
+                name?: string;
+              };
+
+              const codeSnap = await db.collection("n_login_codes").doc(email).get();
+              if (!codeSnap.exists) return null;
+              const codeData = codeSnap.data() as { code: string; expiresAt: { toMillis(): number } };
+              if (codeData.code !== credentials.code.trim()) return null;
+              if (codeData.expiresAt.toMillis() < Date.now()) return null;
+
+              await db.collection("n_login_codes").doc(email).delete();
+
+              return {
+                id: email,
+                name: approved.name ?? email,
+                email,
+                role: approved.role,
+                branchId: approved.branchId,
+              } as unknown as { id: string; name: string; email: string };
+            },
+          }),
           ...(process.env.GOOGLE_CLIENT_ID
                     ? [
                                 GoogleProvider({

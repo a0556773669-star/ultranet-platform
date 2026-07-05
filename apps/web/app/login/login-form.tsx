@@ -4,6 +4,7 @@ import { useState } from "react";
 import type { ChangeEvent, FormEvent } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { EmailCodeForm } from "./email-code-form";
 
 export function LoginForm() {
   const router = useRouter();
@@ -84,8 +85,15 @@ export function LoginForm() {
         onClick={() => signIn("google", { callbackUrl })}
         className="w-full rounded-lg border border-gray-300 px-4 py-2 font-medium text-gray-700 transition hover:bg-gray-50"
       >
-        התחברות עם Google
-      </button>
+        התחברות עם       </button>
+
+      <div className="my-6 flex items-center gap-3">
+        <div className="h-px flex-1 bg-gray-200" />
+        <span className="text-xs text-gray-400">או</span>
+        <div className="h-px flex-1 bg-gray-200" />
+      </div>
+
+      <EmailCodeForm />
     </div>
   );
 }
