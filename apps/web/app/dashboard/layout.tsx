@@ -10,6 +10,7 @@ import { DEVICE_TRUST_COOKIE, verifyDeviceToken } from "@/lib/device-trust";
 const NAV_ITEMS = [
   { href: "/dashboard", label: "סקירה כללית" },
   { href: "/dashboard/branches", label: "סניפים" },
+  { href: "/dashboard/inventory", label: "מלאי" },
   { href: "/dashboard/rentals", label: "השכרות" },
   { href: "/dashboard/coworking", label: "קוורקינג" },
   { href: "/dashboard/accounting", label: "הנהלת חשבונות" },
