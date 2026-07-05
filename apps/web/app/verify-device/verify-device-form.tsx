@@ -67,7 +67,7 @@ export function VerifyDeviceForm() {
         setError(result.message);
         return;
       }
-      router.push("/dashboard");
+      window.location.href = "/dashboard";
     });
   }
 
