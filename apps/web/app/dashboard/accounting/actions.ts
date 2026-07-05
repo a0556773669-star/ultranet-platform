@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { getAdminFirestore } from "@/lib/firebase-admin";
+import { chargeViaRoute } from "@/lib/collection-charge";
 import type {
   AccountingIncome,
   AccountingExpense,
@@ -93,4 +94,21 @@ export async function deleteCollectionRouteAction(id: string) {
   await requireOwner();
   await getAdminFirestore().collection("n_collection_routes").doc(id).delete();
   revalidatePath("/dashboard/accounting/routes");
+}
+
+export async function manualChargeAction(formData: FormData) {
+  await requireOwner();
+  const routeId = String(formData.get("routeId") ?? "").trim();
+  const amount = Number(formData.get("amount") ?? 0);
+  const desc = String(formData.get("desc") ?? "").trim() || "גביה ידנית";
+  const business = String(formData.get("business") ?? "general") as AccountingIncome["business"];
+  const date = String(formData.get("date") ?? "").trim() || new Date().toISOString().slice(0, 10);
+  if (!routeId || !amount) {
+    throw new Error("נא לבחור מסלול גביה ולהזין סכום");
+  }
+  const result = await chargeViaRoute({ routeId, amount, desc, business, date });
+  if (!result.ok) {
+    throw new Error(result.message);
+  }
+  revalidatePath("/dashboard/accounting");
 }

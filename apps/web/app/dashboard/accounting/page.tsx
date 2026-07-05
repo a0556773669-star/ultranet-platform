@@ -3,8 +3,8 @@ import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { getAdminFirestore } from "@/lib/firebase-admin";
-import type { AccountingIncome, AccountingExpense } from "@ultranet/shared-types";
-import { createIncomeAction, createExpenseAction } from "./actions";
+import type { AccountingIncome, AccountingExpense, CollectionRoute } from "@ultranet/shared-types";
+import { createIncomeAction, createExpenseAction, manualChargeAction } from "./actions";
 
 const BUSINESS_LABELS: Record<string, string> = {
   computers: "מחשבים",
@@ -21,9 +21,10 @@ export default async function AccountingPage() {
   }
 
   const db = getAdminFirestore();
-  const [incomeSnap, expenseSnap] = await Promise.all([
+  const [incomeSnap, expenseSnap, routesSnap] = await Promise.all([
     db.collection("n_ah_income").get(),
     db.collection("n_ah_expenses").get(),
+    db.collection("n_collection_routes").get(),
   ]);
   const income = incomeSnap.docs
     .map((d) => ({ id: d.id, ...(d.data() as Omit<AccountingIncome, "id">) }) as AccountingIncome)
@@ -31,6 +32,10 @@ export default async function AccountingPage() {
   const expenses = expenseSnap.docs
     .map((d) => ({ id: d.id, ...(d.data() as Omit<AccountingExpense, "id">) }) as AccountingExpense)
     .sort((a, b) => b.date.localeCompare(a.date));
+
+  const routes = routesSnap.docs.map(
+    (d) => ({ id: d.id, ...(d.data() as Omit<CollectionRoute, "id">) }) as CollectionRoute,
+  );
 
   const totalIncome = income.reduce((sum, i) => sum + i.amount, 0);
   const totalExpenses = expenses.reduce((sum, e) => sum + e.amount, 0);
@@ -100,6 +105,28 @@ export default async function AccountingPage() {
           </select>
           <button type="submit" className="self-start rounded-lg bg-gray-700 px-5 py-2 text-sm font-medium text-white transition hover:bg-gray-800">
             הוספה
+          </button>
+        </form>
+
+        <form action={manualChargeAction} className="flex flex-col gap-3 rounded-xl border border-gray-200 bg-white p-5">
+          <h2 className="font-semibold text-gray-700">גביה ידנית ממסלול</h2>
+          <select name="routeId" required className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-teal focus:outline-none">
+            <option value="">בחר מסלול גביה</option>
+            {routes.map((r) => (
+              <option key={r.id} value={r.id}>{r.name}</option>
+            ))}
+          </select>
+          <input type="date" name="date" required className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-teal focus:outline-none" />
+          <input name="desc" placeholder="תיאור" className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-teal focus:outline-none" />
+          <input type="number" name="amount" min={0} placeholder="סכום לחיוב" required className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-teal focus:outline-none" />
+          <select name="business" className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-teal focus:outline-none">
+            <option value="general">כללי</option>
+            <option value="computers">מחשבים</option>
+            <option value="rentals">השכרות</option>
+            <option value="coworking">קוורקינג</option>
+          </select>
+          <button type="submit" className="self-start rounded-lg bg-gray-700 px-5 py-2 text-sm font-medium text-white transition hover:bg-gray-800">
+            חייב עכשיו
           </button>
         </form>
       </div>

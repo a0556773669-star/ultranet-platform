@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { getAdminFirestore } from "@/lib/firebase-admin";
+import { chargeViaRoute } from "@/lib/collection-charge";
 import type { RentalClient, Laptop, Rental } from "@ultranet/shared-types";
 
 async function requireSession() {
@@ -70,6 +71,7 @@ export async function createRentalAction(formData: FormData) {
   const startDate = String(formData.get("startDate") ?? "");
   const endDate = String(formData.get("endDate") ?? "");
   const calcPrice = Number(formData.get("calcPrice") ?? 0);
+  const collectionRouteId = String(formData.get("collectionRouteId") ?? "").trim() || undefined;
   if (!branchId || !clientId || !itemId || !startDate || !endDate) {
     throw new Error("יש למלא את כל השדות");
   }
@@ -81,6 +83,7 @@ export async function createRentalAction(formData: FormData) {
     startDate,
     endDate,
     calcPrice,
+    collectionRouteId,
     status: "active",
     paid: false,
   };
@@ -91,9 +94,25 @@ export async function createRentalAction(formData: FormData) {
 
 export async function markReturnedAction(id: string) {
   await requireSession();
-  await getAdminFirestore()
-    .collection("n_rentals")
-    .doc(id)
-    .set({ status: "returned", returnDate: new Date().toISOString().slice(0, 10) }, { merge: true });
+  const db = getAdminFirestore();
+  const rentalRef = db.collection("n_rentals").doc(id);
+  const snap = await rentalRef.get();
+  const rental = snap.data() as Omit<Rental, "id"> | undefined;
+  await rentalRef.set(
+    { status: "returned", returnDate: new Date().toISOString().slice(0, 10) },
+    { merge: true },
+  );
+  if (rental && rental.collectionRouteId && !rental.paid) {
+    const amount = rental.finalPrice ?? rental.calcPrice;
+    const result = await chargeViaRoute({
+      routeId: rental.collectionRouteId,
+      amount,
+      desc: "גביית השכרה #" + id,
+      business: "rentals",
+    });
+    if (result.ok) {
+      await rentalRef.set({ paid: true, paymentMethod: "route" }, { merge: true });
+    }
+  }
   revalidatePath("/dashboard/rentals");
 }

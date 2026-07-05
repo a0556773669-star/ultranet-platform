@@ -2,18 +2,19 @@
 
 import { useMemo, useState } from "react";
 import type { ChangeEvent } from "react";
-import type { Branch, RentalClient, Laptop } from "@ultranet/shared-types";
+import type { Branch, RentalClient, Laptop, CollectionRoute } from "@ultranet/shared-types";
 import { createRentalAction } from "../actions";
 
 type Props = {
   branches: Branch[];
   clients: RentalClient[];
   laptops: Laptop[];
+  routes: CollectionRoute[];
   defaultBranchId: string;
   lockBranch: boolean;
 };
 
-export function NewRentalForm({ branches, clients, laptops, defaultBranchId, lockBranch }: Props) {
+export function NewRentalForm({ branches, clients, laptops, routes, defaultBranchId, lockBranch }: Props) {
   const [branchId, setBranchId] = useState(defaultBranchId);
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
@@ -121,6 +122,18 @@ export function NewRentalForm({ branches, clients, laptops, defaultBranchId, loc
           readOnly
           className="w-full rounded-lg border border-gray-300 bg-gray-50 px-3 py-2"
         />
+      </div>
+
+      <div>
+        <label className="mb-1 block text-sm font-medium text-gray-700">מסלול גביה (לא חובה)</label>
+        <select name="collectionRouteId" className="w-full rounded-lg border border-gray-300 px-3 py-2">
+          <option value="">ללא (תשלום ידני)</option>
+          {routes.map((r) => (
+            <option key={r.id} value={r.id}>
+              {r.name}
+            </option>
+          ))}
+        </select>
       </div>
 
       <button
