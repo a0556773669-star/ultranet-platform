@@ -11,6 +11,7 @@ const NAV_ITEMS = [
   { href: "/dashboard", label: "סקירה כללית" },
   { href: "/dashboard/branches", label: "סניפים" },
   { href: "/dashboard/inventory", label: "מלאי" },
+  { href: "/dashboard/tasks", label: "משימות" },
   { href: "/dashboard/rentals", label: "השכרות" },
   { href: "/dashboard/coworking", label: "קוורקינג" },
   { href: "/dashboard/accounting", label: "הנהלת חשבונות" },
