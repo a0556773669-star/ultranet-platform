@@ -14,6 +14,7 @@ const NAV_ITEMS = [
   { href: "/dashboard/tasks", label: "משימות" },
   { href: "/dashboard/tickets", label: "פנייות ותקלות" },
   { href: "/dashboard/news", label: "עדכונים" },
+  { href: "/dashboard/orders", label: "הזמנות ודוחות" },
   { href: "/dashboard/rentals", label: "השכרות" },
   { href: "/dashboard/coworking", label: "קוורקינג" },
   { href: "/dashboard/accounting", label: "הנהלת חשבונות" },
