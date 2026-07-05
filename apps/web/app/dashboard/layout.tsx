@@ -1,23 +1,23 @@
 import type { ReactNode } from "react";
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { SignOutButton } from "./sign-out-button";
 import { cookies } from "next/headers";
 import { DEVICE_TRUST_COOKIE, verifyDeviceToken } from "@/lib/device-trust";
+import { TopNav } from "./top-nav";
 
 const NAV_ITEMS = [
-  { href: "/dashboard", label: "סקירה כללית" },
-  { href: "/dashboard/branches", label: "סניפים" },
-  { href: "/dashboard/inventory", label: "מלאי" },
-  { href: "/dashboard/tasks", label: "משימות" },
-  { href: "/dashboard/tickets", label: "פנייות ותקלות" },
-  { href: "/dashboard/news", label: "עדכונים" },
-  { href: "/dashboard/orders", label: "הזמנות ודוחות" },
-  { href: "/dashboard/rentals", label: "השכרות" },
-  { href: "/dashboard/coworking", label: "קוורקינג" },
-  { href: "/dashboard/accounting", label: "הנהלת חשבונות" },
+  { href: "/dashboard", label: "בית", icon: "🏠" },
+  { href: "/dashboard/branches", label: "סניפים", icon: "🏢" },
+  { href: "/dashboard/inventory", label: "מלאי", icon: "📦" },
+  { href: "/dashboard/tasks", label: "משימות", icon: "✅" },
+  { href: "/dashboard/tickets", label: "פניות", icon: "🔧" },
+  { href: "/dashboard/news", label: "עדכונים", icon: "📢" },
+  { href: "/dashboard/orders", label: "הזמנות", icon: "🛒" },
+  { href: "/dashboard/rentals", label: "השכרות", icon: "💻" },
+  { href: "/dashboard/coworking", label: "קוורקינג", icon: "🪩" },
+  { href: "/dashboard/accounting", label: "הנה\"ח", icon: "📊" },
 ];
 
 export default async function DashboardLayout({ children }: { children: ReactNode }) {
@@ -35,36 +35,21 @@ export default async function DashboardLayout({ children }: { children: ReactNod
   const name = session.user?.name ?? session.user?.email ?? "";
 
   return (
-    <div className="flex min-h-screen bg-gray-50">
-      <aside className="hidden w-60 flex-col border-l border-gray-200 bg-white p-4 md:flex">
-        <div className="mb-6 text-xl font-bold text-teal-dark">אולטרנט</div>
-        <nav className="flex flex-1 flex-col gap-1">
-          {NAV_ITEMS.map((item) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              className="rounded-lg px-3 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-100"
-            >
-              {item.label}
-            </Link>
-          ))}
-        </nav>
-      </aside>
-
-      <div className="flex flex-1 flex-col">
-        <header className="flex items-center justify-between border-b border-gray-200 bg-white px-6 py-3">
-          <div className="text-sm text-gray-500">
-            שלום, <span className="font-medium text-gray-800">{name}</span>
-            {role && (
-              <span className="mr-2 rounded-full border border-teal px-2 py-0.5 text-xs text-teal-dark">
-                {role}
-              </span>
-            )}
-          </div>
+    <div className="min-h-screen bg-page">
+      <header className="flex flex-wrap items-center justify-between gap-3 border-b border-card-border bg-white px-6 py-3">
+        <div className="text-xl font-bold text-teal">אולטרנט</div>
+        <TopNav items={NAV_ITEMS} />
+        <div className="flex items-center gap-2 text-sm text-muted">
+          <span>
+            שלום, <span className="font-medium text-ink">{name}</span>
+          </span>
+          {role && (
+            <span className="rounded-full border border-teal px-2 py-0.5 text-xs text-teal-dark">{role}</span>
+          )}
           <SignOutButton />
-        </header>
-        <main className="flex-1 p-6">{children}</main>
-      </div>
+        </div>
+      </header>
+      <main className="p-6">{children}</main>
     </div>
   );
 }
