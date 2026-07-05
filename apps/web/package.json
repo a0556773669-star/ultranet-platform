@@ -10,6 +10,7 @@
             "typecheck": "tsc --noEmit"
       },
       "dependencies": {
+            "@emailjs/browser": "^4.4.1",
             "@ultranet/shared-types": "workspace:*",
             "firebase-admin": "^12.3.1",
             "next": "^14.2.5",

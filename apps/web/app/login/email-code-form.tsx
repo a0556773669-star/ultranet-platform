@@ -3,7 +3,13 @@
 import { useState, useTransition, type ChangeEvent } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
+import emailjs from "@emailjs/browser";
 import { requestLoginCodeAction } from "./actions";
+
+// אותו שירות EmailJS שכבר בשימוש במערכת המלאי (אולטרה-נט) - מפתח ציבורי, לא סודי.
+const EMAILJS_SERVICE_ID = "service_u6n37yv";
+const EMAILJS_TEMPLATE_ID = "template_ca93kim";
+const EMAILJS_PUBLIC_KEY = "mEEvU9GRHAcCvVCxi";
 
 export function EmailCodeForm() {
   const [step, setStep] = useState<"email" | "code">("email");
@@ -21,11 +27,35 @@ export function EmailCodeForm() {
       const fd = new FormData();
       fd.set("email", email);
       const result = await requestLoginCodeAction(undefined, fd);
-      if (result.ok) {
-        setMessage(result.message);
-        setStep("code");
-      } else {
+      if (!result.ok) {
         setError(result.message);
+        return;
+      }
+
+      try {
+        const now = new Date();
+        await emailjs.send(
+          EMAILJS_SERVICE_ID,
+          EMAILJS_TEMPLATE_ID,
+          {
+            to_email: email,
+            name: result.name,
+            title: "קוד התחברות למערכת אולטרנט",
+            branch: "-",
+            message: `קוד ההתחברות שלך הוא: ${result.code}\nהקוד בתוקף ל-10 דקות.`,
+            date:
+              now.toLocaleDateString("he-IL") +
+              " " +
+              now.toLocaleTimeString("he-IL", { hour: "2-digit", minute: "2-digit" }),
+            email,
+          },
+          { publicKey: EMAILJS_PUBLIC_KEY }
+        );
+        setMessage("קוד נשלח לאימייל שלך");
+        setStep("code");
+      } catch (err) {
+        console.error("שליחת מייל הקוד נכשלה", err);
+        setError("שליחת המייל נכשלה. נסה שוב.");
       }
     });
   }
