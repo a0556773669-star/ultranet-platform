@@ -13,6 +13,7 @@ const NAV_ITEMS = [
   { href: "/dashboard/inventory", label: "מלאי" },
   { href: "/dashboard/tasks", label: "משימות" },
   { href: "/dashboard/tickets", label: "פנייות ותקלות" },
+  { href: "/dashboard/news", label: "עדכונים" },
   { href: "/dashboard/rentals", label: "השכרות" },
   { href: "/dashboard/coworking", label: "קוורקינג" },
   { href: "/dashboard/accounting", label: "הנהלת חשבונות" },
