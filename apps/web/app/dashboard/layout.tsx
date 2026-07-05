@@ -4,6 +4,8 @@ import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { SignOutButton } from "./sign-out-button";
+import { cookies } from "next/headers";
+import { DEVICE_TRUST_COOKIE, verifyDeviceToken } from "@/lib/device-trust";
 
 const NAV_ITEMS = [
   { href: "/dashboard", label: "סקירה כללית" },
@@ -17,6 +19,11 @@ export default async function DashboardLayout({ children }: { children: ReactNod
   const session = await getServerSession(authOptions);
   if (!session) {
     redirect("/login");
+  }
+  const email = session.user?.email ?? "";
+  const deviceToken = cookies().get(DEVICE_TRUST_COOKIE)?.value;
+  if (!verifyDeviceToken(deviceToken, email)) {
+    redirect("/verify-device");
   }
 
   const role = session.user?.role ?? "";
