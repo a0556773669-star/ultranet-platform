@@ -5,9 +5,9 @@ import { getAdminFirestore } from "@/lib/firebase-admin";
 import type { Branch } from "@ultranet/shared-types";
 
 const TYPE_LABELS: Record<string, string> = {
-  computers: "מחשבים",
-  rentals: "השכרות",
-  coworking: "קוורקינג",
+  computers: "🖥️ מחשבים",
+  rentals: "💻 השכרות",
+  coworking: "🏢 קוורקינג",
 };
 
 async function listBranches(): Promise<Branch[]> {
@@ -28,12 +28,15 @@ export default async function BranchesPage() {
 
   return (
     <div>
-      <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-gray-800">סניפים</h1>
+      <div className="mb-4 flex items-center justify-between">
+        <div>
+          <h1 className="text-[21px] font-extrabold text-ink">🏢 ניהול סניפים</h1>
+          <p className="mt-1 text-[13px] text-muted">סניפים, שותפים, הוצאות ומטלות</p>
+        </div>
         {role === "owner" && (
           <Link
             href="/dashboard/branches/new"
-            className="rounded-lg bg-teal px-4 py-2 text-sm font-medium text-white transition hover:bg-teal-dark"
+            className="rounded-lg bg-gradient-to-br from-teal to-teal-light px-4 py-2 text-sm font-bold text-white shadow-primary transition hover:opacity-90"
           >
             + סניף חדש
           </Link>
@@ -41,35 +44,43 @@ export default async function BranchesPage() {
       </div>
 
       {branches.length === 0 ? (
-        <p className="text-sm text-gray-500">אין סניפים להצגה.</p>
+        <div className="rounded-card border border-dashed border-card-border bg-white py-14 text-center text-muted">
+          <div className="mb-3 text-4xl">🏢</div>
+          אין סניפים עדיין
+        </div>
       ) : (
-        <div className="overflow-hidden rounded-xl border border-gray-200 bg-white">
-          <table className="w-full text-right text-sm">
-            <thead className="bg-gray-50 text-gray-500">
-              <tr>
-                <th className="px-4 py-3 font-medium">שם</th>
-                <th className="px-4 py-3 font-medium">סוג</th>
-                <th className="px-4 py-3 font-medium">מיקום</th>
-                <th className="px-4 py-3 font-medium">שותף</th>
-                <th className="px-4 py-3 font-medium">אחוז שלי</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {branches.map((b) => (
-                <tr key={b.id} className="hover:bg-gray-50">
-                  <td className="px-4 py-3">
-                    <Link href={`/dashboard/branches/${b.id}`} className="font-medium text-teal-dark hover:underline">
-                      {b.name}
-                    </Link>
-                  </td>
-                  <td className="px-4 py-3 text-gray-600">{TYPE_LABELS[b.branchType] ?? b.branchType}</td>
-                  <td className="px-4 py-3 text-gray-600">{b.location ?? "-"}</td>
-                  <td className="px-4 py-3 text-gray-600">{b.isMine ? "בבעלות מלאה" : (b.partnerName ?? "-")}</td>
-                  <td className="px-4 py-3 text-gray-600">{b.isMine ? "100%" : `${b.myPct}%`}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div className="space-y-2.5">
+          {branches.map((b) => (
+            <Link
+              key={b.id}
+              href={`/dashboard/branches/${b.id}`}
+              className="block rounded-card border border-card-border bg-white p-4 shadow-card transition hover:border-teal"
+            >
+              <div className="mb-1.5 flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2 text-[15px] font-extrabold text-ink">
+                  🏢 {b.name}
+                  {b.isMine ? (
+                    <span className="rounded-full bg-teal-bg px-2.5 py-1 text-[11px] font-bold text-teal-dark">שלי בלבד</span>
+                  ) : (
+                    <span className="rounded-full bg-[#f3e8fd] px-2.5 py-1 text-[11px] font-bold text-purple">
+                      שותפות עם {b.partnerName ?? "שותף"}
+                    </span>
+                  )}
+                </div>
+                <span className="rounded-full bg-[#e8f4fd] px-2.5 py-1 text-[11px] font-bold text-[#2980b9]">
+                  {TYPE_LABELS[b.branchType] ?? b.branchType}
+                </span>
+              </div>
+              <div className="flex flex-wrap gap-2.5 text-xs text-muted">
+                <span>📍 {b.location ?? "—"}</span>
+                {!b.isMine && (
+                  <span>
+                    🤝 חלוקה: {b.myPct}% / {b.partnerPct}%
+                  </span>
+                )}
+              </div>
+            </Link>
+          ))}
         </div>
       )}
     </div>
