@@ -8,9 +8,9 @@ import { DeleteButton } from "../delete-button";
 import { updateBranchAction, deleteBranchAction } from "../actions";
 
 const TYPE_LABELS: Record<string, string> = {
-  computers: "מחשבים",
-  rentals: "השכרות",
-  coworking: "קוורקינג",
+  computers: "🖥️ מחשבים",
+  rentals: "💻 השכרות",
+  coworking: "🏢 קוורקינג",
 };
 
 export default async function BranchDetailPage({ params }: { params: { id: string } }) {
@@ -32,21 +32,21 @@ export default async function BranchDetailPage({ params }: { params: { id: strin
   if (role !== "owner") {
     return (
       <div className="max-w-2xl">
-        <h1 className="mb-6 text-2xl font-bold text-gray-800">{branch.name}</h1>
-        <dl className="grid grid-cols-2 gap-4 rounded-xl border border-gray-200 bg-white p-6 text-sm">
-          <div>
-            <dt className="text-gray-500">סוג</dt>
-            <dd className="font-medium text-gray-800">{TYPE_LABELS[branch.branchType] ?? branch.branchType}</dd>
+        <h1 className="mb-4 text-[21px] font-extrabold text-ink">🏢 {branch.name}</h1>
+        <div className="grid grid-cols-3 gap-2.5">
+          <div className="rounded-card border border-card-border bg-white p-4 shadow-card">
+            <p className="text-[11px] font-bold uppercase tracking-wide text-muted">סוג</p>
+            <p className="mt-1 font-bold text-ink">{TYPE_LABELS[branch.branchType] ?? branch.branchType}</p>
           </div>
-          <div>
-            <dt className="text-gray-500">מיקום</dt>
-            <dd className="font-medium text-gray-800">{branch.location ?? "-"}</dd>
+          <div className="rounded-card border border-card-border bg-white p-4 shadow-card">
+            <p className="text-[11px] font-bold uppercase tracking-wide text-muted">מיקום</p>
+            <p className="mt-1 font-bold text-ink">{branch.location ?? "-"}</p>
           </div>
-          <div>
-            <dt className="text-gray-500">האחוז שלי</dt>
-            <dd className="font-medium text-gray-800">{branch.isMine ? "100%" : `${branch.myPct}%`}</dd>
+          <div className="rounded-card border border-card-border bg-white p-4 shadow-card">
+            <p className="text-[11px] font-bold uppercase tracking-wide text-muted">האחוז שלי</p>
+            <p className="mt-1 font-bold text-teal-dark">{branch.isMine ? "100%" : `${branch.myPct}%`}</p>
           </div>
-        </dl>
+        </div>
       </div>
     );
   }
@@ -56,8 +56,8 @@ export default async function BranchDetailPage({ params }: { params: { id: strin
 
   return (
     <div className="max-w-2xl">
-      <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-gray-800">{branch.name}</h1>
+      <div className="mb-4 flex items-center justify-between">
+        <h1 className="text-[21px] font-extrabold text-ink">🏢 {branch.name}</h1>
         <form action={boundDelete}>
           <DeleteButton />
         </form>

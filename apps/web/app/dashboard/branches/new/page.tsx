@@ -12,7 +12,7 @@ export default async function NewBranchPage() {
 
   return (
     <div className="max-w-2xl">
-      <h1 className="mb-6 text-2xl font-bold text-gray-800">סניף חדש</h1>
+      <h1 className="mb-4 text-[21px] font-extrabold text-ink">🏢 סניף חדש</h1>
       <BranchForm action={createBranchAction} />
     </div>
   );
