@@ -30,6 +30,7 @@ export const authOptions: NextAuthOptions = {
                                         email: user.email,
                                         role: user.role,
                                         branchId: user.branchId,
+                                        perms: user.perms ?? null,
                             } as unknown as { id: string; name: string; email: string };
                   },
           }),
@@ -61,12 +62,16 @@ export const authOptions: NextAuthOptions = {
 
               await db.collection("n_login_codes").doc(email).delete();
 
+              const usersSnap = await db.collection("n_users").where("email", "==", email).get();
+              const perms = (usersSnap.docs[0]?.data() as { perms?: unknown } | undefined)?.perms ?? null;
+
               return {
                 id: email,
                 name: approved.name ?? email,
                 email,
                 role: approved.role,
                 branchId: approved.branchId,
+                perms,
               } as unknown as { id: string; name: string; email: string };
             },
           }),
@@ -91,9 +96,10 @@ export const authOptions: NextAuthOptions = {
                   if (snap.empty) return false;
                   const doc = snap.docs[0];
                   if (!doc) return false;
-                  const data = doc.data() as { role?: string; branchId?: string; name?: string };
-                  (user as { role?: string; branchId?: string; name?: string | null }).role = data.role;
-                  (user as { role?: string; branchId?: string; name?: string | null }).branchId = data.branchId;
+                  const data = doc.data() as { role?: string; branchId?: string; name?: string; perms?: unknown };
+                  (user as { role?: string; branchId?: string; name?: string | null; perms?: unknown }).role = data.role;
+                  (user as { role?: string; branchId?: string; name?: string | null; perms?: unknown }).branchId = data.branchId;
+                  (user as { role?: string; branchId?: string; name?: string | null; perms?: unknown }).perms = data.perms ?? null;
                   if (data.name) (user as { name?: string | null }).name = data.name;
                   return true;
             } catch (err) {
@@ -105,6 +111,7 @@ export const authOptions: NextAuthOptions = {
                   if (user) {
                             token.role = (user as { role?: string }).role;
                             token.branchId = (user as { branchId?: string }).branchId;
+                            token.perms = (user as { perms?: unknown }).perms ?? null;
                   }
                   return token;
           },
@@ -112,6 +119,7 @@ export const authOptions: NextAuthOptions = {
                   if (session.user) {
                             (session.user as { role?: unknown }).role = token.role;
                             (session.user as { branchId?: unknown }).branchId = token.branchId;
+                            (session.user as { perms?: unknown }).perms = token.perms ?? null;
                   }
                   return session;
           },
