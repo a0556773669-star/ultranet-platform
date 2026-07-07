@@ -13,6 +13,9 @@ const PROVIDER_LABELS: Record<string, string> = {
   cardcom: "Cardcom",
 };
 
+const FIELD = "w-full rounded-lg border border-card-border bg-[#f4f6f9] px-3 py-2 text-sm focus:border-teal focus:bg-white focus:outline-none";
+const LABEL = "mb-1 block text-xs font-semibold text-muted";
+
 export default async function CollectionRoutesPage() {
   const session = await getServerSession(authOptions);
   if (session?.user?.role !== "owner") {
@@ -33,26 +36,19 @@ export default async function CollectionRoutesPage() {
 
   return (
     <div>
-      <h1 className="mb-6 text-2xl font-bold text-gray-800">מסלולי גביה</h1>
+      <h1 className="mb-4 text-[21px] font-extrabold text-ink">💳 מסלולי גביה</h1>
 
       <form
         action={createCollectionRouteAction}
-        className="mb-8 grid grid-cols-1 gap-4 rounded-xl border border-gray-200 bg-white p-6 sm:grid-cols-2"
+        className="mb-6 grid grid-cols-1 gap-4 rounded-card border border-card-border bg-white p-5 shadow-card sm:grid-cols-2"
       >
         <div>
-          <label className="mb-1 block text-sm font-medium text-gray-700">שם המסלול</label>
-          <input
-            name="name"
-            required
-            className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-teal focus:outline-none"
-          />
+          <label className={LABEL}>שם המסלול</label>
+          <input name="name" required className={FIELD} />
         </div>
         <div>
-          <label className="mb-1 block text-sm font-medium text-gray-700">ספק</label>
-          <select
-            name="provider"
-            className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-teal focus:outline-none"
-          >
+          <label className={LABEL}>ספק</label>
+          <select name="provider" className={FIELD}>
             <option value="manual">ידני</option>
             <option value="nedarim_plus">Nedarim Plus</option>
             <option value="tranzila">Tranzila</option>
@@ -60,101 +56,65 @@ export default async function CollectionRoutesPage() {
           </select>
         </div>
         <div>
-          <label className="mb-1 block text-sm font-medium text-gray-700">מזהה סניף (ריק למסלול של סניף ספציפי)</label>
-          <input
-            name="branchScope"
-            placeholder="ריק לכל הסניפים"
-            className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-teal focus:outline-none"
-          />
+          <label className={LABEL}>מזהה סניף (ריק למסלול של כל הסניפים)</label>
+          <input name="branchScope" placeholder="ריק לכל הסניפים" className={FIELD} />
         </div>
         <div>
-          <label className="mb-1 block text-sm font-medium text-gray-700">מטבע</label>
-          <input
-            name="currency"
-            defaultValue="ILS"
-            dir="ltr"
-            className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-teal focus:outline-none"
-          />
+          <label className={LABEL}>מטבע</label>
+          <input name="currency" defaultValue="ILS" dir="ltr" className={FIELD} />
         </div>
         <div>
-          <label className="mb-1 block text-sm font-medium text-gray-700">אחוז עמלה (%)</label>
-          <input
-            name="feePct"
-            type="number"
-            min={0}
-            step="0.01"
-            className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-teal focus:outline-none"
-          />
+          <label className={LABEL}>אחוז עמלה (%)</label>
+          <input name="feePct" type="number" min={0} step="0.01" className={FIELD} />
         </div>
         <div>
-          <label className="mb-1 block text-sm font-medium text-gray-700">עמלה קבועה לעסקה</label>
-          <input
-            name="feeFixed"
-            type="number"
-            min={0}
-            step="0.01"
-            className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-teal focus:outline-none"
-          />
+          <label className={LABEL}>עמלה קבועה לעסקה</label>
+          <input name="feeFixed" type="number" min={0} step="0.01" className={FIELD} />
         </div>
         <div>
-          <label className="mb-1 block text-sm font-medium text-gray-700">יעד הפקדה</label>
-          <select
-            name="depositsTo"
-            className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-teal focus:outline-none"
-          >
+          <label className={LABEL}>יעד הפקדה</label>
+          <select name="depositsTo" className={FIELD}>
             <option value="owner">בעלים</option>
             <option value="branch">סניף</option>
           </select>
         </div>
         <div>
-          <label className="mb-1 block text-sm font-medium text-gray-700">API Key (לא חובה)</label>
-          <input
-            name="apiKey"
-            type="password"
-            dir="ltr"
-            autoComplete="off"
-            className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-teal focus:outline-none"
-          />
+          <label className={LABEL}>API Key (לא חובה)</label>
+          <input name="apiKey" type="password" dir="ltr" autoComplete="off" className={FIELD} />
         </div>
         <div>
-          <label className="mb-1 block text-sm font-medium text-gray-700">API Secret (לא חובה)</label>
-          <input
-            name="apiSecret"
-            type="password"
-            dir="ltr"
-            autoComplete="off"
-            className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-teal focus:outline-none"
-          />
+          <label className={LABEL}>API Secret (לא חובה)</label>
+          <input name="apiSecret" type="password" dir="ltr" autoComplete="off" className={FIELD} />
         </div>
         <button
           type="submit"
-          className="self-start rounded-lg bg-teal px-6 py-2 font-medium text-white transition hover:bg-teal-dark sm:col-span-2"
+          className="self-start rounded-[10px] bg-gradient-to-br from-teal to-teal-light px-6 py-2 text-sm font-bold text-white shadow-primary transition hover:opacity-90 sm:col-span-2"
         >
           הוספת מסלול
         </button>
       </form>
 
-      <div className="overflow-hidden rounded-xl border border-gray-200 bg-white">
-        <table className="w-full text-right text-sm">
-          <thead className="bg-gray-50 text-gray-500">
+      <div className="overflow-hidden rounded-card border border-card-border bg-white shadow-card">
+        <table className="w-full text-[13px]">
+          <thead className="bg-[#f4f6f9] text-muted">
             <tr>
-              <th className="px-4 py-3 font-medium">שם</th>
-              <th className="px-4 py-3 font-medium">ספק</th>
-              <th className="px-4 py-3 font-medium">היקף</th>
-              <th className="px-4 py-3 font-medium">יעד הפקדה</th>
-              <th className="px-4 py-3 font-medium"></th>
+              <th className="px-[11px] py-[9px] text-right text-[11px] font-bold uppercase tracking-wide">שם</th>
+              <th className="px-[11px] py-[9px] text-right text-[11px] font-bold uppercase tracking-wide">ספק</th>
+              <th className="px-[11px] py-[9px] text-right text-[11px] font-bold uppercase tracking-wide">היקף</th>
+              <th className="px-[11px] py-[9px] text-right text-[11px] font-bold uppercase tracking-wide">יעד הפקדה</th>
+              <th className="px-[11px] py-[9px]"></th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-100">
+          <tbody>
             {routes.map((r) => {
               const bound = deleteCollectionRouteAction.bind(null, r.id);
               return (
-                <tr key={r.id}>
-                  <td className="px-4 py-3 font-medium text-gray-800">{r.name}</td>
-                  <td className="px-4 py-3 text-gray-600">{PROVIDER_LABELS[r.provider] ?? r.provider}</td>
-                  <td className="px-4 py-3 text-gray-600">{branchName(r.branchScope)}</td>
-                  <td className="px-4 py-3 text-gray-600">{r.depositsTo === "owner" ? "בעלים" : "סניף"}</td>
-                  <td className="px-4 py-3">
+                <tr key={r.id} className="border-t border-card-border transition hover:bg-[#f8fafc]">
+                  <td className="px-[11px] py-2 font-semibold text-ink">{r.name}</td>
+                  <td className="px-[11px] py-2 text-muted">{PROVIDER_LABELS[r.provider] ?? r.provider}</td>
+                  <td className="px-[11px] py-2 text-muted">{branchName(r.branchScope)}</td>
+                  <td className="px-[11px] py-2 text-muted">{r.depositsTo === "owner" ? "בעלים" : "סניף"}</td>
+                  <td className="px-[11px] py-2">
                     <form action={bound}>
                       <DeleteRouteButton />
                     </form>

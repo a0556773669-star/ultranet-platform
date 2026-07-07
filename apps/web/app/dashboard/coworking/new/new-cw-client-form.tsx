@@ -12,6 +12,9 @@ type Props = {
   lockBranch: boolean;
 };
 
+const FIELD = "w-full rounded-lg border border-card-border bg-[#f4f6f9] px-3 py-2 text-sm focus:border-teal focus:bg-white focus:outline-none disabled:opacity-60";
+const LABEL = "mb-1 block text-xs font-semibold text-muted";
+
 export function NewCoworkingClientForm({ branches, stations, defaultBranchId, lockBranch }: Props) {
   const [branchId, setBranchId] = useState(defaultBranchId);
   const branchStations = stations.filter((s) => s.branchId === branchId);
@@ -19,16 +22,16 @@ export function NewCoworkingClientForm({ branches, stations, defaultBranchId, lo
   return (
     <form
       action={createCoworkingClientAction}
-      className="flex flex-col gap-4 rounded-xl border border-gray-200 bg-white p-6"
+      className="flex flex-col gap-4 rounded-card border border-card-border bg-white p-5 shadow-card"
     >
       <div>
-        <label className="mb-1 block text-sm font-medium text-gray-700">סניף</label>
+        <label className={LABEL}>סניף</label>
         <select
           name="branchId"
           value={branchId}
           disabled={lockBranch}
           onChange={(e: ChangeEvent<HTMLSelectElement>) => setBranchId(e.target.value)}
-          className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-teal focus:outline-none disabled:bg-gray-100"
+          className={FIELD}
         >
           {branches.map((b) => (
             <option key={b.id} value={b.id}>
@@ -39,30 +42,18 @@ export function NewCoworkingClientForm({ branches, stations, defaultBranchId, lo
       </div>
 
       <div>
-        <label className="mb-1 block text-sm font-medium text-gray-700">שם לקוח</label>
-        <input
-          name="name"
-          required
-          className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-teal focus:outline-none"
-        />
+        <label className={LABEL}>שם לקוח</label>
+        <input name="name" required className={FIELD} />
       </div>
 
       <div>
-        <label className="mb-1 block text-sm font-medium text-gray-700">טלפון</label>
-        <input
-          name="phone"
-          dir="ltr"
-          className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-teal focus:outline-none"
-        />
+        <label className={LABEL}>טלפון</label>
+        <input name="phone" dir="ltr" className={FIELD} />
       </div>
 
       <div>
-        <label className="mb-1 block text-sm font-medium text-gray-700">עמדה</label>
-        <select
-          name="stationId"
-          required
-          className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-teal focus:outline-none"
-        >
+        <label className={LABEL}>עמדה</label>
+        <select name="stationId" required className={FIELD}>
           <option value="">בחירת עמדה</option>
           {branchStations.map((s) => (
             <option key={s.id} value={s.id}>
@@ -74,39 +65,23 @@ export function NewCoworkingClientForm({ branches, stations, defaultBranchId, lo
 
       <div className="grid grid-cols-2 gap-4">
         <div>
-          <label className="mb-1 block text-sm font-medium text-gray-700">תאריך התחלה</label>
-          <input
-            type="date"
-            name="startDate"
-            required
-            className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-teal focus:outline-none"
-          />
+          <label className={LABEL}>תאריך התחלה</label>
+          <input type="date" name="startDate" required className={FIELD} />
         </div>
         <div>
-          <label className="mb-1 block text-sm font-medium text-gray-700">יום חיוב בחודש</label>
-          <input
-            type="number"
-            name="payDay"
-            min={1}
-            max={31}
-            className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-teal focus:outline-none"
-          />
+          <label className={LABEL}>יום חיוב בחודש</label>
+          <input type="number" name="payDay" min={1} max={31} className={FIELD} />
         </div>
       </div>
 
       <div>
-        <label className="mb-1 block text-sm font-medium text-gray-700">מחיר מותאם אישי (לא חובה)</label>
-        <input
-          type="number"
-          name="customPrice"
-          min={0}
-          className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-teal focus:outline-none"
-        />
+        <label className={LABEL}>מחיר מותאם אישי (לא חובה)</label>
+        <input type="number" name="customPrice" min={0} className={FIELD} />
       </div>
 
       <button
         type="submit"
-        className="mt-2 self-start rounded-lg bg-teal px-6 py-2 font-medium text-white transition hover:bg-teal-dark"
+        className="mt-1 self-start rounded-[10px] bg-gradient-to-br from-teal to-teal-light px-6 py-2 text-sm font-bold text-white shadow-primary transition hover:opacity-90"
       >
         הוספת לקוח
       </button>
