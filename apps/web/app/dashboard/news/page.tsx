@@ -5,7 +5,7 @@ export default async function NewsPage() {
   const snapshot = await getNewsSnapshotAction();
   return (
     <div>
-      <h1 className="mb-4 text-2xl font-bold text-gray-800">📢 עדכונים</h1>
+      <h1 className="mb-4 text-[21px] font-extrabold text-ink">📢 עדכונים</h1>
       <NewsClient snapshot={snapshot} />
     </div>
   );

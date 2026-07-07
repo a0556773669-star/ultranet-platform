@@ -5,7 +5,7 @@ export default async function OrdersPage() {
   const snapshot = await getOrdersSnapshotAction();
   return (
     <div>
-      <h1 className="mb-4 text-2xl font-bold text-gray-800">📦 הזמנות ודוחות</h1>
+      <h1 className="mb-4 text-[21px] font-extrabold text-ink">📦 הזמנות ודוחות</h1>
       <OrdersClient snapshot={snapshot} />
     </div>
   );
