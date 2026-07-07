@@ -58,31 +58,36 @@ export function InventoryClient({ snapshot }: { snapshot: InventorySnapshot }) {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-3">
-        <label className="text-sm text-gray-700">סניף:</label>
-        <select
-          value={branch}
-          onChange={(e) => setBranch(e.target.value as BranchKey)}
-          className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm"
-        >
-          {branches.map((b) => (
-            <option key={b.key} value={b.key}>{b.label}</option>
-          ))}
-        </select>
+      <div className="flex flex-wrap items-center gap-2">
+        {branches.map((b) => (
+          <button
+            key={b.key}
+            type="button"
+            onClick={() => setBranch(b.key as BranchKey)}
+            className={
+              branch === b.key
+                ? "rounded-lg bg-teal px-3.5 py-1.5 text-sm font-semibold text-white transition"
+                : "rounded-lg border border-card-border bg-white px-3.5 py-1.5 text-sm font-semibold text-muted transition hover:border-teal hover:text-teal"
+            }
+          >
+            {b.label}
+          </button>
+        ))}
         {lowStockCount > 0 && (
-          <span className="rounded-full bg-red-100 px-3 py-1 text-xs font-medium text-red-700">
+          <span className="rounded-full bg-red-50 px-3 py-1 text-xs font-bold text-red-600">
             ⚠️ {lowStockCount} פריטים במלאי נמוך
           </span>
         )}
       </div>
 
-      <div className="overflow-hidden rounded-xl border border-gray-200 bg-white">
-        <table className="w-full text-sm">
-          <thead className="bg-gray-50 text-gray-600">
+      <div className="overflow-hidden rounded-card border border-card-border bg-white shadow-card">
+        <table className="w-full text-[13px]">
+          <thead className="bg-[#f4f6f9] text-muted">
             <tr>
-              <th className="px-4 py-2 text-right font-medium">מוצר</th>
-              <th className="px-4 py-2 text-right font-medium">כמות</th>
-              <th className="px-4 py-2 text-right font-medium">מינימום</th>
+              <th className="px-[11px] py-[9px] text-right text-[11px] font-bold uppercase tracking-wide">מוצר</th>
+              <th className="px-[11px] py-[9px] text-right text-[11px] font-bold uppercase tracking-wide">כמות</th>
+              <th className="px-[11px] py-[9px] text-right text-[11px] font-bold uppercase tracking-wide">מינימום</th>
+              <th className="px-[11px] py-[9px] text-right text-[11px] font-bold uppercase tracking-wide">סטטוס</th>
             </tr>
           </thead>
           <tbody>
@@ -91,25 +96,39 @@ export function InventoryClient({ snapshot }: { snapshot: InventorySnapshot }) {
               const low = item.qty < item.min;
               const zero = item.qty === 0;
               return (
-                <tr key={p} className={zero ? "bg-red-50" : low ? "bg-yellow-50" : ""}>
-                  <td className="border-t border-gray-100 px-4 py-2">{p}</td>
-                  <td className="border-t border-gray-100 px-4 py-2">
+                <tr
+                  key={p}
+                  className={`border-t border-card-border transition hover:bg-[#f8fafc] ${
+                    zero ? "bg-red-50" : low ? "bg-amber-50" : ""
+                  }`}
+                >
+                  <td className="px-[11px] py-2 font-semibold text-ink">{p}</td>
+                  <td className="px-[11px] py-2">
                     <input
                       type="number"
                       min={0}
                       value={item.qty}
                       onChange={(e) => updateField(p, "qty", Number(e.target.value) || 0)}
-                      className="w-20 rounded border border-gray-300 px-2 py-1 text-center"
+                      className="w-20 rounded-lg border border-card-border bg-[#f4f6f9] px-2 py-1 text-center focus:border-teal focus:bg-white focus:outline-none"
                     />
                   </td>
-                  <td className="border-t border-gray-100 px-4 py-2">
+                  <td className="px-[11px] py-2">
                     <input
                       type="number"
                       min={0}
                       value={item.min}
                       onChange={(e) => updateField(p, "min", Number(e.target.value) || 0)}
-                      className="w-20 rounded border border-gray-300 px-2 py-1 text-center"
+                      className="w-20 rounded-lg border border-card-border bg-[#f4f6f9] px-2 py-1 text-center focus:border-teal focus:bg-white focus:outline-none"
                     />
+                  </td>
+                  <td className="px-[11px] py-2">
+                    {zero ? (
+                      <span className="rounded-full bg-red-50 px-2.5 py-1 text-[11px] font-bold text-red-600">חסר</span>
+                    ) : low ? (
+                      <span className="rounded-full bg-amber-50 px-2.5 py-1 text-[11px] font-bold text-amber-600">נמוך</span>
+                    ) : (
+                      <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-bold text-emerald-600">תקין</span>
+                    )}
                   </td>
                 </tr>
               );
@@ -118,14 +137,14 @@ export function InventoryClient({ snapshot }: { snapshot: InventorySnapshot }) {
         </table>
       </div>
 
-      {message && <p className="text-sm text-green-600">{message}</p>}
-      {error && <p className="text-sm text-red-600">{error}</p>}
+      {message && <p className="text-sm font-medium text-emerald-600">{message}</p>}
+      {error && <p className="text-sm font-medium text-red-600">{error}</p>}
 
       <button
         type="button"
         onClick={handleSave}
         disabled={isPending}
-        className="rounded-lg bg-teal px-5 py-2 font-medium text-white transition hover:bg-teal-dark disabled:opacity-60"
+        className="rounded-[10px] bg-gradient-to-br from-teal to-teal-light px-5 py-2.5 text-[14px] font-bold text-white shadow-primary transition hover:opacity-90 disabled:opacity-60"
       >
         {isPending ? "שומר..." : "💾 שמור עדכון"}
       </button>
