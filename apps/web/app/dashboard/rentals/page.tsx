@@ -42,51 +42,70 @@ export default async function RentalsPage() {
 
   return (
     <div>
-      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-bold text-gray-800">השכרות</h1>
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h1 className="text-[21px] font-extrabold text-ink">💻 השכרת ניידים</h1>
+          <p className="mt-1 text-[13px] text-muted">השכרות, לקוחות ומצאי</p>
+        </div>
         <div className="flex gap-2">
-          <Link href="/dashboard/rentals/clients" className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50">
-            לקוחות
+          <Link
+            href="/dashboard/rentals/clients"
+            className="rounded-lg border border-card-border bg-white px-4 py-2 text-sm font-semibold text-ink transition hover:border-teal hover:text-teal"
+          >
+            👥 לקוחות
           </Link>
-          <Link href="/dashboard/rentals/laptops" className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50">
-            מלאי מחשבים
+          <Link
+            href="/dashboard/rentals/laptops"
+            className="rounded-lg border border-card-border bg-white px-4 py-2 text-sm font-semibold text-ink transition hover:border-teal hover:text-teal"
+          >
+            💻 מלאי מחשבים
           </Link>
-          <Link href="/dashboard/rentals/new" className="rounded-lg bg-teal px-4 py-2 text-sm font-medium text-white transition hover:bg-teal-dark">
+          <Link
+            href="/dashboard/rentals/new"
+            className="rounded-lg bg-gradient-to-br from-teal to-teal-light px-4 py-2 text-sm font-bold text-white shadow-primary transition hover:opacity-90"
+          >
             + השכרה חדשה
           </Link>
         </div>
       </div>
 
-      <h2 className="mb-3 text-lg font-semibold text-gray-700">השכרות פעילות</h2>
+      <div className="mb-3 flex items-center justify-between text-xs font-bold uppercase tracking-wide text-muted">
+        <span>📋 השכרות פעילות</span>
+        <span className="rounded-full bg-[#f4f6f9] px-2.5 py-0.5 text-ink normal-case">{active.length}</span>
+      </div>
       {active.length === 0 ? (
-        <p className="mb-8 text-sm text-gray-500">אין השכרות פעילות כרגע.</p>
+        <div className="mb-8 rounded-card border border-dashed border-card-border bg-white py-10 text-center text-sm text-muted">
+          אין השכרות פעילות כרגע
+        </div>
       ) : (
-        <div className="mb-8 overflow-hidden rounded-xl border border-gray-200 bg-white">
-          <table className="w-full text-right text-sm">
-            <thead className="bg-gray-50 text-gray-500">
+        <div className="mb-8 overflow-hidden rounded-card border border-card-border bg-white shadow-card">
+          <table className="w-full text-[13px]">
+            <thead className="bg-[#f4f6f9] text-muted">
               <tr>
-                <th className="px-4 py-3 font-medium">לקוח</th>
-                <th className="px-4 py-3 font-medium">מחשב</th>
-                {role === "owner" && <th className="px-4 py-3 font-medium">סניף</th>}
-                <th className="px-4 py-3 font-medium">התחלה</th>
-                <th className="px-4 py-3 font-medium">סיום</th>
-                <th className="px-4 py-3 font-medium">מחיר</th>
-                <th className="px-4 py-3 font-medium"></th>
+                <th className="px-[11px] py-[9px] text-right text-[11px] font-bold uppercase tracking-wide">לקוח</th>
+                <th className="px-[11px] py-[9px] text-right text-[11px] font-bold uppercase tracking-wide">מחשב</th>
+                {role === "owner" && (
+                  <th className="px-[11px] py-[9px] text-right text-[11px] font-bold uppercase tracking-wide">סניף</th>
+                )}
+                <th className="px-[11px] py-[9px] text-right text-[11px] font-bold uppercase tracking-wide">התחלה</th>
+                <th className="px-[11px] py-[9px] text-right text-[11px] font-bold uppercase tracking-wide">סיום</th>
+                <th className="px-[11px] py-[9px] text-right text-[11px] font-bold uppercase tracking-wide">מחיר</th>
+                <th className="px-[11px] py-[9px]"></th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100">
+            <tbody>
               {active.map((r) => {
                 const info = rowInfo(r);
                 const bound = markReturnedAction.bind(null, r.id);
                 return (
-                  <tr key={r.id} className="hover:bg-gray-50">
-                    <td className="px-4 py-3 font-medium text-gray-800">{info.clientName}</td>
-                    <td className="px-4 py-3 text-gray-600">{info.laptopName}</td>
-                    {role === "owner" && <td className="px-4 py-3 text-gray-600">{info.branchName}</td>}
-                    <td className="px-4 py-3 text-gray-600">{r.startDate}</td>
-                    <td className="px-4 py-3 text-gray-600">{r.endDate}</td>
-                    <td className="px-4 py-3 text-gray-600">{r.calcPrice} ₪</td>
-                    <td className="px-4 py-3">
+                  <tr key={r.id} className="border-t border-card-border transition hover:bg-[#f8fafc]">
+                    <td className="px-[11px] py-2 font-semibold text-ink">{info.clientName}</td>
+                    <td className="px-[11px] py-2 text-muted">{info.laptopName}</td>
+                    {role === "owner" && <td className="px-[11px] py-2 text-muted">{info.branchName}</td>}
+                    <td className="px-[11px] py-2 text-muted">{r.startDate}</td>
+                    <td className="px-[11px] py-2 text-muted">{r.endDate}</td>
+                    <td className="px-[11px] py-2 font-semibold text-ink">{r.calcPrice} ₪</td>
+                    <td className="px-[11px] py-2">
                       <form action={bound}>
                         <ReturnButton />
                       </form>
@@ -99,29 +118,34 @@ export default async function RentalsPage() {
         </div>
       )}
 
-      <h2 className="mb-3 text-lg font-semibold text-gray-700">היסטוריה אחרונה</h2>
+      <div className="mb-3 flex items-center justify-between text-xs font-bold uppercase tracking-wide text-muted">
+        <span>🗄️ היסטוריה אחרונה</span>
+        <span className="rounded-full bg-[#f4f6f9] px-2.5 py-0.5 text-ink normal-case">{history.length}</span>
+      </div>
       {history.length === 0 ? (
-        <p className="text-sm text-gray-500">אין היסטוריית השכרות.</p>
+        <div className="rounded-card border border-dashed border-card-border bg-white py-10 text-center text-sm text-muted">
+          אין היסטוריית השכרות
+        </div>
       ) : (
-        <div className="overflow-hidden rounded-xl border border-gray-200 bg-white">
-          <table className="w-full text-right text-sm">
-            <thead className="bg-gray-50 text-gray-500">
+        <div className="overflow-hidden rounded-card border border-card-border bg-white shadow-card">
+          <table className="w-full text-[13px]">
+            <thead className="bg-[#f4f6f9] text-muted">
               <tr>
-                <th className="px-4 py-3 font-medium">לקוח</th>
-                <th className="px-4 py-3 font-medium">מחשב</th>
-                <th className="px-4 py-3 font-medium">התחלה</th>
-                <th className="px-4 py-3 font-medium">סיום בפועל</th>
+                <th className="px-[11px] py-[9px] text-right text-[11px] font-bold uppercase tracking-wide">לקוח</th>
+                <th className="px-[11px] py-[9px] text-right text-[11px] font-bold uppercase tracking-wide">מחשב</th>
+                <th className="px-[11px] py-[9px] text-right text-[11px] font-bold uppercase tracking-wide">התחלה</th>
+                <th className="px-[11px] py-[9px] text-right text-[11px] font-bold uppercase tracking-wide">סיום בפועל</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100">
+            <tbody>
               {history.map((r) => {
                 const info = rowInfo(r);
                 return (
-                  <tr key={r.id}>
-                    <td className="px-4 py-3 text-gray-600">{info.clientName}</td>
-                    <td className="px-4 py-3 text-gray-600">{info.laptopName}</td>
-                    <td className="px-4 py-3 text-gray-600">{r.startDate}</td>
-                    <td className="px-4 py-3 text-gray-600">{r.returnDate ?? r.endDate}</td>
+                  <tr key={r.id} className="border-t border-card-border transition hover:bg-[#f8fafc]">
+                    <td className="px-[11px] py-2 text-muted">{info.clientName}</td>
+                    <td className="px-[11px] py-2 text-muted">{info.laptopName}</td>
+                    <td className="px-[11px] py-2 text-muted">{r.startDate}</td>
+                    <td className="px-[11px] py-2 text-muted">{r.returnDate ?? r.endDate}</td>
                   </tr>
                 );
               })}
