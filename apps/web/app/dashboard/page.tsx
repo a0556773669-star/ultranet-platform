@@ -1,27 +1,219 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
+import { getAdminFirestore } from "@/lib/firebase-admin";
+import type { PermKey } from "@/lib/perms";
+import { NAV_ITEMS, visibleFor, type NavItem } from "@/lib/nav-items";
+import HomeClock from "./home-clock";
+import { getInventorySnapshotAction } from "./inventory/actions";
+import type {
+  AccountingIncome,
+  AccountingExpense,
+  Laptop,
+  Rental,
+} from "@ultranet/shared-types";
+import type { BranchKey, InventoryItem } from "@/lib/legacy-inventory";
 
-const MODULES = [
-  { href: "/dashboard/branches", title: "סניפים", desc: "ניהול סניפים, שותפי משנה וחלוקת רווחים" },
-  { href: "/dashboard/rentals", title: "השכרות", desc: "לקוחות, מכשירים והשכרות מחשבים" },
-  { href: "/dashboard/coworking", title: "משרד שיתופי", desc: "עמדות, לקוחות ותשלומי משרד שיתופי" },
-  { href: "/dashboard/accounting", title: "הנהלת חשבונות", desc: "הכנסות, הוצאות ומסלולי גביה" },
-];
+export default async function DashboardHomePage() {
+  const session = await getServerSession(authOptions);
+  if (!session) {
+    redirect("/login");
+  }
 
-export default function DashboardHomePage() {
+  const role = session.user?.role ?? "employee";
+  const perms = (session.user as { perms?: Partial<Record<PermKey, boolean>> } | undefined)?.perms;
+  const name = session.user?.name ?? session.user?.email ?? "";
+  const branchId = session.user?.branchId;
+  const isOwner = role === "owner";
+  const has = (key: PermKey) => isOwner || Boolean(perms?.[key]);
+
+  const db = getAdminFirestore();
+
+  let moneyStats: {
+    todayIncome: number;
+    todayExpenses: number;
+    monthIncome: number;
+    monthExpenses: number;
+  } | null = null;
+
+  if (has("accounting")) {
+    const [incomeSnap, expenseSnap] = await Promise.all([
+      db.collection("n_ah_income").get(),
+      db.collection("n_ah_expenses").get(),
+    ]);
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const monthStr = todayStr.slice(0, 7);
+    let todayIncome = 0;
+    let todayExpenses = 0;
+    let monthIncome = 0;
+    let monthExpenses = 0;
+    incomeSnap.docs.forEach((d) => {
+      const data = d.data() as AccountingIncome;
+      if (data.date === todayStr) todayIncome += data.amount;
+      if ((data.month || data.date?.slice(0, 7)) === monthStr) monthIncome += data.amount;
+    });
+    expenseSnap.docs.forEach((d) => {
+      const data = d.data() as AccountingExpense;
+      if (data.date === todayStr) todayExpenses += data.amount;
+      if ((data.month || data.date?.slice(0, 7)) === monthStr) monthExpenses += data.amount;
+    });
+    moneyStats = { todayIncome, todayExpenses, monthIncome, monthExpenses };
+  }
+
+  let rentedLaptops: { name: string; startDate: string }[] | null = null;
+
+  if (has("rentals")) {
+    const [laptopsSnap, rentalsSnap] = await Promise.all([
+      db.collection("n_laptops").get(),
+      db.collection("n_rentals").where("status", "==", "active").where("kind", "==", "laptop").get(),
+    ]);
+    const laptopNames: Record<string, string> = {};
+    laptopsSnap.docs.forEach((d) => {
+      laptopNames[d.id] = (d.data() as Laptop).name;
+    });
+    rentedLaptops = rentalsSnap.docs
+      .map((d) => d.data() as Rental)
+      .filter((r) => isOwner || r.branchId === branchId)
+      .map((r) => ({ name: laptopNames[r.itemId] || "נייד", startDate: r.startDate }));
+  }
+
+  let inventoryItemCount = 0;
+  let lowStockItems: { name: string; qty: number; min: number }[] | null = null;
+
+  if (has("computers")) {
+    const snapshot = await getInventorySnapshotAction();
+    const branchKeys: BranchKey[] = isOwner
+      ? snapshot.branches.map((b) => b.key)
+      : snapshot.branches.filter((b) => String(b.key) === branchId).map((b) => b.key);
+    const items: { name: string; qty: number; min: number }[] = [];
+    branchKeys.forEach((key) => {
+      const branchInv: Record<string, InventoryItem> = snapshot.inventory[key] ?? {};
+      Object.entries(branchInv).forEach(([itemName, item]) => {
+        items.push({ name: itemName, qty: item.qty, min: item.min });
+      });
+    });
+    inventoryItemCount = items.length;
+    lowStockItems = items.filter((i) => i.qty <= i.min).slice(0, 6);
+  }
+
+  const categories: (NavItem)[] = NAV_ITEMS.filter(
+    (item) => item.href !== "/dashboard" && visibleFor(role, perms, item),
+  );
+  if (isOwner) {
+    categories.push({ href: "/dashboard/users", label: "משתמשים והרשאות", icon: "👥" });
+  }
+
   return (
     <div>
-      <h1 className="mb-6 text-2xl font-bold text-gray-800">סקירה כללית</h1>
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {MODULES.map((m) => (
+      <div className="mb-4">
+        <HomeClock name={name} />
+      </div>
+
+      {moneyStats && (
+        <div className="mb-3 grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="relative overflow-hidden rounded-card border border-card-border bg-white p-4 shadow-card">
+            <span className="absolute right-0 top-0 h-full w-1 bg-emerald-500" />
+            <div className="text-[11px] font-semibold uppercase tracking-wide text-muted">{"הכנסות עד היום"}</div>
+            <div className="mt-1 text-[25px] font-black text-emerald-600">{moneyStats.todayIncome.toLocaleString()} ₪</div>
+          </div>
+          <div className="relative overflow-hidden rounded-card border border-card-border bg-white p-4 shadow-card">
+            <span className="absolute right-0 top-0 h-full w-1 bg-red-500" />
+            <div className="text-[11px] font-semibold uppercase tracking-wide text-muted">{"הוצאות עד היום"}</div>
+            <div className="mt-1 text-[25px] font-black text-red-600">{moneyStats.todayExpenses.toLocaleString()} ₪</div>
+          </div>
+          <div className="relative overflow-hidden rounded-card border border-card-border bg-white p-4 shadow-card">
+            <span className="absolute right-0 top-0 h-full w-1 bg-teal" />
+            <div className="text-[11px] font-semibold uppercase tracking-wide text-muted">{"הכנסות החודש"}</div>
+            <div className="mt-1 text-[25px] font-black text-teal-dark">{moneyStats.monthIncome.toLocaleString()} ₪</div>
+          </div>
+          <div className="relative overflow-hidden rounded-card border border-card-border bg-white p-4 shadow-card">
+            <span className="absolute right-0 top-0 h-full w-1 bg-amber-500" />
+            <div className="text-[11px] font-semibold uppercase tracking-wide text-muted">{"הוצאות החודש"}</div>
+            <div className="mt-1 text-[25px] font-black text-amber-600">{moneyStats.monthExpenses.toLocaleString()} ₪</div>
+          </div>
+        </div>
+      )}
+
+      <div className="mb-2 text-xs font-bold uppercase tracking-wide text-muted">{"📂 הקטגוריות שלי"}</div>
+      <div className="mb-4 grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-5">
+        {categories.length === 0 && (
+          <div className="col-span-full rounded-card border border-card-border bg-white p-6 text-center text-sm text-muted shadow-card">
+            {"אין קטגוריות זמינות עבורך"}
+          </div>
+        )}
+        {categories.map((c) => (
           <Link
-            key={m.href}
-            href={m.href}
-            className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm transition hover:border-teal hover:shadow-md"
+            key={c.href}
+            href={c.href}
+            className="flex flex-col items-center gap-1 rounded-card border border-card-border bg-white p-4 text-center shadow-card transition hover:-translate-y-0.5 hover:border-teal hover:shadow-primary"
           >
-            <h2 className="mb-1 font-semibold text-teal-dark">{m.title}</h2>
-            <p className="text-sm text-gray-500">{m.desc}</p>
+            <span className="text-2xl">{c.icon}</span>
+            <span className="text-[13px] font-bold text-ink">{c.label}</span>
           </Link>
         ))}
+      </div>
+
+      <div className="mb-3 grid grid-cols-1 gap-3 lg:grid-cols-2">
+        {rentedLaptops && (
+          <div className="card">
+            <div className="mb-3 flex items-center justify-between text-xs font-bold uppercase tracking-wide text-muted">
+              <span>{"💻 ניידים מושכרים כעת"}</span>
+              <span className="rounded-full bg-[#f4f6f9] px-2.5 py-0.5 text-ink normal-case">{rentedLaptops.length}</span>
+            </div>
+            {rentedLaptops.length === 0 ? (
+              <div className="text-sm text-muted">{"אין השכרות פעילות"}</div>
+            ) : (
+              rentedLaptops.map((l, i) => (
+                <div key={i} className="flex items-center gap-2 border-b border-card-border py-2 text-[13px] last:border-b-0">
+                  <span className="h-2 w-2 rounded-full bg-teal" />
+                  <span className="flex-1 font-medium text-ink">{l.name}</span>
+                  <span className="text-[11px] text-muted">{"מאז " + l.startDate}</span>
+                </div>
+              ))
+            )}
+          </div>
+        )}
+
+        {lowStockItems && (
+          <div className="card">
+            <div className="mb-3 flex items-center justify-between text-xs font-bold uppercase tracking-wide text-muted">
+              <span>{"📦 מלאי - פריטים בחוסר"}</span>
+              <span className="rounded-full bg-[#f4f6f9] px-2.5 py-0.5 text-ink normal-case">{inventoryItemCount}</span>
+            </div>
+            {lowStockItems.length === 0 ? (
+              <div className="text-sm text-muted">{"אין פריטים בחוסר במלאי"}</div>
+            ) : (
+              lowStockItems.map((it, i) => (
+                <div key={i} className="flex items-center gap-2 border-b border-card-border py-2 text-[13px] last:border-b-0">
+                  <span className="h-2 w-2 rounded-full bg-amber-500" />
+                  <span className="flex-1 font-medium text-ink">{it.name}</span>
+                  <span className="text-[11px] text-muted">
+                    {it.qty}
+                    {" " + "מתוך" + " "}
+                    {it.min}
+                  </span>
+                </div>
+              ))
+            )}
+          </div>
+        )}
+      </div>
+
+      <div className="card">
+        <div className="mb-3 flex items-center justify-between text-xs font-bold uppercase tracking-wide text-muted">
+          <span>{"✅ משימות לטיפול"}</span>
+          <span className="rounded-full bg-[#f4f6f9] px-2.5 py-0.5 text-ink normal-case">0</span>
+        </div>
+        <div className="text-sm text-muted">{"ריכוז משימות ייבנה לכל אורך הפיתוח, לפי קטגוריה וצבע"}</div>
+      </div>
+
+      <div className="card">
+        <div className="mb-3 flex items-center justify-between text-xs font-bold uppercase tracking-wide text-muted">
+          <span>{"⚠️ התראות"}</span>
+          <span className="rounded-full bg-[#f4f6f9] px-2.5 py-0.5 text-ink normal-case">0</span>
+        </div>
+        <div className="text-sm text-muted">{"התראות יופיעו כאן בהמשך הפיתוח"}</div>
       </div>
     </div>
   );
