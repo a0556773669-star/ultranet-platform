@@ -65,6 +65,12 @@ export default async function RentalsPage() {
           >
             + השכרה חדשה
           </Link>
+          <Link
+            href="/dashboard/rentals/labels"
+            className="rounded-lg border border-card-border bg-white px-4 py-2 text-sm font-semibold text-ink transition hover:border-teal hover:text-teal-dark"
+          >
+            🏷️ הדפסת מדבקות
+          </Link>
         </div>
       </div>
 
