@@ -76,9 +76,18 @@ export default function LabelPrintClient({
     <div className="flex flex-col gap-4">
       <style>{`
         @media print {
+          @page { margin: 10mm; }
           body * { visibility: hidden; }
           #label-print-area, #label-print-area * { visibility: visible; }
-          #label-print-area { position: fixed; inset: 0; padding: 10mm; }
+          #label-print-area {
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 100%;
+            margin: 0;
+            padding: 0;
+            border: none;
+          }
         }
         .label-box { page-break-inside: avoid; break-inside: avoid; }
       `}</style>
