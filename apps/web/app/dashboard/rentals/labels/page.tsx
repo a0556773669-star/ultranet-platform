@@ -24,10 +24,15 @@ export default async function LabelsPage() {
         )}
       </div>
       <LabelPrintClient
-        widthMm={settings.widthMm}
-        heightMm={settings.heightMm}
+        computerWidthMm={settings.computerWidthMm}
+        computerHeightMm={settings.computerHeightMm}
+        stickWidthMm={settings.stickWidthMm}
+        stickHeightMm={settings.stickHeightMm}
+        fontFamily={settings.fontFamily}
+        textColor={settings.textColor}
         wifiName={settings.wifiName}
         wifiCode={settings.wifiCode}
+        logoUrl={settings.logoUrl}
       />
     </div>
   );

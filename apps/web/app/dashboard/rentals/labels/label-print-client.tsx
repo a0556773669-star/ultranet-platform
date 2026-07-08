@@ -3,10 +3,15 @@
 import { useMemo, useState } from "react";
 
 type Props = {
-  widthMm: number;
-  heightMm: number;
+  computerWidthMm: number;
+  computerHeightMm: number;
+  stickWidthMm: number;
+  stickHeightMm: number;
+  fontFamily: string;
+  textColor: string;
   wifiName: string;
   wifiCode: string;
+  logoUrl?: string;
 };
 
 function parseRanges(input: string): number[] {
@@ -29,7 +34,17 @@ function parseRanges(input: string): number[] {
   return Array.from(nums).sort((a, b) => a - b);
 }
 
-export default function LabelPrintClient({ widthMm, heightMm, wifiName, wifiCode }: Props) {
+export default function LabelPrintClient({
+  computerWidthMm,
+  computerHeightMm,
+  stickWidthMm,
+  stickHeightMm,
+  fontFamily,
+  textColor,
+  wifiName,
+  wifiCode,
+  logoUrl,
+}: Props) {
   const [computerInput, setComputerInput] = useState("");
   const [stickInput, setStickInput] = useState("");
 
@@ -37,6 +52,13 @@ export default function LabelPrintClient({ widthMm, heightMm, wifiName, wifiCode
   const stickNumbers = useMemo(() => parseRanges(stickInput), [stickInput]);
 
   const hasLabels = computerNumbers.length > 0 || stickNumbers.length > 0;
+
+  function Logo() {
+    if (logoUrl) {
+      return <img src={logoUrl} alt="אולטרנט" style={{ maxWidth: "70%", maxHeight: "32%", objectFit: "contain" }} />;
+    }
+    return <span className="text-xs font-extrabold">{"אולטרנט"}</span>;
+  }
 
   return (
     <div className="flex flex-col gap-4">
@@ -85,9 +107,9 @@ export default function LabelPrintClient({ widthMm, heightMm, wifiName, wifiCode
           <div
             key={`computer-${n}`}
             className="label-box flex flex-col items-center justify-center gap-1 border border-black/20 bg-white text-center"
-            style={{ width: `${widthMm}mm`, height: `${heightMm}mm` }}
+            style={{ width: `${computerWidthMm}mm`, height: `${computerHeightMm}mm`, fontFamily, color: textColor }}
           >
-            <span className="text-xs font-extrabold">{"אולטרנט"}</span>
+            <Logo />
             <span className="text-sm font-bold">{`מחשב ${n}`}</span>
           </div>
         ))}
@@ -95,9 +117,9 @@ export default function LabelPrintClient({ widthMm, heightMm, wifiName, wifiCode
           <div
             key={`stick-${n}`}
             className="label-box flex flex-col items-center justify-center gap-1 border border-black/20 bg-white px-1 text-center"
-            style={{ width: `${widthMm}mm`, height: `${heightMm}mm` }}
+            style={{ width: `${stickWidthMm}mm`, height: `${stickHeightMm}mm`, fontFamily, color: textColor }}
           >
-            <span className="text-xs font-extrabold">{"אולטרנט"}</span>
+            <Logo />
             <span className="text-sm font-bold">{`סטיק ${n}`}</span>
             <div className="flex w-full justify-between text-[8px]">
               <span>{`WIFI: ${wifiName}`}</span>

@@ -5,15 +5,24 @@ import { requireModuleAccess, requireOwner } from "@/lib/perms";
 import { getAdminFirestore } from "@/lib/firebase-admin";
 
 export type LabelSettings = {
-  widthMm: number;
-  heightMm: number;
+  computerWidthMm: number;
+  computerHeightMm: number;
+  stickWidthMm: number;
+  stickHeightMm: number;
+  fontFamily: string;
+  textColor: string;
   wifiName: string;
   wifiCode: string;
+  logoUrl?: string;
 };
 
 const DEFAULT_LABEL_SETTINGS: LabelSettings = {
-  widthMm: 60,
-  heightMm: 40,
+  computerWidthMm: 60,
+  computerHeightMm: 40,
+  stickWidthMm: 40,
+  stickHeightMm: 25,
+  fontFamily: "var(--font-heebo), Heebo, sans-serif",
+  textColor: "#111111",
   wifiName: "ultranet",
   wifiCode: "1234567890",
 };
@@ -27,17 +36,39 @@ export async function getLabelSettingsAction(): Promise<LabelSettings> {
 
 export async function updateLabelSettingsAction(formData: FormData) {
   await requireOwner();
-  const widthMm = Number(formData.get("widthMm"));
-  const heightMm = Number(formData.get("heightMm"));
-  const wifiName = String(formData.get("wifiName") ?? "");
-  const wifiCode = String(formData.get("wifiCode") ?? "");
-  const settings: LabelSettings = {
-    widthMm: widthMm > 0 ? widthMm : DEFAULT_LABEL_SETTINGS.widthMm,
-    heightMm: heightMm > 0 ? heightMm : DEFAULT_LABEL_SETTINGS.heightMm,
-    wifiName: wifiName || DEFAULT_LABEL_SETTINGS.wifiName,
-    wifiCode: wifiCode || DEFAULT_LABEL_SETTINGS.wifiCode,
+  const db = getAdminFirestore();
+  const ref = db.collection("n_label_settings").doc("default");
+  const existingDoc = await ref.get();
+  const existing: LabelSettings = {
+    ...DEFAULT_LABEL_SETTINGS,
+    ...(existingDoc.exists ? (existingDoc.data() as Partial<LabelSettings>) : {}),
   };
-  await getAdminFirestore().collection("n_label_settings").doc("default").set(settings);
+
+  const num = (name: string, fallback: number) => {
+    const v = Number(formData.get(name));
+    return v > 0 ? v : fallback;
+  };
+
+  const logoDataUrl = String(formData.get("logoDataUrl") ?? "");
+  const removeLogo = String(formData.get("removeLogo") ?? "") === "1";
+
+  const settings: LabelSettings = {
+    computerWidthMm: num("computerWidthMm", existing.computerWidthMm),
+    computerHeightMm: num("computerHeightMm", existing.computerHeightMm),
+    stickWidthMm: num("stickWidthMm", existing.stickWidthMm),
+    stickHeightMm: num("stickHeightMm", existing.stickHeightMm),
+    fontFamily: String(formData.get("fontFamily") ?? "") || existing.fontFamily,
+    textColor: String(formData.get("textColor") ?? "") || existing.textColor,
+    wifiName: String(formData.get("wifiName") ?? "") || existing.wifiName,
+    wifiCode: String(formData.get("wifiCode") ?? "") || existing.wifiCode,
+  };
+
+  if (!removeLogo) {
+    const finalLogo = logoDataUrl || existing.logoUrl;
+    if (finalLogo) settings.logoUrl = finalLogo;
+  }
+
+  await ref.set(settings);
   revalidatePath("/dashboard/rentals/labels");
   revalidatePath("/dashboard/rentals/labels/settings");
 }
