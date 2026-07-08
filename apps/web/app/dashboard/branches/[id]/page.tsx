@@ -1,6 +1,5 @@
 import { notFound, redirect } from "next/navigation";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { requireModuleAccess } from "@/lib/perms";
 import { getAdminFirestore } from "@/lib/firebase-admin";
 import type { Branch } from "@ultranet/shared-types";
 import { BranchForm } from "../branch-form";
@@ -14,9 +13,9 @@ const TYPE_LABELS: Record<string, string> = {
 };
 
 export default async function BranchDetailPage({ params }: { params: { id: string } }) {
-  const session = await getServerSession(authOptions);
-  const role = session?.user?.role;
-  const myBranchId = session?.user?.branchId;
+  const session = await requireModuleAccess("branches");
+  const role = session.user?.role;
+  const myBranchId = session.user?.branchId;
 
   const doc = await getAdminFirestore().collection("n_branches").doc(params.id).get();
   if (!doc.exists) {

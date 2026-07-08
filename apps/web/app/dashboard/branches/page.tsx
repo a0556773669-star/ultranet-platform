@@ -1,8 +1,7 @@
 import Link from "next/link";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
 import { getAdminFirestore } from "@/lib/firebase-admin";
 import type { Branch } from "@ultranet/shared-types";
+import { requireModuleAccess } from "@/lib/perms";
 
 const TYPE_LABELS: Record<string, string> = {
   computers: "🖥️ מחשבים",
@@ -18,9 +17,9 @@ async function listBranches(): Promise<Branch[]> {
 }
 
 export default async function BranchesPage() {
-  const session = await getServerSession(authOptions);
-  const role = session?.user?.role;
-  const myBranchId = session?.user?.branchId;
+  const session = await requireModuleAccess("branches");
+  const role = session.user?.role;
+  const myBranchId = session.user?.branchId;
 
   const all = await listBranches();
   const branches =
