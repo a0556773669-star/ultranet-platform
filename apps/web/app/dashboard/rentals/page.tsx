@@ -1,6 +1,5 @@
 import Link from "next/link";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { requireModuleAccess } from "@/lib/perms";
 import { getAdminFirestore } from "@/lib/firebase-admin";
 import type { Rental, RentalClient, Laptop, Branch } from "@ultranet/shared-types";
 import { markReturnedAction } from "./actions";
@@ -22,9 +21,9 @@ async function loadData() {
 }
 
 export default async function RentalsPage() {
-  const session = await getServerSession(authOptions);
-  const role = session?.user?.role;
-  const myBranchId = session?.user?.branchId;
+  const session = await requireModuleAccess("rentals");
+  const role = session.user?.role;
+  const myBranchId = session.user?.branchId;
 
   const { rentals, clients, laptops, branches } = await loadData();
 

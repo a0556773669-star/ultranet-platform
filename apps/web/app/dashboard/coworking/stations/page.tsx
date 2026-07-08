@@ -1,5 +1,4 @@
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { requireModuleAccess } from "@/lib/perms";
 import { getAdminFirestore } from "@/lib/firebase-admin";
 import type { CoworkingStation, Branch } from "@ultranet/shared-types";
 import { createStationAction } from "../actions";
@@ -8,9 +7,9 @@ const FIELD = "w-full rounded-lg border border-card-border bg-[#f4f6f9] px-3 py-
 const LABEL = "mb-1 block text-xs font-semibold text-muted";
 
 export default async function StationsPage() {
-  const session = await getServerSession(authOptions);
-  const role = session?.user?.role;
-  const myBranchId = session?.user?.branchId;
+  const session = await requireModuleAccess("coworking");
+  const role = session.user?.role;
+  const myBranchId = session.user?.branchId;
 
   const db = getAdminFirestore();
   const [stationsSnap, branchesSnap] = await Promise.all([

@@ -1,7 +1,9 @@
 import { getOrdersSnapshotAction } from "./actions";
 import { OrdersClient } from "./orders-client";
+import { requireModuleAccess } from "@/lib/perms";
 
 export default async function OrdersPage() {
+  await requireModuleAccess("computers");
   const snapshot = await getOrdersSnapshotAction();
   return (
     <div>

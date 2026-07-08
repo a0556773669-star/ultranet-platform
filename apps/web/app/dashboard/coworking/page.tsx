@@ -1,6 +1,5 @@
 import Link from "next/link";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { requireModuleAccess } from "@/lib/perms";
 import { getAdminFirestore } from "@/lib/firebase-admin";
 import type { CoworkingClient, CoworkingStation, Branch } from "@ultranet/shared-types";
 import { addPaymentAction } from "./actions";
@@ -21,9 +20,9 @@ async function loadData() {
 }
 
 export default async function CoworkingPage() {
-  const session = await getServerSession(authOptions);
-  const role = session?.user?.role;
-  const myBranchId = session?.user?.branchId;
+  const session = await requireModuleAccess("coworking");
+  const role = session.user?.role;
+  const myBranchId = session.user?.branchId;
 
   const { clients, stations, branches } = await loadData();
   const visible = clients.filter((c) => role === "owner" || c.branchId === myBranchId);

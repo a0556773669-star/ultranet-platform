@@ -1,15 +1,11 @@
 import { redirect } from "next/navigation";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { requireModuleAccess } from "@/lib/perms";
 import { getAdminFirestore } from "@/lib/firebase-admin";
 import type { Branch, CoworkingStation } from "@ultranet/shared-types";
 import { NewCoworkingClientForm } from "./new-cw-client-form";
 
 export default async function NewCoworkingClientPage() {
-  const session = await getServerSession(authOptions);
-  if (!session) {
-    redirect("/login");
-  }
+  const session = await requireModuleAccess("coworking");
   const role = session.user?.role;
   const myBranchId = session.user?.branchId;
 
@@ -28,7 +24,7 @@ export default async function NewCoworkingClientPage() {
 
   return (
     <div className="max-w-2xl">
-      <h1 className="mb-6 text-2xl font-bold text-gray-800">לקוח קוורקינג חדש</h1>
+      <h1 className="mb-6 text-[21px] font-extrabold text-ink">לקוח קוורקינג חדש</h1>
       <NewCoworkingClientForm
         branches={branches}
         stations={stations}

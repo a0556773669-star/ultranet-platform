@@ -1,7 +1,5 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { requireModuleAccess } from "@/lib/perms";
 import { getAdminFirestore } from "@/lib/firebase-admin";
 import type { AccountingIncome, AccountingExpense, CollectionRoute } from "@ultranet/shared-types";
 import { createIncomeAction, createExpenseAction, manualChargeAction } from "./actions";
@@ -17,10 +15,7 @@ const BUSINESS_LABELS: Record<string, string> = {
 const FIELD = "rounded-lg border border-card-border bg-[#f4f6f9] px-3 py-2 text-sm focus:border-teal focus:bg-white focus:outline-none";
 
 export default async function AccountingPage() {
-  const session = await getServerSession(authOptions);
-  if (session?.user?.role !== "owner") {
-    redirect("/dashboard");
-  }
+  await requireModuleAccess("accounting");
 
   const db = getAdminFirestore();
   const [incomeSnap, expenseSnap, routesSnap] = await Promise.all([

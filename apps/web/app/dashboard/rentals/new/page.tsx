@@ -1,15 +1,11 @@
 import { redirect } from "next/navigation";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { requireModuleAccess } from "@/lib/perms";
 import { getAdminFirestore } from "@/lib/firebase-admin";
 import type { Branch, RentalClient, Laptop, CollectionRoute } from "@ultranet/shared-types";
 import { NewRentalForm } from "./new-rental-form";
 
 export default async function NewRentalPage() {
-  const session = await getServerSession(authOptions);
-  if (!session) {
-    redirect("/login");
-  }
+  const session = await requireModuleAccess("rentals");
   const role = session.user?.role;
   const myBranchId = session.user?.branchId;
 
@@ -34,7 +30,7 @@ export default async function NewRentalPage() {
 
   return (
     <div className="max-w-2xl">
-      <h1 className="mb-6 text-2xl font-bold text-gray-800">השכרה חדשה</h1>
+      <h1 className="mb-6 text-[21px] font-extrabold text-ink">השכרה חדשה</h1>
       <NewRentalForm
         branches={branches}
         clients={clients}
