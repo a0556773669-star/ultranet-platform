@@ -7,6 +7,7 @@ type Props = {
   computerHeightMm: number;
   stickWidthMm: number;
   stickHeightMm: number;
+  fontSizePt: number;
   fontFamily: string;
   textColor: string;
   wifiName: string;
@@ -39,6 +40,7 @@ export default function LabelPrintClient({
   computerHeightMm,
   stickWidthMm,
   stickHeightMm,
+  fontSizePt,
   fontFamily,
   textColor,
   wifiName,
@@ -52,12 +54,13 @@ export default function LabelPrintClient({
   const stickNumbers = useMemo(() => parseRanges(stickInput), [stickInput]);
 
   const hasLabels = computerNumbers.length > 0 || stickNumbers.length > 0;
+  const labelStyle = { fontFamily, color: textColor, fontSize: `${fontSizePt}pt` };
 
   function Logo() {
     if (logoUrl) {
       return <img src={logoUrl} alt="אולטרנט" style={{ maxWidth: "70%", maxHeight: "32%", objectFit: "contain" }} />;
     }
-    return <span className="text-xs font-extrabold">{"אולטרנט"}</span>;
+    return <span style={{ fontSize: "0.7em", fontWeight: 800 }}>{"אולטרנט"}</span>;
   }
 
   return (
@@ -107,21 +110,21 @@ export default function LabelPrintClient({
           <div
             key={`computer-${n}`}
             className="label-box flex flex-col items-center justify-center gap-1 border border-black/20 bg-white text-center"
-            style={{ width: `${computerWidthMm}mm`, height: `${computerHeightMm}mm`, fontFamily, color: textColor }}
+            style={{ width: `${computerWidthMm}mm`, height: `${computerHeightMm}mm`, ...labelStyle }}
           >
             <Logo />
-            <span className="text-sm font-bold">{`מחשב ${n}`}</span>
+            <span style={{ fontSize: "1em", fontWeight: 700 }}>{`מחשב ${n}`}</span>
           </div>
         ))}
         {stickNumbers.map((n) => (
           <div
             key={`stick-${n}`}
             className="label-box flex flex-col items-center justify-center gap-1 border border-black/20 bg-white px-1 text-center"
-            style={{ width: `${stickWidthMm}mm`, height: `${stickHeightMm}mm`, fontFamily, color: textColor }}
+            style={{ width: `${stickWidthMm}mm`, height: `${stickHeightMm}mm`, ...labelStyle }}
           >
             <Logo />
-            <span className="text-sm font-bold">{`סטיק ${n}`}</span>
-            <div className="flex w-full justify-between text-[8px]">
+            <span style={{ fontSize: "1em", fontWeight: 700 }}>{`סטיק ${n}`}</span>
+            <div className="flex w-full justify-between" style={{ fontSize: "0.55em" }}>
               <span>{`WIFI: ${wifiName}`}</span>
               <span>{`קוד: ${wifiCode}`}</span>
             </div>

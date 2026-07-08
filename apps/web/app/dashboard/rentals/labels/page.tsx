@@ -28,6 +28,7 @@ export default async function LabelsPage() {
         computerHeightMm={settings.computerHeightMm}
         stickWidthMm={settings.stickWidthMm}
         stickHeightMm={settings.stickHeightMm}
+        fontSizePt={settings.fontSizePt}
         fontFamily={settings.fontFamily}
         textColor={settings.textColor}
         wifiName={settings.wifiName}

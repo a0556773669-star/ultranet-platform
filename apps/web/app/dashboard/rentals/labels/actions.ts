@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { requireModuleAccess, requireOwner } from "@/lib/perms";
 import { getAdminFirestore } from "@/lib/firebase-admin";
 
@@ -9,6 +10,7 @@ export type LabelSettings = {
   computerHeightMm: number;
   stickWidthMm: number;
   stickHeightMm: number;
+  fontSizePt: number;
   fontFamily: string;
   textColor: string;
   wifiName: string;
@@ -21,6 +23,7 @@ const DEFAULT_LABEL_SETTINGS: LabelSettings = {
   computerHeightMm: 40,
   stickWidthMm: 40,
   stickHeightMm: 25,
+  fontSizePt: 14,
   fontFamily: "var(--font-heebo), Heebo, sans-serif",
   textColor: "#111111",
   wifiName: "ultranet",
@@ -57,6 +60,7 @@ export async function updateLabelSettingsAction(formData: FormData) {
     computerHeightMm: num("computerHeightMm", existing.computerHeightMm),
     stickWidthMm: num("stickWidthMm", existing.stickWidthMm),
     stickHeightMm: num("stickHeightMm", existing.stickHeightMm),
+    fontSizePt: num("fontSizePt", existing.fontSizePt),
     fontFamily: String(formData.get("fontFamily") ?? "") || existing.fontFamily,
     textColor: String(formData.get("textColor") ?? "") || existing.textColor,
     wifiName: String(formData.get("wifiName") ?? "") || existing.wifiName,
@@ -71,4 +75,5 @@ export async function updateLabelSettingsAction(formData: FormData) {
   await ref.set(settings);
   revalidatePath("/dashboard/rentals/labels");
   revalidatePath("/dashboard/rentals/labels/settings");
+  redirect("/dashboard/rentals/labels");
 }

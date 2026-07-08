@@ -75,6 +75,10 @@ export default async function LabelSettingsPage() {
             {"צבע טקסט"}
             <input type="color" name="textColor" defaultValue={settings.textColor} className="h-10 w-16 cursor-pointer rounded-lg border border-card-border bg-[#f4f6f9] p-1" />
           </label>
+          <label className="flex flex-col gap-1 text-sm font-medium text-ink">
+            {"גודל גופן (pt)"}
+            <input type="number" name="fontSizePt" min={6} max={60} defaultValue={settings.fontSizePt} required className={FIELD} />
+          </label>
           <LogoField initialLogoUrl={settings.logoUrl} />
         </div>
 

@@ -71,6 +71,7 @@ export async function updateBranchAction(id: string, formData: FormData) {
   await getAdminFirestore().collection("n_branches").doc(id).set(stripUndefined(data), { merge: true });
   revalidatePath("/dashboard/branches");
   revalidatePath(`/dashboard/branches/${id}`);
+  redirect("/dashboard/branches");
 }
 
 export async function deleteBranchAction(id: string) {
