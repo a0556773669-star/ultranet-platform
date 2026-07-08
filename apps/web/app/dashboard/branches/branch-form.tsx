@@ -12,7 +12,7 @@ type BranchFormProps = {
 const TYPE_OPTIONS: { value: Branch["branchType"]; label: string }[] = [
   { value: "computers", label: "מחשבים" },
   { value: "rentals", label: "השכרות" },
-  { value: "coworking", label: "קוורקינג" },
+  { value: "coworking", label: "משרד שיתופי" },
 ];
 
 const FIELD = "w-full rounded-lg border border-card-border bg-[#f4f6f9] px-3 py-2 text-sm focus:border-teal focus:bg-white focus:outline-none";

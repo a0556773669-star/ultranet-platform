@@ -6,7 +6,7 @@ import { requireModuleAccess } from "@/lib/perms";
 const TYPE_LABELS: Record<string, string> = {
   computers: "🖥️ מחשבים",
   rentals: "💻 השכרות",
-  coworking: "🏢 קוורקינג",
+  coworking: "🏢 משרד שיתופי",
 };
 
 async function listBranches(): Promise<Branch[]> {

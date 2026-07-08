@@ -17,7 +17,7 @@ const PERM_OPTIONS: { key: keyof NonNullable<AppUser["perms"]>; label: string }[
   { key: "branches", label: "סניפים" },
   { key: "computers", label: "מלאי" },
   { key: "rentals", label: "השכרות" },
-  { key: "coworking", label: "קוורקינג" },
+  { key: "coworking", label: "משרד שיתופי" },
   { key: "accounting", label: "הנה\"ח" },
   { key: "tasks", label: "משימות" },
 ];

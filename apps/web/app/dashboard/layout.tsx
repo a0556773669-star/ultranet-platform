@@ -19,7 +19,7 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/dashboard/news", label: "עדכונים", icon: "📢" },
   { href: "/dashboard/orders", label: "הזמנות", icon: "🛍️", perm: "computers" },
   { href: "/dashboard/rentals", label: "השכרות", icon: "💻", perm: "rentals" },
-  { href: "/dashboard/coworking", label: "קוורקינג", icon: "🪩", perm: "coworking" },
+  { href: "/dashboard/coworking", label: "משרד שיתופי", icon: "🪩", perm: "coworking" },
   { href: "/dashboard/accounting", label: "הנה\"ח", icon: "📊", perm: "accounting" },
 ];
 

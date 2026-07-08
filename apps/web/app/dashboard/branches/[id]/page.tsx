@@ -9,7 +9,7 @@ import { updateBranchAction, deleteBranchAction } from "../actions";
 const TYPE_LABELS: Record<string, string> = {
   computers: "🖥️ מחשבים",
   rentals: "💻 השכרות",
-  coworking: "🏢 קוורקינג",
+  coworking: "🏢 משרד שיתופי",
 };
 
 export default async function BranchDetailPage({ params }: { params: { id: string } }) {

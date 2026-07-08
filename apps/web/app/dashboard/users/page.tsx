@@ -15,7 +15,7 @@ const PERM_LABELS: Record<string, string> = {
   branches: "סניפים",
   computers: "מלאי",
   rentals: "השכרות",
-  coworking: "קוורקינג",
+  coworking: "משרד שיתופי",
   accounting: "הנה\"ח",
   tasks: "משימות",
 };

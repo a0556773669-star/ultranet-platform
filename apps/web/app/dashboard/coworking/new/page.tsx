@@ -24,7 +24,7 @@ export default async function NewCoworkingClientPage() {
 
   return (
     <div className="max-w-2xl">
-      <h1 className="mb-6 text-[21px] font-extrabold text-ink">לקוח קוורקינג חדש</h1>
+      <h1 className="mb-6 text-[21px] font-extrabold text-ink">לקוח משרד שיתופי חדש</h1>
       <NewCoworkingClientForm
         branches={branches}
         stations={stations}

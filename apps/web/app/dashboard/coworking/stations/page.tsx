@@ -25,7 +25,7 @@ export default async function StationsPage() {
 
   return (
     <div>
-      <h1 className="mb-4 text-[21px] font-extrabold text-ink">🪑 עמדות קוורקינג</h1>
+      <h1 className="mb-4 text-[21px] font-extrabold text-ink">🪑 עמדות משרד שיתופי</h1>
 
       <form
         action={createStationAction}

@@ -33,7 +33,7 @@ export default async function CoworkingPage() {
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-[21px] font-extrabold text-ink">🏢 משרד שיתופי</h1>
-          <p className="mt-1 text-[13px] text-muted">עמדות, לקוחות ותשלומי קוורקינג</p>
+          <p className="mt-1 text-[13px] text-muted">עמדות, לקוחות ותשלומי משרד שיתופי</p>
         </div>
         <div className="flex gap-2">
           <Link
@@ -46,14 +46,14 @@ export default async function CoworkingPage() {
             href="/dashboard/coworking/new"
             className="rounded-lg bg-gradient-to-br from-teal to-teal-light px-4 py-2 text-sm font-bold text-white shadow-primary transition hover:opacity-90"
           >
-            + לקוח קוורקינג
+            + לקוח משרד שיתופי
           </Link>
         </div>
       </div>
 
       {active.length === 0 ? (
         <div className="rounded-card border border-dashed border-card-border bg-white py-14 text-center text-muted">
-          אין לקוחות קוורקינג פעילים
+          אין לקוחות משרד שיתופי פעילים
         </div>
       ) : (
         <div className="flex flex-col gap-3">

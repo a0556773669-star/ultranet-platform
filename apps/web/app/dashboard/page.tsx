@@ -3,7 +3,7 @@ import Link from "next/link";
 const MODULES = [
   { href: "/dashboard/branches", title: "סניפים", desc: "ניהול סניפים, שותפי משנה וחלוקת רווחים" },
   { href: "/dashboard/rentals", title: "השכרות", desc: "לקוחות, מכשירים והשכרות מחשבים" },
-  { href: "/dashboard/coworking", title: "קוורקינג", desc: "עמדות, לקוחות ותשלומי קוורקינג" },
+  { href: "/dashboard/coworking", title: "משרד שיתופי", desc: "עמדות, לקוחות ותשלומי משרד שיתופי" },
   { href: "/dashboard/accounting", title: "הנהלת חשבונות", desc: "הכנסות, הוצאות ומסלולי גביה" },
 ];
 

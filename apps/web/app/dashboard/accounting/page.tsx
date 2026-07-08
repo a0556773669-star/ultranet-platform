@@ -7,7 +7,7 @@ import { createIncomeAction, createExpenseAction, manualChargeAction } from "./a
 const BUSINESS_LABELS: Record<string, string> = {
   computers: "מחשבים",
   rentals: "השכרות",
-  coworking: "קוורקינג",
+  coworking: "משרד שיתופי",
   general: "כללי",
   other: "אחר",
 };
@@ -82,7 +82,7 @@ export default async function AccountingPage() {
             <option value="general">כללי</option>
             <option value="computers">מחשבים</option>
             <option value="rentals">השכרות</option>
-            <option value="coworking">קוורקינג</option>
+            <option value="coworking">משרד שיתופי</option>
             <option value="other">אחר</option>
           </select>
           <select name="type" className={FIELD}>
@@ -104,7 +104,7 @@ export default async function AccountingPage() {
             <option value="general">כללי</option>
             <option value="computers">מחשבים</option>
             <option value="rentals">השכרות</option>
-            <option value="coworking">קוורקינג</option>
+            <option value="coworking">משרד שיתופי</option>
           </select>
           <button type="submit" className="self-start rounded-[10px] bg-gradient-to-br from-teal to-teal-light px-5 py-2 text-sm font-bold text-white shadow-primary transition hover:opacity-90">
             הוספה
@@ -126,7 +126,7 @@ export default async function AccountingPage() {
             <option value="general">כללי</option>
             <option value="computers">מחשבים</option>
             <option value="rentals">השכרות</option>
-            <option value="coworking">קוורקינג</option>
+            <option value="coworking">משרד שיתופי</option>
           </select>
           <button type="submit" className="self-start rounded-[10px] bg-gradient-to-br from-teal to-teal-light px-5 py-2 text-sm font-bold text-white shadow-primary transition hover:opacity-90">
             חייב עכשיו
