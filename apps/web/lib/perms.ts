@@ -23,3 +23,14 @@ export async function requireModuleAccess(key: PermKey) {
   }
   return session;
 }
+
+export async function requireOwner() {
+  const session = await getServerSession(authOptions);
+  if (!session) {
+    redirect("/login");
+  }
+  if (session.user?.role !== "owner") {
+    redirect("/dashboard");
+  }
+  return session;
+}
