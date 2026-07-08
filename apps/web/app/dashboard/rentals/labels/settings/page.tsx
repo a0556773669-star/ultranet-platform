@@ -37,6 +37,10 @@ export default async function LabelSettingsPage() {
             {"גובה (מ\"מ)"}
             <input type="number" name="computerHeightMm" min={10} defaultValue={settings.computerHeightMm} required className={FIELD} />
           </label>
+          <label className="flex flex-col gap-1 text-sm font-medium text-ink">
+            {"גודל מלל (pt)"}
+            <input type="number" name="computerFontSizePt" min={6} max={72} defaultValue={settings.computerFontSizePt} required className={FIELD} />
+          </label>
         </div>
 
         <div className="flex flex-col gap-3 rounded-lg border border-card-border p-3">
@@ -48,6 +52,14 @@ export default async function LabelSettingsPage() {
           <label className="flex flex-col gap-1 text-sm font-medium text-ink">
             {"גובה (מ\"מ)"}
             <input type="number" name="stickHeightMm" min={10} defaultValue={settings.stickHeightMm} required className={FIELD} />
+          </label>
+          <label className="flex flex-col gap-1 text-sm font-medium text-ink">
+            {"גודל מלל מספר סטיק (pt)"}
+            <input type="number" name="stickFontSizePt" min={6} max={72} defaultValue={settings.stickFontSizePt} required className={FIELD} />
+          </label>
+          <label className="flex flex-col gap-1 text-sm font-medium text-ink">
+            {"גודל מלל שורת WIFI/קוד (pt)"}
+            <input type="number" name="infoFontSizePt" min={4} max={40} defaultValue={settings.infoFontSizePt} required className={FIELD} />
           </label>
           <label className="flex flex-col gap-1 text-sm font-medium text-ink">
             {"טקסט WIFI"}
@@ -74,10 +86,6 @@ export default async function LabelSettingsPage() {
           <label className="flex flex-col gap-1 text-sm font-medium text-ink">
             {"צבע טקסט"}
             <input type="color" name="textColor" defaultValue={settings.textColor} className="h-10 w-16 cursor-pointer rounded-lg border border-card-border bg-[#f4f6f9] p-1" />
-          </label>
-          <label className="flex flex-col gap-1 text-sm font-medium text-ink">
-            {"גודל גופן (pt)"}
-            <input type="number" name="fontSizePt" min={6} max={60} defaultValue={settings.fontSizePt} required className={FIELD} />
           </label>
           <LogoField initialLogoUrl={settings.logoUrl} />
         </div>

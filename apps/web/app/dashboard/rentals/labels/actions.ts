@@ -10,7 +10,9 @@ export type LabelSettings = {
   computerHeightMm: number;
   stickWidthMm: number;
   stickHeightMm: number;
-  fontSizePt: number;
+  computerFontSizePt: number;
+  stickFontSizePt: number;
+  infoFontSizePt: number;
   fontFamily: string;
   textColor: string;
   wifiName: string;
@@ -23,7 +25,9 @@ const DEFAULT_LABEL_SETTINGS: LabelSettings = {
   computerHeightMm: 40,
   stickWidthMm: 40,
   stickHeightMm: 25,
-  fontSizePt: 14,
+  computerFontSizePt: 16,
+  stickFontSizePt: 14,
+  infoFontSizePt: 8,
   fontFamily: "var(--font-heebo), Heebo, sans-serif",
   textColor: "#111111",
   wifiName: "ultranet",
@@ -60,7 +64,9 @@ export async function updateLabelSettingsAction(formData: FormData) {
     computerHeightMm: num("computerHeightMm", existing.computerHeightMm),
     stickWidthMm: num("stickWidthMm", existing.stickWidthMm),
     stickHeightMm: num("stickHeightMm", existing.stickHeightMm),
-    fontSizePt: num("fontSizePt", existing.fontSizePt),
+    computerFontSizePt: num("computerFontSizePt", existing.computerFontSizePt),
+    stickFontSizePt: num("stickFontSizePt", existing.stickFontSizePt),
+    infoFontSizePt: num("infoFontSizePt", existing.infoFontSizePt),
     fontFamily: String(formData.get("fontFamily") ?? "") || existing.fontFamily,
     textColor: String(formData.get("textColor") ?? "") || existing.textColor,
     wifiName: String(formData.get("wifiName") ?? "") || existing.wifiName,
