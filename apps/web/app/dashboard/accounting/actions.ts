@@ -66,6 +66,18 @@ export async function createExpenseAction(formData: FormData) {
   revalidatePath("/dashboard/accounting");
 }
 
+export async function deleteIncomeAction(id: string) {
+  await requireOwner();
+  await getAdminFirestore().collection("n_ah_income").doc(id).delete();
+  revalidatePath("/dashboard/accounting");
+}
+
+export async function deleteExpenseAction(id: string) {
+  await requireOwner();
+  await getAdminFirestore().collection("n_ah_expenses").doc(id).delete();
+  revalidatePath("/dashboard/accounting");
+}
+
 export async function createCollectionRouteAction(formData: FormData) {
   await requireOwner();
   const name = String(formData.get("name") ?? "").trim();

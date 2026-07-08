@@ -2,7 +2,9 @@ import Link from "next/link";
 import { requireModuleAccess } from "@/lib/perms";
 import { getAdminFirestore } from "@/lib/firebase-admin";
 import type { AccountingIncome, AccountingExpense, CollectionRoute } from "@ultranet/shared-types";
-import { createIncomeAction, createExpenseAction, manualChargeAction } from "./actions";
+import { createIncomeAction, createExpenseAction, deleteIncomeAction, deleteExpenseAction } from "./actions";
+import CollectModal from "./collect-modal";
+import { DeleteEntryButton } from "./delete-entry-button";
 
 const BUSINESS_LABELS: Record<string, string> = {
   computers: "מחשבים",
@@ -111,27 +113,7 @@ export default async function AccountingPage() {
           </button>
         </form>
 
-        <form action={manualChargeAction} className="flex flex-col gap-2.5 rounded-card border border-card-border bg-white p-4 shadow-card">
-          <h2 className="text-xs font-bold uppercase tracking-wide text-muted">💳 גביה ידנית ממסלול</h2>
-          <select name="routeId" required className={FIELD}>
-            <option value="">בחר מסלול גביה</option>
-            {routes.map((r) => (
-              <option key={r.id} value={r.id}>{r.name}</option>
-            ))}
-          </select>
-          <input type="date" name="date" required className={FIELD} />
-          <input name="desc" placeholder="תיאור" className={FIELD} />
-          <input type="number" name="amount" min={0} placeholder="סכום לחיוב" required className={FIELD} />
-          <select name="business" className={FIELD}>
-            <option value="general">כללי</option>
-            <option value="computers">מחשבים</option>
-            <option value="rentals">השכרות</option>
-            <option value="coworking">משרד שיתופי</option>
-          </select>
-          <button type="submit" className="self-start rounded-[10px] bg-gradient-to-br from-teal to-teal-light px-5 py-2 text-sm font-bold text-white shadow-primary transition hover:opacity-90">
-            חייב עכשיו
-          </button>
-        </form>
+        <CollectModal routes={routes} />
       </div>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
@@ -141,15 +123,21 @@ export default async function AccountingPage() {
             <span className="rounded-full bg-[#f4f6f9] px-2.5 py-0.5 text-ink normal-case">{income.length}</span>
           </div>
           <div className="rounded-card border border-card-border bg-white px-4 shadow-card">
-            {income.slice(0, 15).map((i) => (
+            {income.slice(0, 15).map((i) => {
+            const bound = deleteIncomeAction.bind(null, i.id);
+            return (
               <div key={i.id} className="flex items-center gap-2.5 border-b border-card-border py-2.5 text-[13px] last:border-b-0">
                 <div className="flex-1">
                   <div className="font-bold text-ink">{i.desc || BUSINESS_LABELS[i.business]}</div>
                   <div className="mt-0.5 text-[11px] text-muted">{i.date}</div>
                 </div>
                 <div className="min-w-[75px] text-left font-extrabold text-emerald-600">{i.amount.toLocaleString()} ₪</div>
+                <form action={bound}>
+                  <DeleteEntryButton confirmText={"למחק את ההכנסה?"} />
+                </form>
               </div>
-            ))}
+            );
+          })}
           </div>
         </div>
         <div>
@@ -158,15 +146,21 @@ export default async function AccountingPage() {
             <span className="rounded-full bg-[#f4f6f9] px-2.5 py-0.5 text-ink normal-case">{expenses.length}</span>
           </div>
           <div className="rounded-card border border-card-border bg-white px-4 shadow-card">
-            {expenses.slice(0, 15).map((e) => (
+            {expenses.slice(0, 15).map((e) => {
+            const bound = deleteExpenseAction.bind(null, e.id);
+            return (
               <div key={e.id} className="flex items-center gap-2.5 border-b border-card-border py-2.5 text-[13px] last:border-b-0">
                 <div className="flex-1">
                   <div className="font-bold text-ink">{e.desc || BUSINESS_LABELS[e.business]}</div>
                   <div className="mt-0.5 text-[11px] text-muted">{e.date}</div>
                 </div>
                 <div className="min-w-[75px] text-left font-extrabold text-red-600">{e.amount.toLocaleString()} ₪</div>
+                <form action={bound}>
+                  <DeleteEntryButton confirmText={"למחק את ההוצאה?"} />
+                </form>
               </div>
-            ))}
+            );
+          })}
           </div>
         </div>
       </div>
