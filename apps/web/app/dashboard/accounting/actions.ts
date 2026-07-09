@@ -46,6 +46,7 @@ export async function createIncomeAction(formData: FormData) {
   };
   await getAdminFirestore().collection("n_ah_income").add(data);
   revalidatePath("/dashboard/accounting");
+  revalidatePath("/dashboard/rentals/accounting");
 }
 
 export async function createExpenseAction(formData: FormData) {
@@ -64,18 +65,21 @@ export async function createExpenseAction(formData: FormData) {
   };
   await getAdminFirestore().collection("n_ah_expenses").add(data);
   revalidatePath("/dashboard/accounting");
+  revalidatePath("/dashboard/rentals/accounting");
 }
 
 export async function deleteIncomeAction(id: string) {
   await requireOwner();
   await getAdminFirestore().collection("n_ah_income").doc(id).delete();
   revalidatePath("/dashboard/accounting");
+  revalidatePath("/dashboard/rentals/accounting");
 }
 
 export async function deleteExpenseAction(id: string) {
   await requireOwner();
   await getAdminFirestore().collection("n_ah_expenses").doc(id).delete();
   revalidatePath("/dashboard/accounting");
+  revalidatePath("/dashboard/rentals/accounting");
 }
 
 export async function createCollectionRouteAction(formData: FormData) {
