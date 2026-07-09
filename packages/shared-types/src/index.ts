@@ -32,6 +32,9 @@ export interface Branch {
     notes?: string;
     /** sub-branch model: set when this branch rolls up under a head partner's branch */
   parentBranchId?: string | null;
+  collectionRouteId?: string | null;
+  allowCollection?: boolean;
+  allowReceipts?: boolean;
 }
 
 /** collection: n_users */
