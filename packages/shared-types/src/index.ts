@@ -59,6 +59,7 @@ export interface FixedExpense {
     startDate: string;
     endDate?: string;
     payer?: string;
+  category?: string;
 }
 
 /** collection: n_var_expenses */
