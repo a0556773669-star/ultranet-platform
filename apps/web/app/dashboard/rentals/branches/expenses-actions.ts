@@ -1,7 +1,6 @@
 "use server";
-
-import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { revalidatePath } from "next/cache";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { getAdminFirestore } from "@/lib/firebase-admin";
@@ -9,19 +8,14 @@ import type { FixedExpense, VariableExpense } from "@ultranet/shared-types";
 
 async function requireOwner() {
   const session = await getServerSession(authOptions);
-  if (!session || session.user?.role !== "owner") {
-    throw new Error("הפעולה זו מוגבלת לבעלים בלבד");
-  }
+  if (!session) throw new Error("לא מחובר");
+  if (session.user?.role !== "owner") throw new Error("אין הרשאה");
   return session;
 }
 
-function stripUndefined<T extends Record<string, unknown>>(obj: T): T {
-  const out = {} as T;
-  for (const [k, v] of Object.entries(obj)) {
-    if (v !== undefined) {
-      (out as Record<string, unknown>)[k] = v;
-    }
-  }
+function stripUndefined<T extends Record<string, any>>(obj: T): T {
+  const out: any = {};
+  for (const k in obj) if (obj[k] !== undefined) out[k] = obj[k];
   return out;
 }
 
@@ -31,11 +25,12 @@ export async function createFixedExpenseAction(branchId: string, formData: FormD
   const amount = Number(formData.get("amount")) || 0;
   const startDate = String(formData.get("startDate") ?? "").trim();
   const category = String(formData.get("category") ?? "").trim() || undefined;
-  const payer = String(formData.get("payer") ?? "owner").trim() || "owner";
+  const paidBy = String(formData.get("paidBy") ?? "owner").trim() || "owner";
+  const owedBy = String(formData.get("owedBy") ?? "owner").trim() || "owner";
   if (!name || !startDate) {
-    throw new Error("חובה שם ותאריך התחלה");
+    throw new Error("חובה למלא שם ותאריך התחלה");
   }
-  const data: Omit<FixedExpense, "id"> = { branchId, name, amount, startDate, category, payer };
+  const data: Omit<FixedExpense, "id"> = { branchId, name, amount, startDate, category, paidBy, owedBy };
   await getAdminFirestore().collection("n_fixed_expenses").add(stripUndefined(data));
   revalidatePath(`/dashboard/rentals/branches/${branchId}`);
   redirect(`/dashboard/rentals/branches/${branchId}`);
@@ -62,12 +57,13 @@ export async function createVariableExpenseAction(branchId: string, formData: Fo
   const amount = Number(formData.get("amount")) || 0;
   const date = String(formData.get("date") ?? "").trim();
   const category = String(formData.get("category") ?? "").trim() || undefined;
-  const payer = String(formData.get("payer") ?? "owner").trim() || "owner";
+  const paidBy = String(formData.get("paidBy") ?? "owner").trim() || "owner";
+  const owedBy = String(formData.get("owedBy") ?? "owner").trim() || "owner";
   if (!desc || !date || !amount) {
-    throw new Error("חובה תיאור, תאריך וסכום");
+    throw new Error("חובה למלא תיאור, סכום ותאריך");
   }
   const month = date.slice(0, 7);
-  const data: Omit<VariableExpense, "id"> = { branchId, desc, amount, date, month, category, payer };
+  const data: Omit<VariableExpense, "id"> = { branchId, desc, amount, date, month, category, paidBy, owedBy };
   await getAdminFirestore().collection("n_var_expenses").add(stripUndefined(data));
   revalidatePath(`/dashboard/rentals/branches/${branchId}`);
   redirect(`/dashboard/rentals/branches/${branchId}`);

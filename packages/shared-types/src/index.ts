@@ -60,6 +60,8 @@ export interface FixedExpense {
     endDate?: string;
     payer?: string;
   category?: string;
+  paidBy?: string;
+  owedBy?: string;
 }
 
 /** collection: n_var_expenses */
@@ -70,6 +72,8 @@ export interface VariableExpense {
     desc: string;
     category?: string;
     payer?: string;
+  paidBy?: string;
+  owedBy?: string;
     date: string;
     month: string; // YYYY-MM
 }
