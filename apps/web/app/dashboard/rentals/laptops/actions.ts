@@ -65,7 +65,11 @@ export async function createLaptopAction(formData: FormData) {
   if (!data.branchId || !data.name) {
     throw new Error("חובה לבחור סניף ולמלא שם");
   }
-  await getAdminFirestore().collection("n_laptops").add(stripUndefined(data));
+  try {
+    await getAdminFirestore().collection("n_laptops").add(stripUndefined(data));
+  } catch (e) {
+    throw new Error("שגיאה בשמירת המחשב ל-Firestore: " + (e instanceof Error ? e.message : String(e)));
+  }
   revalidatePath("/dashboard/rentals/laptops");
   redirect("/dashboard/rentals/laptops");
 }
@@ -80,7 +84,11 @@ export async function updateLaptopAction(id: string, formData: FormData) {
   if (!data.branchId || !data.name) {
     throw new Error("חובה לבחור סניף ולמלא שם");
   }
-  await getAdminFirestore().collection("n_laptops").doc(id).set(stripUndefined(data), { merge: true });
+  try {
+    await getAdminFirestore().collection("n_laptops").doc(id).set(stripUndefined(data), { merge: true });
+  } catch (e) {
+    throw new Error("שגיאה בעדכון המחשב ב-Firestore: " + (e instanceof Error ? e.message : String(e)));
+  }
   revalidatePath("/dashboard/rentals/laptops");
   redirect("/dashboard/rentals/laptops");
 }
