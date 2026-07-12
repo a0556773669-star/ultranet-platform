@@ -100,7 +100,11 @@ export async function createCollectionRouteAction(formData: FormData) {
     depositsTo: String(formData.get("depositsTo") ?? "owner") as CollectionRoute["depositsTo"],
     apiKey: String(formData.get("apiKey") ?? "").trim() || undefined,
     apiSecret: String(formData.get("apiSecret") ?? "").trim() || undefined,
-    receiptsProvider: "none",
+    receiptsProvider: (String(formData.get("receiptsProvider") ?? "none").trim() ||
+      "none") as CollectionRoute["receiptsProvider"],
+    receiptsCompanyId: String(formData.get("receiptsCompanyId") ?? "").trim() || undefined,
+    receiptsApiKey: String(formData.get("receiptsApiKey") ?? "").trim() || undefined,
+    receiptsApiSecret: String(formData.get("receiptsApiSecret") ?? "").trim() || undefined,
   };
   await getAdminFirestore().collection("n_collection_routes").add(stripUndefined(data));
   revalidatePath("/dashboard/accounting/routes");

@@ -51,6 +51,13 @@ export default async function CollectionRoutesPage() {
           </select>
         </div>
         <div>
+          <label className={LABEL}>מספר מוסד (Mosad ID / Terminal ID)</label>
+          <input name="terminalId" dir="ltr" className={FIELD} />
+          <p className="mt-1 text-[11px] text-muted">
+            בנדרים פלוס: המספר שמזהה את המוסד שלך אצלם.
+          </p>
+        </div>
+        <div>
           <label className={LABEL}>מזהה סניף (ריק למסלול של כל הסניפים)</label>
           <input name="branchScope" placeholder="ריק לכל הסניפים" className={FIELD} />
         </div>
@@ -74,12 +81,35 @@ export default async function CollectionRoutesPage() {
           </select>
         </div>
         <div>
-          <label className={LABEL}>API Key (לא חובה)</label>
+          <label className={LABEL}>API Key / טוקן ApiValid (לא חובה)</label>
           <input name="apiKey" type="password" dir="ltr" autoComplete="off" className={FIELD} />
+          <p className="mt-1 text-[11px] text-muted">
+            בנדרים פלוס: כאן מכניסים את טוקן ה-ApiValid (מבקשים אותו במפורש משירות הלקוחות שלהם).
+          </p>
         </div>
         <div>
           <label className={LABEL}>API Secret (לא חובה)</label>
           <input name="apiSecret" type="password" dir="ltr" autoComplete="off" className={FIELD} />
+        </div>
+        <div className="sm:col-span-2">
+          <label className={LABEL}>הפקת קבלות</label>
+          <select name="receiptsProvider" className={FIELD} defaultValue="none">
+            <option value="none">ללא הפקת קבלות</option>
+            <option value="icount">iCount</option>
+            <option value="green_invoice">חשבונית ירוקה</option>
+          </select>
+        </div>
+        <div>
+          <label className={LABEL}>מזהה חברה אצל ספק הקבלות</label>
+          <input name="receiptsCompanyId" dir="ltr" className={FIELD} />
+        </div>
+        <div>
+          <label className={LABEL}>API Key לקבלות (לא חובה)</label>
+          <input name="receiptsApiKey" type="password" dir="ltr" autoComplete="off" className={FIELD} />
+        </div>
+        <div>
+          <label className={LABEL}>API Secret לקבלות (לא חובה)</label>
+          <input name="receiptsApiSecret" type="password" dir="ltr" autoComplete="off" className={FIELD} />
         </div>
         <button
           type="submit"
