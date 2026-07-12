@@ -26,7 +26,6 @@ function stripUndefined<T extends Record<string, unknown>>(obj: T): T {
 
 function parseLaptopForm(formData: FormData, branchId: string): Omit<Laptop, "id"> {
   const name = String(formData.get("name") ?? "").trim();
-  const serial = String(formData.get("serial") ?? "").trim() || undefined;
   const dayPrice = Number(formData.get("dayPrice")) || 0;
   const weekPrice = Number(formData.get("weekPrice")) || 0;
   const monthPrice = Number(formData.get("monthPrice")) || 0;
@@ -45,7 +44,6 @@ function parseLaptopForm(formData: FormData, branchId: string): Omit<Laptop, "id
     dayPrice,
     weekPrice,
     monthPrice,
-    serial,
     hasStick,
     simNumber,
     altPricing,

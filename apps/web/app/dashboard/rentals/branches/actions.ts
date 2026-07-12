@@ -33,6 +33,7 @@ function parseRentalBranchForm(formData: FormData): Omit<Branch, "id"> {
   const partnerEmail = String(formData.get("partnerEmail") ?? "").trim() || undefined;
   const myPct = Number(formData.get("myPct")) || 0;
   const partnerPct = Number(formData.get("partnerPct")) || 0;
+  const parentPct = Number(formData.get("parentPct")) || undefined;
   const notes = String(formData.get("notes") ?? "").trim() || undefined;
   const parentBranchId = String(formData.get("parentBranchId") ?? "").trim() || null;
   const collectionRouteId = String(formData.get("collectionRouteId") ?? "").trim() || null;
@@ -48,6 +49,7 @@ function parseRentalBranchForm(formData: FormData): Omit<Branch, "id"> {
     partnerEmail,
     myPct,
     partnerPct,
+    parentPct,
     notes,
     parentBranchId,
     collectionRouteId,

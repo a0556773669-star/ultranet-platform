@@ -18,6 +18,7 @@ type Initial = {
   partnerEmail?: string;
   myPct?: number;
   partnerPct?: number;
+  parentPct?: number;
   notes?: string;
   parentBranchId?: string | null;
   collectionRouteId?: string | null;
@@ -95,21 +96,20 @@ export function RentalBranchForm({ action, initial, routes, parentOptions }: Ren
             </div>
           )}
 
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div className={model === "sub_partnership" ? "grid grid-cols-1 gap-4 sm:grid-cols-3" : "grid grid-cols-1 gap-4 sm:grid-cols-2"}>
             <div>
-              <label className={LABEL}>{"אחוז שלי (%)"}</label>
+              <label className={LABEL}>{"שלי (%)"}</label>
               <input type="number" name="myPct" min={0} max={100} defaultValue={initial?.myPct ?? 50} className={FIELD} />
             </div>
+            {model === "sub_partnership" && (
+              <div>
+                <label className={LABEL}>{"סניף האם (%)"}</label>
+                <input type="number" name="parentPct" min={0} max={100} defaultValue={initial?.parentPct ?? 25} className={FIELD} />
+              </div>
+            )}
             <div>
-              <label className={LABEL}>{"אחוז השותף (%)"}</label>
-              <input
-                type="number"
-                name="partnerPct"
-                min={0}
-                max={100}
-                defaultValue={initial?.partnerPct ?? 50}
-                className={FIELD}
-              />
+              <label className={LABEL}>{"השותף (%)"}</label>
+              <input type="number" name="partnerPct" min={0} max={100} defaultValue={initial?.partnerPct ?? 50} className={FIELD} />
             </div>
           </div>
 

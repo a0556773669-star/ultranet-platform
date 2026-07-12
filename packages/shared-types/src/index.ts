@@ -28,6 +28,7 @@ export interface Branch {
     partnerEmail?: string;
     myPct: number;
     partnerPct: number;
+  parentPct?: number;
     setupCost?: number;
     notes?: string;
     /** sub-branch model: set when this branch rolls up under a head partner's branch */
@@ -126,7 +127,6 @@ export interface Laptop {
     dayPrice: number;
     weekPrice: number;
     monthPrice: number;
-    serial?: string;
   hasStick?: boolean;
   simNumber?: string;
   altPricing?: boolean;

@@ -46,7 +46,6 @@ export default async function LaptopsPage() {
             <Link href={`/dashboard/rentals/laptops/${l.id}`} className="flex-1 min-w-[220px]">
               <p className="font-bold text-ink">
                 {l.name}
-                {l.serial ? <span className="mr-2 text-xs font-normal text-muted" dir="ltr">#{l.serial}</span> : null}
               </p>
               <p className="text-xs text-muted">
                 ₪{l.dayPrice ?? 0}/יום · ₪{l.weekPrice ?? 0}/שבוע · ₪{l.monthPrice ?? 0}/חודש

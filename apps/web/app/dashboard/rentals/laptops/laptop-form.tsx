@@ -36,11 +36,6 @@ export function LaptopForm({ action, branches, isOwner, initial }: Props) {
         <input name="name" required defaultValue={initial?.name} className={FIELD} />
       </div>
 
-      <div>
-        <label className={LABEL}>מספר סידורי</label>
-        <input name="serial" dir="ltr" defaultValue={initial?.serial} className={FIELD} />
-      </div>
-
       <div className="grid grid-cols-3 gap-3">
         <div>
           <label className={LABEL}>מחיר ליום</label>

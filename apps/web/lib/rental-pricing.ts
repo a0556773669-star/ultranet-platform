@@ -36,5 +36,14 @@ export function calcRentalPrice(
 
 export function calcRentalDays(startDate: string, endDate: string): number {
   if (!startDate || !endDate) return 0;
-  return Math.max(1, Math.round((new Date(endDate).getTime() - new Date(startDate).getTime()) / 86400000));
+  const start = new Date(startDate);
+  const end = new Date(endDate);
+  const rawDays = Math.max(0, Math.round((end.getTime() - start.getTime()) / 86400000));
+  let billableDays = 0;
+  for (let i = 1; i <= rawDays; i++) {
+    const d = new Date(start);
+    d.setDate(d.getDate() + i);
+    if (d.getDay() !== 6) billableDays++;
+  }
+  return Math.max(1, billableDays);
 }
