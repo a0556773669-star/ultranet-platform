@@ -95,18 +95,6 @@ export function ClientForm({
       {depositType === "credit" && (
         <>
           <div>
-            <label className={LABEL}>4 ספרות אחרונות של הכרטיס</label>
-            <input
-              name="cardLast4"
-              dir="ltr"
-              maxLength={4}
-              inputMode="numeric"
-              pattern="[0-9]{4}"
-              defaultValue={initial?.cardLast4}
-              className={FIELD}
-            />
-          </div>
-          <div>
             <label className={LABEL}>תוקף (MM/YY)</label>
             <input
               name="cardExpiry"
@@ -117,9 +105,16 @@ export function ClientForm({
               className={FIELD}
             />
           </div>
+          <div className="flex items-end sm:col-span-1">
+            <p className="text-xs text-muted">
+              {initial?.cardLast4
+                ? `כרטיס שמור: •••• ${initial.cardLast4} (נשמר דרך נדרים פלוס)`
+                : "מספר הכרטיס עצמו לא מוזן כאן — הוא נשמר בנפרד ובאופן מאובטח, לאחר השמירה, דרך הכפתור \"שמור כרטיס דרך נדרים פלוס\" בעמוד עריכת הלקוח."}
+            </p>
+          </div>
           <p className="text-xs text-muted sm:col-span-2">
-            לא נשמר מספר כרטיס מלא ולא קוד CVV — מטעמי אבטחה (PCI-DSS). לאחר חיבור סליקה, החיוב יתבצע
-            דרך אסימון מאובטח של הסליקה.
+            לא נשמר מספר כרטיס מלא ולא קוד CVV — מטעמי אבטחה (PCI-DSS). מספר הכרטיס נשמר רק דרך אייפרם
+            מאובטח של נדרים פלוס, שמחזיר לנו אסימון (טוקן) ואת 4 הספרות האחרונות בלבד.
           </p>
         </>
       )}
