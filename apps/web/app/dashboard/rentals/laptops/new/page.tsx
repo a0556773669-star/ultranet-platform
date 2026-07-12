@@ -25,6 +25,11 @@ export default async function NewLaptopPage({
           חובה לבחור סניף ולמלא שם מחשב לפני השמירה.
         </div>
       )}
+      {searchParams?.error === "no-branch" && (
+        <div className="mb-4 rounded-card border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-700">
+          לחשבון שלך לא משוייך סניף. פנה לבעלים כדי שישייך לך סניף בעמוד המשתמשים.
+        </div>
+      )}
       <LaptopForm action={createLaptopAction} branches={branches} isOwner={isOwner} />
     </div>
   );

@@ -40,6 +40,11 @@ export default async function EditLaptopPage({
           חובה לבחור סניף ולמלא שם מחשב לפני השמירה.
         </div>
       )}
+      {searchParams?.error === "no-branch" && (
+        <div className="mb-4 rounded-card border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-700">
+          לחשבון שלך לא משוייך סניף. פנה לבעלים כדי שישייך לך סניף בעמוד המשתמשים.
+        </div>
+      )}
       <LaptopForm action={updateLaptopAction.bind(null, laptop.id)} branches={branches} isOwner={isOwner} initial={laptop} />
     </div>
   );

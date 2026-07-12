@@ -63,7 +63,7 @@ export async function createLaptopAction(formData: FormData) {
     role === "owner" ? String(formData.get("branchId") ?? "").trim() : String(session.user?.branchId ?? "").trim();
   const data = parseLaptopForm(formData, branchId);
   if (!data.branchId || !data.name) {
-    redirect("/dashboard/rentals/laptops/new?error=missing");
+    redirect(`/dashboard/rentals/laptops/new?error=${role !== "owner" && !data.branchId ? "no-branch" : "missing"}`);
   }
   try {
     await getAdminFirestore().collection("n_laptops").add(stripUndefined(data));
@@ -82,7 +82,7 @@ export async function updateLaptopAction(id: string, formData: FormData) {
   const branchId = role === "owner" ? String(formData.get("branchId") ?? "").trim() : existingBranchId;
   const data = parseLaptopForm(formData, branchId);
   if (!data.branchId || !data.name) {
-    redirect(`/dashboard/rentals/laptops/${id}?error=missing`);
+    redirect(`/dashboard/rentals/laptops/${id}?error=${role !== "owner" && !data.branchId ? "no-branch" : "missing"}`);
   }
   try {
     await getAdminFirestore().collection("n_laptops").doc(id).set(stripUndefined(data), { merge: true });
