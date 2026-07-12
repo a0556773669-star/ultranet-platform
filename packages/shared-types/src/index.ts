@@ -158,9 +158,12 @@ export interface RentalClient {
     phone?: string;
     idNum?: string;
     address?: string;
-    cc?: string; // legacy - should move to tokenized processor storage, not raw PAN
-  exp?: string;
-    cvv?: string; // legacy - should never be stored raw; see README security note
+  email?: string;
+  signedTerms?: boolean;
+  depositType?: "none" | "check" | "credit";
+  cardLast4?: string; // display-only reference, never store full PAN
+  cardExpiry?: string; // MM/YY, non-sensitive
+  gatewayToken?: string; // set by payment gateway tokenization (Nedarim Plus), never raw card data
 }
 
 /** collection: n_rentals */

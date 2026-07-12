@@ -32,17 +32,59 @@ export async function createClientAction(formData: FormData) {
   const branchId = String(formData.get("branchId") ?? "");
   const name = String(formData.get("name") ?? "").trim();
   if (!branchId || !name) {
-    throw new Error("סניף ושם לקוח הם שדות חובה");
+    redirect("/dashboard/rentals/clients?error=missing");
   }
+  const depositType = String(formData.get("depositType") ?? "none") as "none" | "check" | "credit";
   const data: Omit<RentalClient, "id"> = {
     branchId,
     name,
     phone: String(formData.get("phone") ?? "").trim() || undefined,
+    email: String(formData.get("email") ?? "").trim() || undefined,
     idNum: String(formData.get("idNum") ?? "").trim() || undefined,
     address: String(formData.get("address") ?? "").trim() || undefined,
+    signedTerms: formData.get("signedTerms") === "on",
+    depositType,
+    cardLast4: depositType === "credit" ? (String(formData.get("cardLast4") ?? "").trim().slice(-4) || undefined) : undefined,
+    cardExpiry: depositType === "credit" ? (String(formData.get("cardExpiry") ?? "").trim() || undefined) : undefined,
   };
   await getAdminFirestore().collection("n_rental_clients").add(stripUndefined(data));
   revalidatePath("/dashboard/rentals/clients");
+  redirect("/dashboard/rentals/clients");
+}
+
+export async function updateClientAction(id: string, formData: FormData) {
+  await requireSession();
+  const branchId = String(formData.get("branchId") ?? "");
+  const name = String(formData.get("name") ?? "").trim();
+  if (!branchId || !name) {
+    redirect(`/dashboard/rentals/clients/${id}?error=missing`);
+  }
+  const depositType = String(formData.get("depositType") ?? "none") as "none" | "check" | "credit";
+  const data: Omit<RentalClient, "id"> = {
+    branchId,
+    name,
+    phone: String(formData.get("phone") ?? "").trim() || undefined,
+    email: String(formData.get("email") ?? "").trim() || undefined,
+    idNum: String(formData.get("idNum") ?? "").trim() || undefined,
+    address: String(formData.get("address") ?? "").trim() || undefined,
+    signedTerms: formData.get("signedTerms") === "on",
+    depositType,
+    cardLast4: depositType === "credit" ? (String(formData.get("cardLast4") ?? "").trim().slice(-4) || undefined) : undefined,
+    cardExpiry: depositType === "credit" ? (String(formData.get("cardExpiry") ?? "").trim() || undefined) : undefined,
+  };
+  await getAdminFirestore().collection("n_rental_clients").doc(id).set(stripUndefined(data), { merge: true });
+  revalidatePath("/dashboard/rentals/clients");
+  redirect("/dashboard/rentals/clients");
+}
+
+export async function deleteClientAction(id: string) {
+  const session = await requireSession();
+  if (session.user?.role !== "owner") {
+    redirect("/dashboard/rentals/clients?error=forbidden");
+  }
+  await getAdminFirestore().collection("n_rental_clients").doc(id).delete();
+  revalidatePath("/dashboard/rentals/clients");
+  redirect("/dashboard/rentals/clients");
 }
 
 
