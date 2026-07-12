@@ -70,6 +70,7 @@ export default async function EditClientPage({
           apiValid={nedarimCreds.apiValid}
           clientName={client.name}
           clientPhone={client.phone}
+          clientIdNum={client.idNum}
         />
       )}
       {isOwner && <DeleteClientButton action={boundDelete} />}

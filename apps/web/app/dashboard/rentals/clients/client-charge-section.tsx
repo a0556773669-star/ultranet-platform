@@ -9,11 +9,13 @@ export function ClientChargeSection({
   apiValid,
   clientName,
   clientPhone,
+  clientIdNum,
 }: {
   mosadId: string;
   apiValid: string;
   clientName: string;
   clientPhone?: string;
+  clientIdNum?: string;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -40,6 +42,7 @@ export function ClientChargeSection({
             apiValid={apiValid}
             clientName={clientName}
             clientPhone={clientPhone}
+            clientIdNum={clientIdNum}
             onDone={() => {
               router.refresh();
             }}

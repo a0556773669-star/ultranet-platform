@@ -152,7 +152,8 @@ export async function createNedarimTransactionAction(
   apiValid: string,
   amount: number,
   clientName: string,
-  clientPhone?: string
+  clientPhone?: string,
+  clientIdNum?: string
 ): Promise<{ ok: true; id: string } | { ok: false; message: string }> {
   await requireSession();
   if (!amount || amount <= 0) {
@@ -164,6 +165,7 @@ export async function createNedarimTransactionAction(
     PaymentType: "Ragil",
     Amount: amount.toFixed(2),
     Tashlumim: "1",
+    Zeout: clientIdNum ?? "",
     FirstName: clientName,
     Phone: clientPhone ?? "",
     Comment: `חיוב לקוח - ${clientName}`,

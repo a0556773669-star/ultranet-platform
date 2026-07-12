@@ -12,12 +12,14 @@ export function NedarimChargeCapture({
   apiValid,
   clientName,
   clientPhone,
+  clientIdNum,
   onDone,
 }: {
   mosadId: string;
   apiValid: string;
   clientName: string;
   clientPhone?: string;
+  clientIdNum?: string;
   onDone: (result: { ok: boolean; message?: string }) => void;
 }) {
   const frameRef = useRef<HTMLIFrameElement>(null);
@@ -69,7 +71,7 @@ export function NedarimChargeCapture({
     setStage("creating");
     const activeMosad = testMode ? TEST_MOSAD : mosadId;
     const activeApiValid = testMode ? TEST_API_VALID : apiValid;
-    const res = await createNedarimTransactionAction(activeMosad, activeApiValid, amt, clientName, clientPhone);
+    const res = await createNedarimTransactionAction(activeMosad, activeApiValid, amt, clientName, clientPhone, clientIdNum);
     if (!res.ok) {
       setStage("error");
       setError(res.message);
