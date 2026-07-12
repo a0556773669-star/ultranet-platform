@@ -6,6 +6,7 @@ import { updateClientAction, deleteClientAction } from "../../actions";
 import { ClientForm } from "../client-form";
 import { DeleteClientButton } from "../delete-client-button";
 import { ClientCardSection } from "../client-card-section";
+import { ClientChargeSection } from "../client-charge-section";
 import { resolveNedarimCreds } from "@/lib/nedarim";
 
 export default async function EditClientPage({
@@ -61,6 +62,14 @@ export default async function EditClientPage({
           clientPhone={client.phone}
           currentLast4={client.cardLast4}
           autoOpen={searchParams?.openCard === "1"}
+        />
+      )}
+      {nedarimCreds && (
+        <ClientChargeSection
+          mosadId={nedarimCreds.mosadId}
+          apiValid={nedarimCreds.apiValid}
+          clientName={client.name}
+          clientPhone={client.phone}
         />
       )}
       {isOwner && <DeleteClientButton action={boundDelete} />}

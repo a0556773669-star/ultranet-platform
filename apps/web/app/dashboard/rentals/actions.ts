@@ -147,6 +147,54 @@ export async function saveClientCardTokenAction(clientId: string, token: string,
   revalidatePath(`/dashboard/rentals/clients/${clientId}`);
 }
 
+export async function createNedarimTransactionAction(
+  mosadId: string,
+  apiValid: string,
+  amount: number,
+  clientName: string,
+  clientPhone?: string
+): Promise<{ ok: true; id: string } | { ok: false; message: string }> {
+  await requireSession();
+  if (!amount || amount <= 0) {
+    return { ok: false, message: "סכום לא תקין" };
+  }
+  const body = new URLSearchParams({
+    Mosad: mosadId,
+    ApiValid: apiValid,
+    PaymentType: "Ragil",
+    Amount: amount.toFixed(2),
+    Tashlumim: "1",
+    FirstName: clientName,
+    Phone: clientPhone ?? "",
+    Comment: `חיוב לקוח - ${clientName}`,
+  });
+
+  let res: Response;
+  try {
+    res = await fetch(
+      "https://matara.pro/nedarimplus/V6/Files/WebServices/DebitIframe.aspx?Action=CreateTransaction",
+      { method: "POST", body, headers: { "Content-Type": "application/x-www-form-urlencoded" } }
+    );
+  } catch {
+    return { ok: false, message: "שגיאת תקשורת מול נדרים פלוס" };
+  }
+
+  const text = await res.text();
+  let data: Record<string, unknown>;
+  try {
+    data = JSON.parse(text);
+  } catch {
+    return { ok: false, message: `תגובה לא צפויה מנדרים פלוס: ${text.slice(0, 200)}` };
+  }
+
+  const status = String(data.Status ?? "");
+  const id = String(data.Id ?? data.ID ?? "");
+  if (status !== "OK" || !id) {
+    return { ok: false, message: String(data.Message ?? "יצירת העסקה נכשלה") };
+  }
+  return { ok: true, id };
+}
+
 export async function updateClientAction(id: string, formData: FormData) {
   await requireSession();
   const branchId = String(formData.get("branchId") ?? "");
