@@ -6,7 +6,13 @@ import { LaptopForm } from "../laptop-form";
 import { updateLaptopAction, deleteLaptopAction } from "../actions";
 import { DeleteLaptopButton } from "../delete-button";
 
-export default async function EditLaptopPage({ params }: { params: { id: string } }) {
+export default async function EditLaptopPage({
+  params,
+  searchParams,
+}: {
+  params: { id: string };
+  searchParams?: { error?: string };
+}) {
   const session = await requireModuleAccess("rentals");
   const isOwner = session.user?.role === "owner";
   const db = getAdminFirestore();
@@ -26,9 +32,14 @@ export default async function EditLaptopPage({ params }: { params: { id: string 
   return (
     <div className="max-w-xl">
       <div className="mb-4 flex items-center justify-between">
-        <h1 className="text-[21px] font-extrabold text-ink">💻 עריכת מחשב — {laptop.name}</h1>
+        <h1 className="text-[21px] font-extrabold text-ink">💻 עריכת מחשב – {laptop.name}</h1>
         {isOwner && <DeleteLaptopButton action={deleteLaptopAction.bind(null, laptop.id)} />}
       </div>
+      {searchParams?.error === "missing" && (
+        <div className="mb-4 rounded-card border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-700">
+          חובה לבחור סניף ולמלא שם מחשב לפני השמירה.
+        </div>
+      )}
       <LaptopForm action={updateLaptopAction.bind(null, laptop.id)} branches={branches} isOwner={isOwner} initial={laptop} />
     </div>
   );
