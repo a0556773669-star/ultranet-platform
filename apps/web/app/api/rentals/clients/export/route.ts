@@ -5,17 +5,6 @@ import type { RentalClient, Branch } from "@ultranet/shared-types";
 import { buildClientsExportWorkbook } from "@/lib/client-excel";
 
 export async function GET() {
-  try {
-    return await handler();
-  } catch (err) {
-    return new Response(JSON.stringify({ error: String(err), stack: (err as Error)?.stack }), {
-      status: 500,
-      headers: { "Content-Type": "application/json" },
-    });
-  }
-}
-
-async function handler() {
   const session = await requireModuleAccess("rentals");
   const role = session.user?.role;
   const myBranchId = session.user?.branchId;
