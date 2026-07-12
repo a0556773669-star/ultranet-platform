@@ -6,7 +6,8 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { getAdminFirestore } from "@/lib/firebase-admin";
 import { chargeViaRoute } from "@/lib/collection-charge";
-import type { RentalClient, Laptop, Rental } from "@ultranet/shared-types";
+import type { RentalClient, Laptop, Rental, Branch } from "@ultranet/shared-types";
+import { parseClientsWorkbook } from "@/lib/client-excel";
 import { calcRentalPrice, calcRentalDays } from "@/lib/rental-pricing";
 
 async function requireSession() {
@@ -25,6 +26,88 @@ function stripUndefined<T extends Record<string, unknown>>(obj: T): T {
     }
   }
   return out;
+}
+
+export async function importClientsAction(formData: FormData) {
+  const session = await requireSession();
+  const role = session.user?.role;
+  const myBranchId = session.user?.branchId;
+  const isOwner = role === "owner";
+
+  const file = formData.get("file");
+  if (!(file instanceof File) || file.size === 0) {
+    redirect("/dashboard/rentals/clients?importError=missing");
+  }
+
+  const buf = Buffer.from(await (file as File).arrayBuffer());
+  const { rows, errors } = parseClientsWorkbook(buf);
+
+  const db = getAdminFirestore();
+  const branchesSnap = await db.collection("n_branches").where("branchType", "==", "rentals").get();
+  const branches = branchesSnap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<Branch, "id">) }));
+  const branchIdByName = new Map(branches.map((b) => [b.name.trim(), b.id]));
+
+  let created = 0;
+  let updated = 0;
+  let skipped = errors.length;
+
+  for (const row of rows) {
+    let branchId = myBranchId ?? "";
+    if (isOwner) {
+      const resolved = row.branchName ? branchIdByName.get(row.branchName.trim()) : undefined;
+      if (!resolved) {
+        skipped++;
+        continue;
+      }
+      branchId = resolved;
+    }
+    if (!branchId) {
+      skipped++;
+      continue;
+    }
+
+    const data: Omit<RentalClient, "id"> = {
+      branchId,
+      name: row.name,
+      phone: row.phone,
+      email: row.email,
+      idNum: row.idNum,
+      address: row.address,
+      signedTerms: row.signedTerms,
+      depositType: row.depositType,
+    };
+
+    let existingId: string | null = null;
+    if (row.idNum) {
+      const match = await db
+        .collection("n_rental_clients")
+        .where("branchId", "==", branchId)
+        .where("idNum", "==", row.idNum)
+        .limit(1)
+        .get();
+      if (!match.empty) existingId = match.docs[0]!.id;
+    }
+    if (!existingId) {
+      const matchByName = await db
+        .collection("n_rental_clients")
+        .where("branchId", "==", branchId)
+        .where("name", "==", row.name)
+        .limit(1)
+        .get();
+      if (!matchByName.empty) existingId = matchByName.docs[0]!.id;
+    }
+
+    if (existingId) {
+      await db.collection("n_rental_clients").doc(existingId).set(stripUndefined(data), { merge: true });
+      updated++;
+    } else {
+      await db.collection("n_rental_clients").add(stripUndefined(data));
+      created++;
+    }
+  }
+
+  revalidatePath("/dashboard/rentals/clients");
+  redirect(`/dashboard/rentals/clients?imported=${created}&updated=${updated}&skipped=${skipped}`);
 }
 
 export async function createClientAction(formData: FormData) {
