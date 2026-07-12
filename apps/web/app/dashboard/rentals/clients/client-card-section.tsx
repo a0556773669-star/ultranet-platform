@@ -12,6 +12,7 @@ export function ClientCardSection({
   clientName,
   clientPhone,
   currentLast4,
+  autoOpen,
 }: {
   clientId: string;
   mosadId: string;
@@ -19,9 +20,10 @@ export function ClientCardSection({
   clientName: string;
   clientPhone?: string;
   currentLast4?: string;
+  autoOpen?: boolean;
 }) {
   const router = useRouter();
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(!!autoOpen);
 
   return (
     <div className="mt-6">

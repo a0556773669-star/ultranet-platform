@@ -47,8 +47,11 @@ export async function createClientAction(formData: FormData) {
     cardLast4: depositType === "credit" ? (String(formData.get("cardLast4") ?? "").trim().slice(-4) || undefined) : undefined,
     cardExpiry: depositType === "credit" ? (String(formData.get("cardExpiry") ?? "").trim() || undefined) : undefined,
   };
-  await getAdminFirestore().collection("n_rental_clients").add(stripUndefined(data));
+  const ref = await getAdminFirestore().collection("n_rental_clients").add(stripUndefined(data));
   revalidatePath("/dashboard/rentals/clients");
+  if (depositType === "credit") {
+    redirect(`/dashboard/rentals/clients/${ref.id}?openCard=1`);
+  }
   redirect("/dashboard/rentals/clients");
 }
 

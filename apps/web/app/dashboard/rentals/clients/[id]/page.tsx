@@ -13,7 +13,7 @@ export default async function EditClientPage({
   searchParams,
 }: {
   params: { id: string };
-  searchParams?: { error?: string };
+  searchParams?: { error?: string; openCard?: string };
 }) {
   const session = await requireModuleAccess("rentals");
   const role = session.user?.role;
@@ -60,6 +60,7 @@ export default async function EditClientPage({
           clientName={client.name}
           clientPhone={client.phone}
           currentLast4={client.cardLast4}
+          autoOpen={searchParams?.openCard === "1"}
         />
       )}
       {isOwner && <DeleteClientButton action={boundDelete} />}
