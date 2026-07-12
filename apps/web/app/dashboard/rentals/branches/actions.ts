@@ -25,6 +25,32 @@ function stripUndefined<T extends Record<string, unknown>>(obj: T): T {
   return out;
 }
 
+async function upsertPartnerUser(email: string, name: string | undefined, branchId: string) {
+  const db = getAdminFirestore();
+  const emailLower = email.trim().toLowerCase();
+  if (!emailLower) return;
+  const snap = await db.collection("n_users").where("email", "==", emailLower).get();
+  if (snap.empty) {
+    await db.collection("n_users").add({
+      name: name || emailLower,
+      email: emailLower,
+      role: "partner",
+      branchId,
+      perms: { rentals: true },
+    });
+  } else {
+    const doc = snap.docs[0]!;
+    const existing = doc.data() as { perms?: Record<string, boolean>; role?: string };
+    await doc.ref.set(
+      {
+        branchId,
+        role: existing.role === "owner" ? existing.role : "partner",
+        perms: { ...(existing.perms ?? {}), rentals: true },
+      },
+      { merge: true }
+    );
+  }
+}
 function parseRentalBranchForm(formData: FormData): Omit<Branch, "id"> {
   const name = String(formData.get("name") ?? "").trim();
   const location = String(formData.get("location") ?? "").trim() || undefined;
@@ -65,6 +91,9 @@ export async function createRentalBranchAction(formData: FormData) {
     throw new Error("חובה להזין שם סניף");
   }
   const ref = await getAdminFirestore().collection("n_branches").add(stripUndefined(data));
+  if (data.partnerEmail) {
+    await upsertPartnerUser(data.partnerEmail, data.partnerName, ref.id);
+  }
   revalidatePath("/dashboard/branches");
   revalidatePath("/dashboard/rentals/branches");
   redirect(`/dashboard/rentals/branches/${ref.id}`);
@@ -74,6 +103,9 @@ export async function updateRentalBranchAction(id: string, formData: FormData) {
   await requireOwner();
   const data = parseRentalBranchForm(formData);
   await getAdminFirestore().collection("n_branches").doc(id).set(stripUndefined(data), { merge: true });
+  if (data.partnerEmail) {
+    await upsertPartnerUser(data.partnerEmail, data.partnerName, id);
+  }
   revalidatePath("/dashboard/branches");
   revalidatePath("/dashboard/rentals/branches");
   revalidatePath(`/dashboard/rentals/branches/${id}`);
