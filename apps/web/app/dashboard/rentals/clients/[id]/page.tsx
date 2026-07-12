@@ -5,6 +5,8 @@ import type { RentalClient, Branch } from "@ultranet/shared-types";
 import { updateClientAction, deleteClientAction } from "../../actions";
 import { ClientForm } from "../client-form";
 import { DeleteClientButton } from "../delete-client-button";
+import { ClientCardSection } from "../client-card-section";
+import { resolveNedarimCreds } from "@/lib/nedarim";
 
 export default async function EditClientPage({
   params,
@@ -30,6 +32,7 @@ export default async function EditClientPage({
   const branches = branchesSnap.docs.map(
     (d) => ({ id: d.id, ...(d.data() as Omit<Branch, "id">) }) as Branch
   );
+  const nedarimCreds = await resolveNedarimCreds(client.branchId);
 
   const boundUpdate = updateClientAction.bind(null, params.id);
   const boundDelete = deleteClientAction.bind(null, params.id);
@@ -49,6 +52,16 @@ export default async function EditClientPage({
         myBranchId={myBranchId}
         initial={client}
       />
+      {nedarimCreds && (
+        <ClientCardSection
+          clientId={client.id}
+          mosadId={nedarimCreds.mosadId}
+          apiValid={nedarimCreds.apiValid}
+          clientName={client.name}
+          clientPhone={client.phone}
+          currentLast4={client.cardLast4}
+        />
+      )}
       {isOwner && <DeleteClientButton action={boundDelete} />}
     </div>
   );

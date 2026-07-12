@@ -52,6 +52,15 @@ export async function createClientAction(formData: FormData) {
   redirect("/dashboard/rentals/clients");
 }
 
+export async function saveClientCardTokenAction(clientId: string, token: string, last4: string) {
+  await requireSession();
+  await getAdminFirestore().collection("n_rental_clients").doc(clientId).set(
+    { gatewayToken: token, cardLast4: last4, depositType: "credit" },
+    { merge: true }
+  );
+  revalidatePath(`/dashboard/rentals/clients/${clientId}`);
+}
+
 export async function updateClientAction(id: string, formData: FormData) {
   await requireSession();
   const branchId = String(formData.get("branchId") ?? "");
