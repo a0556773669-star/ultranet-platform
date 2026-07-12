@@ -127,6 +127,15 @@ export interface Laptop {
     weekPrice: number;
     monthPrice: number;
     serial?: string;
+  hasStick?: boolean;
+  simNumber?: string;
+  altPricing?: boolean;
+  noInternetDayPrice?: number;
+  noInternetWeekPrice?: number;
+  noInternetMonthPrice?: number;
+  stickOnlyDayPrice?: number;
+  stickOnlyWeekPrice?: number;
+  stickOnlyMonthPrice?: number;
 }
 
 /** collection: n_sticks */

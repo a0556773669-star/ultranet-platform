@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import type { ChangeEvent } from "react";
+import { calcRentalPrice, calcRentalDays } from "@/lib/rental-pricing";
 import type { Branch, RentalClient, Laptop, CollectionRoute } from "@ultranet/shared-types";
 import { createRentalAction } from "../actions";
 
@@ -30,11 +31,8 @@ export function NewRentalForm({ branches, clients, laptops, routes, defaultBranc
     if (!startDate || !endDate || !itemId) return 0;
     const laptop = branchLaptops.find((l) => l.id === itemId);
     if (!laptop) return 0;
-    const days = Math.max(
-      1,
-      Math.round((new Date(endDate).getTime() - new Date(startDate).getTime()) / 86400000),
-    );
-    return days * laptop.dayPrice;
+    const days = calcRentalDays(startDate, endDate);
+    return calcRentalPrice(days, laptop.dayPrice, laptop.weekPrice, laptop.monthPrice);
   }, [startDate, endDate, itemId, branchLaptops]);
 
   return (

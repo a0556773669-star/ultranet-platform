@@ -11,7 +11,7 @@ async function loadData() {
     db.collection("n_rentals").get(),
     db.collection("n_rental_clients").get(),
     db.collection("n_laptops").get(),
-    db.collection("n_branches").get(),
+    db.collection("n_branches").where("branchType", "==", "rentals").get(),
   ]);
   const rentals = rentalsSnap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<Rental, "id">) }) as Rental);
   const clients = new Map(clientsSnap.docs.map((d) => [d.id, d.data() as RentalClient]));

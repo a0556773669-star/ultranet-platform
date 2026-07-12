@@ -7,6 +7,7 @@ import { authOptions } from "@/lib/auth";
 import { getAdminFirestore } from "@/lib/firebase-admin";
 import { chargeViaRoute } from "@/lib/collection-charge";
 import type { RentalClient, Laptop, Rental } from "@ultranet/shared-types";
+import { calcRentalPrice, calcRentalDays } from "@/lib/rental-pricing";
 
 async function requireSession() {
   const session = await getServerSession(authOptions);
@@ -44,24 +45,6 @@ export async function createClientAction(formData: FormData) {
   revalidatePath("/dashboard/rentals/clients");
 }
 
-export async function createLaptopAction(formData: FormData) {
-  await requireSession();
-  const branchId = String(formData.get("branchId") ?? "");
-  const name = String(formData.get("name") ?? "").trim();
-  if (!branchId || !name) {
-    throw new Error("סניף ושם מחשב הם שדות חובה");
-  }
-  const data: Omit<Laptop, "id"> = {
-    branchId,
-    name,
-    dayPrice: Number(formData.get("dayPrice") ?? 0),
-    weekPrice: Number(formData.get("weekPrice") ?? 0),
-    monthPrice: Number(formData.get("monthPrice") ?? 0),
-    serial: String(formData.get("serial") ?? "").trim() || undefined,
-  };
-  await getAdminFirestore().collection("n_laptops").add(stripUndefined(data));
-  revalidatePath("/dashboard/rentals/laptops");
-}
 
 export async function createRentalAction(formData: FormData) {
   await requireSession();
@@ -70,11 +53,14 @@ export async function createRentalAction(formData: FormData) {
   const itemId = String(formData.get("itemId") ?? "");
   const startDate = String(formData.get("startDate") ?? "");
   const endDate = String(formData.get("endDate") ?? "");
-  const calcPrice = Number(formData.get("calcPrice") ?? 0);
   const collectionRouteId = String(formData.get("collectionRouteId") ?? "").trim() || undefined;
   if (!branchId || !clientId || !itemId || !startDate || !endDate) {
     throw new Error("יש למלא את כל השדות");
   }
+  const laptopDoc = await getAdminFirestore().collection("n_laptops").doc(itemId).get();
+  const laptop = laptopDoc.data() as Omit<Laptop, "id"> | undefined;
+  const rentalDays = calcRentalDays(startDate, endDate);
+  const calcPrice = laptop ? calcRentalPrice(rentalDays, laptop.dayPrice, laptop.weekPrice, laptop.monthPrice) : 0;
   const data: Omit<Rental, "id"> = {
     branchId,
     clientId,

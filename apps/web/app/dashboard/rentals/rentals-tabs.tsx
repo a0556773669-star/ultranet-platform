@@ -8,6 +8,7 @@ type TabItem = { href: string; label: string; icon: string; ownerOnly?: boolean 
 const TABS: TabItem[] = [
   { href: "/dashboard/rentals", label: "בית", icon: "🏠" },
   { href: "/dashboard/rentals/branches", label: "סניפים", icon: "🏢", ownerOnly: true },
+  { href: "/dashboard/rentals/expenses", label: "הוצאות", icon: "💸", ownerOnly: true },
   { href: "/dashboard/rentals/laptops", label: "מחשבים", icon: "💻" },
   { href: "/dashboard/rentals/clients", label: "לקוחות", icon: "👥" },
   { href: "/dashboard/rentals/manage", label: "השכרות", icon: "📋" },

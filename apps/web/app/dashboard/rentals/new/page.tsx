@@ -11,7 +11,7 @@ export default async function NewRentalPage() {
 
   const db = getAdminFirestore();
   const [branchesSnap, clientsSnap, laptopsSnap, routesSnap] = await Promise.all([
-    db.collection("n_branches").get(),
+    db.collection("n_branches").where("branchType", "==", "rentals").get(),
     db.collection("n_rental_clients").get(),
     db.collection("n_laptops").get(),
     db.collection("n_collection_routes").get(),

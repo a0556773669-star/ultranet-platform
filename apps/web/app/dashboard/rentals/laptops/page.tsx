@@ -1,10 +1,9 @@
+import Link from "next/link";
 import { requireModuleAccess } from "@/lib/perms";
 import { getAdminFirestore } from "@/lib/firebase-admin";
 import type { Laptop, Branch } from "@ultranet/shared-types";
-import { createLaptopAction } from "../actions";
-
-const FIELD = "w-full rounded-lg border border-card-border bg-[#f4f6f9] px-3 py-2 text-sm focus:border-teal focus:bg-white focus:outline-none";
-const LABEL = "mb-1 block text-xs font-semibold text-muted";
+import { deleteLaptopAction } from "./actions";
+import { DeleteLaptopButton } from "./delete-button";
 
 export default async function LaptopsPage() {
   const session = await requireModuleAccess("rentals");
@@ -14,7 +13,7 @@ export default async function LaptopsPage() {
   const db = getAdminFirestore();
   const [laptopsSnap, branchesSnap] = await Promise.all([
     db.collection("n_laptops").get(),
-    db.collection("n_branches").get(),
+    db.collection("n_branches").where("branchType", "==", "rentals").get(),
   ]);
   const branches = branchesSnap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<Branch, "id">) }) as Branch);
   const allLaptops = laptopsSnap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<Laptop, "id">) }) as Laptop);
@@ -23,75 +22,49 @@ export default async function LaptopsPage() {
 
   return (
     <div>
-      <h1 className="mb-4 text-[21px] font-extrabold text-ink">💻 מלאי מחשבים</h1>
-
-      <form
-        action={createLaptopAction}
-        className="mb-6 grid grid-cols-1 gap-4 rounded-card border border-card-border bg-white p-5 shadow-card sm:grid-cols-2"
-      >
-        {role === "owner" ? (
-          <div>
-            <label className={LABEL}>סניף</label>
-            <select name="branchId" required className={FIELD}>
-              {branches.map((b) => (
-                <option key={b.id} value={b.id}>
-                  {b.name}
-                </option>
-              ))}
-            </select>
-          </div>
-        ) : (
-          <input type="hidden" name="branchId" value={myBranchId ?? ""} />
-        )}
-        <div>
-          <label className={LABEL}>שם מחשב</label>
-          <input name="name" required className={FIELD} />
-        </div>
-        <div>
-          <label className={LABEL}>מספר סידורי</label>
-          <input name="serial" dir="ltr" className={FIELD} />
-        </div>
-        <div>
-          <label className={LABEL}>מחיר ליום</label>
-          <input name="dayPrice" type="number" min={0} defaultValue={0} className={FIELD} />
-        </div>
-        <div>
-          <label className={LABEL}>מחיר לשבוע</label>
-          <input name="weekPrice" type="number" min={0} defaultValue={0} className={FIELD} />
-        </div>
-        <div>
-          <label className={LABEL}>מחיר לחודש</label>
-          <input name="monthPrice" type="number" min={0} defaultValue={0} className={FIELD} />
-        </div>
-        <button
-          type="submit"
-          className="self-start rounded-[10px] bg-gradient-to-br from-teal to-teal-light px-6 py-2 text-sm font-bold text-white shadow-primary transition hover:opacity-90 sm:col-span-2"
+      <div className="mb-4 flex items-center justify-between">
+        <h1 className="text-[21px] font-extrabold text-ink">💻 מלאי מחשבים</h1>
+        <Link
+          href="/dashboard/rentals/laptops/new"
+          className="rounded-[10px] bg-gradient-to-br from-teal to-teal-light px-5 py-2 text-sm font-bold text-white shadow-primary transition hover:opacity-90"
         >
-          הוספת מחשב
-        </button>
-      </form>
+          + הוסף מחשב
+        </Link>
+      </div>
 
-      <div className="overflow-hidden rounded-card border border-card-border bg-white shadow-card">
-        <table className="w-full text-[13px]">
-          <thead className="bg-[#f4f6f9] text-muted">
-            <tr>
-              <th className="px-[11px] py-[9px] text-right text-[11px] font-bold uppercase tracking-wide">שם</th>
-              <th className="px-[11px] py-[9px] text-right text-[11px] font-bold uppercase tracking-wide">מחיר ליום</th>
-              {role === "owner" && (
-                <th className="px-[11px] py-[9px] text-right text-[11px] font-bold uppercase tracking-wide">סניף</th>
-              )}
-            </tr>
-          </thead>
-          <tbody>
-            {laptops.map((l) => (
-              <tr key={l.id} className="border-t border-card-border transition hover:bg-[#f8fafc]">
-                <td className="px-[11px] py-2 font-semibold text-ink">{l.name}</td>
-                <td className="px-[11px] py-2 text-muted">{l.dayPrice} ₪</td>
-                {role === "owner" && <td className="px-[11px] py-2 text-muted">{branchName(l.branchId)}</td>}
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      <div className="flex flex-col gap-2">
+        {laptops.length === 0 && (
+          <div className="rounded-card border border-card-border bg-white p-5 text-center text-sm text-muted shadow-card">
+            אין מחשבים עדיין
+          </div>
+        )}
+        {laptops.map((l) => (
+          <div
+            key={l.id}
+            className="flex flex-wrap items-center justify-between gap-3 rounded-card border border-card-border bg-white p-4 shadow-card"
+          >
+            <Link href={`/dashboard/rentals/laptops/${l.id}`} className="flex-1 min-w-[220px]">
+              <p className="font-bold text-ink">
+                {l.name}
+                {l.serial ? <span className="mr-2 text-xs font-normal text-muted" dir="ltr">#{l.serial}</span> : null}
+              </p>
+              <p className="text-xs text-muted">
+                ₪{l.dayPrice ?? 0}/יום · ₪{l.weekPrice ?? 0}/שבוע · ₪{l.monthPrice ?? 0}/חודש
+                {l.hasStick ? ` · 📡 סטיק${l.simNumber ? ` (${l.simNumber})` : ""}` : ""}
+                {role === "owner" ? ` · ${branchName(l.branchId)}` : ""}
+              </p>
+            </Link>
+            <div className="flex items-center gap-2">
+              <Link
+                href={`/dashboard/rentals/laptops/${l.id}`}
+                className="rounded-lg border border-card-border bg-white px-3 py-1.5 text-xs font-bold text-ink hover:bg-[#f4f6f9]"
+              >
+                עריכה
+              </Link>
+              {role === "owner" && <DeleteLaptopButton action={deleteLaptopAction.bind(null, l.id)} />}
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   );

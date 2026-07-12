@@ -5,7 +5,7 @@ import {
   deleteFixedExpenseAction,
   createVariableExpenseAction,
   deleteVariableExpenseAction,
-} from "./expenses-actions";
+} from "./actions";
 
 const CATEGORIES = ["שכירות", "חשמל ומים", "משכורות", "ציוד ותחזוקה", "שיווק ופרסום", "ביטוח", "אחר"];
 
