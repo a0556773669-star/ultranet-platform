@@ -7,7 +7,8 @@ function money(n: number) {
 
 function MiniStats({ f }: { f: BranchFinancials }) {
   return (
-    <div className="mt-2 grid grid-cols-3 gap-2 text-center text-xs">
+    <div className="mt-2 flex flex-col gap-2">
+      <div className="grid grid-cols-3 gap-2 text-center text-xs">
       <div>
         <div className="text-muted">השקעתי עד היום</div>
         <div className="font-bold text-ink">{money(f.ownerInvestedToDate)}</div>
@@ -22,6 +23,23 @@ function MiniStats({ f }: { f: BranchFinancials }) {
           {money(f.ownerBalanceToDate)}
         </div>
       </div>
+      </div>
+      {f.computerProfitTrend && f.computerProfitTrend.length > 0 && (
+        <div className="mt-2">
+          <h3 className="mb-1 text-[10px] font-bold text-ink">{`רווח פר מחשב (יעד 150 ₪ לחודש)`}</h3>
+          <div className="flex items-end gap-1" style={{ height: 50 }}>
+            {f.computerProfitTrend.map((m) => {
+              const height = Math.max(4, Math.min(50, Math.abs(m.profitPerComputer) / 3));
+              return (
+                <div key={m.month} className="flex flex-1 flex-col items-center justify-end" title={`${m.month}: ${Math.round(m.profitPerComputer)} ₪`}>
+                  <div className={`w-full rounded-t ${m.isHealthy ? "bg-teal" : "bg-red-400"}`} style={{ height }} />
+                  <span className={`mt-1 text-[8px] font-bold whitespace-nowrap ${m.isHealthy ? "text-teal-dark" : "text-red-600"}`}>{Math.round(m.profitPerComputer)} ₪</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
