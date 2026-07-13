@@ -32,7 +32,7 @@ export async function createUserAction(formData: FormData) {
   if (!existing.empty) {
     throw new Error("כבר קיים משתמש עם אימייל זה");
   }
-  const branchId = data.role === "owner" ? "all" : data.branchId;
+  const branchId = data.role === "owner" ? (data.branchId || "all") : data.branchId;
   await db.collection("n_users").add({
     name: data.name,
     email: data.email,
@@ -60,7 +60,7 @@ export async function updateUserAction(id: string, formData: FormData) {
   const docRef = db.collection("n_users").doc(id);
   const doc = await docRef.get();
   const prevEmail = doc.exists ? (doc.data()?.email as string | undefined) : undefined;
-  const branchId = data.role === "owner" ? "all" : data.branchId;
+  const branchId = data.role === "owner" ? (data.branchId || "all") : data.branchId;
 
   const update: Record<string, unknown> = {
     name: data.name,
