@@ -62,6 +62,7 @@ export async function createLaptopAction(formData: FormData) {
   const branchId =
     role === "owner" ? String(formData.get("branchId") ?? "").trim() : String(session.user?.branchId ?? "").trim();
   const data = parseLaptopForm(formData, branchId);
+  (data as Record<string, unknown>).addedDate = new Date().toISOString().slice(0, 10);
   if (!data.branchId || !data.name) {
     redirect(`/dashboard/rentals/laptops/new?error=${role !== "owner" && !data.branchId ? "no-branch" : "missing"}`);
   }
