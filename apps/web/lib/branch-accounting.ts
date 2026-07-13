@@ -1,0 +1,146 @@
+/**
+ * Core (pure, testable) calculations for the branch/partner accounting (הנה"ח) module.
+ * Sign convention throughout: positive = amount owed FROM the partner TO the owner.
+ * Negative = amount owed FROM the owner TO the partner.
+ */
+
+export type PaidBy = "owner" | "partner" | undefined;
+export type OwedBy = "owner" | "partner" | "shared" | undefined;
+
+/**
+ * Net amount owed TO the owner for a single expense line.
+ * Mirrors the existing netToOwner() logic already used in
+ * apps/web/app/dashboard/rentals/expenses/branch-expenses.tsx, kept in sync intentionally.
+ */
+export function expenseNetToOwner(amount: number, paidBy?: string, owedBy?: string): number {
+  const p = paidBy === "partner" ? "partner" : "owner";
+  const o = owedBy === "partner" ? "partner" : owedBy === "shared" ? "shared" : "owner";
+  if (o === "shared") return p === "owner" ? amount / 2 : -amount / 2;
+  if (o === p) return 0;
+  return p === "owner" ? amount : -amount;
+}
+
+/**
+ * The owner's true economic share of an expense's cost, regardless of who fronted the cash.
+ * Used for real profit calculations (not cash-settlement direction).
+ */
+export function ownerExpenseBurden(amount: number, owedBy?: string): number {
+  if (owedBy === "partner") return 0;
+  if (owedBy === "shared") return amount / 2;
+  return amount; // undefined/"owner" -> fully the owner's cost
+}
+
+export interface RentalIncomeLine {
+  amount: number;
+  /** true if this specific payment already sits with the owner directly (e.g. direct Nedarim charge,
+   *  or a collection route configured with depositsTo === "owner") rather than with the partner. */
+  collectedByOwner: boolean;
+}
+
+/**
+ * Amount owed TO the owner from a set of rental income lines for one branch/month.
+ * Default assumption: the partner holds the cash, so the owner is owed ownerPct% of it.
+ * For lines the owner already collected directly, that flips: the owner owes the partner
+ * partnerPct% of that specific line instead.
+ */
+export function incomeShareToOwner(lines: RentalIncomeLine[], ownerPct: number): number {
+  const partnerPct = 100 - ownerPct;
+  let total = 0;
+  for (const line of lines) {
+    if (line.collectedByOwner) {
+      total -= (line.amount * partnerPct) / 100;
+    } else {
+      total += (line.amount * ownerPct) / 100;
+    }
+  }
+  return total;
+}
+
+export function isCollectedByOwner(
+  paymentMethod: string | undefined,
+  route: { depositsTo?: string } | null | undefined
+): boolean {
+  if (paymentMethod === "nedarim") return true; // direct owner-gateway charge, never touches the partner
+  if (route && route.depositsTo === "owner") return true;
+  return false;
+}
+
+export interface ExpenseLine {
+  amount: number;
+  paidBy?: string;
+  owedBy?: string;
+}
+
+export interface MonthlySettlement {
+  incomeShareToOwner: number;
+  expenseNetToOwner: number;
+  /** positive => partner should transfer this to owner; negative => owner should transfer |amount| to partner */
+  netToOwner: number;
+}
+
+export function computeMonthlySettlement(
+  incomeLines: RentalIncomeLine[],
+  ownerPct: number,
+  expenses: ExpenseLine[]
+): MonthlySettlement {
+  const incomeShare = incomeShareToOwner(incomeLines, ownerPct);
+  const expenseNet = expenses.reduce((sum, e) => sum + expenseNetToOwner(e.amount, e.paidBy, e.owedBy), 0);
+  return {
+    incomeShareToOwner: incomeShare,
+    expenseNetToOwner: expenseNet,
+    netToOwner: incomeShare + expenseNet,
+  };
+}
+
+/**
+ * The owner's true monthly profit from a branch: owner's revenue share minus the owner's
+ * real economic expense burden (independent of who physically paid). This is what feeds
+ * the per-computer 150-per-month profit target, not the cash-settlement figure above.
+ */
+export function ownerMonthlyProfit(incomeLines: RentalIncomeLine[], ownerPct: number, expenses: ExpenseLine[]): number {
+  const incomeShare = incomeShareToOwner(incomeLines, ownerPct);
+  const expenseBurden = expenses.reduce((sum, e) => sum + ownerExpenseBurden(e.amount, e.owedBy), 0);
+  return incomeShare - expenseBurden;
+}
+
+export interface ComputerProfitMonth {
+  month: string; // YYYY-MM
+  netProfit: number;
+  computerCount: number;
+  profitPerComputer: number;
+  isHealthy: boolean;
+}
+
+const PROFIT_PER_COMPUTER_TARGET = 150;
+
+/**
+ * Computer count active in a given YYYY-MM month, based on each computer's addedDate.
+ * A computer counts for a month if it was added on/before the last day of that month.
+ * (No end-date handling here since computers aren't currently "removed" from a branch in the data model;
+ * if that's added later, filter out here too.)
+ */
+export function computersActiveInMonth(addedDates: (string | undefined)[], month: string): number {
+  const monthEnd = `${month}-31`; // safe upper bound for string comparison of YYYY-MM-DD
+  return addedDates.filter((d) => !d || d <= monthEnd).length;
+}
+
+/**
+ * Builds the per-computer profit trend for a branch across a list of months, given each month's
+ * owner net profit (already computed via ownerMonthlyProfit) and the computer addedDates for that branch.
+ */
+export function buildComputerProfitTrend(
+  monthlyNetProfits: { month: string; netProfit: number }[],
+  addedDates: (string | undefined)[]
+): ComputerProfitMonth[] {
+  return monthlyNetProfits.map(({ month, netProfit }) => {
+    const computerCount = computersActiveInMonth(addedDates, month) || 1;
+    const profitPerComputer = netProfit / computerCount;
+    return {
+      month,
+      netProfit,
+      computerCount,
+      profitPerComputer,
+      isHealthy: profitPerComputer >= PROFIT_PER_COMPUTER_TARGET,
+    };
+  });
+}

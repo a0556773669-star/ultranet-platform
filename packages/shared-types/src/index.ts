@@ -136,6 +136,8 @@ export interface Laptop {
   stickOnlyDayPrice?: number;
   stickOnlyWeekPrice?: number;
   stickOnlyMonthPrice?: number;
+  /** ISO date - when this computer was added; used for per-computer profit tracking */
+  addedDate?: string;
 }
 
 /** collection: n_sticks */
@@ -294,4 +296,18 @@ export interface CollectionRoute {
     feeFixed?: number;
     notes?: string;
     status: RouteStatus;
+}
+
+/** collection: n_branch_transfers - monthly partner<->owner settlement records */
+export interface BranchTransfer {
+  id: string;
+  branchId: string;
+  month: string; // YYYY-MM
+  /** positive = partner should transfer this to owner; negative = owner owes partner */
+  netToOwner: number;
+  incomeShareToOwner: number;
+  expenseNetToOwner: number;
+  transferred: boolean;
+  transferredAt?: string;
+  note?: string;
 }
