@@ -93,38 +93,28 @@ export function ClientForm({
       </div>
 
       {depositType === "credit" && (
-        <>
-          <div>
-            <label className={LABEL}>תוקף (MM/YY)</label>
-            <input
-              name="cardExpiry"
-              dir="ltr"
-              placeholder="MM/YY"
-              maxLength={5}
-              defaultValue={initial?.cardExpiry}
-              className={FIELD}
-            />
-          </div>
-          <div className="flex items-end sm:col-span-1">
-            <p className="text-xs text-muted">
+          <div className="sm:col-span-2 rounded-lg border border-teal-light bg-teal-bg px-3 py-2">
+            <p className="text-xs font-semibold text-teal-dark">
               {initial?.cardLast4
-                ? `כרטיס שמור: •••• ${initial.cardLast4} (נשמר דרך נדרים פלוס)`
-                : "מספר הכרטיס עצמו לא מוזן כאן — הוא נשמר בנפרד ובאופן מאובטח, לאחר השמירה, דרך הכפתור \"שמור כרטיס דרך נדרים פלוס\" בעמוד עריכת הלקוח."}
+                ? `נשמר אמצעי תשלום: •••• ${initial.cardLast4}`
+                : "לאחר השמירה ייפתח באותו חלון חלון מאבטח של נדרים פלאס להזנת פרטי האשראי"}
+            </p>
+            <p className="mt-1 text-[11px] text-muted">
+              מספר הכרטיס וקוד ה-CVV לא נשמרים אצלנו בשום שלב (PCI-DSS) – הכל מוקלד ומאובטח דרך נדרים פלאס.
             </p>
           </div>
-          <p className="text-xs text-muted sm:col-span-2">
-            לא נשמר מספר כרטיס מלא ולא קוד CVV — מטעמי אבטחה (PCI-DSS). מספר הכרטיס נשמר רק דרך אייפרם
-            מאובטח של נדרים פלוס, שמחזיר לנו אסימון (טוקן) ואת 4 הספרות האחרונות בלבד.
-          </p>
-        </>
-      )}
+        )}
 
-      <button
-        type="submit"
-        className="rounded-[10px] bg-gradient-to-br from-teal to-teal-light px-5 py-2 text-sm font-bold text-white shadow-primary transition hover:opacity-90 sm:col-span-2"
-      >
-        {initial ? "שמור שינויים" : "הוסף לקוח"}
-      </button>
-    </form>
+        <button
+          type="submit"
+          className="rounded-[10px] bg-gradient-to-br from-teal to-teal-light px-5 py-2 text-sm font-bold text-white shadow-primary transition hover:opacity-90 sm:col-span-2"
+        >
+          {initial
+            ? "עדכן פרטים"
+            : depositType === "credit"
+              ? "שמור פרטי לקוח ועבור למילוי פרטי אשראי"
+              : "הוסף לקוח"}
+        </button>
+      </form>
   );
 }

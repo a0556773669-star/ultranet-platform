@@ -108,14 +108,43 @@ export const authOptions: NextAuthOptions = {
             }
           },
           async jwt({ token, user }) {
-                  if (user) {
-                            token.role = (user as { role?: string }).role;
-                            token.branchId = (user as { branchId?: string }).branchId;
-                            token.perms = (user as { perms?: unknown }).perms ?? null;
-                  }
-                  return token;
-          },
-          async session({ session, token }) {
+      if (user) {
+        token.role = (user as { role?: string }).role;
+        token.branchId = (user as { branchId?: string }).branchId;
+        token.perms = (user as { perms?: unknown }).perms ?? null;
+        (token as { branchSyncedAt?: number }).branchSyncedAt = Date.now();
+        return token;
+      }
+      // Re-sync role/branchId/perms from Firestore periodically so changes made
+      // after the user's last full sign-in (e.g. linking a partner to a branch)
+      // take effect without forcing them to log out and back in.
+      const lastSync = (token as { branchSyncedAt?: number }).branchSyncedAt ?? 0;
+      const staleMs = 2 * 60 * 1000;
+      if (token.email && Date.now() - lastSync > staleMs) {
+        try {
+          const db = getAdminFirestore();
+          const snap = await db
+            .collection("n_users")
+            .where("email", "==", String(token.email).toLowerCase())
+            .get();
+          if (!snap.empty) {
+            const data = snap.docs[0]!.data() as {
+              role?: string;
+              branchId?: string;
+              perms?: unknown;
+            };
+            token.role = data.role;
+            token.branchId = data.branchId;
+            token.perms = data.perms ?? null;
+          }
+        } catch {
+          // ignore transient Firestore errors; keep existing cached token values
+        }
+        (token as { branchSyncedAt?: number }).branchSyncedAt = Date.now();
+      }
+      return token;
+    },
+    async session({ session, token }) {
                   if (session.user) {
                             (session.user as { role?: unknown }).role = token.role;
                             (session.user as { branchId?: unknown }).branchId = token.branchId;
