@@ -6,7 +6,6 @@ import { usePathname } from "next/navigation";
 type TabItem = { href: string; label: string; icon: string; ownerOnly?: boolean };
 
 const TABS: TabItem[] = [
-  { href: "/dashboard/rentals", label: "בית", icon: "🏠" },
   { href: "/dashboard/rentals/branches", label: "סניפים", icon: "🏢", ownerOnly: true },
   { href: "/dashboard/rentals/expenses", label: "הוצאות", icon: "💸", ownerOnly: true },
   { href: "/dashboard/rentals/laptops", label: "מחשבים", icon: "💻" },
