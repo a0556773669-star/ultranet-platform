@@ -234,7 +234,7 @@ export async function deleteClientAction(id: string) {
 }
 
 
-export async function markRentalPaidAction(rentalId: string, paymentMethod: "cash" | "nedarim" | "route") {
+export async function markRentalPaidAction(rentalId: string, paymentMethod: "cash" | "nedarim" | "route", routeId?: string) {
   await requireSession();
   const db = getAdminFirestore();
   const ref = db.collection("n_rentals").doc(rentalId);
@@ -244,9 +244,10 @@ export async function markRentalPaidAction(rentalId: string, paymentMethod: "cas
   const amount = rental.finalPrice ?? rental.calcPrice;
   let receiptIssued = false;
 
-  if (paymentMethod === "route" && rental.collectionRouteId) {
+  const effectiveRouteId = routeId || rental.collectionRouteId;
+  if (paymentMethod === "route" && effectiveRouteId) {
     const result = await chargeViaRoute({
-      routeId: rental.collectionRouteId,
+      routeId: effectiveRouteId,
       amount,
       desc: "השכרה #" + rentalId,
       business: "rentals",

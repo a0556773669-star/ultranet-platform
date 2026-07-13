@@ -2,18 +2,19 @@ import Link from "next/link";
 import { requireModuleAccess } from "@/lib/perms";
 import { getAdminFirestore } from "@/lib/firebase-admin";
 import { resolveNedarimCreds } from "@/lib/nedarim";
-import type { Rental, RentalClient, Laptop, Stick, Branch } from "@ultranet/shared-types";
+import type { Rental, RentalClient, Laptop, Stick, Branch, CollectionRoute } from "@ultranet/shared-types";
 import { ActiveRentalRow } from "./active-rental-row";
 import { UnpaidRowActions } from "./unpaid-row-actions";
 
 async function loadData() {
   const db = getAdminFirestore();
-  const [rentalsSnap, clientsSnap, laptopsSnap, sticksSnap, branchesSnap] = await Promise.all([
+  const [rentalsSnap, clientsSnap, laptopsSnap, sticksSnap, branchesSnap, routesSnap] = await Promise.all([
     db.collection("n_rentals").get(),
     db.collection("n_rental_clients").get(),
     db.collection("n_laptops").get(),
     db.collection("n_sticks").get(),
     db.collection("n_branches").where("branchType", "==", "rentals").get(),
+    db.collection("n_collection_routes").get(),
   ]);
   const rentals = rentalsSnap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<Rental, "id">) }) as Rental);
   const clients = new Map(clientsSnap.docs.map((d) => [d.id, d.data() as RentalClient]));
@@ -23,7 +24,8 @@ async function loadData() {
   const sticks = new Map(sticksList.map((s) => [s.id, s]));
   const branchesList = branchesSnap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<Branch, "id">) }) as Branch);
   const branches = new Map(branchesList.map((b) => [b.id, b]));
-  return { rentals, clients, laptops, sticks, laptopsList, sticksList, branches, branchesList };
+  const routesList = routesSnap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<CollectionRoute, "id">) }) as CollectionRoute);
+  return { rentals, clients, laptops, sticks, laptopsList, sticksList, branches, branchesList, routesList };
 }
 
 export default async function RentalsPage() {
@@ -31,7 +33,7 @@ export default async function RentalsPage() {
   const role = session.user?.role;
   const myBranchId = session.user?.branchId;
 
-  const { rentals, clients, laptops, sticks, laptopsList, sticksList, branches, branchesList } = await loadData();
+  const { rentals, clients, laptops, sticks, laptopsList, sticksList, branches, branchesList, routesList } = await loadData();
 
   const visible = rentals.filter((r) => role === "owner" || r.branchId === myBranchId);
   const active = visible.filter((r) => r.status === "active");
@@ -51,7 +53,15 @@ export default async function RentalsPage() {
     return clients.get(rental.clientId)?.name ?? "לקוח";
   }
 
-  function rowInfo(r: Rental) {
+function routesForBranch(branchId: string): { id: string; name: string }[] {
+    const branch = branches.get(branchId);
+    if (!branch?.allowCollection) return [];
+    return routesList
+      .filter((rt) => !rt.branchScope || rt.branchScope === branchId)
+      .map((rt) => ({ id: rt.id, name: rt.name }));
+  }
+
+    function rowInfo(r: Rental) {
     const item = r.kind === "stick" ? sticks.get(r.itemId) : laptops.get(r.itemId);
     return {
       clientName: clients.get(r.clientId)?.name ?? "-",
@@ -245,7 +255,7 @@ export default async function RentalsPage() {
                       {r.paid ? (
                         <span className="rounded-full bg-teal-bg px-2 py-0.5 text-[11px] font-bold text-teal-dark">שולם</span>
                       ) : (
-                        <UnpaidRowActions rentalId={r.id} hasRoute={!!r.collectionRouteId} />
+                        <UnpaidRowActions rentalId={r.id} routes={routesForBranch(r.branchId)} />
                       )}
                     </td>
                   </tr>

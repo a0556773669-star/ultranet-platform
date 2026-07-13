@@ -210,17 +210,6 @@ export function NewRentalForm({
         <textarea name="notes" rows={2} className={FIELD} />
       </div>
 
-      <div>
-        <label className={LABEL}>מסלול גבייה</label>
-        <select name="collectionRouteId" className={FIELD}>
-          <option value="">ללא (גבייה ידנית)</option>
-          {routes.map((r) => (
-            <option key={r.id} value={r.id}>
-              {r.name}
-            </option>
-          ))}
-        </select>
-      </div>
 
       <button
         type="submit"
