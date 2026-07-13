@@ -1,9 +1,10 @@
 import Link from "next/link";
 import { requireModuleAccess } from "@/lib/perms";
 import { getAdminFirestore } from "@/lib/firebase-admin";
+import { resolveNedarimCreds } from "@/lib/nedarim";
 import type { Rental, RentalClient, Laptop, Stick, Branch } from "@ultranet/shared-types";
-import { markReturnedAction } from "../actions";
-import { ReturnButton } from "../return-button";
+import { ActiveRentalRow } from "./active-rental-row";
+import { UnpaidRowActions } from "./unpaid-row-actions";
 
 async function loadData() {
   const db = getAdminFirestore();
@@ -19,9 +20,10 @@ async function loadData() {
   const laptopsList = laptopsSnap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<Laptop, "id">) }) as Laptop);
   const sticksList = sticksSnap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<Stick, "id">) }) as Stick);
   const laptops = new Map(laptopsList.map((l) => [l.id, l]));
+  const sticks = new Map(sticksList.map((s) => [s.id, s]));
   const branchesList = branchesSnap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<Branch, "id">) }) as Branch);
   const branches = new Map(branchesList.map((b) => [b.id, b]));
-  return { rentals, clients, laptops, laptopsList, sticksList, branches, branchesList };
+  return { rentals, clients, laptops, sticks, laptopsList, sticksList, branches, branchesList };
 }
 
 export default async function RentalsPage() {
@@ -29,13 +31,19 @@ export default async function RentalsPage() {
   const role = session.user?.role;
   const myBranchId = session.user?.branchId;
 
-  const { rentals, clients, laptops, laptopsList, sticksList, branches, branchesList } = await loadData();
+  const { rentals, clients, laptops, sticks, laptopsList, sticksList, branches, branchesList } = await loadData();
 
   const visible = rentals.filter((r) => role === "owner" || r.branchId === myBranchId);
   const active = visible.filter((r) => r.status === "active");
   const history = visible.filter((r) => r.status !== "active").slice(0, 20);
 
   const visibleBranches = role === "owner" ? branchesList : branchesList.filter((b) => b.id === myBranchId);
+
+  const activeBranchIds = Array.from(new Set(active.map((r) => r.branchId)));
+  const credsEntries = await Promise.all(
+    activeBranchIds.map(async (id) => [id, await resolveNedarimCreds(id)] as const)
+  );
+  const credsMap = new Map(credsEntries);
 
   function renterName(itemId: string, kind: "laptop" | "stick") {
     const rental = active.find((r) => r.itemId === itemId && r.kind === kind);
@@ -44,9 +52,12 @@ export default async function RentalsPage() {
   }
 
   function rowInfo(r: Rental) {
+    const item = r.kind === "stick" ? sticks.get(r.itemId) : laptops.get(r.itemId);
     return {
       clientName: clients.get(r.clientId)?.name ?? "-",
-      laptopName: laptops.get(r.itemId)?.name ?? "-",
+      clientPhone: clients.get(r.clientId)?.phone,
+      clientIdNum: clients.get(r.clientId)?.idNum,
+      itemName: item?.name ?? "-",
       branchName: branches.get(r.branchId)?.name ?? "-",
     };
   }
@@ -147,20 +158,48 @@ export default async function RentalsPage() {
             <tbody>
               {active.map((r) => {
                 const info = rowInfo(r);
-                const bound = markReturnedAction.bind(null, r.id);
+                const item = r.kind === "stick" ? sticks.get(r.itemId) : laptops.get(r.itemId);
+                const laptopRates =
+                  r.kind === "laptop" && item
+                    ? {
+                        dayPrice: (item as Laptop).dayPrice,
+                        weekPrice: (item as Laptop).weekPrice,
+                        monthPrice: (item as Laptop).monthPrice,
+                        altPricing: (item as Laptop).altPricing,
+                        noInternetDayPrice: (item as Laptop).noInternetDayPrice,
+                        noInternetWeekPrice: (item as Laptop).noInternetWeekPrice,
+                        noInternetMonthPrice: (item as Laptop).noInternetMonthPrice,
+                      }
+                    : undefined;
+                const stickRates =
+                  r.kind === "stick" && item
+                    ? {
+                        day1: (item as Stick).day1,
+                        day2: (item as Stick).day2,
+                        day3plus: (item as Stick).day3plus,
+                      }
+                    : undefined;
+                const creds = credsMap.get(r.branchId) ?? null;
                 return (
-                  <tr key={r.id} className="border-t border-card-border transition hover:bg-[#f8fafc]">
-                    <td className="px-[11px] py-2 font-semibold text-ink">{info.clientName}</td>
-                    <td className="px-[11px] py-2 text-muted">{info.laptopName}</td>
-                    {role === "owner" && <td className="px-[11px] py-2 text-muted">{info.branchName}</td>}
-                    <td className="px-[11px] py-2 text-muted">{r.startDate}</td>
-                    <td className="px-[11px] py-2 font-semibold text-ink">{r.calcPrice} ₪</td>
-                    <td className="px-[11px] py-2">
-                      <form action={bound}>
-                        <ReturnButton />
-                      </form>
-                    </td>
-                  </tr>
+                  <ActiveRentalRow
+                    key={r.id}
+                    rentalId={r.id}
+                    startDate={r.startDate}
+                    kind={r.kind}
+                    pricingVariant={r.pricingVariant}
+                    clientName={info.clientName}
+                    clientPhone={info.clientPhone}
+                    clientIdNum={info.clientIdNum}
+                    itemName={info.itemName}
+                    branchName={info.branchName}
+                    showBranch={role === "owner"}
+                    calcPrice={r.calcPrice}
+                    notes={r.notes}
+                    laptopRates={laptopRates}
+                    stickRates={stickRates}
+                    hasRoute={!!r.collectionRouteId}
+                    nedarimCreds={creds ? { mosadId: creds.mosadId, apiValid: creds.apiValid } : null}
+                  />
                 );
               })}
             </tbody>
@@ -184,18 +223,31 @@ export default async function RentalsPage() {
                 <th className="px-[11px] py-[9px] text-right text-[11px] font-bold uppercase tracking-wide">לקוח</th>
                 <th className="px-[11px] py-[9px] text-right text-[11px] font-bold uppercase tracking-wide">פריט</th>
                 <th className="px-[11px] py-[9px] text-right text-[11px] font-bold uppercase tracking-wide">התחלה</th>
-                <th className="px-[11px] py-[9px] text-right text-[11px] font-bold uppercase tracking-wide">החזרה/סיום</th>
+                <th className="px-[11px] py-[9px] text-right text-[11px] font-bold uppercase tracking-wide">החזרה</th>
+                <th className="px-[11px] py-[9px] text-right text-[11px] font-bold uppercase tracking-wide">מחיר</th>
+                <th className="px-[11px] py-[9px] text-right text-[11px] font-bold uppercase tracking-wide">תשלום</th>
               </tr>
             </thead>
             <tbody>
               {history.map((r) => {
                 const info = rowInfo(r);
                 return (
-                  <tr key={r.id} className="border-t border-card-border transition hover:bg-[#f8fafc]">
+                  <tr
+                    key={r.id}
+                    className={`border-t border-card-border transition hover:bg-[#f8fafc] ${!r.paid ? "bg-red-50" : ""}`}
+                  >
                     <td className="px-[11px] py-2 text-muted">{info.clientName}</td>
-                    <td className="px-[11px] py-2 text-muted">{info.laptopName}</td>
+                    <td className="px-[11px] py-2 text-muted">{info.itemName}</td>
                     <td className="px-[11px] py-2 text-muted">{r.startDate}</td>
                     <td className="px-[11px] py-2 text-muted">{r.returnDate ?? r.endDate}</td>
+                    <td className="px-[11px] py-2 font-semibold text-ink">{(r.finalPrice ?? r.calcPrice)} ₪</td>
+                    <td className="px-[11px] py-2">
+                      {r.paid ? (
+                        <span className="rounded-full bg-teal-bg px-2 py-0.5 text-[11px] font-bold text-teal-dark">שולם</span>
+                      ) : (
+                        <UnpaidRowActions rentalId={r.id} hasRoute={!!r.collectionRouteId} />
+                      )}
+                    </td>
                   </tr>
                 );
               })}

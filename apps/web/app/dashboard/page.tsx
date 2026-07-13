@@ -62,6 +62,7 @@ export default async function DashboardHomePage() {
   }
 
   let rentedLaptops: { name: string; startDate: string }[] | null = null;
+  let unpaidRentals: { id: string; clientName: string; itemName: string; amount: number }[] | null = null;
 
   if (has("rentals")) {
     const [laptopsSnap, rentalsSnap] = await Promise.all([
@@ -76,6 +77,24 @@ export default async function DashboardHomePage() {
       .map((d) => d.data() as Rental)
       .filter((r) => isOwner || r.branchId === branchId)
       .map((r) => ({ name: laptopNames[r.itemId] || "נייד", startDate: r.startDate }));
+
+    const [clientsSnap2, unpaidSnap] = await Promise.all([
+      db.collection("n_rental_clients").get(),
+      db.collection("n_rentals").where("status", "==", "returned").where("paid", "==", false).get(),
+    ]);
+    const clientNames: Record<string, string> = {};
+    clientsSnap2.docs.forEach((d) => {
+      clientNames[d.id] = (d.data() as { name: string }).name;
+    });
+    unpaidRentals = unpaidSnap.docs
+      .map((d) => ({ ...(d.data() as Omit<Rental, "id">), id: d.id }))
+      .filter((r) => isOwner || r.branchId === branchId)
+      .map((r) => ({
+        id: r.id,
+        clientName: clientNames[r.clientId] || "לקוח",
+        itemName: laptopNames[r.itemId] || "פריט",
+        amount: r.finalPrice ?? r.calcPrice,
+      }));
   }
 
   let inventoryItemCount = 0;
@@ -175,7 +194,26 @@ export default async function DashboardHomePage() {
           </div>
         )}
 
-        {lowStockItems && (
+        {unpaidRentals && unpaidRentals.length > 0 && (
+        <div className="card border-red-300 bg-red-50">
+          <div className="mb-3 flex items-center justify-between text-xs font-bold uppercase tracking-wide text-red-700">
+            <span>🔴 חובות השכרות</span>
+            <span className="rounded-full bg-red-100 px-2.5 py-0.5 text-red-700 normal-case">{unpaidRentals.length}</span>
+          </div>
+          {unpaidRentals.map((u) => (
+            <div key={u.id} className="flex items-center gap-2 border-b border-red-100 py-2 text-[13px] last:border-b-0">
+              <span className="h-2 w-2 rounded-full bg-red-500" />
+              <span className="flex-1 font-medium text-ink">{u.clientName} – {u.itemName}</span>
+              <span className="text-[11px] font-bold text-red-700">{u.amount} ₪</span>
+            </div>
+          ))}
+          <Link href="/dashboard/rentals/manage" className="mt-2 inline-block text-[11px] font-bold text-red-700 hover:underline">
+            למעבר לאיחוד השכרות ←
+          </Link>
+        </div>
+      )}
+
+      {lowStockItems && (
           <div className="card">
             <div className="mb-3 flex items-center justify-between text-xs font-bold uppercase tracking-wide text-muted">
               <span>{"📦 מלאי - פריטים בחוסר"}</span>

@@ -47,3 +47,16 @@ export function calcRentalDays(startDate: string, endDate: string): number {
   }
   return Math.max(1, billableDays);
 }
+
+/**
+ * Progressive per-day pricing for stick-only rentals: day1 covers the first
+ * day, day2 covers the second day, and every day from the third onward is
+ * billed at the day3plus rate.
+ */
+export function calcStickPrice(days: number, day1: number, day2: number, day3plus: number): number {
+  if (days <= 0) return 0;
+  let total = day1 || 0;
+  if (days >= 2) total += day2 || 0;
+  if (days > 2) total += (days - 2) * (day3plus || 0);
+  return total;
+}

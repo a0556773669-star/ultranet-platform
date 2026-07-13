@@ -6,6 +6,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { getAdminFirestore } from "@/lib/firebase-admin";
 import { chargeViaRoute } from "@/lib/collection-charge";
+import { Timestamp } from "firebase-admin/firestore";
 import type { RentalClient, Laptop, Stick, Rental, Branch } from "@ultranet/shared-types";
 import { parseClientsWorkbook } from "@/lib/client-excel";
 import { calcRentalPrice, calcRentalDays } from "@/lib/rental-pricing";
@@ -232,6 +233,66 @@ export async function deleteClientAction(id: string) {
   redirect("/dashboard/rentals/clients");
 }
 
+
+export async function markRentalPaidAction(rentalId: string, paymentMethod: "cash" | "nedarim" | "route") {
+  await requireSession();
+  const db = getAdminFirestore();
+  const ref = db.collection("n_rentals").doc(rentalId);
+  const snap = await ref.get();
+  const rental = snap.data() as Omit<Rental, "id"> | undefined;
+  if (!rental) throw new Error("השכרה לא נמצאה");
+  const amount = rental.finalPrice ?? rental.calcPrice;
+  let receiptIssued = false;
+
+  if (paymentMethod === "route" && rental.collectionRouteId) {
+    const result = await chargeViaRoute({
+      routeId: rental.collectionRouteId,
+      amount,
+      desc: "השכרה #" + rentalId,
+      business: "rentals",
+    });
+    if (!result.ok) throw new Error(result.message);
+    receiptIssued = true;
+  } else {
+    const date = new Date().toISOString().slice(0, 10);
+    await db.collection("n_ah_income").add({
+      date,
+      amount,
+      desc: "השכרה #" + rentalId + " (" + (paymentMethod === "nedarim" ? "נדרים פלאס" : "מזומן") + ")",
+      business: "rentals",
+      type: "cash",
+      month: date.slice(0, 7),
+      createdAt: Timestamp.now(),
+    });
+  }
+
+  await ref.set({ paid: true, paymentMethod, receiptIssued }, { merge: true });
+  revalidatePath("/dashboard/rentals");
+  revalidatePath("/dashboard");
+  return { ok: true };
+}
+
+export async function closeRentalAction(
+  rentalId: string,
+  data: { returnDate: string; finalPrice: number; priceOverrideReason?: string; notes?: string }
+) {
+  await requireSession();
+  await getAdminFirestore()
+    .collection("n_rentals")
+    .doc(rentalId)
+    .set(
+      stripUndefined({
+        status: "returned",
+        returnDate: data.returnDate,
+        finalPrice: data.finalPrice,
+        priceOverrideReason: data.priceOverrideReason,
+        notes: data.notes,
+      }),
+      { merge: true }
+    );
+  revalidatePath("/dashboard/rentals");
+  revalidatePath("/dashboard");
+}
 
 export async function createRentalAction(formData: FormData) {
   await requireSession();

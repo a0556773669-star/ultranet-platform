@@ -13,6 +13,7 @@ export function NedarimChargeCapture({
   clientName,
   clientPhone,
   clientIdNum,
+  initialAmount,
   onDone,
 }: {
   mosadId: string;
@@ -20,12 +21,13 @@ export function NedarimChargeCapture({
   clientName: string;
   clientPhone?: string;
   clientIdNum?: string;
+  initialAmount?: number;
   onDone: (result: { ok: boolean; message?: string }) => void;
 }) {
   const frameRef = useRef<HTMLIFrameElement>(null);
   const [height, setHeight] = useState(0);
   const [stage, setStage] = useState<"amount" | "creating" | "iframe" | "sending" | "error" | "done">("amount");
-  const [amount, setAmount] = useState("");
+  const [amount, setAmount] = useState(initialAmount ? String(initialAmount) : "");
   const [error, setError] = useState<string | null>(null);
   const [testMode, setTestMode] = useState(true);
   const [txId, setTxId] = useState<string | null>(null);
