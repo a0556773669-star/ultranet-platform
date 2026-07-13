@@ -55,11 +55,12 @@ function PayerFields({ namePrefix = "" }: { namePrefix?: string }) {
 type Props = {
   branchId: string;
   isPartner: boolean;
+  canManage: boolean;
   fixedExpenses: FixedExpense[];
   variableExpenses: VariableExpense[];
 };
 
-export function BranchExpenses({ branchId, isPartner, fixedExpenses, variableExpenses }: Props) {
+export function BranchExpenses({ branchId, isPartner, canManage, fixedExpenses, variableExpenses }: Props) {
   const activeFixed = fixedExpenses.filter((e) => !e.endDate);
   const endedFixed = fixedExpenses.filter((e) => e.endDate);
 
@@ -85,7 +86,8 @@ export function BranchExpenses({ branchId, isPartner, fixedExpenses, variableExp
 
       <div className="rounded-card border border-card-border bg-white p-4 shadow-card">
         <h3 className="mb-3 text-sm font-bold text-ink">📅 הוצאות קבועות / חודשיות</h3>
-        <form action={createFixed} className="mb-4 grid grid-cols-2 gap-2 md:grid-cols-3">
+        {canManage && (
+<form action={createFixed} className="mb-4 grid grid-cols-2 gap-2 md:grid-cols-3">
           <div>
             <label className={LABEL}>שם ההוצאה</label>
             <input name="name" className={FIELD} required />
@@ -112,6 +114,7 @@ export function BranchExpenses({ branchId, isPartner, fixedExpenses, variableExp
             <button type="submit" className={BTN}>+ הוסף הוצאה קבועה</button>
           </div>
         </form>
+)}
 
         <div className="flex flex-col gap-2">
           {activeFixed.length === 0 && <p className="text-sm text-muted">אין הוצאות קבועות פעילות</p>}
@@ -122,13 +125,17 @@ export function BranchExpenses({ branchId, isPartner, fixedExpenses, variableExp
                 <p className="text-xs text-muted">{e.category || "ללא קטגוריה"} · מתחיל {e.startDate}{isPartner ? ` · ${paymentNote(e.paidBy, e.owedBy)}` : ""}</p>
               </div>
               <div className="flex items-center gap-2">
-                <form action={endFixedExpenseAction.bind(null, e.id, branchId)} className="flex items-center gap-1">
+                {canManage && (
+<form action={endFixedExpenseAction.bind(null, e.id, branchId)} className="flex items-center gap-1">
                   <input name="endDate" type="date" className="rounded-lg border border-card-border bg-white px-2 py-1 text-xs" />
                   <button type="submit" className="rounded-lg border border-card-border bg-white px-2 py-1 text-xs font-bold text-ink hover:bg-[#f4f6f9]">סיום</button>
                 </form>
-                <form action={deleteFixedExpenseAction.bind(null, e.id, branchId)}>
+)}
+                {canManage && (
+<form action={deleteFixedExpenseAction.bind(null, e.id, branchId)}>
                   <button type="submit" className="rounded-lg border border-red-200 bg-white px-2 py-1 text-xs font-bold text-red-600 hover:bg-red-50">מחיקה</button>
                 </form>
+)}
               </div>
             </div>
           ))}
@@ -144,9 +151,11 @@ export function BranchExpenses({ branchId, isPartner, fixedExpenses, variableExp
                     <p className="text-sm font-bold text-ink">{e.name} — ₪{(e.amount || 0).toLocaleString()}/חודש</p>
                     <p className="text-xs text-muted">{e.startDate} – {e.endDate}{isPartner ? ` · ${paymentNote(e.paidBy, e.owedBy)}` : ""}</p>
                   </div>
-                  <form action={deleteFixedExpenseAction.bind(null, e.id, branchId)}>
+                  {canManage && (
+<form action={deleteFixedExpenseAction.bind(null, e.id, branchId)}>
                     <button type="submit" className="rounded-lg border border-red-200 bg-white px-2 py-1 text-xs font-bold text-red-600 hover:bg-red-50">מחיקה</button>
                   </form>
+)}
                 </div>
               ))}
             </div>
@@ -156,7 +165,8 @@ export function BranchExpenses({ branchId, isPartner, fixedExpenses, variableExp
 
       <div className="rounded-card border border-card-border bg-white p-4 shadow-card">
         <h3 className="mb-3 text-sm font-bold text-ink">🧾 הוצאות חד פעמיות</h3>
-        <form action={createVariable} className="mb-4 grid grid-cols-2 gap-2 md:grid-cols-3">
+        {canManage && (
+<form action={createVariable} className="mb-4 grid grid-cols-2 gap-2 md:grid-cols-3">
           <div>
             <label className={LABEL}>תיאור</label>
             <input name="desc" className={FIELD} required />
@@ -183,6 +193,7 @@ export function BranchExpenses({ branchId, isPartner, fixedExpenses, variableExp
             <button type="submit" className={BTN}>+ הוסף הוצאה חד פעמית</button>
           </div>
         </form>
+)}
 
         <div className="flex flex-col gap-2">
           {variableExpenses.length === 0 && <p className="text-sm text-muted">אין הוצאות חד פעמיות</p>}
@@ -192,9 +203,11 @@ export function BranchExpenses({ branchId, isPartner, fixedExpenses, variableExp
                 <p className="text-sm font-bold text-ink">{e.desc} — ₪{(e.amount || 0).toLocaleString()}</p>
                 <p className="text-xs text-muted">{e.category || "ללא קטגוריה"} · {e.date}{isPartner ? ` · ${paymentNote(e.paidBy, e.owedBy)}` : ""}</p>
               </div>
-              <form action={deleteVariableExpenseAction.bind(null, e.id, branchId)}>
+              {canManage && (
+<form action={deleteVariableExpenseAction.bind(null, e.id, branchId)}>
                 <button type="submit" className="rounded-lg border border-red-200 bg-white px-2 py-1 text-xs font-bold text-red-600 hover:bg-red-50">מחיקה</button>
               </form>
+)}
             </div>
           ))}
         </div>

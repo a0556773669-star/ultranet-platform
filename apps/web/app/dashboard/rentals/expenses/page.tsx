@@ -8,7 +8,15 @@ import type { Branch } from "@ultranet/shared-types";
 export default async function ExpensesHomePage() {
   const session = await getServerSession(authOptions);
   if (!session) redirect("/login");
-  if (session.user?.role !== "owner") redirect("/dashboard/rentals");
+  const isOwner = session.user?.role === "owner";
+  if (!isOwner) {
+    const myBranchId = session.user?.branchId;
+    if (!myBranchId) redirect("/dashboard/rentals");
+    const myDoc = await getAdminFirestore().collection("n_branches").doc(myBranchId).get();
+    const myBranch = myDoc.exists ? ({ id: myDoc.id, ...(myDoc.data() as Omit<Branch, "id">) } as Branch) : null;
+    if (!myBranch || myBranch.parentBranchId) redirect("/dashboard/rentals");
+    redirect(`/dashboard/rentals/expenses/${myBranchId}`);
+  }
 
   const db = getAdminFirestore();
   const snap = await db.collection("n_branches").where("branchType", "==", "rentals").get();

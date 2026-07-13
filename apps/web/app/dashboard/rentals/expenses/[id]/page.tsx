@@ -9,12 +9,15 @@ import { BranchExpenses } from "../branch-expenses";
 export default async function BranchExpensesPage({ params }: { params: { id: string } }) {
   const session = await getServerSession(authOptions);
   if (!session) redirect("/login");
-  if (session.user?.role !== "owner") redirect("/dashboard/rentals");
+  const isOwner = session.user?.role === "owner";
+  const myBranchId = session.user?.branchId;
+  if (!isOwner && params.id !== myBranchId) redirect("/dashboard/rentals");
 
   const db = getAdminFirestore();
   const doc = await db.collection("n_branches").doc(params.id).get();
   if (!doc.exists) notFound();
   const branch = { id: doc.id, ...(doc.data() as Omit<Branch, "id">) } as Branch;
+  if (!isOwner && branch.parentBranchId) redirect("/dashboard/rentals");
 
   const [fixedSnap, variableSnap] = await Promise.all([
     db.collection("n_fixed_expenses").where("branchId", "==", branch.id).get(),
@@ -28,6 +31,8 @@ export default async function BranchExpensesPage({ params }: { params: { id: str
     .sort((a, b) => b.date.localeCompare(a.date));
 
   const isPartner = branch.isMine === false;
+  const visibleFixed = isOwner ? fixedExpenses : fixedExpenses.filter((e) => e.owedBy === "shared" || e.owedBy === "partner");
+  const visibleVariable = isOwner ? variableExpenses : variableExpenses.filter((e) => e.owedBy === "shared" || e.owedBy === "partner");
 
   return (
     <div className="flex flex-col gap-4">
@@ -37,7 +42,7 @@ export default async function BranchExpensesPage({ params }: { params: { id: str
           ← בחירת סניף אחר
         </Link>
       </div>
-      <BranchExpenses branchId={branch.id} isPartner={isPartner} fixedExpenses={fixedExpenses} variableExpenses={variableExpenses} />
+      <BranchExpenses branchId={branch.id} isPartner={isPartner} canManage={isOwner} fixedExpenses={visibleFixed} variableExpenses={visibleVariable} />
     </div>
   );
 }
