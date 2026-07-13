@@ -1,23 +1,27 @@
 import Link from "next/link";
 import { requireModuleAccess } from "@/lib/perms";
 import { getAdminFirestore } from "@/lib/firebase-admin";
-import type { Rental, RentalClient, Laptop, Branch } from "@ultranet/shared-types";
+import type { Rental, RentalClient, Laptop, Stick, Branch } from "@ultranet/shared-types";
 import { markReturnedAction } from "../actions";
 import { ReturnButton } from "../return-button";
 
 async function loadData() {
   const db = getAdminFirestore();
-  const [rentalsSnap, clientsSnap, laptopsSnap, branchesSnap] = await Promise.all([
+  const [rentalsSnap, clientsSnap, laptopsSnap, sticksSnap, branchesSnap] = await Promise.all([
     db.collection("n_rentals").get(),
     db.collection("n_rental_clients").get(),
     db.collection("n_laptops").get(),
+    db.collection("n_sticks").get(),
     db.collection("n_branches").where("branchType", "==", "rentals").get(),
   ]);
   const rentals = rentalsSnap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<Rental, "id">) }) as Rental);
   const clients = new Map(clientsSnap.docs.map((d) => [d.id, d.data() as RentalClient]));
-  const laptops = new Map(laptopsSnap.docs.map((d) => [d.id, d.data() as Laptop]));
-  const branches = new Map(branchesSnap.docs.map((d) => [d.id, d.data() as Branch]));
-  return { rentals, clients, laptops, branches };
+  const laptopsList = laptopsSnap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<Laptop, "id">) }) as Laptop);
+  const sticksList = sticksSnap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<Stick, "id">) }) as Stick);
+  const laptops = new Map(laptopsList.map((l) => [l.id, l]));
+  const branchesList = branchesSnap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<Branch, "id">) }) as Branch);
+  const branches = new Map(branchesList.map((b) => [b.id, b]));
+  return { rentals, clients, laptops, laptopsList, sticksList, branches, branchesList };
 }
 
 export default async function RentalsPage() {
@@ -25,11 +29,19 @@ export default async function RentalsPage() {
   const role = session.user?.role;
   const myBranchId = session.user?.branchId;
 
-  const { rentals, clients, laptops, branches } = await loadData();
+  const { rentals, clients, laptops, laptopsList, sticksList, branches, branchesList } = await loadData();
 
   const visible = rentals.filter((r) => role === "owner" || r.branchId === myBranchId);
   const active = visible.filter((r) => r.status === "active");
   const history = visible.filter((r) => r.status !== "active").slice(0, 20);
+
+  const visibleBranches = role === "owner" ? branchesList : branchesList.filter((b) => b.id === myBranchId);
+
+  function renterName(itemId: string, kind: "laptop" | "stick") {
+    const rental = active.find((r) => r.itemId === itemId && r.kind === kind);
+    if (!rental) return null;
+    return clients.get(rental.clientId)?.name ?? "לקוח";
+  }
 
   function rowInfo(r: Rental) {
     return {
@@ -42,16 +54,80 @@ export default async function RentalsPage() {
   return (
     <div className="flex flex-col gap-4">
       <div>
-        <h1 className="text-[21px] font-extrabold text-ink">📋 ניהול השכרות</h1>
-        <p className="text-sm text-muted">השכרות פעילות והיסטוריה</p>
+        <h1 className="text-[21px] font-extrabold text-ink">📄 איחוד השכרות</h1>
+        <p className="text-sm text-muted">ניהול השכרות פעילות והיסטוריה</p>
       </div>
-      <div className="mb-3 flex items-center justify-between text-xs font-bold uppercase tracking-wide text-muted">
-        <span>📋 השכרות פעילות</span>
+
+      <div className="flex items-center justify-between">
+        <div className="text-xs font-bold uppercase tracking-wide text-muted">מצב מחשבים וסטיקים</div>
+        <Link
+          href="/dashboard/rentals/new"
+          className="rounded-[10px] bg-gradient-to-br from-teal to-teal-light px-4 py-1.5 text-xs font-bold text-white shadow-primary transition hover:opacity-90"
+        >
+          + השכרה חדשה
+        </Link>
+      </div>
+
+      {visibleBranches.length === 0 ? (
+        <div className="rounded-card border border-dashed border-card-border bg-white py-10 text-center text-sm text-muted">
+          אין סניפים להצגה
+        </div>
+      ) : (
+        visibleBranches.map((b) => {
+          const bLaptops = laptopsList.filter((l) => l.branchId === b.id);
+          const bSticks = sticksList.filter((s) => s.branchId === b.id);
+          if (bLaptops.length === 0 && bSticks.length === 0) return null;
+          return (
+            <div key={b.id} className="mb-2">
+              {role === "owner" && <h3 className="mb-2 text-sm font-bold text-ink">{b.name}</h3>}
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
+                {bLaptops.map((l) => {
+                  const renter = renterName(l.id, "laptop");
+                  return (
+                    <div
+                      key={l.id}
+                      className={`rounded-xl border p-3 text-center text-xs ${
+                        renter ? "border-red-300 bg-red-50" : "border-teal bg-teal-bg"
+                      }`}
+                    >
+                      <div className="truncate font-bold text-ink">💻 {l.name}</div>
+                      <div className={`mt-1 text-[11px] font-semibold ${renter ? "text-red-600" : "text-teal-dark"}`}>
+                        {renter ? "מושכר" : "פנוי"}
+                      </div>
+                      {renter && <div className="mt-1 truncate text-[11px] text-muted">{renter}</div>}
+                    </div>
+                  );
+                })}
+                {bSticks.map((s) => {
+                  const renter = renterName(s.id, "stick");
+                  return (
+                    <div
+                      key={s.id}
+                      className={`rounded-xl border p-3 text-center text-xs ${
+                        renter ? "border-red-300 bg-red-50" : "border-teal bg-teal-bg"
+                      }`}
+                    >
+                      <div className="truncate font-bold text-ink">📡 {s.name}</div>
+                      <div className={`mt-1 text-[11px] font-semibold ${renter ? "text-red-600" : "text-teal-dark"}`}>
+                        {renter ? "מושכר" : "פנוי"}
+                      </div>
+                      {renter && <div className="mt-1 truncate text-[11px] text-muted">{renter}</div>}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })
+      )}
+
+      <div className="mb-3 mt-4 flex items-center justify-between text-xs font-bold uppercase tracking-wide text-muted">
+        <span>השכרות פעילות</span>
         <span className="rounded-full bg-[#f4f6f9] px-2.5 py-0.5 text-ink normal-case">{active.length}</span>
       </div>
       {active.length === 0 ? (
         <div className="mb-8 rounded-card border border-dashed border-card-border bg-white py-10 text-center text-sm text-muted">
-          אין השכרות פעילות כרגע
+          אין השכרות פעילות
         </div>
       ) : (
         <div className="mb-8 overflow-hidden rounded-card border border-card-border bg-white shadow-card">
@@ -59,13 +135,12 @@ export default async function RentalsPage() {
             <thead className="bg-[#f4f6f9] text-muted">
               <tr>
                 <th className="px-[11px] py-[9px] text-right text-[11px] font-bold uppercase tracking-wide">לקוח</th>
-                <th className="px-[11px] py-[9px] text-right text-[11px] font-bold uppercase tracking-wide">מחשב</th>
+                <th className="px-[11px] py-[9px] text-right text-[11px] font-bold uppercase tracking-wide">פריט</th>
                 {role === "owner" && (
                   <th className="px-[11px] py-[9px] text-right text-[11px] font-bold uppercase tracking-wide">סניף</th>
                 )}
                 <th className="px-[11px] py-[9px] text-right text-[11px] font-bold uppercase tracking-wide">התחלה</th>
-                <th className="px-[11px] py-[9px] text-right text-[11px] font-bold uppercase tracking-wide">סיום</th>
-                <th className="px-[11px] py-[9px] text-right text-[11px] font-bold uppercase tracking-wide">מחיר</th>
+                <th className="px-[11px] py-[9px] text-right text-[11px] font-bold uppercase tracking-wide">מחיר משוער</th>
                 <th className="px-[11px] py-[9px]"></th>
               </tr>
             </thead>
@@ -79,7 +154,6 @@ export default async function RentalsPage() {
                     <td className="px-[11px] py-2 text-muted">{info.laptopName}</td>
                     {role === "owner" && <td className="px-[11px] py-2 text-muted">{info.branchName}</td>}
                     <td className="px-[11px] py-2 text-muted">{r.startDate}</td>
-                    <td className="px-[11px] py-2 text-muted">{r.endDate}</td>
                     <td className="px-[11px] py-2 font-semibold text-ink">{r.calcPrice} ₪</td>
                     <td className="px-[11px] py-2">
                       <form action={bound}>
@@ -95,12 +169,12 @@ export default async function RentalsPage() {
       )}
 
       <div className="mb-3 flex items-center justify-between text-xs font-bold uppercase tracking-wide text-muted">
-        <span>🗄️ היסטוריה אחרונה</span>
+        <span>היסטוריה אחרונה</span>
         <span className="rounded-full bg-[#f4f6f9] px-2.5 py-0.5 text-ink normal-case">{history.length}</span>
       </div>
       {history.length === 0 ? (
         <div className="rounded-card border border-dashed border-card-border bg-white py-10 text-center text-sm text-muted">
-          אין היסטוריית השכרות
+          אין היסטוריה עדיין
         </div>
       ) : (
         <div className="overflow-hidden rounded-card border border-card-border bg-white shadow-card">
@@ -108,9 +182,9 @@ export default async function RentalsPage() {
             <thead className="bg-[#f4f6f9] text-muted">
               <tr>
                 <th className="px-[11px] py-[9px] text-right text-[11px] font-bold uppercase tracking-wide">לקוח</th>
-                <th className="px-[11px] py-[9px] text-right text-[11px] font-bold uppercase tracking-wide">מחשב</th>
+                <th className="px-[11px] py-[9px] text-right text-[11px] font-bold uppercase tracking-wide">פריט</th>
                 <th className="px-[11px] py-[9px] text-right text-[11px] font-bold uppercase tracking-wide">התחלה</th>
-                <th className="px-[11px] py-[9px] text-right text-[11px] font-bold uppercase tracking-wide">סיום בפועל</th>
+                <th className="px-[11px] py-[9px] text-right text-[11px] font-bold uppercase tracking-wide">החזרה/סיום</th>
               </tr>
             </thead>
             <tbody>
