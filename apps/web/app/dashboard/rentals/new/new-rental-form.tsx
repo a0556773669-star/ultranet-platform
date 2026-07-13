@@ -2,41 +2,69 @@
 
 import { useMemo, useState } from "react";
 import type { ChangeEvent } from "react";
-import { calcRentalPrice, calcRentalDays } from "@/lib/rental-pricing";
-import type { Branch, RentalClient, Laptop, CollectionRoute } from "@ultranet/shared-types";
+import type { Branch, RentalClient, Laptop, Stick, CollectionRoute } from "@ultranet/shared-types";
 import { createRentalAction } from "../actions";
 
 type Props = {
   branches: Branch[];
   clients: RentalClient[];
   laptops: Laptop[];
+  sticks: Stick[];
   routes: CollectionRoute[];
   defaultBranchId: string;
   lockBranch: boolean;
 };
 
-const FIELD = "w-full rounded-lg border border-card-border bg-[#f4f6f9] px-3 py-2 text-sm focus:border-teal focus:bg-white focus:outline-none disabled:opacity-60";
+const FIELD =
+  "w-full rounded-lg border border-card-border bg-[#f4f6f9] px-3 py-2 text-sm focus:border-teal focus:bg-white focus:outline-none disabled:opacity-60";
 const LABEL = "mb-1 block text-xs font-semibold text-muted";
 
-export function NewRentalForm({ branches, clients, laptops, routes, defaultBranchId, lockBranch }: Props) {
+export function NewRentalForm({
+  branches,
+  clients,
+  laptops,
+  sticks,
+  routes,
+  defaultBranchId,
+  lockBranch,
+}: Props) {
   const [branchId, setBranchId] = useState(defaultBranchId);
   const [startDate, setStartDate] = useState("");
-  const [endDate, setEndDate] = useState("");
+  const [kind, setKind] = useState<"laptop" | "stick">("laptop");
   const [itemId, setItemId] = useState("");
+  const [pricingVariant, setPricingVariant] = useState<"normal" | "noInternet">("normal");
 
   const branchClients = clients.filter((c) => c.branchId === branchId);
   const branchLaptops = laptops.filter((l) => l.branchId === branchId);
+  const branchSticks = sticks.filter((s) => s.branchId === branchId);
 
-  const calcPrice = useMemo(() => {
-    if (!startDate || !endDate || !itemId) return 0;
-    const laptop = branchLaptops.find((l) => l.id === itemId);
-    if (!laptop) return 0;
-    const days = calcRentalDays(startDate, endDate);
-    return calcRentalPrice(days, laptop.dayPrice, laptop.weekPrice, laptop.monthPrice);
-  }, [startDate, endDate, itemId, branchLaptops]);
+  const selectedLaptop = branchLaptops.find((l) => l.id === itemId);
+  const selectedStick = branchSticks.find((s) => s.id === itemId);
+
+  const dayPriceRef = useMemo(() => {
+    if (kind === "laptop" && selectedLaptop) {
+      if (pricingVariant === "noInternet" && selectedLaptop.altPricing) {
+        return selectedLaptop.noInternetDayPrice ?? selectedLaptop.dayPrice;
+      }
+      return selectedLaptop.dayPrice;
+    }
+    if (kind === "stick" && selectedStick) {
+      return selectedStick.day1;
+    }
+    return null;
+  }, [kind, selectedLaptop, selectedStick, pricingVariant]);
+
+  function handleKindChange(next: "laptop" | "stick") {
+    setKind(next);
+    setItemId("");
+    setPricingVariant("normal");
+  }
 
   return (
-    <form action={createRentalAction} className="flex flex-col gap-4 rounded-card border border-card-border bg-white p-5 shadow-card">
+    <form
+      action={createRentalAction}
+      className="flex flex-col gap-4 rounded-card border border-card-border bg-white p-5 shadow-card"
+    >
       <div>
         <label className={LABEL}>סניף</label>
         <select
@@ -57,7 +85,7 @@ export function NewRentalForm({ branches, clients, laptops, routes, defaultBranc
       <div>
         <label className={LABEL}>לקוח</label>
         <select name="clientId" required className={FIELD}>
-          <option value="">בחירת לקוח</option>
+          <option value="">בחר לקוח</option>
           {branchClients.map((c) => (
             <option key={c.id} value={c.id}>
               {c.name}
@@ -67,60 +95,125 @@ export function NewRentalForm({ branches, clients, laptops, routes, defaultBranc
       </div>
 
       <div>
-        <label className={LABEL}>מחשב</label>
-        <select
-          name="itemId"
+        <label className={LABEL}>סוג השכרה</label>
+        <div className="flex gap-4 text-sm">
+          <label className="flex items-center gap-1.5">
+            <input
+              type="radio"
+              name="kind"
+              value="laptop"
+              checked={kind === "laptop"}
+              onChange={() => handleKindChange("laptop")}
+            />
+            מחשב נייד
+          </label>
+          <label className="flex items-center gap-1.5">
+            <input
+              type="radio"
+              name="kind"
+              value="stick"
+              checked={kind === "stick"}
+              onChange={() => handleKindChange("stick")}
+            />
+            סטיק
+          </label>
+        </div>
+      </div>
+
+      {kind === "laptop" ? (
+        <div>
+          <label className={LABEL}>מחשב</label>
+          <select
+            name="itemId"
+            required
+            value={itemId}
+            onChange={(e: ChangeEvent<HTMLSelectElement>) => setItemId(e.target.value)}
+            className={FIELD}
+          >
+            <option value="">בחר מחשב</option>
+            {branchLaptops.map((l) => (
+              <option key={l.id} value={l.id}>
+                {l.name} ({l.dayPrice} ₪/יום)
+              </option>
+            ))}
+          </select>
+        </div>
+      ) : (
+        <div>
+          <label className={LABEL}>סטיק</label>
+          <select
+            name="itemId"
+            required
+            value={itemId}
+            onChange={(e: ChangeEvent<HTMLSelectElement>) => setItemId(e.target.value)}
+            className={FIELD}
+          >
+            <option value="">בחר סטיק</option>
+            {branchSticks.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.name} ({s.day1} ₪/יום ראשון)
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+
+      {kind === "laptop" && selectedLaptop?.altPricing && (
+        <div>
+          <label className={LABEL}>אינטרנט</label>
+          <div className="flex gap-4 text-sm">
+            <label className="flex items-center gap-1.5">
+              <input
+                type="radio"
+                name="pricingVariant"
+                value="normal"
+                checked={pricingVariant === "normal"}
+                onChange={() => setPricingVariant("normal")}
+              />
+              עם אינטרנט
+            </label>
+            <label className="flex items-center gap-1.5">
+              <input
+                type="radio"
+                name="pricingVariant"
+                value="noInternet"
+                checked={pricingVariant === "noInternet"}
+                onChange={() => setPricingVariant("noInternet")}
+              />
+              בלי אינטרנט
+            </label>
+          </div>
+        </div>
+      )}
+
+      <div>
+        <label className={LABEL}>תאריך התחלה</label>
+        <input
+          type="date"
+          name="startDate"
           required
-          value={itemId}
-          onChange={(e: ChangeEvent<HTMLSelectElement>) => setItemId(e.target.value)}
+          value={startDate}
+          onChange={(e: ChangeEvent<HTMLInputElement>) => setStartDate(e.target.value)}
           className={FIELD}
-        >
-          <option value="">בחירת מחשב</option>
-          {branchLaptops.map((l) => (
-            <option key={l.id} value={l.id}>
-              {l.name} ({l.dayPrice} ₪/יום)
-            </option>
-          ))}
-        </select>
+        />
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <label className={LABEL}>תאריך התחלה</label>
-          <input
-            type="date"
-            name="startDate"
-            required
-            value={startDate}
-            onChange={(e: ChangeEvent<HTMLInputElement>) => setStartDate(e.target.value)}
-            className={FIELD}
-          />
+      {dayPriceRef !== null && (
+        <div className="rounded-xl border border-teal bg-gradient-to-br from-teal-bg to-emerald-50 px-4 py-3 text-sm">
+          <span className="text-muted">מחיר ליום: </span>
+          <span className="text-lg font-black text-teal-dark">{dayPriceRef.toLocaleString()} ₪</span>
         </div>
-        <div>
-          <label className={LABEL}>תאריך סיום</label>
-          <input
-            type="date"
-            name="endDate"
-            required
-            value={endDate}
-            onChange={(e: ChangeEvent<HTMLInputElement>) => setEndDate(e.target.value)}
-            className={FIELD}
-          />
-        </div>
-      </div>
+      )}
 
-      <div className="rounded-xl border border-teal bg-gradient-to-br from-teal-bg to-emerald-50 px-4 py-3">
-        <div className="flex items-center justify-between text-sm">
-          <span className="text-muted">מחיר מחושב</span>
-          <span className="text-lg font-black text-teal-dark">{calcPrice.toLocaleString()} ₪</span>
-        </div>
-        <input type="hidden" name="calcPrice" value={calcPrice} />
+      <div>
+        <label className={LABEL}>הערות</label>
+        <textarea name="notes" rows={2} className={FIELD} />
       </div>
 
       <div>
-        <label className={LABEL}>מסלול גביה (לא חובה)</label>
+        <label className={LABEL}>מסלול גבייה</label>
         <select name="collectionRouteId" className={FIELD}>
-          <option value="">ללא (תשלום ידני)</option>
+          <option value="">ללא (גבייה ידנית)</option>
           {routes.map((r) => (
             <option key={r.id} value={r.id}>
               {r.name}
@@ -133,7 +226,7 @@ export function NewRentalForm({ branches, clients, laptops, routes, defaultBranc
         type="submit"
         className="mt-1 self-start rounded-[10px] bg-gradient-to-br from-teal to-teal-light px-6 py-2 text-sm font-bold text-white shadow-primary transition hover:opacity-90"
       >
-        יצירת השכרה
+        התחל השכרה
       </button>
     </form>
   );

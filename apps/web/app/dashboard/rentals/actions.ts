@@ -6,7 +6,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { getAdminFirestore } from "@/lib/firebase-admin";
 import { chargeViaRoute } from "@/lib/collection-charge";
-import type { RentalClient, Laptop, Rental, Branch } from "@ultranet/shared-types";
+import type { RentalClient, Laptop, Stick, Rental, Branch } from "@ultranet/shared-types";
 import { parseClientsWorkbook } from "@/lib/client-excel";
 import { calcRentalPrice, calcRentalDays } from "@/lib/rental-pricing";
 
@@ -237,25 +237,43 @@ export async function createRentalAction(formData: FormData) {
   await requireSession();
   const branchId = String(formData.get("branchId") ?? "");
   const clientId = String(formData.get("clientId") ?? "");
+  const kind = (String(formData.get("kind") ?? "laptop") as "laptop" | "stick");
   const itemId = String(formData.get("itemId") ?? "");
+  const pricingVariant = (String(formData.get("pricingVariant") ?? "normal") as "normal" | "noInternet");
   const startDate = String(formData.get("startDate") ?? "");
-  const endDate = String(formData.get("endDate") ?? "");
+  const notes = String(formData.get("notes") ?? "").trim() || undefined;
   const collectionRouteId = String(formData.get("collectionRouteId") ?? "").trim() || undefined;
-  if (!branchId || !clientId || !itemId || !startDate || !endDate) {
-    throw new Error("יש למלא את כל השדות");
+  if (!branchId || !clientId || !itemId || !startDate) {
+    throw new Error("חסרים שדות חובה");
   }
-  const laptopDoc = await getAdminFirestore().collection("n_laptops").doc(itemId).get();
-  const laptop = laptopDoc.data() as Omit<Laptop, "id"> | undefined;
-  const rentalDays = calcRentalDays(startDate, endDate);
-  const calcPrice = laptop ? calcRentalPrice(rentalDays, laptop.dayPrice, laptop.weekPrice, laptop.monthPrice) : 0;
+
+  let calcPrice = 0;
+  if (kind === "laptop") {
+    const laptopDoc = await getAdminFirestore().collection("n_laptops").doc(itemId).get();
+    const laptop = laptopDoc.data() as Omit<Laptop, "id"> | undefined;
+    if (laptop) {
+      calcPrice =
+        pricingVariant === "noInternet" && laptop.altPricing
+          ? (laptop.noInternetDayPrice ?? laptop.dayPrice)
+          : laptop.dayPrice;
+    }
+  } else {
+    const stickDoc = await getAdminFirestore().collection("n_sticks").doc(itemId).get();
+    const stick = stickDoc.data() as Omit<Stick, "id"> | undefined;
+    if (stick) {
+      calcPrice = stick.day1;
+    }
+  }
+
   const data: Omit<Rental, "id"> = {
     branchId,
     clientId,
     itemId,
-    kind: "laptop",
+    kind,
+    pricingVariant: kind === "laptop" ? pricingVariant : undefined,
     startDate,
-    endDate,
     calcPrice,
+    notes,
     collectionRouteId,
     status: "active",
     paid: false,

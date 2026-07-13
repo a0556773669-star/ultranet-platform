@@ -1,7 +1,6 @@
-import { redirect } from "next/navigation";
 import { requireModuleAccess } from "@/lib/perms";
 import { getAdminFirestore } from "@/lib/firebase-admin";
-import type { Branch, RentalClient, Laptop, CollectionRoute } from "@ultranet/shared-types";
+import type { Branch, RentalClient, Laptop, Stick, CollectionRoute } from "@ultranet/shared-types";
 import { NewRentalForm } from "./new-rental-form";
 
 export default async function NewRentalPage() {
@@ -10,20 +9,22 @@ export default async function NewRentalPage() {
   const myBranchId = session.user?.branchId;
 
   const db = getAdminFirestore();
-  const [branchesSnap, clientsSnap, laptopsSnap, routesSnap] = await Promise.all([
+  const [branchesSnap, clientsSnap, laptopsSnap, sticksSnap, routesSnap] = await Promise.all([
     db.collection("n_branches").where("branchType", "==", "rentals").get(),
     db.collection("n_rental_clients").get(),
     db.collection("n_laptops").get(),
+    db.collection("n_sticks").get(),
     db.collection("n_collection_routes").get(),
   ]);
   const allBranches = branchesSnap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<Branch, "id">) }) as Branch);
   const branches = role === "owner" ? allBranches : allBranches.filter((b) => b.id === myBranchId);
   const clients = clientsSnap.docs.map(
-    (d) => ({ id: d.id, ...(d.data() as Omit<RentalClient, "id">) }) as RentalClient,
+    (d) => ({ id: d.id, ...(d.data() as Omit<RentalClient, "id">) }) as RentalClient
   );
   const laptops = laptopsSnap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<Laptop, "id">) }) as Laptop);
+  const sticks = sticksSnap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<Stick, "id">) }) as Stick);
   const routes = routesSnap.docs.map(
-    (d) => ({ id: d.id, ...(d.data() as Omit<CollectionRoute, "id">) }) as CollectionRoute,
+    (d) => ({ id: d.id, ...(d.data() as Omit<CollectionRoute, "id">) }) as CollectionRoute
   );
 
   const defaultBranchId = role === "owner" ? (branches[0]?.id ?? "") : (myBranchId ?? "");
@@ -35,6 +36,7 @@ export default async function NewRentalPage() {
         branches={branches}
         clients={clients}
         laptops={laptops}
+        sticks={sticks}
         routes={routes}
         defaultBranchId={defaultBranchId}
         lockBranch={role !== "owner"}

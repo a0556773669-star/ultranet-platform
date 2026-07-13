@@ -168,22 +168,26 @@ export interface RentalClient {
 
 /** collection: n_rentals */
 export interface Rental {
-    id: string;
-    branchId: string;
-    clientId: string;
-    itemId: string;
-    kind: "laptop" | "stick";
-    startDate: string;
-    endDate: string;
-    calcPrice: number;
-    finalPrice?: number;
-    status: "active" | "returned";
-    paid: boolean;
-    paymentMethod?: string;
-    collectionRouteId?: string | null;
-    pickupLoc?: string;
-    returnLoc?: string;
-    returnDate?: string;
+  id: string;
+  branchId: string;
+  clientId: string;
+  itemId: string;
+  kind: "laptop" | "stick";
+  pricingVariant?: "normal" | "noInternet" | "stickOnly";
+  startDate: string;
+  endDate?: string;
+  calcPrice: number;
+  finalPrice?: number;
+  priceOverrideReason?: string;
+  notes?: string;
+  status: "active" | "returned";
+  paid: boolean;
+  paymentMethod?: string;
+  receiptIssued?: boolean;
+  collectionRouteId?: string | null;
+  pickupLoc?: string;
+  returnLoc?: string;
+  returnDate?: string;
 }
 
 /** collection: n_inventory */
