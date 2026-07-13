@@ -4,11 +4,21 @@ import { authOptions } from "@/lib/auth";
 import { requireModuleAccess } from "@/lib/perms";
 import { getLabelSettingsAction } from "./actions";
 import LabelPrintClient from "./label-print-client";
+import { getAdminFirestore } from "@/lib/firebase-admin";
 
 export default async function LabelsPage() {
   await requireModuleAccess("rentals");
   const session = await getServerSession(authOptions);
   const isOwner = session?.user?.role === "owner";
+  const branchId = session?.user?.branchId;
+  let myComputers: { id: string; name: string }[] = [];
+  if (!isOwner && branchId) {
+    const snap = await getAdminFirestore().collection("n_laptops").where("branchId", "==", branchId).get();
+    myComputers = snap.docs
+      .map((d) => ({ id: d.id, name: String((d.data() as { name?: string }).name ?? "") }))
+      .filter((c) => c.name)
+      .sort((a, b) => a.name.localeCompare(b.name, "he", { numeric: true }));
+  }
   const settings = await getLabelSettingsAction();
 
   return (
@@ -36,6 +46,7 @@ export default async function LabelsPage() {
         wifiName={settings.wifiName}
         wifiCode={settings.wifiCode}
         logoUrl={settings.logoUrl}
+        myComputers={myComputers}
       />
     </div>
   );
