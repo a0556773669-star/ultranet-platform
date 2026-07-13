@@ -66,6 +66,7 @@ export default async function RentalsAccountingPage({
             transfer={raw.transfersByBranchMonth.get(`${selectedBranch.id}|${month}`)}
             month={month}
             showSettlement={false}
+            isOwner
           />
         )}
       </div>

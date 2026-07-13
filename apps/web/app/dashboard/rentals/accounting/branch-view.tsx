@@ -21,11 +21,13 @@ export function BranchAccountingView({
   transfer,
   month,
   showSettlement,
+  isOwner = false,
 }: {
   financials: BranchFinancials;
   transfer: BranchTransfer | undefined;
   month: string;
   showSettlement: boolean;
+  isOwner?: boolean;
 }) {
   const f = financials;
   const isFirstOfMonth = new Date().getDate() === 1;
@@ -72,6 +74,7 @@ export function BranchAccountingView({
         </div>
       )}
 
+      {isOwner && (
       <div>
         <h3 className="mb-2 text-sm font-bold text-ink">רווח נטו פר מחשב (יעד: 150 ₪ לחודש)</h3>
         <div className="flex items-end gap-1" style={{ height: 80 }}>
@@ -84,6 +87,7 @@ export function BranchAccountingView({
                 title={`${m.month}: ${Math.round(m.profitPerComputer)} ₪`}
               >
                 <div className={`w-full rounded-t ${m.isHealthy ? "bg-teal" : "bg-red-400"}`} style={{ height }} />
+                  <span className={`mt-1 text-[9px] font-bold whitespace-nowrap ${m.isHealthy ? "text-teal-dark" : "text-red-600"}`}>{Math.round(m.profitPerComputer)}</span>
               </div>
             );
           })}
@@ -93,6 +97,7 @@ export function BranchAccountingView({
           <span>{f.computerProfitTrend[f.computerProfitTrend.length - 1]?.month}</span>
         </div>
       </div>
+      )}
     </div>
   );
 }
