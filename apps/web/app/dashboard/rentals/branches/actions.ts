@@ -119,3 +119,51 @@ export async function deleteRentalBranchAction(id: string) {
   revalidatePath("/dashboard/rentals/branches");
   redirect("/dashboard/rentals/branches");
 }
+
+
+export async function auditRentalPermissionsAction(): Promise<{ checked: number; fixed: number; skipped: number }> {
+  await requireOwner();
+  const db = getAdminFirestore();
+  const branchesSnap = await db.collection("n_branches").where("branchType", "==", "rentals").get();
+  let checked = 0;
+  let fixed = 0;
+  let skipped = 0;
+  for (const doc of branchesSnap.docs) {
+    const data = doc.data() as { partnerEmail?: string; partnerName?: string };
+    if (!data.partnerEmail) {
+      skipped++;
+      continue;
+    }
+    checked++;
+    const emailLower = data.partnerEmail.trim().toLowerCase();
+    const usersSnap = await db.collection("n_users").where("email", "==", emailLower).get();
+    if (usersSnap.empty) {
+      await db.collection("n_users").add({
+        name: data.partnerName || emailLower,
+        email: emailLower,
+        role: "partner",
+        branchId: doc.id,
+        perms: { rentals: true },
+      });
+      fixed++;
+    } else {
+      const userDoc = usersSnap.docs[0];
+        if (!userDoc) continue;
+      const userData = userDoc.data() as { perms?: Record<string, boolean>; branchId?: string; role?: string };
+      const needsFix = userData.perms?.rentals !== true || userData.branchId !== doc.id || userData.role !== "partner";
+      if (needsFix) {
+        await userDoc.ref.set(
+          {
+            role: "partner",
+            branchId: doc.id,
+            perms: { ...(userData.perms ?? {}), rentals: true },
+          },
+          { merge: true }
+        );
+        fixed++;
+      }
+    }
+  }
+  revalidatePath("/dashboard/rentals/branches");
+  return { checked, fixed, skipped };
+}

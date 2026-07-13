@@ -4,6 +4,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { getAdminFirestore } from "@/lib/firebase-admin";
 import type { Branch } from "@ultranet/shared-types";
+import { AuditPermsButton } from "./audit-perms-button";
 
 const MODEL_LABELS: Record<string, string> = {
   classic: "🏢 קלאסי",
@@ -34,12 +35,15 @@ export default async function RentalBranchesPage() {
           <h2 className="text-lg font-extrabold text-ink">{"🏢 סניפי ההשכרות"}</h2>
           <p className="text-[13px] text-muted">{"ניהול סניפים, שותפויות ותת-שותפויות"}</p>
         </div>
-        <Link
-          href="/dashboard/rentals/branches/new"
-          className="rounded-lg bg-gradient-to-br from-teal to-teal-light px-4 py-2 text-sm font-bold text-white shadow-primary transition hover:opacity-90"
-        >
-          {"+ הוספת סניף"}
-        </Link>
+        <div className="flex items-center gap-2">
+          <AuditPermsButton />
+          <Link
+            href="/dashboard/rentals/branches/new"
+            className="rounded-lg bg-gradient-to-br from-teal to-teal-light px-4 py-2 text-sm font-bold text-white shadow-primary transition hover:opacity-90"
+          >
+            {"+ הוספת סניף"}
+          </Link>
+        </div>
       </div>
 
       {branches.length === 0 ? (
