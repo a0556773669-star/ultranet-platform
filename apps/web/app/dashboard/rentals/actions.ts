@@ -295,8 +295,12 @@ export async function closeRentalAction(
 }
 
 export async function createRentalAction(formData: FormData) {
-  await requireSession();
-  const branchId = String(formData.get("branchId") ?? "");
+  const session = await requireSession();
+  const role = session.user?.role;
+  const branchId =
+    role === "owner"
+      ? String(formData.get("branchId") ?? "").trim()
+      : String(session.user?.branchId ?? "").trim();
   const clientId = String(formData.get("clientId") ?? "");
   const kind = (String(formData.get("kind") ?? "laptop") as "laptop" | "stick");
   const itemId = String(formData.get("itemId") ?? "");
@@ -304,8 +308,11 @@ export async function createRentalAction(formData: FormData) {
   const startDate = String(formData.get("startDate") ?? "");
   const notes = String(formData.get("notes") ?? "").trim() || undefined;
   const collectionRouteId = String(formData.get("collectionRouteId") ?? "").trim() || undefined;
-  if (!branchId || !clientId || !itemId || !startDate) {
-    throw new Error("חסרים שדות חובה");
+  if (!branchId) {
+    redirect(`/dashboard/rentals/new?error=${role !== "owner" ? "no-branch" : "missing"}`);
+  }
+  if (!clientId || !itemId || !startDate) {
+    redirect("/dashboard/rentals/new?error=missing");
   }
 
   let calcPrice = 0;

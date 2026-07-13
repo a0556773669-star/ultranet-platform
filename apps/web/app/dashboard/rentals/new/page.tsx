@@ -3,7 +3,11 @@ import { getAdminFirestore } from "@/lib/firebase-admin";
 import type { Branch, RentalClient, Laptop, Stick, CollectionRoute } from "@ultranet/shared-types";
 import { NewRentalForm } from "./new-rental-form";
 
-export default async function NewRentalPage() {
+export default async function NewRentalPage({
+  searchParams,
+}: {
+  searchParams?: { error?: string };
+}) {
   const session = await requireModuleAccess("rentals");
   const role = session.user?.role;
   const myBranchId = session.user?.branchId;
@@ -28,19 +32,29 @@ export default async function NewRentalPage() {
   );
 
   const defaultBranchId = role === "owner" ? (branches[0]?.id ?? "") : (myBranchId ?? "");
+  const noBranch = role !== "owner" && branches.length === 0;
 
   return (
     <div className="max-w-2xl">
       <h1 className="mb-6 text-[21px] font-extrabold text-ink">השכרה חדשה</h1>
-      <NewRentalForm
-        branches={branches}
-        clients={clients}
-        laptops={laptops}
-        sticks={sticks}
-        routes={routes}
-        defaultBranchId={defaultBranchId}
-        lockBranch={role !== "owner"}
-      />
+      {(searchParams?.error === "missing" || searchParams?.error === "no-branch" || noBranch) && (
+        <div className="mb-4 rounded-card border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-700">
+          {noBranch || searchParams?.error === "no-branch"
+            ? "החשבון שלך לא משויך כרגע לסניף. נסה להתנתק ולהתחבר מחדש (השיוך מתעדכן אוטומטית תוך כ-2 דקות), או פנה לבעלים לשיוך סניף בעמוד המשתמשים."
+            : "חובה לבחור לקוח, מחשב/סטיק ותאריך התחלה לפני השמירה."}
+        </div>
+      )}
+      {!noBranch && (
+        <NewRentalForm
+          branches={branches}
+          clients={clients}
+          laptops={laptops}
+          sticks={sticks}
+          routes={routes}
+          defaultBranchId={defaultBranchId}
+          lockBranch={role !== "owner"}
+        />
+      )}
     </div>
   );
 }
