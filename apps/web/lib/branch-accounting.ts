@@ -144,3 +144,30 @@ export function buildComputerProfitTrend(
     };
   });
 }
+
+
+/** The partner's true economic share of an expense's cost (mirror of ownerExpenseBurden). */
+export function partnerExpenseBurden(amount: number, owedBy?: string): number {
+  return amount - ownerExpenseBurden(amount, owedBy);
+}
+
+/** Iterates YYYY-MM month strings from start to end inclusive. */
+export function monthsBetween(start: string, end: string): string[] {
+  const s = start.slice(0, 7);
+  const e = end.slice(0, 7);
+  const [sy, sm] = s.split("-").map(Number);
+  const [ey, em] = e.split("-").map(Number);
+  if (!sy || !sm || !ey || !em) return [];
+  const months: string[] = [];
+  let y: number = sy;
+  let m: number = sm;
+  while (y < ey || (y === ey && m <= em)) {
+    months.push(`${y}-${String(m).padStart(2, "0")}`);
+    m += 1;
+    if (m > 12) {
+      m = 1;
+      y += 1;
+    }
+  }
+  return months;
+}
