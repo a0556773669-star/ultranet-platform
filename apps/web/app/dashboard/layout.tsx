@@ -9,6 +9,7 @@ import { TopNav } from "./top-nav";
 import type { PermKey } from "@/lib/perms";
 
 import { NAV_ITEMS, visibleFor } from "@/lib/nav-items";
+import { getAdminFirestore } from "@/lib/firebase-admin";
 
 export default async function DashboardLayout({ children }: { children: ReactNode }) {
   const session = await getServerSession(authOptions);
@@ -30,10 +31,24 @@ export default async function DashboardLayout({ children }: { children: ReactNod
     items.push({ href: "/dashboard/users", label: "משתמשים", icon: "👥" });
   }
 
+  let logoUrl = "";
+  try {
+    const logoDoc = await getAdminFirestore().collection("n_label_settings").doc("default").get();
+    logoUrl = String((logoDoc.data() as { logoUrl?: string } | undefined)?.logoUrl ?? "");
+  } catch {
+    logoUrl = "";
+  }
+
   return (
     <div className="min-h-screen bg-page">
       <header className="flex flex-wrap items-center justify-between gap-3 border-b border-card-border bg-white px-6 py-3">
-        <div className="text-xl font-bold text-teal">אולטרנט</div>
+        <div className="flex items-center gap-2">
+          {logoUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={logoUrl} alt="אולטרנט" className="h-10 w-10 rounded-lg object-contain shadow-sm" />
+          ) : null}
+          <span className="text-xl font-extrabold tracking-tight text-teal">אולטרנט</span>
+        </div>
         <TopNav items={items} />
         <div className="flex items-center gap-2 text-sm text-muted">
           <span>
