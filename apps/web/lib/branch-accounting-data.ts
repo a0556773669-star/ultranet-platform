@@ -76,6 +76,9 @@ export interface BranchFinancials {
   balanceToDate: number;
   settlementNetToOwner: number; // positive: partner should transfer to owner; negative: owner owes partner
   ownerNetProfitThisMonth: number; // true owner profit, used for per-computer metric
+  ownerInvestedToDate: number;
+  ownerEarnedToDate: number;
+  ownerBalanceToDate: number;
   computerProfitTrend: ComputerProfitMonth[];
 }
 
@@ -223,6 +226,11 @@ export function computeBranchFinancials(branch: Branch, raw: BranchAccountingRaw
     balanceToDate: incomeToDate - expenseToDate,
     settlementNetToOwner: settlementIncome + settlementExpense,
     ownerNetProfitThisMonth,
+    ownerInvestedToDate: expenseLines.reduce((sum, e) => sum + ownerExpenseBurden(e.amount, e.owedBy), 0),
+    ownerEarnedToDate: incomeLines.reduce((sum, i) => sum + (i.amount * ownerPct) / 100, 0),
+    ownerBalanceToDate:
+      incomeLines.reduce((sum, i) => sum + (i.amount * ownerPct) / 100, 0) -
+      expenseLines.reduce((sum, e) => sum + ownerExpenseBurden(e.amount, e.owedBy), 0),
     computerProfitTrend,
   };
 }

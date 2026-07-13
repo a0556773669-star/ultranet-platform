@@ -12,9 +12,65 @@ import { DeleteEntryButton } from "../../accounting/delete-entry-button";
 const FIELD =
   "rounded-lg border border-card-border bg-[#f4f6f9] px-3 py-2 text-sm focus:border-teal focus:bg-white focus:outline-none";
 
-export default async function RentalsAccountingPage() {
+import { loadBranchAccountingRawData, computeBranchFinancials, currentMonth as getCurrentMonth } from "@/lib/branch-accounting-data";
+import { BranchAccountingView } from "./branch-view";
+import { OwnerBranchesOverview } from "./owner-overview";
+
+export default async function RentalsAccountingPage({
+  searchParams,
+}: {
+  searchParams?: { branchId?: string };
+}) {
   const session = await requireModuleAccess("rentals");
   const isOwner = session.user?.role === "owner";
+  const myBranchId = session.user?.branchId;
+
+  const raw = await loadBranchAccountingRawData();
+  const month = getCurrentMonth();
+  const rentalsBranches = raw.branches.filter((b) => b.branchType === "rentals");
+
+  if (!isOwner) {
+    const myBranch = rentalsBranches.find((b) => b.id === myBranchId);
+    if (myBranch) {
+      const financials = computeBranchFinancials(myBranch, raw, month);
+      const transfer = raw.transfersByBranchMonth.get(`${myBranch.id}|${month}`);
+      return (
+        <div className="max-w-3xl">
+          <h1 className="mb-4 text-[21px] font-extrabold text-ink">הנה"ח - {myBranch.name}</h1>
+          <BranchAccountingView financials={financials} transfer={transfer} month={month} showSettlement />
+        </div>
+      );
+    }
+  }
+
+  let ownerDrillDown: JSX.Element | null = null;
+  if (isOwner) {
+    const parents = rentalsBranches.filter((b) => !b.parentBranchId);
+    const childrenByParent = new Map<string, ReturnType<typeof computeBranchFinancials>[]>();
+    for (const b of rentalsBranches) {
+      if (b.parentBranchId) {
+        const arr = childrenByParent.get(b.parentBranchId) ?? [];
+        arr.push(computeBranchFinancials(b, raw, month));
+        childrenByParent.set(b.parentBranchId, arr);
+      }
+    }
+    const parentFinancials = parents.map((p) => computeBranchFinancials(p, raw, month));
+
+    const selectedBranch = searchParams?.branchId ? rentalsBranches.find((b) => b.id === searchParams.branchId) : undefined;
+    ownerDrillDown = (
+      <div className="mb-6 space-y-4">
+        <OwnerBranchesOverview parents={parentFinancials} childrenByParent={childrenByParent} />
+        {selectedBranch && (
+          <BranchAccountingView
+            financials={computeBranchFinancials(selectedBranch, raw, month)}
+            transfer={raw.transfersByBranchMonth.get(`${selectedBranch.id}|${month}`)}
+            month={month}
+            showSettlement={false}
+          />
+        )}
+      </div>
+    );
+  }
 
   const db = getAdminFirestore();
   const [incomeSnap, expenseSnap] = await Promise.all([
@@ -48,6 +104,8 @@ export default async function RentalsAccountingPage() {
         <h1 className="text-[21px] font-extrabold text-ink">📊 הנה\"ח השכרות</h1>
         <p className="text-sm text-muted">גביה ותמונת מצב של מודול ההשכרות</p>
       </div>
+
+      {ownerDrillDown}
 
       <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-4">
         <div className="rounded-card border border-card-border bg-white p-4 shadow-card">
