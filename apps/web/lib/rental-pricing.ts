@@ -22,7 +22,14 @@ export function calcRentalPrice(
     if (cached !== undefined) return cached;
     let best = n * daily;
     if (weekly !== undefined) {
-      best = n <= 7 ? Math.min(best, weekly) : Math.min(best, weekly + cost(n - 7));
+      if (n <= 6) {
+        best = Math.min(best, weekly);
+      } else {
+        const weeks = Math.floor(n / 6);
+        const remainder = n % 6;
+        const prorated = weeks * weekly + remainder * (weekly / 6);
+        best = Math.min(best, prorated);
+      }
     }
     if (monthly !== undefined) {
       best = n <= 30 ? Math.min(best, monthly) : Math.min(best, monthly + cost(n - 30));

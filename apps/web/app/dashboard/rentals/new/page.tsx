@@ -31,7 +31,8 @@ export default async function NewRentalPage({
     (d) => ({ id: d.id, ...(d.data() as Omit<CollectionRoute, "id">) }) as CollectionRoute
   );
 
-  const defaultBranchId = role === "owner" ? (branches[0]?.id ?? "") : (myBranchId ?? "");
+  const defaultBranchId =
+    role === "owner" ? (myBranchId || branches[0]?.id || "") : (myBranchId ?? "");
   const noBranch = role !== "owner" && branches.length === 0;
 
   return (

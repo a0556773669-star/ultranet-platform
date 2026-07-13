@@ -78,16 +78,20 @@ export function UserForm({
         </div>
         <div>
           <label className={LABEL}>סניף</label>
-          <select name="branchId" defaultValue={initial?.branchId ?? ""} className={FIELD} disabled={role === "owner"}>
-            <option value="">בחר סניף</option>
-            {branches.map((b) => (
-              <option key={b.id} value={b.id}>
-                {b.name}
-              </option>
-            ))}
-          </select>
-          {role === "owner" && <p className="mt-1 text-[11px] text-muted">בעלים משויך לכל הסניפים</p>}
-        </div>
+          <select name="branchId" defaultValue={initial?.branchId ?? ""} className={FIELD}>
+          <option value="">בחר סניף</option>
+          {branches.map((b) => (
+            <option key={b.id} value={b.id}>
+              {b.name}
+            </option>
+          ))}
+        </select>
+        {role === "owner" && (
+          <p className="mt-1 text-[11px] text-muted">
+            בעלים משויך לכל הסניפים בכל מקום במערכת. הבחירה כאן משמשת רק כברירת מחדל בעת פתיחת השכרה חדשה - עדיין ניתן לבחור כל סניף אחר בטופס ההשכרה עצמו.
+          </p>
+        )}
+      </div>
       </div>
 
       {role !== "owner" && (
