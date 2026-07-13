@@ -42,12 +42,13 @@ export default async function DashboardLayout({ children }: { children: ReactNod
   return (
     <div className="min-h-screen bg-page">
       <header className="flex flex-wrap items-center justify-between gap-3 border-b border-card-border bg-white px-6 py-3">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center">
           {logoUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={logoUrl} alt="אולטרנט" className="h-10 w-10 rounded-lg object-contain shadow-sm" />
-          ) : null}
-          <span className="text-xl font-extrabold tracking-tight text-teal">אולטרנט</span>
+            <img src={logoUrl} alt="אולטרנט" className="h-12 w-auto object-contain" />
+          ) : (
+            <span className="text-xl font-extrabold tracking-tight text-teal">אולטרנט</span>
+          )}
         </div>
         <TopNav items={items} />
         <div className="flex items-center gap-2 text-sm text-muted">
