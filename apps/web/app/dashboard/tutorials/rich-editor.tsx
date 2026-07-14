@@ -75,7 +75,8 @@ export function RichEditor({ name, defaultValue }: Props) {
   function sanitizePastedHtml(dirty: string): string {
     const container = document.createElement("div");
     container.innerHTML = dirty;
-    container.querySelectorAll("script,style,meta,link,o:p").forEach((el) => el.remove());
+    container.querySelectorAll("script, style, meta, link").forEach((el) => el.remove());
+    Array.from(container.getElementsByTagName("o:p")).forEach((el) => el.remove());
     // Strip Word's inline mso- styles/classes and empty class attrs but keep bold/italic/lists/images.
     container.querySelectorAll("*").forEach((el) => {
       el.removeAttribute("class");
