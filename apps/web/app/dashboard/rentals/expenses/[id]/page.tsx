@@ -43,7 +43,7 @@ export default async function BranchExpensesPage({ params }: { params: { id: str
           ← בחירת סניף אחר
         </Link>
       </div>
-      <BranchExpenses branchId={branch.id} isPartner={isPartner} canManage={isOwner} fixedExpenses={visibleFixed} variableExpenses={visibleVariable} />
+      <BranchExpenses branchId={branch.id} isPartner={isPartner} canManage={isOwner} canAdd={isOwner || isPartner} fixedExpenses={visibleFixed} variableExpenses={visibleVariable} />
     </div>
   );
 }

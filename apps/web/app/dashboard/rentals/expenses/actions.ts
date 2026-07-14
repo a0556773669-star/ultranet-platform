@@ -13,6 +13,14 @@ async function requireOwner() {
   return session;
 }
 
+async function requireBranchAccess(branchId: string) {
+  const session = await getServerSession(authOptions);
+  if (!session) throw new Error("לא מחובר");
+  if (session.user?.role === "owner") return session;
+  if (session.user?.branchId === branchId) return session;
+  throw new Error("אין הרשאה");
+}
+
 function stripUndefined<T extends Record<string, any>>(obj: T): T {
   const out: any = {};
   for (const k in obj) if (obj[k] !== undefined) out[k] = obj[k];
@@ -20,7 +28,7 @@ function stripUndefined<T extends Record<string, any>>(obj: T): T {
 }
 
 export async function createFixedExpenseAction(branchId: string, formData: FormData) {
-  await requireOwner();
+  await requireBranchAccess(branchId);
   const name = String(formData.get("name") ?? "").trim();
   const amount = Number(formData.get("amount")) || 0;
   const startDate = String(formData.get("startDate") ?? "").trim();
@@ -52,7 +60,7 @@ export async function deleteFixedExpenseAction(id: string, branchId: string) {
 }
 
 export async function createVariableExpenseAction(branchId: string, formData: FormData) {
-  await requireOwner();
+  await requireBranchAccess(branchId);
   const desc = String(formData.get("desc") ?? "").trim();
   const amount = Number(formData.get("amount")) || 0;
   const date = String(formData.get("date") ?? "").trim();

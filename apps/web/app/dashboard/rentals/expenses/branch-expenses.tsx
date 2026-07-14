@@ -56,11 +56,12 @@ type Props = {
   branchId: string;
   isPartner: boolean;
   canManage: boolean;
+  canAdd: boolean;
   fixedExpenses: FixedExpense[];
   variableExpenses: VariableExpense[];
 };
 
-export function BranchExpenses({ branchId, isPartner, canManage, fixedExpenses, variableExpenses }: Props) {
+export function BranchExpenses({ branchId, isPartner, canManage, canAdd, fixedExpenses, variableExpenses }: Props) {
   const activeFixed = fixedExpenses.filter((e) => !e.endDate);
   const endedFixed = fixedExpenses.filter((e) => e.endDate);
 
@@ -86,7 +87,7 @@ export function BranchExpenses({ branchId, isPartner, canManage, fixedExpenses, 
 
       <div className="rounded-card border border-card-border bg-white p-4 shadow-card">
         <h3 className="mb-3 text-sm font-bold text-ink">📅 הוצאות קבועות / חודשיות</h3>
-        {canManage && (
+        {canAdd && (
 <form action={createFixed} className="mb-4 grid grid-cols-2 gap-2 md:grid-cols-3">
           <div>
             <label className={LABEL}>שם ההוצאה</label>
@@ -165,7 +166,7 @@ export function BranchExpenses({ branchId, isPartner, canManage, fixedExpenses, 
 
       <div className="rounded-card border border-card-border bg-white p-4 shadow-card">
         <h3 className="mb-3 text-sm font-bold text-ink">🧾 הוצאות חד פעמיות</h3>
-        {canManage && (
+        {canAdd && (
 <form action={createVariable} className="mb-4 grid grid-cols-2 gap-2 md:grid-cols-3">
           <div>
             <label className={LABEL}>תיאור</label>
