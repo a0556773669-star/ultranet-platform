@@ -18,7 +18,13 @@ function parseUserForm(formData: FormData) {
   for (const key of PERM_KEYS) {
     perms[key] = formData.get(`perm_${key}`) === "on";
   }
-  return { name, email, pass, role, branchId, perms };
+  const viewClientBranchIds: string[] = [];
+  for (const [key, value] of formData.entries()) {
+    if (key.startsWith("viewBranch_") && value === "on") {
+      viewClientBranchIds.push(key.slice("viewBranch_".length));
+    }
+  }
+  return { name, email, pass, role, branchId, perms, viewClientBranchIds };
 }
 
 export async function createUserAction(formData: FormData) {
@@ -40,6 +46,7 @@ export async function createUserAction(formData: FormData) {
     role: data.role,
     branchId,
     perms: data.perms,
+    viewClientBranchIds: data.viewClientBranchIds,
   });
   await db.collection("n_approved_emails").doc(data.email).set({
     name: data.name,
@@ -68,6 +75,7 @@ export async function updateUserAction(id: string, formData: FormData) {
     role: data.role,
     branchId,
     perms: data.perms,
+    viewClientBranchIds: data.viewClientBranchIds,
   };
   if (data.pass) {
     update.pass = data.pass;

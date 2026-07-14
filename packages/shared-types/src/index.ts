@@ -47,6 +47,7 @@ export interface AppUser {
   role: UserRole;
     branchId: string; // "all" for owner
   perms?: Partial<Record<"branches" | "computers" | "rentals" | "coworking" | "accounting" | "tasks", boolean>>;
+  viewClientBranchIds?: string[];
 }
 
 /** collection: n_fixed_expenses */

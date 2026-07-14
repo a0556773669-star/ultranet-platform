@@ -20,6 +20,7 @@ export default async function RentalClientsPage({
   const role = session.user?.role;
   const myBranchId = session.user?.branchId;
   const isOwner = role === "owner";
+  const viewClientBranchIds = (session.user as { viewClientBranchIds?: string[] } | undefined)?.viewClientBranchIds ?? [];
 
   const db = getAdminFirestore();
   const [clientsSnap, branchesSnap] = await Promise.all([
@@ -32,7 +33,9 @@ export default async function RentalClientsPage({
   const allClients = clientsSnap.docs.map(
     (d) => ({ id: d.id, ...(d.data() as Omit<RentalClient, "id">) }) as RentalClient
   );
-  const clients = isOwner ? allClients : allClients.filter((c) => c.branchId === myBranchId);
+  const clients = isOwner
+    ? allClients
+    : allClients.filter((c) => c.branchId === myBranchId || viewClientBranchIds.includes(c.branchId));
   const branchName = (id: string) => branches.find((b) => b.id === id)?.name ?? "-";
 
   return (
@@ -96,7 +99,7 @@ export default async function RentalClientsPage({
               <th className="px-[11px] py-[9px] text-right text-[11px] font-bold uppercase tracking-wide">טלפון</th>
               <th className="px-[11px] py-[9px] text-right text-[11px] font-bold uppercase tracking-wide">פיקדון</th>
               <th className="px-[11px] py-[9px] text-right text-[11px] font-bold uppercase tracking-wide">תקנון</th>
-              {isOwner && (
+              {(isOwner || viewClientBranchIds.length > 0) && (
                 <th className="px-[11px] py-[9px] text-right text-[11px] font-bold uppercase tracking-wide">סניף</th>
               )}
               <th className="px-[11px] py-[9px] text-right text-[11px] font-bold uppercase tracking-wide"></th>
@@ -136,7 +139,7 @@ export default async function RentalClientsPage({
                     <span className="font-bold text-red-500">✗</span>
                   )}
                 </td>
-                {isOwner && <td className="px-[11px] py-2 text-muted">{branchName(c.branchId)}</td>}
+                {(isOwner || viewClientBranchIds.length > 0) && <td className="px-[11px] py-2 text-muted">{branchName(c.branchId)}</td>}
                 <td className="px-[11px] py-2 text-left">
                   <Link
                     href={`/dashboard/rentals/clients/${c.id}`}
