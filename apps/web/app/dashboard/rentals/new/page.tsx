@@ -6,11 +6,12 @@ import { NewRentalForm } from "./new-rental-form";
 export default async function NewRentalPage({
   searchParams,
 }: {
-  searchParams?: { error?: string };
+  searchParams?: { error?: string; mine?: string };
 }) {
   const session = await requireModuleAccess("rentals");
   const role = session.user?.role;
   const myBranchId = session.user?.branchId;
+  const onlyMine = searchParams?.mine === "1";
 
   const db = getAdminFirestore();
   const [branchesSnap, clientsSnap, laptopsSnap, sticksSnap, routesSnap] = await Promise.all([
@@ -21,7 +22,7 @@ export default async function NewRentalPage({
     db.collection("n_collection_routes").get(),
   ]);
   const allBranches = branchesSnap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<Branch, "id">) }) as Branch);
-  const branches = role === "owner" ? allBranches : allBranches.filter((b) => b.id === myBranchId);
+  const branches = role === "owner" ? (onlyMine ? allBranches.filter((b) => b.isMine === true) : allBranches) : allBranches.filter((b) => b.id === myBranchId);
   const clients = clientsSnap.docs.map(
     (d) => ({ id: d.id, ...(d.data() as Omit<RentalClient, "id">) }) as RentalClient
   );
@@ -34,7 +35,7 @@ export default async function NewRentalPage({
   const ownerHomeBranchId = myBranchId && myBranchId !== "all" ? myBranchId : "";
   const defaultBranchId =
     role === "owner" ? (ownerHomeBranchId || branches[0]?.id || "") : (myBranchId ?? "");
-  const noBranch = role !== "owner" && branches.length === 0;
+  const noBranch = (role !== "owner" || onlyMine) && branches.length === 0;
 
   return (
     <div className="max-w-2xl">
@@ -54,7 +55,7 @@ export default async function NewRentalPage({
           sticks={sticks}
           routes={routes}
           defaultBranchId={defaultBranchId}
-          lockBranch={role !== "owner"}
+          lockBranch={role !== "owner" || onlyMine}
         />
       )}
     </div>

@@ -89,7 +89,7 @@ function routesForBranch(branchId: string): { id: string; name: string }[] {
       <div className="flex items-center justify-between">
         <div className="text-xs font-bold uppercase tracking-wide text-muted">מצב מחשבים וסטיקים</div>
         <Link
-          href="/dashboard/rentals/new"
+          href={onlyMine ? "/dashboard/rentals/new?mine=1" : "/dashboard/rentals/new"}
           className="rounded-[10px] bg-gradient-to-br from-teal to-teal-light px-4 py-1.5 text-xs font-bold text-white shadow-primary transition hover:opacity-90"
         >
           + השכרה חדשה
