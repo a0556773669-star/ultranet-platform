@@ -33,6 +33,9 @@ function toTutorial(id: string, data: Partial<Tutorial> | undefined): Tutorial {
     title: data?.title ?? "",
     instructions: data?.instructions ?? "",
     imageDataUrl: data?.imageDataUrl ?? "",
+    videoUrl: data?.videoUrl ?? "",
+    attachmentDataUrl: data?.attachmentDataUrl ?? "",
+    attachmentName: data?.attachmentName ?? "",
     createdAt: data?.createdAt ?? 0,
     updatedAt: data?.updatedAt ?? 0,
   };
