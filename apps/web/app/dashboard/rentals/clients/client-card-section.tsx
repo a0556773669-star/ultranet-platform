@@ -58,7 +58,7 @@ export function ClientCardSection({
             clientName={clientName}
             clientPhone={clientPhone}
             onSaved={async (token, last4, cardExpiry) => {
-              await saveClientCardTokenAction(clientId, token, last4);
+              await saveClientCardTokenAction(clientId, token, last4, cardExpiry);
               router.refresh();
               setOpen(false);
             }}

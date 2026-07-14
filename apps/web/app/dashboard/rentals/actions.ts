@@ -139,10 +139,10 @@ export async function createClientAction(formData: FormData) {
   redirect("/dashboard/rentals/clients");
 }
 
-export async function saveClientCardTokenAction(clientId: string, token: string, last4: string) {
+export async function saveClientCardTokenAction(clientId: string, token: string, last4: string, cardExpiry?: string) {
   await requireSession();
   await getAdminFirestore().collection("n_rental_clients").doc(clientId).set(
-    { gatewayToken: token, cardLast4: last4, depositType: "credit" },
+    { gatewayToken: token, cardLast4: last4, cardExpiry: cardExpiry || "", depositType: "credit" },
     { merge: true }
   );
   revalidatePath(`/dashboard/rentals/clients/${clientId}`);
