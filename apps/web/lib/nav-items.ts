@@ -8,6 +8,7 @@ export const NAV_ITEMS: NavItem[] = [
   { href: "/dashboard/rentals", label: "השכרות", icon: "💻", perm: "rentals" },
   { href: "/dashboard/coworking", label: "משרד שיתופי", icon: "🤝", perm: "coworking" },
   { href: "/dashboard/accounting", label: "הנה\"ח", icon: "📊", perm: "accounting" },
+  { href: "/dashboard/tutorials", label: "הדרכות", icon: "📚" },
 ];
 
 export function visibleFor(role: string, perms: Partial<Record<PermKey, boolean>> | null | undefined, item: NavItem) {
