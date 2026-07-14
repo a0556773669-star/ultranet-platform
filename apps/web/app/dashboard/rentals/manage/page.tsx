@@ -5,6 +5,7 @@ import { resolveNedarimCreds } from "@/lib/nedarim";
 import type { Rental, RentalClient, Laptop, Stick, Branch, CollectionRoute } from "@ultranet/shared-types";
 import { ActiveRentalRow } from "./active-rental-row";
 import { UnpaidRowActions } from "./unpaid-row-actions";
+import { DeleteHistoryRentalButton } from "./delete-history-rental-button";
 
 async function loadData() {
   const db = getAdminFirestore();
@@ -243,6 +244,7 @@ function routesForBranch(branchId: string): { id: string; name: string }[] {
                 <th className="px-[11px] py-[9px] text-right text-[11px] font-bold uppercase tracking-wide">החזרה</th>
                 <th className="px-[11px] py-[9px] text-right text-[11px] font-bold uppercase tracking-wide">מחיר</th>
                 <th className="px-[11px] py-[9px] text-right text-[11px] font-bold uppercase tracking-wide">תשלום</th>
+                <th className="px-[11px] py-[9px] text-right text-[11px] font-bold uppercase tracking-wide"></th>
               </tr>
             </thead>
             <tbody>
@@ -264,6 +266,9 @@ function routesForBranch(branchId: string): { id: string; name: string }[] {
                       ) : (
                         <UnpaidRowActions rentalId={r.id} routes={routesForBranch(r.branchId)} />
                       )}
+                    </td>
+                    <td className="px-[11px] py-2 text-left">
+                      {role === "owner" && <DeleteHistoryRentalButton rentalId={r.id} />}
                     </td>
                   </tr>
                 );
