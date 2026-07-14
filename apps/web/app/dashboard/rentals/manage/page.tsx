@@ -28,18 +28,24 @@ async function loadData() {
   return { rentals, clients, laptops, sticks, laptopsList, sticksList, branches, branchesList, routesList };
 }
 
-export default async function RentalsPage() {
+export default async function RentalsPage({ searchParams }: { searchParams?: { mine?: string } }) {
   const session = await requireModuleAccess("rentals");
   const role = session.user?.role;
   const myBranchId = session.user?.branchId;
+  const onlyMine = searchParams?.mine === "1";
 
   const { rentals, clients, laptops, sticks, laptopsList, sticksList, branches, branchesList, routesList } = await loadData();
 
-  const visible = rentals.filter((r) => role === "owner" || r.branchId === myBranchId);
+  const myOwnBranchIds = branchesList.filter((b) => b.isMine === true).map((b) => b.id);
+  const visible = rentals.filter((r) => (role === "owner" && !onlyMine) || r.branchId === myBranchId || (onlyMine && myOwnBranchIds.includes(r.branchId)));
   const active = visible.filter((r) => r.status === "active");
   const history = visible.filter((r) => r.status !== "active").slice(0, 20);
 
-  const visibleBranches = role === "owner" ? branchesList : branchesList.filter((b) => b.id === myBranchId);
+  const visibleBranches = onlyMine
+    ? branchesList.filter((b) => b.isMine === true)
+    : role === "owner"
+    ? branchesList
+    : branchesList.filter((b) => b.id === myBranchId);
 
   const activeBranchIds = Array.from(new Set(active.map((r) => r.branchId)));
   const credsEntries = await Promise.all(

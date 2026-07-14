@@ -12,6 +12,7 @@ const TABS: TabItem[] = [
   { href: "/dashboard/rentals/labels", label: "מדבקות", icon: "🏷️" },
   { href: "/dashboard/rentals/clients", label: "לקוחות", icon: "👥" },
   { href: "/dashboard/rentals/manage", label: "השכרות", icon: "📋" },
+  { href: "/dashboard/rentals/mine", label: "השכרות יוני", icon: "🧑‍💼", ownerOnly: true },
   { href: "/dashboard/rentals/accounting", label: "הנה\"ח", icon: "📊" },
 ];
 
