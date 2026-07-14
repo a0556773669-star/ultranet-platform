@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
-import { Heebo } from "next/font/google";
+// import { Heebo } from "next/font/google";
 import "./globals.css";
 import { Providers } from "./providers";
 
-const heebo = Heebo({ subsets: ["hebrew", "latin"], weight: ["300", "400", "500", "700", "800"], variable: "--font-heebo" });
+// const heebo = ...
 
 import { getAdminFirestore } from "@/lib/firebase-admin";
 
@@ -28,7 +28,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="he" dir="rtl" className={heebo.variable}>
+    <html lang="he" dir="rtl" className=''>
       <body className="font-sans bg-[#f0f2f5] text-[#1a2332]"><Providers>{children}</Providers></body></html>
   );
 }

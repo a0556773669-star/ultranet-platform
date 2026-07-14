@@ -17,10 +17,11 @@ export function NedarimCardCapture({
   apiValid: string;
   clientName: string;
   clientPhone?: string;
-  onSaved: (token: string, last4: string) => void;
+  onSaved: (token: string, last4: string, cardExpiry: string) => void;
 }) {
   const frameRef = useRef<HTMLIFrameElement>(null);
   const [height, setHeight] = useState(0);
+  const [cardExpiry, setCardExpiry] = useState("");
   const [status, setStatus] = useState<"idle" | "sending" | "error" | "done">("idle");
   const [error, setError] = useState<string | null>(null);
   const [testMode, setTestMode] = useState(false);
@@ -39,13 +40,13 @@ export function NedarimCardCapture({
           setError(value.Message || "שגיאה בשמירת הכרטיס");
         } else if (value?.Token) {
           setStatus("done");
-          onSaved(value.Token, value.LastNum || "");
+          onSaved(value.Token, value.LastNum || "", cardExpiry);
         }
       }
     }
     window.addEventListener("message", onMessage);
     return () => window.removeEventListener("message", onMessage);
-  }, [onSaved]);
+  }, [onSaved, cardExpiry]);
 
   function postToFrame(payload: unknown) {
     frameRef.current?.contentWindow?.postMessage(payload, "*");
@@ -89,6 +90,19 @@ export function NedarimCardCapture({
         style={{ width: "100%", border: "none", height: height || 300 }}
         title="שמירת כרטיס אשראי - נדרים פלוס"
       />
+      <div className="mt-3">
+        <label className="mb-1 block text-xs font-semibold text-muted">
+          תוקף כרטיס (MM/YY)
+        </label>
+        <input
+          type="text"
+          value={cardExpiry}
+          onChange={(e) => setCardExpiry(e.target.value)}
+          placeholder="12/27"
+          maxLength={5}
+          className="w-full rounded-lg border border-card-border bg-white px-3 py-2 text-sm focus:border-teal focus:outline-none"
+        />
+      </div>
       {status === "error" && (
         <p className="mt-2 text-sm font-semibold text-red-600">{error}</p>
       )}
@@ -99,7 +113,7 @@ export function NedarimCardCapture({
         type="button"
         onClick={handleSubmit}
         disabled={status === "sending"}
-        className="mt-3 rounded-[10px] bg-gradient-to-br from-teal to-teal-light px-5 py-2 text-sm font-bold text-white shadow-primary transition hover:opacity-90 disabled:opacity-50"
+        className="mt-3 w-full rounded-[10px] bg-gradient-to-br from-teal to-teal-light px-5 py-2 text-sm font-bold text-white shadow-primary transition hover:opacity-90 disabled:opacity-50"
       >
         {status === "sending" ? "שומר..." : "שמור כרטיס"}
       </button>
