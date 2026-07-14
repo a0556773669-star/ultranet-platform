@@ -102,7 +102,7 @@ export function ClientForm({
             <p className="mt-1 text-[11px] text-muted">
               מספר הכרטיס וקוד ה-CVV לא נשמרים אצלנו בשום שלב (PCI-DSS) – הכל מוקלד ומאובטח דרך נדרים פלאס.
             </p>
-            <div className="mt-2">
+            {depositType === "credit" && (            <div className="mt-2">
               <label className="mb-1 block text-[11px] font-semibold text-muted">תוקף כרטיס (MM/YY)</label>
               <input
                 type="text"
@@ -114,6 +114,7 @@ export function ClientForm({
               />
             </div>
           </div>
+                                                      )}
         )}
 
         <button
