@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 type Props = {
   name: string;
@@ -10,6 +10,13 @@ type Props = {
 export function RichEditor({ name, defaultValue }: Props) {
   const editorRef = useRef<HTMLDivElement>(null);
   const [html, setHtml] = useState(defaultValue ?? "");
+
+  useEffect(() => {
+    if (editorRef.current && defaultValue) {
+      editorRef.current.innerHTML = defaultValue;
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   function sync() {
     setHtml(editorRef.current?.innerHTML ?? "");
@@ -74,7 +81,6 @@ export function RichEditor({ name, defaultValue }: Props) {
         suppressContentEditableWarning
         dir="rtl"
         onInput={sync}
-        dangerouslySetInnerHTML={{ __html: defaultValue ?? "" }}
         className="min-h-[260px] w-full rounded-lg border border-card-border bg-[#f4f6f9] px-3 py-2 text-sm leading-relaxed focus:border-teal focus:bg-white focus:outline-none [&_img]:max-w-full [&_img]:rounded-lg [&_ol]:list-decimal [&_ol]:pr-5 [&_ul]:list-disc [&_ul]:pr-5"
       />
       <input type="hidden" name={name} value={html} />
