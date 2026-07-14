@@ -33,6 +33,8 @@ export default async function RentalsPage({ searchParams }: { searchParams?: { m
   const session = await requireModuleAccess("rentals");
   const role = session.user?.role;
   const myBranchId = session.user?.branchId;
+  const perms = (session.user as { perms?: Partial<Record<string, boolean>> } | undefined)?.perms;
+  const canCharge = role === "owner" || !!perms?.charging;
   const onlyMine = searchParams?.mine === "1";
 
   const { rentals, clients, laptops, sticks, laptopsList, sticksList, branches, branchesList, routesList } = await loadData();
@@ -217,7 +219,8 @@ function routesForBranch(branchId: string): { id: string; name: string }[] {
                     hasRoute={!!r.collectionRouteId}
                     nedarimCreds={creds ? { mosadId: creds.mosadId, apiValid: creds.apiValid } : null}
                     isOwner={role === "owner"}
-                  />
+                  canCharge={canCharge}
+            />
                 );
               })}
             </tbody>

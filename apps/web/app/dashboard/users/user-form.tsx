@@ -20,6 +20,7 @@ const PERM_OPTIONS: { key: keyof NonNullable<AppUser["perms"]>; label: string }[
   { key: "coworking", label: "משרד שיתופי" },
   { key: "accounting", label: "הנה\"ח" },
   { key: "tasks", label: "משימות" },
+  { key: "charging", label: "סליקה וקבלות" },
 ];
 
 export function UserForm({

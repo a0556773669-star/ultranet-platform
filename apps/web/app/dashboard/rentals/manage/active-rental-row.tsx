@@ -35,6 +35,7 @@ type Props = {
   stickRates?: StickRates;
   hasRoute: boolean;
   nedarimCreds: { mosadId: string; apiValid: string } | null;
+  canCharge: boolean;
 };
 
 const BTN =
@@ -58,6 +59,7 @@ export function ActiveRentalRow({
   stickRates,
   hasRoute,
   nedarimCreds,
+  canCharge,
 }: Props) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -251,7 +253,7 @@ export function ActiveRentalRow({
                     )}
                   </div>
                 )}
-                {showNedarim && nedarimCreds && !paid && (
+                {showNedarim && nedarimCreds && !paid && canCharge && (
                   <div className="mt-3">
                     <NedarimChargeCapture
                       mosadId={nedarimCreds.mosadId}

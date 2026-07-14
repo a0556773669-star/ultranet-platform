@@ -156,7 +156,12 @@ export async function createNedarimTransactionAction(
   clientPhone?: string,
   clientIdNum?: string
 ): Promise<{ ok: true; id: string } | { ok: false; message: string }> {
-  await requireSession();
+  const session = await requireSession();
+  const role = session.user?.role;
+  const perms = (session.user as { perms?: Partial<Record<string, boolean>> } | undefined)?.perms;
+  if (role !== "owner" && !perms?.charging) {
+    return { ok: false, message: "אין לך הרשאה לבצע חיוב" };
+  }
   if (!amount || amount <= 0) {
     return { ok: false, message: "סכום לא תקין" };
   }

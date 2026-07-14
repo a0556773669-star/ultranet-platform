@@ -46,7 +46,7 @@ export interface AppUser {
     pass: string; // legacy plaintext - replace with proper auth before any customer-facing exposure
   role: UserRole;
     branchId: string; // "all" for owner
-  perms?: Partial<Record<"branches" | "computers" | "rentals" | "coworking" | "accounting" | "tasks", boolean>>;
+  perms?: Partial<Record<"branches" | "computers" | "rentals" | "coworking" | "accounting" | "tasks" | "charging", boolean>>;
   viewClientBranchIds?: string[];
 }
 
