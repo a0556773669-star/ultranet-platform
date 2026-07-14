@@ -29,7 +29,7 @@ export function NedarimChargeCapture({
   const [stage, setStage] = useState<"amount" | "creating" | "iframe" | "sending" | "error" | "done">("amount");
   const [amount, setAmount] = useState(initialAmount ? String(initialAmount) : "");
   const [error, setError] = useState<string | null>(null);
-  const [testMode, setTestMode] = useState(true);
+  const [testMode, setTestMode] = useState(false);
   const [txId, setTxId] = useState<string | null>(null);
 
   useEffect(() => {

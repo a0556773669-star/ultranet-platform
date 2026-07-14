@@ -23,7 +23,7 @@ export function NedarimCardCapture({
   const [height, setHeight] = useState(0);
   const [status, setStatus] = useState<"idle" | "sending" | "error" | "done">("idle");
   const [error, setError] = useState<string | null>(null);
-  const [testMode, setTestMode] = useState(true);
+  const [testMode, setTestMode] = useState(false);
 
   useEffect(() => {
     function onMessage(event: MessageEvent) {
