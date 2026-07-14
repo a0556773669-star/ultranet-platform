@@ -129,6 +129,26 @@ export default async function DashboardHomePage() {
         <HomeClock name={name} />
       </div>
 
+        {rentedLaptops && (
+          <div className="card">
+            <div className="mb-3 flex items-center justify-between text-xs font-bold uppercase tracking-wide text-muted">
+              <span>{"💻 ניידים מושכרים כעת"}</span>
+              <span className="rounded-full bg-[#f4f6f9] px-2.5 py-0.5 text-ink normal-case">{rentedLaptops.length}</span>
+            </div>
+            {rentedLaptops.length === 0 ? (
+              <div className="text-sm text-muted">{"אין השכרות פעילות"}</div>
+            ) : (
+              rentedLaptops.map((l, i) => (
+                <div key={i} className="flex items-center gap-2 border-b border-card-border py-2 text-[13px] last:border-b-0">
+                  <span className="h-2 w-2 rounded-full bg-teal" />
+                  <span className="flex-1 font-medium text-ink">{l.name}</span>
+                  <span className="text-[11px] text-muted">{"מאז " + l.startDate}</span>
+                </div>
+              ))
+            )}
+          </div>
+        )}
+
       {moneyStats && (
         <div className="mb-3 grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-4">
           <div className="relative overflow-hidden rounded-card border border-card-border bg-white p-4 shadow-card">
@@ -174,26 +194,6 @@ export default async function DashboardHomePage() {
       </div>
 
       <div className="mb-3 grid grid-cols-1 gap-3 lg:grid-cols-2">
-        {rentedLaptops && (
-          <div className="card">
-            <div className="mb-3 flex items-center justify-between text-xs font-bold uppercase tracking-wide text-muted">
-              <span>{"💻 ניידים מושכרים כעת"}</span>
-              <span className="rounded-full bg-[#f4f6f9] px-2.5 py-0.5 text-ink normal-case">{rentedLaptops.length}</span>
-            </div>
-            {rentedLaptops.length === 0 ? (
-              <div className="text-sm text-muted">{"אין השכרות פעילות"}</div>
-            ) : (
-              rentedLaptops.map((l, i) => (
-                <div key={i} className="flex items-center gap-2 border-b border-card-border py-2 text-[13px] last:border-b-0">
-                  <span className="h-2 w-2 rounded-full bg-teal" />
-                  <span className="flex-1 font-medium text-ink">{l.name}</span>
-                  <span className="text-[11px] text-muted">{"מאז " + l.startDate}</span>
-                </div>
-              ))
-            )}
-          </div>
-        )}
-
         {unpaidRentals && unpaidRentals.length > 0 && (
         <div className="card border-red-300 bg-red-50">
           <div className="mb-3 flex items-center justify-between text-xs font-bold uppercase tracking-wide text-red-700">
@@ -237,7 +237,6 @@ export default async function DashboardHomePage() {
           </div>
         )}
       </div>
-
       <div className="card">
         <div className="mb-3 flex items-center justify-between text-xs font-bold uppercase tracking-wide text-muted">
           <span>{"✅ משימות לטיפול"}</span>
@@ -245,7 +244,6 @@ export default async function DashboardHomePage() {
         </div>
         <div className="text-sm text-muted">{"ריכוז משימות ייבנה לכל אורך הפיתוח, לפי קטגוריה וצבע"}</div>
       </div>
-
       <div className="card">
         <div className="mb-3 flex items-center justify-between text-xs font-bold uppercase tracking-wide text-muted">
           <span>{"⚠️ התראות"}</span>
