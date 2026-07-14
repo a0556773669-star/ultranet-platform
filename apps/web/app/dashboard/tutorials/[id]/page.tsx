@@ -48,7 +48,10 @@ export default async function TutorialDetailPage({ params }: { params: { id: str
             className="w-full rounded-lg border border-card-border object-contain"
           />
         )}
-        <p className="whitespace-pre-wrap text-sm leading-relaxed text-ink">{tutorial.instructions}</p>
+        <div
+            className="text-sm leading-relaxed text-ink [&_img]:max-w-full [&_img]:rounded-lg [&_ol]:list-decimal [&_ol]:pr-5 [&_ul]:list-disc [&_ul]:pr-5"
+            dangerouslySetInnerHTML={{ __html: tutorial.instructions }}
+          />
       </div>
     </div>
   );
