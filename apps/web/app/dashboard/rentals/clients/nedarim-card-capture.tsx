@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 
-const IFRAME_SRC = "https://www.matara.pro/nedarimplus/iframe/?CVV=Hide";
+const IFRAME_SRC = "https://www.matara.pro/nedarimplus/iframe/?Tokef=Hide&CVV=Hide";
 const TEST_MOSAD = "0";
 const TEST_API_VALID = "j+iyEFN3bE";
 

@@ -240,6 +240,7 @@ function routesForBranch(branchId: string): { id: string; name: string }[] {
               <tr>
                 <th className="px-[11px] py-[9px] text-right text-[11px] font-bold uppercase tracking-wide">לקוח</th>
                 <th className="px-[11px] py-[9px] text-right text-[11px] font-bold uppercase tracking-wide">פריט</th>
+            <th className="px-[11px] py-[9px] text-right text-[11px] font-bold uppercase tracking-wide">סניף</th>
                 <th className="px-[11px] py-[9px] text-right text-[11px] font-bold uppercase tracking-wide">התחלה</th>
                 <th className="px-[11px] py-[9px] text-right text-[11px] font-bold uppercase tracking-wide">החזרה</th>
                 <th className="px-[11px] py-[9px] text-right text-[11px] font-bold uppercase tracking-wide">מחיר</th>
@@ -257,6 +258,7 @@ function routesForBranch(branchId: string): { id: string; name: string }[] {
                   >
                     <td className="px-[11px] py-2 text-muted">{info.clientName}</td>
                     <td className="px-[11px] py-2 text-muted">{info.itemName}</td>
+                <td className="px-[11px] py-2 text-muted">{info.branchName}</td>
                     <td className="px-[11px] py-2 text-muted">{r.startDate}</td>
                     <td className="px-[11px] py-2 text-muted">{r.returnDate ?? r.endDate}</td>
                     <td className="px-[11px] py-2 font-semibold text-ink">{(r.finalPrice ?? r.calcPrice)} ₪</td>
