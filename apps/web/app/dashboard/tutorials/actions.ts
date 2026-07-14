@@ -14,6 +14,9 @@ export type Tutorial = {
   title: string;
   instructions: string;
   imageDataUrl: string;
+  videoUrl?: string;
+  attachmentDataUrl?: string;
+  attachmentName?: string;
   createdAt: number;
   updatedAt: number;
 };
@@ -53,12 +56,24 @@ export async function createTutorialAction(formData: FormData) {
   const title = String(formData.get("title") ?? "").trim();
   const instructions = String(formData.get("instructions") ?? "").trim();
   const imageDataUrl = String(formData.get("imageDataUrl") ?? "");
+  const videoUrl = String(formData.get("videoUrl") ?? "").trim();
+  const attachmentDataUrl = String(formData.get("attachmentDataUrl") ?? "");
+  const attachmentName = String(formData.get("attachmentName") ?? "").trim();
   if (!title) {
     redirect("/dashboard/tutorials/new");
   }
   const now = Date.now();
   const ref = getAdminFirestore().collection(COLLECTION).doc();
-  await ref.set({ title, instructions, imageDataUrl, createdAt: now, updatedAt: now });
+  await ref.set({
+    title,
+    instructions,
+    imageDataUrl,
+    videoUrl,
+    attachmentDataUrl,
+    attachmentName,
+    createdAt: now,
+    updatedAt: now,
+  });
   revalidatePath("/dashboard/tutorials");
   redirect("/dashboard/tutorials");
 }
@@ -73,8 +88,22 @@ export async function updateTutorialAction(id: string, formData: FormData) {
   const imageDataUrl = String(formData.get("imageDataUrl") ?? "");
   const removeImage = String(formData.get("removeImage") ?? "") === "1";
   const finalImage = removeImage ? "" : imageDataUrl || existing.imageDataUrl || "";
+  const videoUrl = String(formData.get("videoUrl") ?? "").trim();
+  const attachmentDataUrl = String(formData.get("attachmentDataUrl") ?? "");
+  const attachmentName = String(formData.get("attachmentName") ?? "").trim();
+  const removeAttachment = String(formData.get("removeAttachment") ?? "") === "1";
+  const finalAttachmentDataUrl = removeAttachment ? "" : attachmentDataUrl || existing.attachmentDataUrl || "";
+  const finalAttachmentName = removeAttachment ? "" : attachmentName || existing.attachmentName || "";
   await ref.set(
-    { title, instructions, imageDataUrl: finalImage, updatedAt: Date.now() },
+    {
+      title,
+      instructions,
+      imageDataUrl: finalImage,
+      videoUrl: videoUrl || existing.videoUrl || "",
+      attachmentDataUrl: finalAttachmentDataUrl,
+      attachmentName: finalAttachmentName,
+      updatedAt: Date.now(),
+    },
     { merge: true }
   );
   revalidatePath("/dashboard/tutorials");

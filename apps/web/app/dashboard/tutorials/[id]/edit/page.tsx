@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { getTutorial, updateTutorialAction } from "../../actions";
 import { RichEditor } from "../../rich-editor";
+import { AttachmentField } from "../../attachment-field";
 
 export default async function EditTutorialPage({ params }: { params: { id: string } }) {
   const session = await getServerSession(authOptions);
@@ -31,6 +32,20 @@ export default async function EditTutorialPage({ params }: { params: { id: strin
         <div>
           <label className="mb-1 block text-xs font-semibold text-muted">{"הוראות"}</label>
           <RichEditor name="instructions" defaultValue={tutorial.instructions} />
+        </div>
+        <div>
+          <label className="mb-1 block text-xs font-semibold text-muted">{"קישור לסרטון (יוטיוב / דרייב)"}</label>
+          <input
+            type="text"
+            name="videoUrl"
+            defaultValue={tutorial.videoUrl}
+            placeholder="https://youtu.be/... או https://drive.google.com/..."
+            className="w-full rounded-lg border border-card-border bg-[#f4f6f9] px-3 py-2 text-sm focus:border-teal focus:bg-white focus:outline-none"
+          />
+        </div>
+        <div>
+          <label className="mb-1 block text-xs font-semibold text-muted">{"קובץ מצורף (PDF / Word)"}</label>
+          <AttachmentField currentName={tutorial.attachmentName} />
         </div>
         <button
           type="submit"
