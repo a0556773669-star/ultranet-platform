@@ -31,8 +31,9 @@ export default async function BranchExpensesPage({ params }: { params: { id: str
     .sort((a, b) => b.date.localeCompare(a.date));
 
   const isPartner = branch.isMine === false;
-  const visibleFixed = isOwner ? fixedExpenses : fixedExpenses.filter((e) => e.owedBy === "shared" || e.owedBy === "partner");
-  const visibleVariable = isOwner ? variableExpenses : variableExpenses.filter((e) => e.owedBy === "shared" || e.owedBy === "partner");
+  const hiddenFromPartner = (e: { paidBy?: string; owedBy?: string }) => e.paidBy === "owner" && e.owedBy === "owner";
+  const visibleFixed = isOwner ? fixedExpenses : fixedExpenses.filter((e) => !hiddenFromPartner(e));
+  const visibleVariable = isOwner ? variableExpenses : variableExpenses.filter((e) => !hiddenFromPartner(e));
 
   return (
     <div className="flex flex-col gap-4">

@@ -3,7 +3,7 @@
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { calcRentalDays, calcRentalPrice, calcStickPrice } from "@/lib/rental-pricing";
-import { markRentalPaidAction, closeRentalAction } from "../actions";
+import { markRentalPaidAction, closeRentalAction, deleteRentalAction } from "../actions";
 import { NedarimChargeCapture } from "../clients/nedarim-charge-capture";
 
 type LaptopRates = {
@@ -28,6 +28,7 @@ type Props = {
   itemName: string;
   branchName: string;
   showBranch: boolean;
+  isOwner?: boolean;
   calcPrice: number;
   notes?: string;
   laptopRates?: LaptopRates;
@@ -50,6 +51,7 @@ export function ActiveRentalRow({
   itemName,
   branchName,
   showBranch,
+  isOwner,
   calcPrice,
   notes: initialNotes,
   laptopRates,
@@ -69,6 +71,7 @@ export function ActiveRentalRow({
   const [paymentMethod, setPaymentMethod] = useState<string | null>(null);
   const [showNedarim, setShowNedarim] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const autoPrice = useMemo(() => {
     const days = calcRentalDays(startDate, returnDate);
@@ -118,6 +121,22 @@ export function ActiveRentalRow({
         router.refresh();
       } catch (e) {
         setActionError(e instanceof Error ? e.message : "שגיאה בסגירת ההשכרה");
+      }
+    });
+  }
+
+  function handleDelete() {
+    if (!confirm("למחוק את השכרה לצמיתוצ")) return;
+    setDeleting(true);
+    setActionError(null);
+    startTransition(async () => {
+      try {
+        await deleteRentalAction(rentalId);
+        router.refresh();
+      } catch (e) {
+        setActionError(e instanceof Error ? e.message : "שגיאה במחיקת השכרה");
+      } finally {
+        setDeleting(false);
       }
     });
   }
@@ -264,6 +283,16 @@ export function ActiveRentalRow({
                 >
                   {pending ? "מעבד..." : "סגירה"}
                 </button>
+                {isOwner && (
+                  <button
+                    type="button"
+                    disabled={deleting}
+                    onClick={handleDelete}
+                    className="rounded-[10px] border border-red-200 px-4 py-2 text-sm font-bold text-red-600 transition hover:bg-red-50 disabled:opacity-50"
+                  >
+                    {deleting ? "מוחק..." : "מחיקת השכרה"}
+                  </button>
+                )}
                 {!paid && <span className="text-xs text-muted">אפשר לסגור גם ללא תשלום – ההשכרה תסומן כחובה</span>}
               </div>
             </div>

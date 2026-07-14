@@ -209,6 +209,7 @@ function routesForBranch(branchId: string): { id: string; name: string }[] {
                     stickRates={stickRates}
                     hasRoute={!!r.collectionRouteId}
                     nedarimCreds={creds ? { mosadId: creds.mosadId, apiValid: creds.apiValid } : null}
+                    isOwner={role === "owner"}
                   />
                 );
               })}

@@ -376,3 +376,13 @@ export async function markReturnedAction(id: string) {
   }
   revalidatePath("/dashboard/rentals");
 }
+
+export async function deleteRentalAction(rentalId: string) {
+  const session = await requireSession();
+  if (session.user?.role !== "owner") {
+    throw new Error("רק מנהל יכול למחוק השכרה");
+  }
+  await getAdminFirestore().collection("n_rentals").doc(rentalId).delete();
+  revalidatePath("/dashboard/rentals");
+  revalidatePath("/dashboard");
+}
