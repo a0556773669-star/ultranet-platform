@@ -16,9 +16,11 @@ export function TokenChargeButton({
   const [amount, setAmount] = useState(String(initialAmount));
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [ambiguous, setAmbiguous] = useState(false);
 
   async function handleCharge() {
     setError(null);
+    setAmbiguous(false);
     const amt = Number(amount);
     if (!amt || amt <= 0) {
       setError("יש להזין סכום תקין");
@@ -34,12 +36,15 @@ export function TokenChargeButton({
       const data = await res.json();
       if (data.success) {
         onDone({ ok: true });
+      } else if (data.ambiguous) {
+        setAmbiguous(true);
+        setError(data.message ?? "לא ברור אם החיוב בוצע - יש לבדוק ידנית");
       } else {
         setError(data.message ?? "החיוב נכשל");
         onDone({ ok: false, message: data.message });
       }
     } catch {
-      setError("שגיאת תקשורת מול נדרים פלוס");
+      setError("שגיאת תקשורת מול נדרים פלוס - החיוב כנראה לא בוצע");
     } finally {
       setPending(false);
     }
@@ -60,7 +65,11 @@ export function TokenChargeButton({
         dir="ltr"
         className="mb-2 w-40 rounded-[10px] border border-card-border px-3 py-2 text-sm"
       />
-      {error && <p className="mb-2 text-xs font-bold text-red-600">{error}</p>}
+      {error && (
+        <p className={`mb-2 text-xs font-bold ${ambiguous ? "text-amber-600" : "text-red-600"}`}>
+          {error}
+        </p>
+      )}
       <button
         type="button"
         onClick={handleCharge}

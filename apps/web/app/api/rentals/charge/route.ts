@@ -61,24 +61,66 @@ export async function POST(req: NextRequest) {
       Adresse: client.address || "",
     });
 
-    const response = await fetch(NEDARIUM_API, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded",
-      },
-      body: postData.toString(),
-    });
+    let response: Response;
+    try {
+      response = await fetch(NEDARIUM_API, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+        body: postData.toString(),
+      });
+    } catch (networkError) {
+      // The request never reached Nedarim Plus (or we never got a response) -
+      // no charge could have happened on their end, so this is a real failure.
+      console.error("Charge network error:", networkError);
+      return NextResponse.json(
+        { success: false, message: "שגיאת תקשורת מול נדרים פלוס - החיוב לא בוצע" },
+        { status: 502 }
+      );
+    }
 
     const responseText = await response.text();
-    const result = JSON.parse(responseText);
+    let result: Record<string, unknown>;
+    try {
+      result = JSON.parse(responseText);
+    } catch (parseError) {
+      // Nedarim DID respond - the charge may well have gone through on their
+      // side even though we can't parse their reply (e.g. encoding issue).
+      // Do not report a plain failure here: log the raw response and tell
+      // the user to verify manually instead of risking a false "failed" that
+      // could lead to a duplicate charge on retry.
+      console.error("Charge response parse error:", parseError, responseText.slice(0, 500));
+      await db.collection("n_rental_transactions").add({
+        clientId,
+        amount,
+        tashloumim,
+        status: "unknown",
+        paymentMethod: "credit_token",
+        rawResponse: responseText.slice(0, 1000),
+        createdAt: new Date(),
+      });
+      return NextResponse.json(
+        {
+          success: false,
+          ambiguous: true,
+          message:
+            "התקבלה תגובה לא תקינה מנדרים פלוס. ייתכן שהחיוב בכל זאת בוצע - יש לבדוק בדוח הסליקה של נדרים פלוס לפני חיוב חוזר.",
+        },
+        { status: 502 }
+      );
+    }
 
-    if (result.Status === "OK") {
+    const status = String(result.Status ?? "").trim().toUpperCase();
+    const nedarimId = result.ID ?? result.Id ?? result.id;
+
+    if (status === "OK") {
       await db.collection("n_rental_transactions").add({
         clientId,
         amount,
         tashloumim,
         confirmation: result.Confirmation,
-        nedarium_id: result["נדרים פלוס - בדיקהID"],
+        nedarium_id: nedarimId,
         status: "completed",
         paymentMethod: "credit_token",
         createdAt: new Date(),
@@ -88,13 +130,22 @@ export async function POST(req: NextRequest) {
         success: true,
         message: "חיוב בוצע בהצלחה",
         confirmation: result.Confirmation,
-        nedarium_id: result["נדרים פלוס - בדיקהID"],
+        nedarium_id: nedarimId,
       });
     } else {
+      await db.collection("n_rental_transactions").add({
+        clientId,
+        amount,
+        tashloumim,
+        status: "failed",
+        paymentMethod: "credit_token",
+        rawResponse: responseText.slice(0, 1000),
+        createdAt: new Date(),
+      });
       return NextResponse.json(
         {
           success: false,
-          message: `שגיאה בחיוב: ${result.Message}`,
+          message: `שגיאה בחיוב: ${result.Message ?? "לא ידוע"}`,
         },
         { status: 400 }
       );
