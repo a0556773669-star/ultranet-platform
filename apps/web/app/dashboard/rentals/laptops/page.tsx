@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Laptop as LaptopIcon, Wifi } from "lucide-react";
 import { requireModuleAccess } from "@/lib/perms";
 import { getAdminFirestore } from "@/lib/firebase-admin";
 import type { Laptop, Branch } from "@ultranet/shared-types";
@@ -23,7 +24,10 @@ export default async function LaptopsPage() {
   return (
     <div>
       <div className="mb-4 flex items-center justify-between">
-        <h1 className="text-[21px] font-extrabold text-ink">💻 מלאי מחשבים</h1>
+        <h1 className="flex items-center gap-1.5 text-[21px] font-extrabold text-ink">
+          <LaptopIcon className="h-4 w-4" />
+          {"מלאי מחשבים"}
+        </h1>
         <Link
           href="/dashboard/rentals/laptops/new"
           className="rounded-[10px] bg-gradient-to-br from-teal to-teal-light px-5 py-2 text-sm font-bold text-white shadow-primary transition hover:opacity-90"
@@ -47,10 +51,18 @@ export default async function LaptopsPage() {
               <p className="font-bold text-ink">
                 {l.name}
               </p>
-              <p className="text-xs text-muted">
-                ₪{l.dayPrice ?? 0}/יום · ₪{l.weekPrice ?? 0}/שבוע · ₪{l.monthPrice ?? 0}/חודש
-                {l.hasStick ? ` · 📡 סטיק${l.simNumber ? ` (${l.simNumber})` : ""}` : ""}
-                {role === "owner" ? ` · ${branchName(l.branchId)}` : ""}
+              <p className="flex flex-wrap items-center gap-x-1 text-xs text-muted">
+                <span>
+                  ₪{l.dayPrice ?? 0}/יום · ₪{l.weekPrice ?? 0}/שבוע · ₪{l.monthPrice ?? 0}/חודש
+                </span>
+                {l.hasStick && (
+                  <span className="flex items-center gap-1">
+                    {"·"}
+                    <Wifi className="h-3 w-3" />
+                    {`סטיק${l.simNumber ? ` (${l.simNumber})` : ""}`}
+                  </span>
+                )}
+                {role === "owner" && <span>{`· ${branchName(l.branchId)}`}</span>}
               </p>
             </Link>
             <div className="flex items-center gap-2">

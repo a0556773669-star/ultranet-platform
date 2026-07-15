@@ -1,14 +1,15 @@
+import { Home, Monitor, Laptop, Handshake, BarChart3, BookOpen, type LucideIcon } from "lucide-react";
 import type { PermKey } from "@/lib/perms";
 
-export type NavItem = { href: string; label: string; icon: string; perm?: PermKey | PermKey[] };
+export type NavItem = { href: string; label: string; icon: LucideIcon; perm?: PermKey | PermKey[] };
 
 export const NAV_ITEMS: NavItem[] = [
-  { href: "/dashboard", label: "בית", icon: "🏠" },
-  { href: "/dashboard/computer-rooms", label: "חדרי מחשבים", icon: "🖥️", perm: ["branches", "computers", "tasks"] },
-  { href: "/dashboard/rentals", label: "השכרות", icon: "💻", perm: "rentals" },
-  { href: "/dashboard/coworking", label: "משרד שיתופי", icon: "🤝", perm: "coworking" },
-  { href: "/dashboard/accounting", label: "הנה\"ח", icon: "📊", perm: "accounting" },
-  { href: "/dashboard/tutorials", label: "הדרכות", icon: "📚" },
+  { href: "/dashboard", label: "בית", icon: Home },
+  { href: "/dashboard/computer-rooms", label: "חדרי מחשבים", icon: Monitor, perm: ["branches", "computers", "tasks"] },
+  { href: "/dashboard/rentals", label: "השכרות", icon: Laptop, perm: "rentals" },
+  { href: "/dashboard/coworking", label: "משרד שיתופי", icon: Handshake, perm: "coworking" },
+  { href: "/dashboard/accounting", label: "הנה\"ח", icon: BarChart3, perm: "accounting" },
+  { href: "/dashboard/tutorials", label: "הדרכות", icon: BookOpen },
 ];
 
 export function visibleFor(role: string, perms: Partial<Record<PermKey, boolean>> | null | undefined, item: NavItem) {

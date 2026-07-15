@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
+import { Users } from "lucide-react";
 import { authOptions } from "@/lib/auth";
 import { SignOutButton } from "./sign-out-button";
 import { cookies } from "next/headers";
@@ -28,7 +29,7 @@ export default async function DashboardLayout({ children }: { children: ReactNod
 
   const items = NAV_ITEMS.filter((item) => visibleFor(role, perms, item));
   if (role === "owner") {
-    items.push({ href: "/dashboard/users", label: "משתמשים", icon: "👥" });
+    items.push({ href: "/dashboard/users", label: "משתמשים", icon: Users });
   }
 
   let logoUrl = "";

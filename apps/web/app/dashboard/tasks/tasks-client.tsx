@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { Calendar, CalendarDays, Plus } from "lucide-react";
 import {
   addTaskAction,
   deleteTaskAction,
@@ -88,8 +89,9 @@ export function TasksClient({ snapshot }: { snapshot: TasksSnapshot }) {
               </span>
             </label>
 
-            <span className="rounded-full bg-[#f4f6f9] px-2.5 py-1 text-[11px] font-bold text-muted">
-              {t.freq === "weekly" ? "📅 שבועי" : "🗓️ חודשי"}
+            <span className="flex items-center gap-1.5 rounded-full bg-[#f4f6f9] px-2.5 py-1 text-[11px] font-bold text-muted">
+              {t.freq === "weekly" ? <Calendar className="h-3.5 w-3.5" /> : <CalendarDays className="h-3.5 w-3.5" />}
+              {t.freq === "weekly" ? "שבועי" : "חודשי"}
             </span>
             <span className="text-[11px] text-muted">{t.branchLabel}</span>
             {snapshot.canManage && (
@@ -109,7 +111,7 @@ export function TasksClient({ snapshot }: { snapshot: TasksSnapshot }) {
 
       {snapshot.canManage && (
         <div className="space-y-3 rounded-card border border-card-border bg-white p-4 shadow-card">
-          <h2 className="text-xs font-bold uppercase tracking-wide text-muted">➕ הוספת משימה</h2>
+          <h2 className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-muted"><Plus className="h-4 w-4" />הוספת משימה</h2>
           <input
             type="text"
             value={name}
@@ -163,9 +165,9 @@ export function TasksClient({ snapshot }: { snapshot: TasksSnapshot }) {
             type="button"
             onClick={handleAdd}
             disabled={isPending}
-            className="rounded-[10px] bg-gradient-to-br from-teal to-teal-light px-4 py-2 text-sm font-bold text-white shadow-primary transition hover:opacity-90 disabled:opacity-60"
+            className="flex items-center gap-1.5 rounded-[10px] bg-gradient-to-br from-teal to-teal-light px-4 py-2 text-sm font-bold text-white shadow-primary transition hover:opacity-90 disabled:opacity-60"
           >
-            {isPending ? "מוסיף..." : "➕ הוסף משימה"}
+            {isPending ? "מוסיף..." : <><Plus className="h-4 w-4" />הוסף משימה</>}
           </button>
         </div>
       )}

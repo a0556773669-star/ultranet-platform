@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ArrowRight, Settings } from "lucide-react";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { requireModuleAccess } from "@/lib/perms";
@@ -24,12 +25,14 @@ export default async function LabelsPage() {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
-        <Link href="/dashboard/rentals" className="text-sm font-semibold text-teal-dark hover:underline">
-          {"→ חזרה להשכרות"}
+        <Link href="/dashboard/rentals" className="flex items-center gap-1.5 text-sm font-semibold text-teal-dark hover:underline">
+          <ArrowRight className="h-4 w-4" />
+          {"חזרה להשכרות"}
         </Link>
         {isOwner && (
-          <Link href="/dashboard/rentals/labels/settings" className="text-sm font-semibold text-teal-dark hover:underline">
-            {"⚙️ הגדרות מדבקות"}
+          <Link href="/dashboard/rentals/labels/settings" className="flex items-center gap-1.5 text-sm font-semibold text-teal-dark hover:underline">
+            <Settings className="h-4 w-4" />
+            {"הגדרות מדבקות"}
           </Link>
         )}
       </div>

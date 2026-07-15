@@ -2,6 +2,7 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { Check } from "lucide-react";
 import { calcRentalDays, calcRentalPrice, calcStickPrice } from "@/lib/rental-pricing";
 import { markRentalPaidAction, closeRentalAction, deleteRentalAction } from "../actions";
 import { NedarimChargeCapture } from "../clients/nedarim-charge-capture";
@@ -219,8 +220,10 @@ export function ActiveRentalRow({
               <div className="rounded-lg border border-card-border bg-white p-3">
                 <div className="mb-2 text-xs font-bold text-muted">תשלום</div>
                 {paid ? (
-                  <div className="text-sm font-bold text-teal-dark">
-                    שולם ✓ ({paymentMethod === "nedarim" ? "נדרים פלאס" : paymentMethod === "route" ? "מסלול גבייה" : "מזומן"})
+                  <div className="flex items-center gap-1.5 text-sm font-bold text-teal-dark">
+                    {"שולם"}
+                    <Check className="h-4 w-4" />
+                    {`(${paymentMethod === "nedarim" ? "נדרים פלאס" : paymentMethod === "route" ? "מסלול גבייה" : "מזומן"})`}
                   </div>
                 ) : (
                   <div className="flex flex-wrap gap-2">

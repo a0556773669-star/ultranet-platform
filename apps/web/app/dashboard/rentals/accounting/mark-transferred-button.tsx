@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { Check } from "lucide-react";
 import { markTransferredAction } from "./branch-actions";
 
 export function MarkTransferredButton({
@@ -20,7 +21,12 @@ export function MarkTransferredButton({
   const [done, setDone] = useState(false);
 
   if (done) {
-    return <div className="text-sm font-bold text-teal-dark">העברתי ✓</div>;
+    return (
+      <div className="flex items-center gap-1.5 text-sm font-bold text-teal-dark">
+        העברתי
+        <Check className="h-4 w-4" />
+      </div>
+    );
   }
 
   return (

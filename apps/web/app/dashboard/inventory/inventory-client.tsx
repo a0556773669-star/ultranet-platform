@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
+import { AlertTriangle, Save } from "lucide-react";
 import type { InventorySnapshot, SaveInventoryResult } from "./actions";
 import { saveInventoryAction } from "./actions";
 import type { BranchKey, InventoryItem } from "@/lib/legacy-inventory";
@@ -74,8 +75,8 @@ export function InventoryClient({ snapshot }: { snapshot: InventorySnapshot }) {
           </button>
         ))}
         {lowStockCount > 0 && (
-          <span className="rounded-full bg-red-50 px-3 py-1 text-xs font-bold text-red-600">
-            ⚠️ {lowStockCount} פריטים במלאי נמוך
+          <span className="flex items-center gap-1.5 rounded-full bg-red-50 px-3 py-1 text-xs font-bold text-red-600">
+            <AlertTriangle className="h-4 w-4" />{lowStockCount} פריטים במלאי נמוך
           </span>
         )}
       </div>
@@ -144,9 +145,9 @@ export function InventoryClient({ snapshot }: { snapshot: InventorySnapshot }) {
         type="button"
         onClick={handleSave}
         disabled={isPending}
-        className="rounded-[10px] bg-gradient-to-br from-teal to-teal-light px-5 py-2.5 text-[14px] font-bold text-white shadow-primary transition hover:opacity-90 disabled:opacity-60"
+        className="flex items-center gap-1.5 rounded-[10px] bg-gradient-to-br from-teal to-teal-light px-5 py-2.5 text-[14px] font-bold text-white shadow-primary transition hover:opacity-90 disabled:opacity-60"
       >
-        {isPending ? "שומר..." : "💾 שמור עדכון"}
+        {isPending ? "שומר..." : (<><Save className="h-4 w-4" />שמור עדכון</>)}
       </button>
     </div>
   );

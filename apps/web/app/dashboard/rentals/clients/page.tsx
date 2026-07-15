@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Users, Check, X } from "lucide-react";
 import { requireModuleAccess } from "@/lib/perms";
 import { getAdminFirestore } from "@/lib/firebase-admin";
 import type { RentalClient, Branch } from "@ultranet/shared-types";
@@ -40,7 +41,10 @@ export default async function RentalClientsPage({
 
   return (
     <div>
-      <h1 className="mb-4 text-[21px] font-extrabold text-ink">לקוחות 👥</h1>
+      <h1 className="mb-4 flex items-center gap-1.5 text-[21px] font-extrabold text-ink">
+        לקוחות
+        <Users className="h-5 w-5" />
+      </h1>
 
       <div className="mb-4 flex flex-wrap items-center gap-2">
         <a
@@ -134,9 +138,9 @@ export default async function RentalClientsPage({
                 </td>
                 <td className="px-[11px] py-2">
                   {c.signedTerms ? (
-                    <span className="font-bold text-teal">✓</span>
+                    <Check className="h-4 w-4 text-teal" />
                   ) : (
-                    <span className="font-bold text-red-500">✗</span>
+                    <X className="h-4 w-4 text-red-500" />
                   )}
                 </td>
                 {(isOwner || viewClientBranchIds.length > 0) && <td className="px-[11px] py-2 text-muted">{branchName(c.branchId)}</td>}

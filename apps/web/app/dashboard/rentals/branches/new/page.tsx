@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { Plus } from "lucide-react";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { getAdminFirestore } from "@/lib/firebase-admin";
@@ -27,7 +28,10 @@ export default async function NewRentalBranchPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <h2 className="text-lg font-extrabold text-ink">{"➕ הוספת סניף השכרות"}</h2>
+      <h2 className="flex items-center gap-1.5 text-lg font-extrabold text-ink">
+        <Plus className="h-4 w-4" />
+        {"הוספת סניף השכרות"}
+      </h2>
       <RentalBranchForm action={createRentalBranchAction} routes={routes} parentOptions={parentOptions} />
     </div>
   );

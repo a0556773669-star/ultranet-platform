@@ -1,5 +1,6 @@
 import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
+import { Building2, Banknote, ArrowRight } from "lucide-react";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { getAdminFirestore } from "@/lib/firebase-admin";
@@ -38,13 +39,18 @@ export default async function RentalBranchDetailPage({ params }: { params: { id:
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between gap-3">
-        <h2 className="text-lg font-extrabold text-ink">{`🏢 ${branch.name}`}</h2>
+        <h2 className="flex items-center gap-1.5 text-lg font-extrabold text-ink">
+          <Building2 className="h-5 w-5" />
+          {branch.name}
+        </h2>
         <div className="flex items-center gap-2">
           <Link
             href={`/dashboard/rentals/expenses/${branch.id}`}
-            className="rounded-lg border border-card-border bg-white px-3 py-1.5 text-xs font-bold text-ink hover:bg-[#f4f6f9]"
+            className="flex items-center gap-1.5 rounded-lg border border-card-border bg-white px-3 py-1.5 text-xs font-bold text-ink hover:bg-[#f4f6f9]"
           >
-            💸 ניהול הוצאות →
+            <Banknote className="h-4 w-4" />
+            ניהול הוצאות
+            <ArrowRight className="h-4 w-4" />
           </Link>
           <form action={boundDelete}>
             <DeleteRentalBranchButton />

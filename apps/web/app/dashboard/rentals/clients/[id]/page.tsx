@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { Users } from "lucide-react";
 import { requireModuleAccess } from "@/lib/perms";
 import { getAdminFirestore } from "@/lib/firebase-admin";
 import type { RentalClient, Branch } from "@ultranet/shared-types";
@@ -42,7 +43,10 @@ export default async function EditClientPage({
 
   return (
     <div className="max-w-xl">
-      <h1 className="mb-4 text-[21px] font-extrabold text-ink">עריכת לקוח 👥</h1>
+      <h1 className="mb-4 flex items-center gap-1.5 text-[21px] font-extrabold text-ink">
+        עריכת לקוח
+        <Users className="h-5 w-5" />
+      </h1>
       {searchParams?.error === "missing" && (
         <div className="mb-4 rounded-card border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-700">
           חובה לבחור סניף ולמלא שם לקוח לפני השמירה.

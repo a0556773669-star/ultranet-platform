@@ -1,5 +1,6 @@
 import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
+import { Banknote, ArrowLeft } from "lucide-react";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { getAdminFirestore } from "@/lib/firebase-admin";
@@ -38,9 +39,13 @@ export default async function BranchExpensesPage({ params }: { params: { id: str
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
-        <h1 className="text-lg font-extrabold text-ink">💸 הוצאות — {branch.name}</h1>
-        <Link href="/dashboard/rentals/expenses" className="text-xs font-bold text-teal hover:underline">
-          ← בחירת סניף אחר
+        <h1 className="flex items-center gap-1.5 text-lg font-extrabold text-ink">
+          <Banknote className="h-5 w-5" />
+          הוצאות — {branch.name}
+        </h1>
+        <Link href="/dashboard/rentals/expenses" className="flex items-center gap-1.5 text-xs font-bold text-teal hover:underline">
+          <ArrowLeft className="h-4 w-4" />
+          בחירת סניף אחר
         </Link>
       </div>
       <BranchExpenses branchId={branch.id} isPartner={isPartner} canManage={isOwner} canAdd={isOwner || isPartner} fixedExpenses={visibleFixed} variableExpenses={visibleVariable} />

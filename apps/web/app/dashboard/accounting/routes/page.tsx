@@ -1,3 +1,4 @@
+import { CreditCard } from "lucide-react";
 import { requireModuleAccess } from "@/lib/perms";
 import { getAdminFirestore } from "@/lib/firebase-admin";
 import type { CollectionRoute, Branch } from "@ultranet/shared-types";
@@ -31,7 +32,7 @@ export default async function CollectionRoutesPage() {
 
   return (
     <div>
-      <h1 className="mb-4 text-[21px] font-extrabold text-ink">💳 מסלולי גביה</h1>
+      <h1 className="mb-4 flex items-center gap-1.5 text-[21px] font-extrabold text-ink"><CreditCard className="h-5 w-5" />מסלולי גביה</h1>
 
       <form
         action={createCollectionRouteAction}

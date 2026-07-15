@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
+import { Laptop as LaptopIcon, Users, FolderOpen, AlertCircle, Package, CheckCircle2, AlertTriangle, ArrowLeft } from "lucide-react";
 import { authOptions } from "@/lib/auth";
 import { getAdminFirestore } from "@/lib/firebase-admin";
 import type { PermKey } from "@/lib/perms";
@@ -120,7 +121,7 @@ export default async function DashboardHomePage() {
     (item) => item.href !== "/dashboard" && visibleFor(role, perms, item),
   );
   if (isOwner) {
-    categories.push({ href: "/dashboard/users", label: "משתמשים והרשאות", icon: "👥" });
+    categories.push({ href: "/dashboard/users", label: "משתמשים והרשאות", icon: Users });
   }
 
   return (
@@ -132,7 +133,7 @@ export default async function DashboardHomePage() {
         {rentedLaptops && (
           <div className="card">
             <div className="mb-3 flex items-center justify-between text-xs font-bold uppercase tracking-wide text-muted">
-              <span>{"💻 ניידים מושכרים כעת"}</span>
+              <span className="flex items-center gap-1.5"><LaptopIcon className="h-4 w-4" />{"ניידים מושכרים כעת"}</span>
               <span className="rounded-full bg-[#f4f6f9] px-2.5 py-0.5 text-ink normal-case">{rentedLaptops.length}</span>
             </div>
             {rentedLaptops.length === 0 ? (
@@ -174,7 +175,7 @@ export default async function DashboardHomePage() {
         </div>
       )}
 
-      <div className="mb-2 text-xs font-bold uppercase tracking-wide text-muted">{"📂 הקטגוריות שלי"}</div>
+      <div className="mb-2 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-muted"><FolderOpen className="h-4 w-4" />{"הקטגוריות שלי"}</div>
       <div className="mb-4 grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-5">
         {categories.length === 0 && (
           <div className="col-span-full rounded-card border border-card-border bg-white p-6 text-center text-sm text-muted shadow-card">
@@ -187,7 +188,7 @@ export default async function DashboardHomePage() {
             href={c.href}
             className="flex flex-col items-center gap-1 rounded-card border border-card-border bg-white p-4 text-center shadow-card transition hover:-translate-y-0.5 hover:border-teal hover:shadow-primary"
           >
-            <span className="text-2xl">{c.icon}</span>
+            <c.icon className="h-6 w-6 text-teal-dark" />
             <span className="text-[13px] font-bold text-ink">{c.label}</span>
           </Link>
         ))}
@@ -197,7 +198,7 @@ export default async function DashboardHomePage() {
         {unpaidRentals && unpaidRentals.length > 0 && (
         <div className="card border-red-300 bg-red-50">
           <div className="mb-3 flex items-center justify-between text-xs font-bold uppercase tracking-wide text-red-700">
-            <span>🔴 חובות השכרות</span>
+            <span className="flex items-center gap-1.5"><AlertCircle className="h-4 w-4" />{"חובות השכרות"}</span>
             <span className="rounded-full bg-red-100 px-2.5 py-0.5 text-red-700 normal-case">{unpaidRentals.length}</span>
           </div>
           {unpaidRentals.map((u) => (
@@ -207,8 +208,9 @@ export default async function DashboardHomePage() {
               <span className="text-[11px] font-bold text-red-700">{u.amount} ₪</span>
             </div>
           ))}
-          <Link href="/dashboard/rentals/manage" className="mt-2 inline-block text-[11px] font-bold text-red-700 hover:underline">
-            למעבר לאיחוד השכרות ←
+          <Link href="/dashboard/rentals/manage" className="mt-2 inline-flex items-center gap-1 text-[11px] font-bold text-red-700 hover:underline">
+            {"למעבר לאיחוד השכרות"}
+            <ArrowLeft className="h-3 w-3" />
           </Link>
         </div>
       )}
@@ -216,7 +218,7 @@ export default async function DashboardHomePage() {
       {lowStockItems && (
           <div className="card">
             <div className="mb-3 flex items-center justify-between text-xs font-bold uppercase tracking-wide text-muted">
-              <span>{"📦 מלאי - פריטים בחוסר"}</span>
+              <span className="flex items-center gap-1.5"><Package className="h-4 w-4" />{"מלאי - פריטים בחוסר"}</span>
               <span className="rounded-full bg-[#f4f6f9] px-2.5 py-0.5 text-ink normal-case">{inventoryItemCount}</span>
             </div>
             {lowStockItems.length === 0 ? (
@@ -239,14 +241,14 @@ export default async function DashboardHomePage() {
       </div>
       <div className="card">
         <div className="mb-3 flex items-center justify-between text-xs font-bold uppercase tracking-wide text-muted">
-          <span>{"✅ משימות לטיפול"}</span>
+          <span className="flex items-center gap-1.5"><CheckCircle2 className="h-4 w-4" />{"משימות לטיפול"}</span>
           <span className="rounded-full bg-[#f4f6f9] px-2.5 py-0.5 text-ink normal-case">0</span>
         </div>
         <div className="text-sm text-muted">{"ריכוז משימות ייבנה לכל אורך הפיתוח, לפי קטגוריה וצבע"}</div>
       </div>
       <div className="card">
         <div className="mb-3 flex items-center justify-between text-xs font-bold uppercase tracking-wide text-muted">
-          <span>{"⚠️ התראות"}</span>
+          <span className="flex items-center gap-1.5"><AlertTriangle className="h-4 w-4" />{"התראות"}</span>
           <span className="rounded-full bg-[#f4f6f9] px-2.5 py-0.5 text-ink normal-case">0</span>
         </div>
         <div className="text-sm text-muted">{"התראות יופיעו כאן בהמשך הפיתוח"}</div>

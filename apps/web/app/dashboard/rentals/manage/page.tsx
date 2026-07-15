@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { FileText, Laptop as LaptopIcon, Wifi } from "lucide-react";
 import { requireModuleAccess } from "@/lib/perms";
 import { getAdminFirestore } from "@/lib/firebase-admin";
 import { resolveNedarimCreds } from "@/lib/nedarim";
@@ -84,7 +85,10 @@ function routesForBranch(branchId: string): { id: string; name: string }[] {
   return (
     <div className="flex flex-col gap-4">
       <div>
-        <h1 className="text-[21px] font-extrabold text-ink">📄 איחוד השכרות</h1>
+        <h1 className="flex items-center gap-1.5 text-[21px] font-extrabold text-ink">
+          <FileText className="h-4 w-4" />
+          {"איחוד השכרות"}
+        </h1>
         <p className="text-sm text-muted">ניהול השכרות פעילות והיסטוריה</p>
       </div>
 
@@ -120,7 +124,10 @@ function routesForBranch(branchId: string): { id: string; name: string }[] {
                         renter ? "border-red-300 bg-red-50" : "border-teal bg-teal-bg"
                       }`}
                     >
-                      <div className="truncate font-bold text-ink">💻 {l.name}</div>
+                      <div className="flex items-center justify-center gap-1 truncate font-bold text-ink">
+                        <LaptopIcon className="h-4 w-4 shrink-0" />
+                        {l.name}
+                      </div>
                       <div className={`mt-1 text-[11px] font-semibold ${renter ? "text-red-600" : "text-teal-dark"}`}>
                         {renter ? "מושכר" : "פנוי"}
                       </div>
@@ -137,7 +144,10 @@ function routesForBranch(branchId: string): { id: string; name: string }[] {
                         renter ? "border-red-300 bg-red-50" : "border-teal bg-teal-bg"
                       }`}
                     >
-                      <div className="truncate font-bold text-ink">📡 {s.name}</div>
+                      <div className="flex items-center justify-center gap-1 truncate font-bold text-ink">
+                        <Wifi className="h-4 w-4 shrink-0" />
+                        {s.name}
+                      </div>
                       <div className={`mt-1 text-[11px] font-semibold ${renter ? "text-red-600" : "text-teal-dark"}`}>
                         {renter ? "מושכר" : "פנוי"}
                       </div>

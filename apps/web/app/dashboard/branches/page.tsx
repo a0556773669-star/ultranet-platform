@@ -1,12 +1,13 @@
 import Link from "next/link";
+import { Monitor, Laptop, Building2, MapPin, Handshake, Plus, type LucideIcon } from "lucide-react";
 import { getAdminFirestore } from "@/lib/firebase-admin";
 import type { Branch } from "@ultranet/shared-types";
 import { requireModuleAccess } from "@/lib/perms";
 
-const TYPE_LABELS: Record<string, string> = {
-  computers: "🖥️ מחשבים",
-  rentals: "💻 השכרות",
-  coworking: "🏢 משרד שיתופי",
+const TYPE_LABELS: Record<string, { icon: LucideIcon; label: string }> = {
+  computers: { icon: Monitor, label: "מחשבים" },
+  rentals: { icon: Laptop, label: "השכרות" },
+  coworking: { icon: Building2, label: "משרד שיתופי" },
 };
 
 async function listBranches(): Promise<Branch[]> {
@@ -29,22 +30,23 @@ export default async function BranchesPage() {
     <div>
       <div className="mb-4 flex items-center justify-between">
         <div>
-          <h1 className="text-[21px] font-extrabold text-ink">🏢 ניהול סניפים</h1>
+          <h1 className="flex items-center gap-1.5 text-[21px] font-extrabold text-ink"><Building2 className="h-5 w-5" />ניהול סניפים</h1>
           <p className="mt-1 text-[13px] text-muted">סניפים, שותפים, הוצאות ומטלות</p>
         </div>
         {role === "owner" && (
           <Link
             href="/dashboard/branches/new"
-            className="rounded-lg bg-gradient-to-br from-teal to-teal-light px-4 py-2 text-sm font-bold text-white shadow-primary transition hover:opacity-90"
+            className="flex items-center gap-1.5 rounded-lg bg-gradient-to-br from-teal to-teal-light px-4 py-2 text-sm font-bold text-white shadow-primary transition hover:opacity-90"
           >
-            + סניף חדש
+            <Plus className="h-4 w-4" />
+            סניף חדש
           </Link>
         )}
       </div>
 
       {branches.length === 0 ? (
         <div className="rounded-card border border-dashed border-card-border bg-white py-14 text-center text-muted">
-          <div className="mb-3 text-4xl">🏢</div>
+          <Building2 className="mx-auto mb-3 h-9 w-9" />
           אין סניפים עדיין
         </div>
       ) : (
@@ -57,7 +59,7 @@ export default async function BranchesPage() {
             >
               <div className="mb-1.5 flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2 text-[15px] font-extrabold text-ink">
-                  🏢 {b.name}
+                  <span className="flex items-center gap-1.5"><Building2 className="h-4 w-4" />{b.name}</span>
                   {b.isMine ? (
                     <span className="rounded-full bg-teal-bg px-2.5 py-1 text-[11px] font-bold text-teal-dark">שלי בלבד</span>
                   ) : (
@@ -66,15 +68,26 @@ export default async function BranchesPage() {
                     </span>
                   )}
                 </div>
-                <span className="rounded-full bg-[#e8f4fd] px-2.5 py-1 text-[11px] font-bold text-[#2980b9]">
-                  {TYPE_LABELS[b.branchType] ?? b.branchType}
+                <span className="flex items-center gap-1.5 rounded-full bg-[#e8f4fd] px-2.5 py-1 text-[11px] font-bold text-[#2980b9]">
+                  {(() => {
+                    const typeInfo = TYPE_LABELS[b.branchType];
+                    if (!typeInfo) return b.branchType;
+                    const Icon = typeInfo.icon;
+                    return (
+                      <>
+                        <Icon className="h-3.5 w-3.5" />
+                        {typeInfo.label}
+                      </>
+                    );
+                  })()}
                 </span>
               </div>
               <div className="flex flex-wrap gap-2.5 text-xs text-muted">
-                <span>📍 {b.location ?? "—"}</span>
+                <span className="flex items-center gap-1"><MapPin className="h-3.5 w-3.5" />{b.location ?? "—"}</span>
                 {!b.isMine && (
-                  <span>
-                    🤝 חלוקה: {b.myPct}% / {b.partnerPct}%
+                  <span className="flex items-center gap-1">
+                    <Handshake className="h-3.5 w-3.5" />
+                    חלוקה: {b.myPct}% / {b.partnerPct}%
                   </span>
                 )}
               </div>
