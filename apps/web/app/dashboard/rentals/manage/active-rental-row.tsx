@@ -4,7 +4,7 @@ import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Check } from "lucide-react";
 import { calcRentalDays, calcRentalPrice, calcStickPrice } from "@/lib/rental-pricing";
-import { markRentalPaidAction, closeRentalAction, deleteRentalAction } from "../actions";
+import { markRentalPaidAction, closeRentalAction, closeRentalWithChargeAction, deleteRentalAction } from "../actions";
 import { NedarimChargeCapture } from "../clients/nedarim-charge-capture";
 import { TokenChargeButton } from "./token-charge-button";
 
@@ -114,6 +114,15 @@ export function ActiveRentalRow({
     });
   }
 
+  function buildCloseData() {
+    return {
+      returnDate,
+      finalPrice,
+      priceOverrideReason: override ? overrideReason.trim() : undefined,
+      notes: notes.trim() || undefined,
+    };
+  }
+
   function handleClose() {
     if (override && !overrideReason.trim()) {
       setActionError("יש לפרט את הסיבה לשינוי המחיר הידני");
@@ -122,15 +131,27 @@ export function ActiveRentalRow({
     setActionError(null);
     startTransition(async () => {
       try {
-        await closeRentalAction(rentalId, {
-          returnDate,
-          finalPrice,
-          priceOverrideReason: override ? overrideReason.trim() : undefined,
-          notes: notes.trim() || undefined,
-        });
+        await closeRentalAction(rentalId, buildCloseData());
         router.refresh();
       } catch (e) {
         setActionError(e instanceof Error ? e.message : "שגיאה בסגירת ההשכרה");
+      }
+    });
+  }
+
+  function handleChargeSuccess() {
+    // הכסף כבר חויב בפועל אצל נדרים פלוס בשלב הזה - אסור לעצור כאן גם אם חסר
+    // נימוק למחיר ידני; ממשיכים לסמן שולם ולסגור, ורק מציגים שגיאה אם הסגירה עצמה נכשלת.
+    setActionError(null);
+    setPaid(true);
+    setPaymentMethod("nedarim");
+    setShowNedarim(false);
+    startTransition(async () => {
+      try {
+        await closeRentalWithChargeAction(rentalId, buildCloseData());
+        router.refresh();
+      } catch (e) {
+        setActionError(e instanceof Error ? e.message : "הגבייה בוצעה אך סגירת ההשכרה נכשלה - יש לסגור ידנית");
       }
     });
   }
@@ -255,7 +276,14 @@ export function ActiveRentalRow({
                     {canCharge && nedarimCreds && (
                       <button
                         type="button"
-                        onClick={() => setShowNedarim((v) => !v)}
+                        onClick={() => {
+                          if (override && !overrideReason.trim()) {
+                            setActionError("יש לפרט את הסיבה לשינוי המחיר הידני לפני גבייה");
+                            return;
+                          }
+                          setActionError(null);
+                          setShowNedarim((v) => !v);
+                        }}
                         className={`${BTN} bg-gradient-to-br from-teal to-teal-light text-white`}
                       >
                         {hasCardToken ? "גבייה מידית (כרטיס אשראי)" : "גבייה מידית (הזנת כרטיס)"}
@@ -272,7 +300,7 @@ export function ActiveRentalRow({
                         cardLast4={cardLast4}
                         onDone={(result) => {
                           if (result.ok) {
-                            handleMarkPaid("nedarim");
+                            handleChargeSuccess();
                           } else {
                             setActionError(result.message ?? "הגבייה נכשלה");
                           }
@@ -288,7 +316,7 @@ export function ActiveRentalRow({
                         initialAmount={finalPrice}
                         onDone={(result) => {
                           if (result.ok) {
-                            handleMarkPaid("nedarim");
+                            handleChargeSuccess();
                           } else {
                             setActionError(result.message ?? "הגבייה נכשלה");
                           }

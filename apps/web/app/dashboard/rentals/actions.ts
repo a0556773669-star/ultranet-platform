@@ -311,6 +311,18 @@ export async function closeRentalAction(
   revalidatePath("/dashboard");
 }
 
+export async function closeRentalWithChargeAction(
+  rentalId: string,
+  data: { returnDate: string; finalPrice: number; priceOverrideReason?: string; notes?: string }
+) {
+  await requireSession();
+  // הגבייה המידית (נדרים פלוס) כבר בוצעה בהצלחה בצד הלקוח לפני קריאה לפעולה זו -
+  // כאן רק מסמנים שולם וסוגרים את ההשכרה יחד, כדי שלא יישאר מצב ביניים של "חויב אך לא סגור".
+  await markRentalPaidAction(rentalId, "nedarim");
+  await closeRentalAction(rentalId, data);
+  return { ok: true };
+}
+
 export async function createRentalAction(formData: FormData) {
   const session = await requireSession();
   const role = session.user?.role;
