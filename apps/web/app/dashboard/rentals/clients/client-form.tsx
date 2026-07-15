@@ -102,17 +102,6 @@ export function ClientForm({
           <p className="mt-1 text-[11px] text-muted">
             מספר הכרטיס וקוד ה-CVV לא נשמרים אצלנו בשום שלב (PCI-DSS) – הכל מוקלד ומאובטח דרך נדרים פלאס.
           </p>
-          <div className="mt-2">
-            <label className="mb-1 block text-[11px] font-semibold text-muted">תוקף כרטיס (MM/YY)</label>
-            <input
-              type="text"
-              name="cardExpiry"
-              defaultValue={initial?.cardExpiry}
-              placeholder="12/27"
-              maxLength={5}
-              className="w-40 rounded-lg border border-card-border bg-white px-3 py-1.5 text-sm focus:border-teal focus:bg-white focus:outline-none"
-            />
-          </div>
         </div>
       )}
 
