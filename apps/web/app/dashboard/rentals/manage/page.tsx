@@ -72,10 +72,13 @@ function routesForBranch(branchId: string): { id: string; name: string }[] {
 
     function rowInfo(r: Rental) {
     const item = r.kind === "stick" ? sticks.get(r.itemId) : laptops.get(r.itemId);
+    const client = clients.get(r.clientId);
     return {
-      clientName: clients.get(r.clientId)?.name ?? "-",
-      clientPhone: clients.get(r.clientId)?.phone,
-      clientIdNum: clients.get(r.clientId)?.idNum,
+      clientName: client?.name ?? "-",
+      clientPhone: client?.phone,
+      clientIdNum: client?.idNum,
+      cardLast4: client?.cardLast4,
+      hasCardToken: !!(client?.gatewayToken && client?.cardExpiry),
       itemName: item?.name ?? "-",
       branchName: branches.get(r.branchId)?.name ?? "-",
     };
@@ -206,9 +209,12 @@ function routesForBranch(branchId: string): { id: string; name: string }[] {
                     startDate={r.startDate}
                     kind={r.kind}
                     pricingVariant={r.pricingVariant}
+                    clientId={r.clientId}
                     clientName={info.clientName}
                     clientPhone={info.clientPhone}
                     clientIdNum={info.clientIdNum}
+                    cardLast4={info.cardLast4}
+                    hasCardToken={info.hasCardToken}
                     itemName={info.itemName}
                     branchName={info.branchName}
                     showBranch={role === "owner"}
@@ -217,7 +223,7 @@ function routesForBranch(branchId: string): { id: string; name: string }[] {
                     laptopRates={laptopRates}
                     stickRates={stickRates}
                     hasRoute={!!r.collectionRouteId}
-                    nedarimCreds={creds ? { mosadId: creds.mosadId, apiValid: creds.apiValid } : null}
+                    nedarimCreds={canCharge && creds ? { mosadId: creds.mosadId, apiValid: creds.apiValid } : null}
                     isOwner={role === "owner"}
                   canCharge={canCharge}
             />
