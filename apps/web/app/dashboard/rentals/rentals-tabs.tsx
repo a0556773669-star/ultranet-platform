@@ -6,14 +6,14 @@ import { usePathname } from "next/navigation";
 type TabItem = { href: string; label: string; icon: string; ownerOnly?: boolean };
 
 const TABS: TabItem[] = [
-  { href: "/dashboard/rentals/branches", label: "סניפים", icon: "🏢", ownerOnly: true },
+  { href: "/dashboard/rentals/manage", label: "השכרות", icon: "📋" },
+  { href: "/dashboard/rentals/mine", label: "השכרות יוני", icon: "🧑‍💼", ownerOnly: true },
+  { href: "/dashboard/rentals/clients", label: "לקוחות", icon: "👥" },
   { href: "/dashboard/rentals/expenses", label: "הוצאות", icon: "💸" },
   { href: "/dashboard/rentals/laptops", label: "מחשבים", icon: "💻" },
   { href: "/dashboard/rentals/labels", label: "מדבקות", icon: "🏷️" },
-  { href: "/dashboard/rentals/clients", label: "לקוחות", icon: "👥" },
-  { href: "/dashboard/rentals/manage", label: "השכרות", icon: "📋" },
-  { href: "/dashboard/rentals/mine", label: "השכרות יוני", icon: "🧑‍💼", ownerOnly: true },
   { href: "/dashboard/rentals/accounting", label: "הנה\"ח", icon: "📊" },
+  { href: "/dashboard/rentals/branches", label: "סניפים", icon: "🏢", ownerOnly: true },
 ];
 
 export function RentalsTabs({ isOwner }: { isOwner: boolean }) {
