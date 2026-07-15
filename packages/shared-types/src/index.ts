@@ -169,6 +169,16 @@ export interface RentalClient {
   gatewayToken?: string; // set by payment gateway tokenization (Nedarim Plus), never raw card data
 }
 
+/** collection: n_client_private_flags — doc id: `${uid}_${clientId}`. Private per-user annotation on
+ *  a client (e.g. "owes me"); a user may only ever read/write docs where uid === their own session uid. */
+export interface ClientPrivateFlag {
+  id: string;
+  uid: string;
+  clientId: string;
+  owesMe: boolean;
+  updatedAt: unknown; // Firestore Timestamp
+}
+
 /** collection: n_rentals */
 export interface Rental {
   id: string;
