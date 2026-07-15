@@ -1,48 +1,35 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { Fragment, useMemo, useState } from "react";
 import Link from "next/link";
 import { Check, X } from "lucide-react";
 import type { RentalClient, Branch } from "@ultranet/shared-types";
+import { TokenChargeButton } from "../manage/token-charge-button";
 
 type Scope = "mine" | "all";
 
 export function ClientsTable({
   clients,
   myScopeBranchIds,
-  owedClientIds,
   showBranchColumn,
   branches,
-  toggleOwesMeAction,
+  canCharge,
 }: {
   clients: RentalClient[];
   myScopeBranchIds: string[];
-  owedClientIds: string[];
   showBranchColumn: boolean;
   branches: Branch[];
-  toggleOwesMeAction: (clientId: string, owesMe: boolean) => Promise<void>;
+  canCharge: boolean;
 }) {
   const [scope, setScope] = useState<Scope>("mine");
-  const [owed, setOwed] = useState<Set<string>>(new Set(owedClientIds));
-  const [, startTransition] = useTransition();
+  const [openChargeId, setOpenChargeId] = useState<string | null>(null);
+  const [chargeResult, setChargeResult] = useState<Record<string, string>>({});
 
   const myScopeSet = useMemo(() => new Set(myScopeBranchIds), [myScopeBranchIds]);
   const branchName = (id: string) => branches.find((b) => b.id === id)?.name ?? "-";
 
   const visibleClients =
     scope === "mine" ? clients.filter((c) => myScopeSet.has(c.branchId)) : clients;
-
-  function toggleOwed(clientId: string, next: boolean) {
-    setOwed((prev) => {
-      const copy = new Set(prev);
-      if (next) copy.add(clientId);
-      else copy.delete(clientId);
-      return copy;
-    });
-    startTransition(() => {
-      toggleOwesMeAction(clientId, next);
-    });
-  }
 
   return (
     <div>
@@ -82,65 +69,96 @@ export function ClientsTable({
               {showBranchColumn && (
                 <th className="px-[11px] py-[9px] text-right text-[11px] font-bold uppercase tracking-wide">סניף</th>
               )}
-              <th className="px-[11px] py-[9px] text-right text-[11px] font-bold uppercase tracking-wide" title="גלוי רק לך">
-                חייב
-              </th>
+              {canCharge && (
+                <th className="px-[11px] py-[9px] text-right text-[11px] font-bold uppercase tracking-wide"></th>
+              )}
               <th className="px-[11px] py-[9px] text-right text-[11px] font-bold uppercase tracking-wide"></th>
             </tr>
           </thead>
           <tbody>
-            {visibleClients.map((c) => (
-              <tr key={c.id} className="border-t border-card-border transition hover:bg-[#f8fafc]">
-                <td className="px-[11px] py-2 font-semibold text-ink">{c.name}</td>
-                <td className="px-[11px] py-2 text-muted" dir="ltr">
-                  {c.phone ?? "-"}
-                </td>
-                <td className="px-[11px] py-2">
-                  {(!c.depositType || c.depositType === "none") && (
-                    <span className="rounded-full bg-[#fdecea] px-2 py-0.5 text-[11px] font-bold text-red-600">
-                      ללא פיקדון
-                    </span>
+            {visibleClients.map((c) => {
+              const hasToken = !!(c.gatewayToken && c.cardExpiry);
+              return (
+                <Fragment key={c.id}>
+                <tr className="border-t border-card-border transition hover:bg-[#f8fafc]">
+                  <td className="px-[11px] py-2 font-semibold text-ink">{c.name}</td>
+                  <td className="px-[11px] py-2 text-muted" dir="ltr">
+                    {c.phone ?? "-"}
+                  </td>
+                  <td className="px-[11px] py-2">
+                    {(!c.depositType || c.depositType === "none") && (
+                      <span className="rounded-full bg-[#fdecea] px-2 py-0.5 text-[11px] font-bold text-red-600">
+                        ללא פיקדון
+                      </span>
+                    )}
+                    {c.depositType === "check" && (
+                      <span className="rounded-full bg-[#eaf3ff] px-2 py-0.5 text-[11px] font-bold text-blue-600">
+                        צ׳ק
+                      </span>
+                    )}
+                    {c.depositType === "credit" && (
+                      <span
+                        className="rounded-full bg-[#eafaf0] px-2 py-0.5 text-[11px] font-bold text-teal"
+                        dir="ltr"
+                      >
+                        אשראי •••• {c.cardLast4 ?? "----"}
+                      </span>
+                    )}
+                  </td>
+                  <td className="px-[11px] py-2">
+                    {c.signedTerms ? (
+                      <Check className="h-4 w-4 text-teal" />
+                    ) : (
+                      <X className="h-4 w-4 text-red-500" />
+                    )}
+                  </td>
+                  {showBranchColumn && <td className="px-[11px] py-2 text-muted">{branchName(c.branchId)}</td>}
+                  {canCharge && (
+                    <td className="px-[11px] py-2">
+                      {hasToken && (
+                        <button
+                          type="button"
+                          onClick={() => setOpenChargeId((v) => (v === c.id ? null : c.id))}
+                          className="rounded-full bg-gradient-to-br from-teal to-teal-light px-2.5 py-1 text-[11px] font-bold text-white transition hover:opacity-90"
+                        >
+                          חייב
+                        </button>
+                      )}
+                      {chargeResult[c.id] && (
+                        <p className="mt-1 text-[11px] font-semibold text-muted">{chargeResult[c.id]}</p>
+                      )}
+                    </td>
                   )}
-                  {c.depositType === "check" && (
-                    <span className="rounded-full bg-[#eaf3ff] px-2 py-0.5 text-[11px] font-bold text-blue-600">
-                      צ׳ק
-                    </span>
-                  )}
-                  {c.depositType === "credit" && (
-                    <span
-                      className="rounded-full bg-[#eafaf0] px-2 py-0.5 text-[11px] font-bold text-teal"
-                      dir="ltr"
+                  <td className="px-[11px] py-2 text-left">
+                    <Link
+                      href={`/dashboard/rentals/clients/${c.id}`}
+                      className="text-xs font-bold text-teal hover:underline"
                     >
-                      אשראי •••• {c.cardLast4 ?? "----"}
-                    </span>
-                  )}
-                </td>
-                <td className="px-[11px] py-2">
-                  {c.signedTerms ? (
-                    <Check className="h-4 w-4 text-teal" />
-                  ) : (
-                    <X className="h-4 w-4 text-red-500" />
-                  )}
-                </td>
-                {showBranchColumn && <td className="px-[11px] py-2 text-muted">{branchName(c.branchId)}</td>}
-                <td className="px-[11px] py-2" title="הסימון הזה פרטי - רק אתה רואה אותו">
-                  <input
-                    type="checkbox"
-                    checked={owed.has(c.id)}
-                    onChange={(e) => toggleOwed(c.id, e.target.checked)}
-                    className="h-4 w-4 rounded border-card-border accent-red-600"
-                  />
-                </td>
-                <td className="px-[11px] py-2 text-left">
-                  <Link
-                    href={`/dashboard/rentals/clients/${c.id}`}
-                    className="text-xs font-bold text-teal hover:underline"
-                  >
-                    עריכה
-                  </Link>
-                </td>
-              </tr>
-            ))}
+                      עריכה
+                    </Link>
+                  </td>
+                </tr>
+                {canCharge && openChargeId === c.id && (
+                  <tr>
+                    <td colSpan={showBranchColumn ? 7 : 6} className="border-t border-card-border bg-[#f8fafc] px-[11px] py-3">
+                      <TokenChargeButton
+                        clientId={c.id}
+                        initialAmount={0}
+                        cardLast4={c.cardLast4}
+                        onDone={(result) => {
+                          setChargeResult((prev) => ({
+                            ...prev,
+                            [c.id]: result.ok ? "החיוב בוצע בהצלחה" : result.message ?? "החיוב נכשל",
+                          }));
+                          if (result.ok) setOpenChargeId(null);
+                        }}
+                      />
+                    </td>
+                  </tr>
+                )}
+                </Fragment>
+              );
+            })}
           </tbody>
         </table>
       </div>

@@ -160,7 +160,6 @@ pnpm dev        # turbo run dev — מריץ web + api
 | `n_laptops` | `Laptop` | מחשבים ניידים להשכרה + תמחור (יום/שבוע/חודש, וריאנטים) |
 | `n_sticks` | `Stick` | סטיקים סלולריים + תמחור מדורג |
 | `n_rental_clients` | `RentalClient` | לקוחות השכרה; פרטי כרטיס לא-רגישים, `gatewayToken` |
-| `n_client_private_flags` | `ClientPrivateFlag` | סימון פרטי לחלוטין לפי משתמש (`uid`) על לקוח, למשל "חייב" — נשלף ונכתב תמיד עם סינון לפי `uid` של המשתמש המחובר בלבד, לא נחשף למשתמשים אחרים |
 | `n_rentals` | `Rental` | השכרות; פריט, תאריכים, מחיר מחושב/סופי, סטטוס, תשלום |
 | `n_inventory` | `InventoryItem` | מלאי (כמות, מינימום) |
 | `n_tickets` | `Ticket` | קריאות שירות למכשירים |
@@ -197,9 +196,11 @@ pnpm dev        # turbo run dev — מריץ web + api
   `nedarim-charge-capture.tsx`), ייצוא/ייבוא אקסל. טבלת הלקוחות
   (`clients-table.tsx`) כוללת כפתורי סינון "הצג את שלי" (הסניף של המשתמש +
   סניפים עם `parentBranchId` שווה לסניף שלו) מול "הצג את של כולם" (כל הלקוחות
-  שהמשתמש מורשה לראות לפי ההרשאות הקיימות), וכן תיבת סימון "חייב" פרטית
-  לחלוטין לכל שורה — נשמרת ב-`n_client_private_flags` וממופה תמיד רק לפי
-  `uid` המשתמש המחובר, כך שאף משתמש אחר לא רואה או משנה אותה.
+  שהמשתמש מורשה לראות לפי ההרשאות הקיימות). לכל לקוח עם טוקן כרטיס שמור
+  (`gatewayToken` + `cardExpiry`) מוצג בשורה כפתור "חייב" (מוצג רק ל-`owner`
+  או למי שיש לו `perms.charging`), שפותח את `TokenChargeButton` הקיים
+  (`../manage/token-charge-button.tsx`) וקורא ל-`/api/rentals/charge` לחיוב
+  ישיר דרך הטוקן השמור, ללא הזנת פרטי כרטיס מחדש.
 - **`/manage`** — ניהול השכרות פעילות והיסטוריה, חובות (`unpaid-row-actions.tsx`).
   כפתור "גבייה מידית" בשורת השכרה פעילה (`active-rental-row.tsx`) גלוי רק
   ל-owner או למי שיש לו `perms.charging`; אם ללקוח יש `gatewayToken`+`cardExpiry`
