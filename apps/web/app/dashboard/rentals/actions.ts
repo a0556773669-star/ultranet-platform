@@ -228,17 +228,6 @@ export async function updateClientAction(id: string, formData: FormData) {
   redirect("/dashboard/rentals/clients");
 }
 
-export async function toggleClientOwesMeAction(clientId: string, owesMe: boolean) {
-  const session = await requireSession();
-  const uid = session.user?.email;
-  if (!uid) throw new Error("יש להתחבר");
-  await getAdminFirestore()
-    .collection("n_client_private_flags")
-    .doc(`${uid}_${clientId}`)
-    .set({ uid, clientId, owesMe, updatedAt: Timestamp.now() }, { merge: true });
-  revalidatePath("/dashboard/rentals/clients");
-}
-
 export async function deleteClientAction(id: string) {
   const session = await requireSession();
   if (session.user?.role !== "owner") {

@@ -2,7 +2,7 @@ import { Users } from "lucide-react";
 import { requireModuleAccess } from "@/lib/perms";
 import { getAdminFirestore } from "@/lib/firebase-admin";
 import type { RentalClient, Branch } from "@ultranet/shared-types";
-import { createClientAction, importClientsAction, toggleClientOwesMeAction } from "../actions";
+import { createClientAction, importClientsAction } from "../actions";
 import { ClientForm } from "./client-form";
 import { ClientsTable } from "./clients-table";
 
@@ -22,16 +22,13 @@ export default async function RentalClientsPage({
   const myBranchId = session.user?.branchId;
   const isOwner = role === "owner";
   const viewClientBranchIds = (session.user as { viewClientBranchIds?: string[] } | undefined)?.viewClientBranchIds ?? [];
-
-  const uid = session.user?.email ?? "";
+  const perms = (session.user as { perms?: Partial<Record<string, boolean>> } | undefined)?.perms;
+  const canCharge = isOwner || !!perms?.charging;
 
   const db = getAdminFirestore();
-  const [clientsSnap, branchesSnap, flagsSnap] = await Promise.all([
+  const [clientsSnap, branchesSnap] = await Promise.all([
     db.collection("n_rental_clients").get(),
     db.collection("n_branches").where("branchType", "==", "rentals").get(),
-    uid
-      ? db.collection("n_client_private_flags").where("uid", "==", uid).where("owesMe", "==", true).get()
-      : Promise.resolve(null),
   ]);
   const branches = branchesSnap.docs.map(
     (d) => ({ id: d.id, ...(d.data() as Omit<Branch, "id">) }) as Branch
@@ -46,7 +43,6 @@ export default async function RentalClientsPage({
   const myScopeBranchIds = new Set(
     branches.filter((b) => b.id === myBranchId || b.parentBranchId === myBranchId).map((b) => b.id)
   );
-  const owedClientIds = (flagsSnap?.docs ?? []).map((d) => String(d.data().clientId));
 
   return (
     <div>
@@ -107,10 +103,9 @@ export default async function RentalClientsPage({
       <ClientsTable
         clients={clients}
         myScopeBranchIds={Array.from(myScopeBranchIds)}
-        owedClientIds={owedClientIds}
         showBranchColumn={isOwner || viewClientBranchIds.length > 0}
         branches={branches}
-        toggleOwesMeAction={toggleClientOwesMeAction}
+        canCharge={canCharge}
       />
     </div>
   );
