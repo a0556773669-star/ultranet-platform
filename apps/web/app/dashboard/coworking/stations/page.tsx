@@ -1,3 +1,4 @@
+import { Armchair } from "lucide-react";
 import { requireModuleAccess } from "@/lib/perms";
 import { getAdminFirestore } from "@/lib/firebase-admin";
 import type { CoworkingStation, Branch } from "@ultranet/shared-types";
@@ -25,7 +26,7 @@ export default async function StationsPage() {
 
   return (
     <div>
-      <h1 className="mb-4 text-[21px] font-extrabold text-ink">🪑 עמדות משרד שיתופי</h1>
+      <h1 className="mb-4 flex items-center gap-1.5 text-[21px] font-extrabold text-ink"><Armchair className="h-5 w-5" />עמדות משרד שיתופי</h1>
 
       <form
         action={createStationAction}

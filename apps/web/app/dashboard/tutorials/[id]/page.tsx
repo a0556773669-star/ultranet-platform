@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ArrowRight, Printer } from "lucide-react";
 import { notFound } from "next/navigation";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
@@ -44,8 +45,9 @@ export default async function TutorialDetailPage({ params }: { params: { id: str
   return (
     <div className="mx-auto max-w-2xl">
       <div className="mb-4 flex items-center justify-between print:hidden">
-        <Link href="/dashboard/tutorials" className="text-sm font-semibold text-teal hover:underline">
-          {"→ חזרה להדרכות"}
+        <Link href="/dashboard/tutorials" className="flex items-center gap-1.5 text-sm font-semibold text-teal hover:underline">
+          <ArrowRight className="h-4 w-4" />
+          {"חזרה להדרכות"}
         </Link>
         <div className="flex items-center gap-2">
           <PrintButton />
@@ -102,9 +104,10 @@ export default async function TutorialDetailPage({ params }: { params: { id: str
               href={tutorial.attachmentDataUrl}
               target="_blank"
               rel="noreferrer"
-              className="rounded-lg border border-card-border bg-[#f4f6f9] px-3 py-2 text-xs font-semibold text-ink hover:bg-teal-bg"
+              className="flex items-center gap-1.5 rounded-lg border border-card-border bg-[#f4f6f9] px-3 py-2 text-xs font-semibold text-ink hover:bg-teal-bg"
             >
-              {"🖨 פתיחה/הדפסה"}
+              <Printer className="h-4 w-4" />
+              {"פתיחה/הדפסה"}
             </a>
           </div>
         ) : null}

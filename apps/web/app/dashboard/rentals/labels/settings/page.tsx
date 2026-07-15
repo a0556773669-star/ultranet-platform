@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Laptop, Plug, Palette, ArrowRight } from "lucide-react";
 import { requireOwner } from "@/lib/perms";
 import { getLabelSettingsAction, updateLabelSettingsAction } from "../actions";
 import LogoField from "./logo-field";
@@ -22,13 +23,17 @@ export default async function LabelSettingsPage() {
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
         <h1 className="text-lg font-extrabold text-ink">{"הגדרות מדבקות"}</h1>
-        <Link href="/dashboard/rentals/labels" className="text-sm font-semibold text-teal-dark hover:underline">
-          {"→ להדפסת מדבקות"}
+        <Link href="/dashboard/rentals/labels" className="flex items-center gap-1 text-sm font-semibold text-teal-dark hover:underline">
+          <ArrowRight className="h-4 w-4" />
+          {"להדפסת מדבקות"}
         </Link>
       </div>
       <form action={updateLabelSettingsAction} className="card flex max-w-md flex-col gap-4">
         <div className="flex flex-col gap-3 rounded-lg border border-card-border p-3">
-          <h2 className="text-sm font-extrabold text-ink">{"💻 מדבקת מחשב"}</h2>
+          <h2 className="flex items-center gap-1.5 text-sm font-extrabold text-ink">
+            <Laptop className="h-4 w-4" />
+            {"מדבקת מחשב"}
+          </h2>
           <label className="flex flex-col gap-1 text-sm font-medium text-ink">
             {"רוחב (מ\"מ)"}
             <input type="number" name="computerWidthMm" min={10} defaultValue={settings.computerWidthMm} required className={FIELD} />
@@ -44,7 +49,10 @@ export default async function LabelSettingsPage() {
         </div>
 
         <div className="flex flex-col gap-3 rounded-lg border border-card-border p-3">
-          <h2 className="text-sm font-extrabold text-ink">{"🔌 מדבקת סטיק"}</h2>
+          <h2 className="flex items-center gap-1.5 text-sm font-extrabold text-ink">
+            <Plug className="h-4 w-4" />
+            {"מדבקת סטיק"}
+          </h2>
           <label className="flex flex-col gap-1 text-sm font-medium text-ink">
             {"רוחב (מ\"מ)"}
             <input type="number" name="stickWidthMm" min={10} defaultValue={settings.stickWidthMm} required className={FIELD} />
@@ -72,7 +80,10 @@ export default async function LabelSettingsPage() {
         </div>
 
         <div className="flex flex-col gap-3 rounded-lg border border-card-border p-3">
-          <h2 className="text-sm font-extrabold text-ink">{"🎨 עיצוב"}</h2>
+          <h2 className="flex items-center gap-1.5 text-sm font-extrabold text-ink">
+            <Palette className="h-4 w-4" />
+            {"עיצוב"}
+          </h2>
           <label className="flex flex-col gap-1 text-sm font-medium text-ink">
             {"גופן"}
             <select name="fontFamily" defaultValue={settings.fontFamily} className={FIELD}>

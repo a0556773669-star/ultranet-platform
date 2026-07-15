@@ -1,13 +1,14 @@
 "use client";
 
 import { useState } from "react";
+import { CreditCard, X } from "lucide-react";
 import type { CollectionRoute } from "@ultranet/shared-types";
 import { manualChargeAction } from "./actions";
 
 const FIELD =
   "rounded-lg border border-card-border bg-[#f4f6f9] px-3 py-2 text-sm focus:border-teal focus:bg-white focus:outline-none";
 
-const TITLE = "💳 גביה דנית ממסלול";
+const TITLE = "גביה דנית ממסלול";
 
 export default function CollectModal({ routes }: { routes: CollectionRoute[] }) {
   const [open, setOpen] = useState(false);
@@ -19,7 +20,10 @@ export default function CollectModal({ routes }: { routes: CollectionRoute[] }) 
         onClick={() => setOpen(true)}
         className="flex h-full min-h-[96px] w-full flex-col items-start justify-center gap-1 rounded-card border border-dashed border-teal bg-teal-bg p-4 text-right shadow-card transition hover:opacity-90"
       >
-        <span className="text-xs font-bold uppercase tracking-wide text-teal-dark">{TITLE}</span>
+        <span className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-teal-dark">
+          <CreditCard className="h-4 w-4" />
+          {TITLE}
+        </span>
         <span className="text-[13px] text-muted">{"לחץ לפתיחת חלון גביה"}</span>
       </button>
       {open && (
@@ -32,13 +36,16 @@ export default function CollectModal({ routes }: { routes: CollectionRoute[] }) 
             onClick={(e) => e.stopPropagation()}
           >
             <div className="mb-3 flex items-center justify-between">
-              <h2 className="text-base font-extrabold text-ink">{TITLE}</h2>
+              <h2 className="flex items-center gap-1.5 text-base font-extrabold text-ink">
+                <CreditCard className="h-4 w-4" />
+                {TITLE}
+              </h2>
               <button
                 type="button"
                 onClick={() => setOpen(false)}
                 className="text-lg text-muted transition hover:text-ink"
               >
-                ✕
+                <X className="h-4 w-4" />
               </button>
             </div>
             <form

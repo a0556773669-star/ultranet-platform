@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { BarChart3, Download, Upload } from "lucide-react";
 import { requireModuleAccess } from "@/lib/perms";
 import { getAdminFirestore } from "@/lib/firebase-admin";
 import type { AccountingIncome, AccountingExpense, CollectionRoute } from "@ultranet/shared-types";
@@ -43,7 +44,7 @@ export default async function AccountingPage() {
     <div>
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-[21px] font-extrabold text-ink">📊 הנהלת חשבונות</h1>
+          <h1 className="flex items-center gap-1.5 text-[21px] font-extrabold text-ink"><BarChart3 className="h-5 w-5" />הנהלת חשבונות</h1>
           <p className="mt-1 text-[13px] text-muted">הכנסות והוצאות אישיות</p>
         </div>
         <Link
@@ -76,7 +77,7 @@ export default async function AccountingPage() {
 
       <div className="mb-6 grid grid-cols-1 gap-3 lg:grid-cols-3">
         <form action={createIncomeAction} className="flex flex-col gap-2.5 rounded-card border border-card-border bg-white p-4 shadow-card">
-          <h2 className="text-xs font-bold uppercase tracking-wide text-muted">📥 הוספת הכנסה</h2>
+          <h2 className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-muted"><Download className="h-4 w-4" />הוספת הכנסה</h2>
           <input type="date" name="date" required className={FIELD} />
           <input name="desc" placeholder="תיאור" className={FIELD} />
           <input type="number" name="amount" min={0} placeholder="סכום" required className={FIELD} />
@@ -98,7 +99,7 @@ export default async function AccountingPage() {
         </form>
 
         <form action={createExpenseAction} className="flex flex-col gap-2.5 rounded-card border border-card-border bg-white p-4 shadow-card">
-          <h2 className="text-xs font-bold uppercase tracking-wide text-muted">📤 הוספת הוצאה</h2>
+          <h2 className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-muted"><Upload className="h-4 w-4" />הוספת הוצאה</h2>
           <input type="date" name="date" required className={FIELD} />
           <input name="desc" placeholder="תיאור" className={FIELD} />
           <input type="number" name="amount" min={0} placeholder="סכום" required className={FIELD} />
@@ -119,7 +120,7 @@ export default async function AccountingPage() {
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <div>
           <div className="mb-2 flex items-center justify-between text-xs font-bold uppercase tracking-wide text-muted">
-            <span>📥 הכנסות אחרונות</span>
+            <span className="flex items-center gap-1.5"><Download className="h-4 w-4" />הכנסות אחרונות</span>
             <span className="rounded-full bg-[#f4f6f9] px-2.5 py-0.5 text-ink normal-case">{income.length}</span>
           </div>
           <div className="rounded-card border border-card-border bg-white px-4 shadow-card">
@@ -142,7 +143,7 @@ export default async function AccountingPage() {
         </div>
         <div>
           <div className="mb-2 flex items-center justify-between text-xs font-bold uppercase tracking-wide text-muted">
-            <span>📤 הוצאות אחרונות</span>
+            <span className="flex items-center gap-1.5"><Upload className="h-4 w-4" />הוצאות אחרונות</span>
             <span className="rounded-full bg-[#f4f6f9] px-2.5 py-0.5 text-ink normal-case">{expenses.length}</span>
           </div>
           <div className="rounded-card border border-card-border bg-white px-4 shadow-card">

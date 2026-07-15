@@ -1,3 +1,4 @@
+import { BarChart3, Plus, Minus, Wallet, Banknote } from "lucide-react";
 import { requireModuleAccess } from "@/lib/perms";
 import { getAdminFirestore } from "@/lib/firebase-admin";
 import type { AccountingIncome, AccountingExpense } from "@ultranet/shared-types";
@@ -102,7 +103,10 @@ export default async function RentalsAccountingPage({
   return (
     <div className="flex flex-col gap-4">
       <div>
-        <h1 className="text-[21px] font-extrabold text-ink">📊 הנה\"ח השכרות</h1>
+        <h1 className="flex items-center gap-1.5 text-[21px] font-extrabold text-ink">
+          <BarChart3 className="h-5 w-5" />
+          {"הנה\"ח השכרות"}
+        </h1>
         <p className="text-sm text-muted">גביה ותמונת מצב של מודול ההשכרות</p>
       </div>
 
@@ -137,7 +141,10 @@ export default async function RentalsAccountingPage({
             action={createIncomeAction}
             className="flex flex-col gap-2.5 rounded-card border border-card-border bg-white p-4 shadow-card"
           >
-            <h2 className="text-xs font-bold uppercase tracking-wide text-muted">{"➕ הוספת הכנסה"}</h2>
+            <h2 className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-muted">
+              <Plus className="h-4 w-4" />
+              {"הוספת הכנסה"}
+            </h2>
             <input type="hidden" name="business" value="rentals" />
             <input type="date" name="date" required className={FIELD} />
             <input name="desc" placeholder="תיאור" className={FIELD} />
@@ -153,7 +160,10 @@ export default async function RentalsAccountingPage({
             action={createExpenseAction}
             className="flex flex-col gap-2.5 rounded-card border border-card-border bg-white p-4 shadow-card"
           >
-            <h2 className="text-xs font-bold uppercase tracking-wide text-muted">{"➖ הוספת הוצאה"}</h2>
+            <h2 className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-muted">
+              <Minus className="h-4 w-4" />
+              {"הוספת הוצאה"}
+            </h2>
             <input type="hidden" name="business" value="rentals" />
             <input type="date" name="date" required className={FIELD} />
             <input name="desc" placeholder="תיאור" className={FIELD} />
@@ -171,7 +181,10 @@ export default async function RentalsAccountingPage({
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <div>
           <div className="mb-2 flex items-center justify-between text-xs font-bold uppercase tracking-wide text-muted">
-            <span>{"💰 הכנסות"}</span>
+            <span className="flex items-center gap-1.5">
+              <Wallet className="h-4 w-4" />
+              {"הכנסות"}
+            </span>
             <span className="rounded-full bg-[#f4f6f9] px-2.5 py-0.5 text-ink normal-case">{income.length}</span>
           </div>
           <div className="rounded-card border border-card-border bg-white px-4 shadow-card">
@@ -199,7 +212,10 @@ export default async function RentalsAccountingPage({
         </div>
         <div>
           <div className="mb-2 flex items-center justify-between text-xs font-bold uppercase tracking-wide text-muted">
-            <span>{"💸 הוצאות"}</span>
+            <span className="flex items-center gap-1.5">
+              <Banknote className="h-4 w-4" />
+              {"הוצאות"}
+            </span>
             <span className="rounded-full bg-[#f4f6f9] px-2.5 py-0.5 text-ink normal-case">{expenses.length}</span>
           </div>
           <div className="rounded-card border border-card-border bg-white px-4 shadow-card">

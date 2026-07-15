@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Building2, Armchair, User } from "lucide-react";
 import { requireModuleAccess } from "@/lib/perms";
 import { getAdminFirestore } from "@/lib/firebase-admin";
 import type { CoworkingClient, CoworkingStation, Branch } from "@ultranet/shared-types";
@@ -32,15 +33,15 @@ export default async function CoworkingPage() {
     <div>
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-[21px] font-extrabold text-ink">🏢 משרד שיתופי</h1>
+          <h1 className="flex items-center gap-1.5 text-[21px] font-extrabold text-ink"><Building2 className="h-5 w-5" />משרד שיתופי</h1>
           <p className="mt-1 text-[13px] text-muted">עמדות, לקוחות ותשלומי משרד שיתופי</p>
         </div>
         <div className="flex gap-2">
           <Link
             href="/dashboard/coworking/stations"
-            className="rounded-lg border border-card-border bg-white px-4 py-2 text-sm font-semibold text-ink transition hover:border-teal hover:text-teal"
+            className="flex items-center gap-1.5 rounded-lg border border-card-border bg-white px-4 py-2 text-sm font-semibold text-ink transition hover:border-teal hover:text-teal"
           >
-            🪑 עמדות
+            <Armchair className="h-4 w-4" />עמדות
           </Link>
           <Link
             href="/dashboard/coworking/new"
@@ -66,7 +67,7 @@ export default async function CoworkingPage() {
               <div key={c.id} className="rounded-card border border-card-border bg-white p-4 shadow-card">
                 <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                   <div>
-                    <span className="font-extrabold text-ink">👤 {c.name}</span>
+                    <span className="inline-flex items-center gap-1.5 font-extrabold text-ink"><User className="h-4 w-4" />{c.name}</span>
                     <span className="mr-2 text-sm text-muted">
                       {station?.name ?? "-"} {role === "owner" ? `· ${branch?.name ?? "-"}` : ""}
                     </span>

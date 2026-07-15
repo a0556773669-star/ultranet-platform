@@ -1,3 +1,4 @@
+import { Scale, Calendar, Receipt } from "lucide-react";
 import type { FixedExpense, VariableExpense } from "@ultranet/shared-types";
 import {
   createFixedExpenseAction,
@@ -78,7 +79,10 @@ export function BranchExpenses({ branchId, isPartner, canManage, canAdd, fixedEx
     <div className="flex flex-col gap-4">
       {isPartner && (
         <div className="rounded-card border border-card-border bg-white p-4 shadow-card">
-          <h3 className="mb-2 text-sm font-bold text-ink">⚖️ מאזן הוצאות (סטטוס בלבד, לא מחובר להנה"ח המרכזית)</h3>
+          <h3 className="mb-2 flex items-center gap-1.5 text-sm font-bold text-ink">
+            <Scale className="h-4 w-4" />
+            מאזן הוצאות (סטטוס בלבד, לא מחובר להנה"ח המרכזית)
+          </h3>
           {net === 0 && <p className="text-sm text-muted">מאוזן — אין חובות הדדיים</p>}
           {net > 0 && <p className="text-sm font-bold text-teal">השותף חייב לך ₪{net.toLocaleString()}</p>}
           {net < 0 && <p className="text-sm font-bold text-red-600">אתה חייב לשותף ₪{Math.abs(net).toLocaleString()}</p>}
@@ -86,7 +90,10 @@ export function BranchExpenses({ branchId, isPartner, canManage, canAdd, fixedEx
       )}
 
       <div className="rounded-card border border-card-border bg-white p-4 shadow-card">
-        <h3 className="mb-3 text-sm font-bold text-ink">📅 הוצאות קבועות / חודשיות</h3>
+        <h3 className="mb-3 flex items-center gap-1.5 text-sm font-bold text-ink">
+          <Calendar className="h-4 w-4" />
+          הוצאות קבועות / חודשיות
+        </h3>
         {canAdd && (
 <form action={createFixed} className="mb-4 grid grid-cols-2 gap-2 md:grid-cols-3">
           <div>
@@ -165,7 +172,10 @@ export function BranchExpenses({ branchId, isPartner, canManage, canAdd, fixedEx
       </div>
 
       <div className="rounded-card border border-card-border bg-white p-4 shadow-card">
-        <h3 className="mb-3 text-sm font-bold text-ink">🧾 הוצאות חד פעמיות</h3>
+        <h3 className="mb-3 flex items-center gap-1.5 text-sm font-bold text-ink">
+          <Receipt className="h-4 w-4" />
+          הוצאות חד פעמיות
+        </h3>
         {canAdd && (
 <form action={createVariable} className="mb-4 grid grid-cols-2 gap-2 md:grid-cols-3">
           <div>

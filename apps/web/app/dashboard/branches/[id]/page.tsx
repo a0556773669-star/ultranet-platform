@@ -1,4 +1,5 @@
 import { notFound, redirect } from "next/navigation";
+import { Monitor, Laptop, Building2, type LucideIcon } from "lucide-react";
 import { requireModuleAccess } from "@/lib/perms";
 import { getAdminFirestore } from "@/lib/firebase-admin";
 import type { Branch } from "@ultranet/shared-types";
@@ -6,10 +7,10 @@ import { BranchForm } from "../branch-form";
 import { DeleteButton } from "../delete-button";
 import { updateBranchAction, deleteBranchAction } from "../actions";
 
-const TYPE_LABELS: Record<string, string> = {
-  computers: "🖥️ מחשבים",
-  rentals: "💻 השכרות",
-  coworking: "🏢 משרד שיתופי",
+const TYPE_LABELS: Record<string, { icon: LucideIcon; label: string }> = {
+  computers: { icon: Monitor, label: "מחשבים" },
+  rentals: { icon: Laptop, label: "השכרות" },
+  coworking: { icon: Building2, label: "משרד שיתופי" },
 };
 
 export default async function BranchDetailPage({ params }: { params: { id: string } }) {
@@ -28,14 +29,19 @@ export default async function BranchDetailPage({ params }: { params: { id: strin
     redirect("/dashboard/branches");
   }
 
+  const typeInfo = TYPE_LABELS[branch.branchType];
+
   if (role !== "owner") {
     return (
       <div className="max-w-2xl">
-        <h1 className="mb-4 text-[21px] font-extrabold text-ink">🏢 {branch.name}</h1>
+        <h1 className="mb-4 flex items-center gap-1.5 text-[21px] font-extrabold text-ink"><Building2 className="h-5 w-5" />{branch.name}</h1>
         <div className="grid grid-cols-3 gap-2.5">
           <div className="rounded-card border border-card-border bg-white p-4 shadow-card">
             <p className="text-[11px] font-bold uppercase tracking-wide text-muted">סוג</p>
-            <p className="mt-1 font-bold text-ink">{TYPE_LABELS[branch.branchType] ?? branch.branchType}</p>
+            <p className="mt-1 flex items-center gap-1.5 font-bold text-ink">
+              {typeInfo ? <typeInfo.icon className="h-4 w-4" /> : null}
+              {typeInfo?.label ?? branch.branchType}
+            </p>
           </div>
           <div className="rounded-card border border-card-border bg-white p-4 shadow-card">
             <p className="text-[11px] font-bold uppercase tracking-wide text-muted">מיקום</p>
@@ -56,7 +62,7 @@ export default async function BranchDetailPage({ params }: { params: { id: strin
   return (
     <div className="max-w-2xl">
       <div className="mb-4 flex items-center justify-between">
-        <h1 className="text-[21px] font-extrabold text-ink">🏢 {branch.name}</h1>
+        <h1 className="flex items-center gap-1.5 text-[21px] font-extrabold text-ink"><Building2 className="h-5 w-5" />{branch.name}</h1>
         <form action={boundDelete}>
           <DeleteButton />
         </form>

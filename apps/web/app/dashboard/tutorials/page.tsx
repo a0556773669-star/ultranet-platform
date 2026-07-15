@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { BookOpen } from "lucide-react";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { listTutorials } from "./actions";
@@ -42,8 +43,8 @@ export default async function TutorialsPage() {
                   className="h-32 w-full rounded-lg border border-card-border object-cover"
                 />
               ) : (
-                <div className="flex h-32 w-full items-center justify-center rounded-lg border border-card-border bg-[#f4f6f9] text-3xl">
-                  {"📚"}
+                <div className="flex h-32 w-full items-center justify-center rounded-lg border border-card-border bg-[#f4f6f9]">
+                  <BookOpen className="h-8 w-8 text-muted" />
                 </div>
               )}
               <div className="text-sm font-bold text-ink">{t.title}</div>

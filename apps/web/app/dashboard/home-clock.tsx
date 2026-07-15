@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Calendar } from "lucide-react";
 
 const DAY_NAMES = [
   "ראשון",
@@ -56,8 +57,9 @@ export default function HomeClock({ name }: { name: string }) {
           {greetWord(now.getHours())}, <span className="text-teal">{firstName}</span>
         </div>
         <div className="mt-1 flex gap-2 text-xs text-muted">
-          <span>
-            {"📅 יום "}
+          <span className="flex items-center gap-1.5">
+            <Calendar className="h-4 w-4" />
+            {"יום "}
             {DAY_NAMES[now.getDay()]}
             {", "}
             {now.toLocaleDateString("he-IL")}

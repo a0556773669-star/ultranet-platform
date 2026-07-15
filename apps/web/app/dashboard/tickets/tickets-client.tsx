@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { Wrench } from "lucide-react";
 import {
   createTicketAction,
   deleteTicketAction,
@@ -13,16 +14,16 @@ import type { BranchKey } from "@/lib/legacy-inventory";
 import type { TicketStatus } from "@/lib/legacy-tickets";
 
 const DIRECTION_OPTIONS: { value: "to-admin" | "to-branch"; label: string }[] = [
-  { value: "to-admin", label: "📄 דיווח תקלה למנהל" },
-  { value: "to-branch", label: "📩 הודעה לסניף" },
+  { value: "to-admin", label: "דיווח תקלה למנהל" },
+  { value: "to-branch", label: "הודעה לסניף" },
 ];
 
 const FIELD = "rounded-lg border border-card-border bg-[#f4f6f9] px-3 py-2 text-sm focus:border-teal focus:bg-white focus:outline-none";
 
-const STATUS_OPTS: { value: TicketStatus; label: string; on: string; off: string }[] = [
-  { value: "open", label: "🔴 פתוח", on: "bg-red-500 text-white", off: "bg-red-50 text-red-600" },
-  { value: "progress", label: "🟡 בטיפול", on: "bg-amber-500 text-white", off: "bg-amber-50 text-amber-600" },
-  { value: "done", label: "🟢 טופל", on: "bg-emerald-500 text-white", off: "bg-emerald-50 text-emerald-600" },
+const STATUS_OPTS: { value: TicketStatus; label: string; dotClass: string; on: string; off: string }[] = [
+  { value: "open", label: "פתוח", dotClass: "bg-red-500", on: "bg-red-500 text-white", off: "bg-red-50 text-red-600" },
+  { value: "progress", label: "בטיפול", dotClass: "bg-amber-500", on: "bg-amber-500 text-white", off: "bg-amber-50 text-amber-600" },
+  { value: "done", label: "טופל", dotClass: "bg-emerald-500", on: "bg-emerald-500 text-white", off: "bg-emerald-50 text-emerald-600" },
 ];
 
 export function TicketsClient({ snapshot }: { snapshot: TicketsSnapshot }) {
@@ -70,7 +71,7 @@ export function TicketsClient({ snapshot }: { snapshot: TicketsSnapshot }) {
   return (
     <div className="space-y-4">
       <div className="space-y-3 rounded-card border border-card-border bg-white p-4 shadow-card">
-        <h2 className="text-xs font-bold uppercase tracking-wide text-muted">🛠️ פנייה חדשה</h2>
+        <h2 className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-muted"><Wrench className="h-4 w-4" />פנייה חדשה</h2>
         <div className="flex flex-wrap gap-3">
           <select
             value={direction}
@@ -144,8 +145,9 @@ export function TicketsClient({ snapshot }: { snapshot: TicketsSnapshot }) {
                 <button
                   key={s.value}
                   onClick={() => handleStatus(t.id, s.value)}
-                  className={`rounded-full px-3 py-1 text-xs font-bold transition ${t.status === s.value ? s.on : s.off}`}
+                  className={`flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-bold transition ${t.status === s.value ? s.on : s.off}`}
                 >
+                  <span className={`h-2 w-2 rounded-full ${s.dotClass}`} />
                   {s.label}
                 </button>
               ))}

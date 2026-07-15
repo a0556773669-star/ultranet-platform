@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { Laptop as LaptopIcon } from "lucide-react";
 import { requireModuleAccess } from "@/lib/perms";
 import { getAdminFirestore } from "@/lib/firebase-admin";
 import type { Branch, Laptop } from "@ultranet/shared-types";
@@ -32,7 +33,10 @@ export default async function EditLaptopPage({
   return (
     <div className="max-w-xl">
       <div className="mb-4 flex items-center justify-between">
-        <h1 className="text-[21px] font-extrabold text-ink">💻 עריכת מחשב – {laptop.name}</h1>
+        <h1 className="flex items-center gap-1.5 text-[21px] font-extrabold text-ink">
+          <LaptopIcon className="h-4 w-4" />
+          {`עריכת מחשב – ${laptop.name}`}
+        </h1>
         {isOwner && <DeleteLaptopButton action={deleteLaptopAction.bind(null, laptop.id)} />}
       </div>
       {searchParams?.error === "missing" && (

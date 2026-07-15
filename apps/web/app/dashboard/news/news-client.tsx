@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { Newspaper } from "lucide-react";
 import {
   createNewsAction,
   deleteNewsAction,
@@ -46,7 +47,7 @@ export function NewsClient({ snapshot }: { snapshot: NewsSnapshot }) {
     <div className="space-y-4">
       {snapshot.canManage && (
         <div className="space-y-3 rounded-card border border-card-border bg-white p-4 shadow-card">
-          <h2 className="text-xs font-bold uppercase tracking-wide text-muted">📰 עדכון חדש</h2>
+          <h2 className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-muted"><Newspaper className="h-4 w-4" />עדכון חדש</h2>
           <input
             value={title}
             onChange={(e) => setTitle(e.target.value)}

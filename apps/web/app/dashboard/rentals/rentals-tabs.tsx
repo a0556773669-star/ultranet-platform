@@ -2,18 +2,19 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { Building2, Banknote, Laptop, Tag, Users, ClipboardList, Briefcase, BarChart3, type LucideIcon } from "lucide-react";
 
-type TabItem = { href: string; label: string; icon: string; ownerOnly?: boolean };
+type TabItem = { href: string; label: string; icon: LucideIcon; ownerOnly?: boolean };
 
 const TABS: TabItem[] = [
-  { href: "/dashboard/rentals/manage", label: "השכרות", icon: "📋" },
-  { href: "/dashboard/rentals/mine", label: "השכרות יוני", icon: "🧑‍💼", ownerOnly: true },
-  { href: "/dashboard/rentals/clients", label: "לקוחות", icon: "👥" },
-  { href: "/dashboard/rentals/expenses", label: "הוצאות", icon: "💸" },
-  { href: "/dashboard/rentals/laptops", label: "מחשבים", icon: "💻" },
-  { href: "/dashboard/rentals/labels", label: "מדבקות", icon: "🏷️" },
-  { href: "/dashboard/rentals/accounting", label: "הנה\"ח", icon: "📊" },
-  { href: "/dashboard/rentals/branches", label: "סניפים", icon: "🏢", ownerOnly: true },
+  { href: "/dashboard/rentals/manage", label: "השכרות", icon: ClipboardList },
+  { href: "/dashboard/rentals/mine", label: "השכרות יוני", icon: Briefcase, ownerOnly: true },
+  { href: "/dashboard/rentals/clients", label: "לקוחות", icon: Users },
+  { href: "/dashboard/rentals/expenses", label: "הוצאות", icon: Banknote },
+  { href: "/dashboard/rentals/laptops", label: "מחשבים", icon: Laptop },
+  { href: "/dashboard/rentals/labels", label: "מדבקות", icon: Tag },
+  { href: "/dashboard/rentals/accounting", label: "הנה\"ח", icon: BarChart3 },
+  { href: "/dashboard/rentals/branches", label: "סניפים", icon: Building2, ownerOnly: true },
 ];
 
 export function RentalsTabs({ isOwner }: { isOwner: boolean }) {
@@ -29,7 +30,7 @@ export function RentalsTabs({ isOwner }: { isOwner: boolean }) {
             : pathname?.startsWith(tab.href);
         return (
           <Link key={tab.href} href={tab.href} className={active ? "pill-active" : "pill-inactive"}>
-            <span className="ml-1">{tab.icon}</span>
+            <tab.icon className="ml-1 h-4 w-4" />
             {tab.label}
           </Link>
         );

@@ -1,3 +1,4 @@
+import { Check } from "lucide-react";
 import type { BranchFinancials } from "@/lib/branch-accounting-data";
 import type { BranchTransfer } from "@ultranet/shared-types";
 import { MarkTransferredButton } from "./mark-transferred-button";
@@ -50,7 +51,10 @@ export function BranchAccountingView({
       {showSettlement && (isFirstOfMonth || alreadyTransferred) && (
         <div className="rounded-card border border-card-border bg-[#f4f6f9] p-4">
           {alreadyTransferred ? (
-            <div className="text-sm font-bold text-teal-dark">העברת החודש הזה כבר סומנה כבוצעה ✓</div>
+            <div className="flex items-center gap-1.5 text-sm font-bold text-teal-dark">
+              <Check className="h-4 w-4" />
+              העברת החודש הזה כבר סומנה כבוצעה
+            </div>
           ) : f.settlementNetToOwner > 0 ? (
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="text-sm font-semibold text-ink">

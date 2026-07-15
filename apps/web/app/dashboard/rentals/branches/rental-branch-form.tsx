@@ -54,9 +54,9 @@ export function RentalBranchForm({ action, initial, routes, parentOptions }: Ren
       <div>
         <label className={LABEL}>{"סוג הסניף"}</label>
         <select value={model} onChange={(e) => setModel(e.target.value as BranchModel)} className={FIELD}>
-          <option value="classic">{"🏢 קלאסי (סניף שלי)"}</option>
-          <option value="partnership">{"🤝 שותפות"}</option>
-          <option value="sub_partnership">{"🌿 תת שותפות"}</option>
+          <option value="classic">{"קלאסי (סניף שלי)"}</option>
+          <option value="partnership">{"שותפות"}</option>
+          <option value="sub_partnership">{"תת שותפות"}</option>
         </select>
       </div>
 

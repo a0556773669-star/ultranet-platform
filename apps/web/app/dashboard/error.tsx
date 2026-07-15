@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { AlertTriangle } from "lucide-react";
 
 export default function DashboardError({
   error,
@@ -15,7 +16,7 @@ export default function DashboardError({
 
   return (
     <div className="flex min-h-[50vh] flex-col items-center justify-center gap-4 p-6 text-center">
-      <div className="text-4xl">⚠️</div>
+      <AlertTriangle className="h-10 w-10 text-amber-500" />
       <h2 className="text-lg font-bold text-ink">משהו השתבש</h2>
       <p className="max-w-md text-sm text-muted">
         {error.message && error.message.length < 200
