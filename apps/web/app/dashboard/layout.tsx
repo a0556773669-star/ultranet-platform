@@ -31,6 +31,11 @@ export default async function DashboardLayout({ children }: { children: ReactNod
   if (role === "owner") {
     items.push({ href: "/dashboard/users", label: "משתמשים", icon: Users });
   }
+  const navItems = items.map((item) => ({
+    href: item.href,
+    label: item.label,
+    icon: <item.icon className="ml-1 h-4 w-4" />,
+  }));
 
   let logoUrl = "";
   try {
@@ -51,7 +56,7 @@ export default async function DashboardLayout({ children }: { children: ReactNod
             <span className="text-xl font-extrabold tracking-tight text-teal">אולטרנט</span>
           )}
         </div>
-        <TopNav items={items} />
+        <TopNav items={navItems} />
         <div className="flex items-center gap-2 text-sm text-muted">
           <span>
             שלום, <span className="font-medium text-ink">{name}</span>
