@@ -7,14 +7,14 @@ import { Building2, Banknote, Laptop, Tag, Users, ClipboardList, Briefcase, BarC
 type TabItem = { href: string; label: string; icon: LucideIcon; ownerOnly?: boolean };
 
 const TABS: TabItem[] = [
-  { href: "/dashboard/rentals/branches", label: "סניפים", icon: Building2, ownerOnly: true },
+  { href: "/dashboard/rentals/manage", label: "השכרות", icon: ClipboardList },
+  { href: "/dashboard/rentals/mine", label: "השכרות יוני", icon: Briefcase, ownerOnly: true },
+  { href: "/dashboard/rentals/clients", label: "לקוחות", icon: Users },
   { href: "/dashboard/rentals/expenses", label: "הוצאות", icon: Banknote },
   { href: "/dashboard/rentals/laptops", label: "מחשבים", icon: Laptop },
   { href: "/dashboard/rentals/labels", label: "מדבקות", icon: Tag },
-  { href: "/dashboard/rentals/clients", label: "לקוחות", icon: Users },
-  { href: "/dashboard/rentals/manage", label: "השכרות", icon: ClipboardList },
-  { href: "/dashboard/rentals/mine", label: "השכרות יוני", icon: Briefcase, ownerOnly: true },
   { href: "/dashboard/rentals/accounting", label: "הנה\"ח", icon: BarChart3 },
+  { href: "/dashboard/rentals/branches", label: "סניפים", icon: Building2, ownerOnly: true },
 ];
 
 export function RentalsTabs({ isOwner }: { isOwner: boolean }) {

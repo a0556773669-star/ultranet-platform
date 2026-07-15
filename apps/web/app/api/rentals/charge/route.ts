@@ -1,12 +1,24 @@
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
 import { getAdminFirestore } from "@/lib/firebase-admin";
+import { resolveNedarimCreds } from "@/lib/nedarim";
 import { NextRequest, NextResponse } from "next/server";
 
 const NEDARIUM_API = "https://matara.pro/nedarimplus/V6/Files/WebServices/DebitCard.aspx";
-const MOSAD = "7013078";
 const CURRENCY = "1";
 
 export async function POST(req: NextRequest) {
   try {
+    const session = await getServerSession(authOptions);
+    if (!session) {
+      return NextResponse.json({ success: false, message: "יש להתחבר" }, { status: 401 });
+    }
+    const role = session.user?.role;
+    const perms = (session.user as { perms?: Partial<Record<string, boolean>> } | undefined)?.perms;
+    if (role !== "owner" && !perms?.charging) {
+      return NextResponse.json({ success: false, message: "אין לך הרשאה לבצע חיוב" }, { status: 403 });
+    }
+
     const { clientId, amount, tashloumim = 1 } = await req.json();
 
     if (!clientId || !amount) {
@@ -27,8 +39,16 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    const creds = await resolveNedarimCreds(client.branchId);
+    if (!creds) {
+      return NextResponse.json(
+        { success: false, message: "לא נמצא מסלול סליקה של נדרים פלוס לסניף זה" },
+        { status: 400 }
+      );
+    }
+
     const postData = new URLSearchParams({
-      Mosad: MOSAD,
+      Mosad: creds.mosadId,
       Token: client.gatewayToken,
       Tokef: client.cardExpiry,
       Amount: String(Math.round(amount * 100) / 100),
