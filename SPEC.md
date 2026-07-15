@@ -195,13 +195,20 @@ pnpm dev        # turbo run dev — מריץ web + api
   (`nedarim-card-capture.tsx`), חיוב (`client-charge-section.tsx`,
   `nedarim-charge-capture.tsx`), ייצוא/ייבוא אקסל.
 - **`/manage`** — ניהול השכרות פעילות והיסטוריה, חובות (`unpaid-row-actions.tsx`).
+  כפתור "גבייה מידית" בשורת השכרה פעילה (`active-rental-row.tsx`) גלוי רק
+  ל-owner או למי שיש לו `perms.charging`; אם ללקוח יש `gatewayToken`+`cardExpiry`
+  שמורים הוא מחייב ישירות דרך הטוקן (`token-charge-button.tsx` → `/api/rentals/charge`),
+  אחרת נופל חזרה להזנת כרטיס ידנית באייפרם (`nedarim-charge-capture.tsx`).
 - **`/mine`** — ההשכרות שלי.
 - **`/expenses`** — הוצאות סניף השכרות.
 - **`/accounting`** — הנה"ח ברמת סניף השכרות: תצוגת סניף/בעלים, סימון העברות
   (`mark-transferred-button.tsx`, `n_branch_transfers`).
 - **`/branches`** — ניהול סניפי השכרה + audit הרשאות.
 - **`/labels`** — הדפסת מדבקות ללקוחות/פריטים + הגדרות לוגו.
-- **API `/api/rentals/charge`** — חיוב כרטיס דרך Nedarim Plus.
+- **API `/api/rentals/charge`** — חיוב כרטיס דרך Nedarim Plus (`DebitCard.aspx`)
+  לפי `gatewayToken`/`cardExpiry` שמורים על הלקוח; מוגן בהרשאת `charging` בצד
+  שרת, ומזהה המוסד (`Mosad`) נפתר דינמית דרך `resolveNedarimCreds` לפי סניף
+  הלקוח (לא hardcoded).
 - **API `/api/rentals/clients/export|template`** — ייצוא/תבנית אקסל של לקוחות.
 
 תמחור השכרה: `lib/rental-pricing.ts` (יום/שבוע/חודש + וריאנטים

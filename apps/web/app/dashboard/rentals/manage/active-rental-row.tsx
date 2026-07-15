@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { calcRentalDays, calcRentalPrice, calcStickPrice } from "@/lib/rental-pricing";
 import { markRentalPaidAction, closeRentalAction, deleteRentalAction } from "../actions";
 import { NedarimChargeCapture } from "../clients/nedarim-charge-capture";
+import { TokenChargeButton } from "./token-charge-button";
 
 type LaptopRates = {
   dayPrice: number;
@@ -22,9 +23,12 @@ type Props = {
   startDate: string;
   kind: "laptop" | "stick";
   pricingVariant?: "normal" | "noInternet" | "stickOnly";
+  clientId: string;
   clientName: string;
   clientPhone?: string;
   clientIdNum?: string;
+  cardLast4?: string;
+  hasCardToken: boolean;
   itemName: string;
   branchName: string;
   showBranch: boolean;
@@ -46,9 +50,12 @@ export function ActiveRentalRow({
   startDate,
   kind,
   pricingVariant,
+  clientId,
   clientName,
   clientPhone,
   clientIdNum,
+  cardLast4,
+  hasCardToken,
   itemName,
   branchName,
   showBranch,
@@ -242,34 +249,49 @@ export function ActiveRentalRow({
                         גבייה + קבלה דרך מסלול
                       </button>
                     )}
-                    {nedarimCreds && (
+                    {canCharge && nedarimCreds && (
                       <button
                         type="button"
                         onClick={() => setShowNedarim((v) => !v)}
                         className={`${BTN} bg-gradient-to-br from-teal to-teal-light text-white`}
                       >
-                        גבייה מידייה (כרטיס אשראי)
+                        {hasCardToken ? "גבייה מידית (כרטיס אשראי)" : "גבייה מידית (הזנת כרטיס)"}
                       </button>
                     )}
                   </div>
                 )}
                 {showNedarim && nedarimCreds && !paid && canCharge && (
                   <div className="mt-3">
-                    <NedarimChargeCapture
-                      mosadId={nedarimCreds.mosadId}
-                      apiValid={nedarimCreds.apiValid}
-                      clientName={clientName}
-                      clientPhone={clientPhone}
-                      clientIdNum={clientIdNum}
-                      initialAmount={finalPrice}
-                      onDone={(result) => {
-                        if (result.ok) {
-                          handleMarkPaid("nedarim");
-                        } else {
-                          setActionError(result.message ?? "הגבייה נכשלה");
-                        }
-                      }}
-                    />
+                    {hasCardToken ? (
+                      <TokenChargeButton
+                        clientId={clientId}
+                        initialAmount={finalPrice}
+                        cardLast4={cardLast4}
+                        onDone={(result) => {
+                          if (result.ok) {
+                            handleMarkPaid("nedarim");
+                          } else {
+                            setActionError(result.message ?? "הגבייה נכשלה");
+                          }
+                        }}
+                      />
+                    ) : (
+                      <NedarimChargeCapture
+                        mosadId={nedarimCreds.mosadId}
+                        apiValid={nedarimCreds.apiValid}
+                        clientName={clientName}
+                        clientPhone={clientPhone}
+                        clientIdNum={clientIdNum}
+                        initialAmount={finalPrice}
+                        onDone={(result) => {
+                          if (result.ok) {
+                            handleMarkPaid("nedarim");
+                          } else {
+                            setActionError(result.message ?? "הגבייה נכשלה");
+                          }
+                        }}
+                      />
+                    )}
                   </div>
                 )}
               </div>
