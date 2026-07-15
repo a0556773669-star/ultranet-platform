@@ -96,6 +96,7 @@ export default async function CollectionRoutesPage() {
           <label className={LABEL}>הפקת קבלות</label>
           <select name="receiptsProvider" className={FIELD} defaultValue="none">
             <option value="none">ללא הפקת קבלות</option>
+            <option value="ezcount">EZcount</option>
             <option value="icount">iCount</option>
             <option value="green_invoice">חשבונית ירוקה</option>
           </select>
@@ -103,10 +104,16 @@ export default async function CollectionRoutesPage() {
         <div>
           <label className={LABEL}>מזהה חברה אצל ספק הקבלות</label>
           <input name="receiptsCompanyId" dir="ltr" className={FIELD} />
+          <p className="mt-1 text-[11px] text-muted">
+            ב-EZcount: כאן מכניסים את ה-developer_email (כתובת המייל שקושרה לחשבון ה-API שלכם).
+          </p>
         </div>
         <div>
           <label className={LABEL}>API Key לקבלות (לא חובה)</label>
           <input name="receiptsApiKey" type="password" dir="ltr" autoComplete="off" className={FIELD} />
+          <p className="mt-1 text-[11px] text-muted">
+            ב-EZcount: מפתח ה-API מהעמוד הגדרות ← API בחשבון שלכם ב-ezcount.co.il.
+          </p>
         </div>
         <div>
           <label className={LABEL}>API Secret לקבלות (לא חובה)</label>

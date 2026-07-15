@@ -4,7 +4,13 @@ import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Check } from "lucide-react";
 import { calcRentalDays, calcRentalPrice, calcStickPrice } from "@/lib/rental-pricing";
-import { markRentalPaidAction, closeRentalAction, closeRentalWithChargeAction, deleteRentalAction } from "../actions";
+import {
+  markRentalPaidAction,
+  closeRentalAction,
+  closeRentalWithChargeAction,
+  deleteRentalAction,
+  issueCashReceiptAction,
+} from "../actions";
 import { NedarimChargeCapture } from "../clients/nedarim-charge-capture";
 import { TokenChargeButton } from "./token-charge-button";
 
@@ -82,6 +88,7 @@ export function ActiveRentalRow({
   const [showNedarim, setShowNedarim] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [issuingReceipt, setIssuingReceipt] = useState(false);
 
   const autoPrice = useMemo(() => {
     const days = calcRentalDays(startDate, returnDate);
@@ -100,11 +107,11 @@ export function ActiveRentalRow({
 
   const finalPrice = override ? Number(manualPrice) || 0 : autoPrice;
 
-  function handleMarkPaid(method: "cash" | "route" | "nedarim") {
+  function handleMarkPaid(method: "cash" | "route" | "nedarim", receiptPdfLink?: string) {
     setActionError(null);
     startTransition(async () => {
       try {
-        await markRentalPaidAction(rentalId, method);
+        await markRentalPaidAction(rentalId, method, undefined, receiptPdfLink);
         setPaid(true);
         setPaymentMethod(method);
         setShowNedarim(false);
@@ -123,6 +130,26 @@ export function ActiveRentalRow({
     };
   }
 
+  function handleIssueCashReceipt() {
+    setActionError(null);
+    setIssuingReceipt(true);
+    startTransition(async () => {
+      try {
+        const result = await issueCashReceiptAction(rentalId);
+        if (result.ok) {
+          setPaid(true);
+          setPaymentMethod("cash");
+        } else {
+          setActionError(result.message ?? "הפקת הקבלה נכשלה");
+        }
+      } catch (e) {
+        setActionError(e instanceof Error ? e.message : "הפקת הקבלה נכשלה");
+      } finally {
+        setIssuingReceipt(false);
+      }
+    });
+  }
+
   function handleClose() {
     if (override && !overrideReason.trim()) {
       setActionError("יש לפרט את הסיבה לשינוי המחיר הידני");
@@ -139,16 +166,18 @@ export function ActiveRentalRow({
     });
   }
 
-  function handleChargeSuccess() {
+  function handleChargeSuccess(receiptPdfLink?: string, receiptError?: string) {
     // הכסף כבר חויב בפועל אצל נדרים פלוס בשלב הזה - אסור לעצור כאן גם אם חסר
     // נימוק למחיר ידני; ממשיכים לסמן שולם ולסגור, ורק מציגים שגיאה אם הסגירה עצמה נכשלת.
-    setActionError(null);
+    setActionError(
+      receiptError ? `החיוב בוצע בהצלחה, אך הפקת הקבלה נכשלה: ${receiptError}` : null
+    );
     setPaid(true);
     setPaymentMethod("nedarim");
     setShowNedarim(false);
     startTransition(async () => {
       try {
-        await closeRentalWithChargeAction(rentalId, buildCloseData());
+        await closeRentalWithChargeAction(rentalId, buildCloseData(), receiptPdfLink);
         router.refresh();
       } catch (e) {
         setActionError(e instanceof Error ? e.message : "הגבייה בוצעה אך סגירת ההשכרה נכשלה - יש לסגור ידנית");
@@ -263,6 +292,16 @@ export function ActiveRentalRow({
                     >
                       סמן כשולם (מזומן)
                     </button>
+                    {canCharge && (
+                      <button
+                        type="button"
+                        disabled={pending || issuingReceipt}
+                        onClick={handleIssueCashReceipt}
+                        className={`${BTN} bg-[#f4f6f9] text-ink hover:bg-[#e9edf3]`}
+                      >
+                        {issuingReceipt ? "מפיק קבלה..." : "קבלה (מזומן/העברה)"}
+                      </button>
+                    )}
                     {hasRoute && (
                       <button
                         type="button"
@@ -300,7 +339,7 @@ export function ActiveRentalRow({
                         cardLast4={cardLast4}
                         onDone={(result) => {
                           if (result.ok) {
-                            handleChargeSuccess();
+                            handleChargeSuccess(result.receiptPdfLink, result.receiptError);
                           } else {
                             setActionError(result.message ?? "הגבייה נכשלה");
                           }
