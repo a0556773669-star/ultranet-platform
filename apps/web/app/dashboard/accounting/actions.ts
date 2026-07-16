@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { getAdminFirestore } from "@/lib/firebase-admin";
@@ -108,6 +109,50 @@ export async function createCollectionRouteAction(formData: FormData) {
   };
   await getAdminFirestore().collection("n_collection_routes").add(stripUndefined(data));
   revalidatePath("/dashboard/accounting/routes");
+}
+
+export async function updateCollectionRouteAction(id: string, formData: FormData) {
+  await requireOwner();
+  const name = String(formData.get("name") ?? "").trim();
+  if (!name) {
+    throw new Error("שם המסלול הוא שדה חובה");
+  }
+
+  const db = getAdminFirestore();
+  const existingDoc = await db.collection("n_collection_routes").doc(id).get();
+  const existing = existingDoc.data() as Omit<CollectionRoute, "id"> | undefined;
+  if (!existing) {
+    throw new Error("מסלול לא נמצא");
+  }
+
+  // secret fields: only overwrite if the admin typed a new value, otherwise keep what's stored
+  // (the form leaves these blank on load instead of re-displaying the stored secret)
+  const apiKey = String(formData.get("apiKey") ?? "").trim();
+  const apiSecret = String(formData.get("apiSecret") ?? "").trim();
+  const receiptsApiKey = String(formData.get("receiptsApiKey") ?? "").trim();
+  const receiptsApiSecret = String(formData.get("receiptsApiSecret") ?? "").trim();
+
+  const data: Omit<CollectionRoute, "id"> = {
+    terminalId: String(formData.get("terminalId") ?? "").trim(),
+    status: existing.status,
+    name,
+    branchScope: String(formData.get("branchScope") ?? "").trim() || null,
+    provider: String(formData.get("provider") ?? "manual") as CollectionRoute["provider"],
+    currency: String(formData.get("currency") ?? "ILS").trim() || undefined,
+    feePct: formData.get("feePct") ? Number(formData.get("feePct")) : undefined,
+    feeFixed: formData.get("feeFixed") ? Number(formData.get("feeFixed")) : undefined,
+    depositsTo: String(formData.get("depositsTo") ?? "owner") as CollectionRoute["depositsTo"],
+    apiKey: apiKey || existing.apiKey,
+    apiSecret: apiSecret || existing.apiSecret,
+    receiptsProvider: (String(formData.get("receiptsProvider") ?? "none").trim() ||
+      "none") as CollectionRoute["receiptsProvider"],
+    receiptsCompanyId: String(formData.get("receiptsCompanyId") ?? "").trim() || undefined,
+    receiptsApiKey: receiptsApiKey || existing.receiptsApiKey,
+    receiptsApiSecret: receiptsApiSecret || existing.receiptsApiSecret,
+  };
+  await db.collection("n_collection_routes").doc(id).set(stripUndefined(data), { merge: false });
+  revalidatePath("/dashboard/accounting/routes");
+  redirect("/dashboard/accounting/routes");
 }
 
 export async function deleteCollectionRouteAction(id: string) {

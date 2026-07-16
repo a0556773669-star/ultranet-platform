@@ -232,6 +232,10 @@ pnpm dev        # turbo run dev — מריץ web + api
 ### הנהלת חשבונות (`/dashboard/accounting`) — perm: accounting
 הכנסות/הוצאות מרכזיות (`n_ah_income` / `n_ah_expenses`), גבייה (`collect-modal.tsx`,
 `lib/collection-charge.ts`), ומסלולי גבייה (`/routes`, `n_collection_routes`).
+יצירה/עריכה/מחיקה של מסלול - owner בלבד (`createCollectionRouteAction` /
+`updateCollectionRouteAction` / `deleteCollectionRouteAction`, `/routes/[id]`
+לעריכה). שדות הסוד (apiKey/apiSecret/receiptsApiKey/receiptsApiSecret) לא
+מוצגים מחדש בטופס העריכה - משאירים ריק כדי לא לשנות אותם.
 חישובי התחשבנות ב-`lib/branch-accounting.ts` / `branch-accounting-data.ts`.
 
 ### הדרכות (`/dashboard/tutorials`)
