@@ -16,8 +16,15 @@ const TABS: TabItem[] = [
   { href: "/dashboard/orders", label: "הזמנות", icon: Mail, perm: "computers" },
 ];
 
-export function ComputerRoomsTabs({ has }: { has: (key?: PermKey) => boolean }) {
+export function ComputerRoomsTabs({
+  isOwner,
+  perms,
+}: {
+  isOwner: boolean;
+  perms: Partial<Record<PermKey, boolean>> | undefined;
+}) {
   const pathname = usePathname();
+  const has = (key?: PermKey) => !key || isOwner || Boolean(perms?.[key]);
   const visibleTabs = TABS.filter((tab) => has(tab.perm));
 
   return (
