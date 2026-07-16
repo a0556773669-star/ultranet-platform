@@ -1,17 +1,11 @@
 import Link from "next/link";
-import { Monitor, Laptop, Building2, MapPin, Handshake, Plus, type LucideIcon } from "lucide-react";
+import { Building2, MapPin, Handshake, Plus } from "lucide-react";
 import { getAdminFirestore } from "@/lib/firebase-admin";
 import type { Branch } from "@ultranet/shared-types";
 import { requireModuleAccess } from "@/lib/perms";
 
-const TYPE_LABELS: Record<string, { icon: LucideIcon; label: string }> = {
-  computers: { icon: Monitor, label: "מחשבים" },
-  rentals: { icon: Laptop, label: "השכרות" },
-  coworking: { icon: Building2, label: "משרד שיתופי" },
-};
-
 async function listBranches(): Promise<Branch[]> {
-  const snap = await getAdminFirestore().collection("n_branches").get();
+  const snap = await getAdminFirestore().collection("n_branches").where("branchType", "==", "computers").get();
   return snap.docs
     .map((d) => ({ id: d.id, ...(d.data() as Omit<Branch, "id">) }) as Branch)
     .sort((a, b) => a.name.localeCompare(b.name, "he"));
@@ -68,19 +62,6 @@ export default async function BranchesPage() {
                     </span>
                   )}
                 </div>
-                <span className="flex items-center gap-1.5 rounded-full bg-[#e8f4fd] px-2.5 py-1 text-[11px] font-bold text-[#2980b9]">
-                  {(() => {
-                    const typeInfo = TYPE_LABELS[b.branchType];
-                    if (!typeInfo) return b.branchType;
-                    const Icon = typeInfo.icon;
-                    return (
-                      <>
-                        <Icon className="h-3.5 w-3.5" />
-                        {typeInfo.label}
-                      </>
-                    );
-                  })()}
-                </span>
               </div>
               <div className="flex flex-wrap gap-2.5 text-xs text-muted">
                 <span className="flex items-center gap-1"><MapPin className="h-3.5 w-3.5" />{b.location ?? "—"}</span>
