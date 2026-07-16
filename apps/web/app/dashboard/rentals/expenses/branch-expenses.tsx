@@ -10,8 +10,16 @@ import {
 
 const CATEGORIES = ["שכירות", "חשמל ומים", "משכורות", "ציוד ותחזוקה", "שיווק ופרסום", "ביטוח", "אחר"];
 
-const PAID_LABELS: Record<string, string> = { owner: "אני", partner: "השותף" };
-const OWED_LABELS: Record<string, string> = { owner: "עלי (הכל)", partner: "עליו (הכל)", shared: "משותף (חצי-חצי)" };
+/** Fixed owner name shown instead of the relative "אני", so payer/debt labels read the same for everyone. */
+const OWNER_NAME = "יוני ארנטרוי";
+
+function paidLabels(partnerName: string): Record<string, string> {
+  return { owner: OWNER_NAME, partner: partnerName };
+}
+
+function owedLabels(partnerName: string): Record<string, string> {
+  return { owner: `על ${OWNER_NAME} (הכל)`, partner: `על ${partnerName} (הכל)`, shared: "משותף (חצי-חצי)" };
+}
 
 const FIELD = "w-full rounded-lg border border-card-border bg-[#f4f6f9] px-3 py-2 text-sm focus:border-teal focus:bg-white focus:outline-none";
 const LABEL = "mb-1 block text-xs font-semibold text-muted";
@@ -25,27 +33,27 @@ function netToOwner(amount: number, paidBy?: string, owedBy?: string): number {
   return p === "owner" ? amount : -amount;
 }
 
-function paymentNote(paidBy?: string, owedBy?: string) {
+function paymentNote(paidBy: string | undefined, owedBy: string | undefined, partnerName: string) {
   const p = paidBy === "partner" ? "partner" : "owner";
   const o = owedBy === "partner" ? "partner" : owedBy === "shared" ? "shared" : "owner";
-  return `שילם: ${PAID_LABELS[p]} · חוב: ${OWED_LABELS[o]}`;
+  return `שילם: ${paidLabels(partnerName)[p]} · חוב: ${owedLabels(partnerName)[o]}`;
 }
 
-function PayerFields({ namePrefix = "" }: { namePrefix?: string }) {
+function PayerFields({ partnerName }: { partnerName: string }) {
   return (
     <>
       <div>
         <label className={LABEL}>מי שילם בפועל</label>
         <select name="paidBy" defaultValue="owner" className={FIELD}>
-          <option value="owner">אני</option>
-          <option value="partner">השותף</option>
+          <option value="owner">{OWNER_NAME}</option>
+          <option value="partner">{partnerName}</option>
         </select>
       </div>
       <div>
         <label className={LABEL}>על מי החוב</label>
         <select name="owedBy" defaultValue="owner" className={FIELD}>
-          <option value="owner">עלי בלבד</option>
-          <option value="partner">על השותף בלבד</option>
+          <option value="owner">על {OWNER_NAME} בלבד</option>
+          <option value="partner">על {partnerName} בלבד</option>
           <option value="shared">משותף (חצי-חצי)</option>
         </select>
       </div>
@@ -55,6 +63,7 @@ function PayerFields({ namePrefix = "" }: { namePrefix?: string }) {
 
 type Props = {
   branchId: string;
+  partnerName?: string;
   isPartner: boolean;
   canManage: boolean;
   canAdd: boolean;
@@ -62,7 +71,8 @@ type Props = {
   variableExpenses: VariableExpense[];
 };
 
-export function BranchExpenses({ branchId, isPartner, canManage, canAdd, fixedExpenses, variableExpenses }: Props) {
+export function BranchExpenses({ branchId, partnerName: partnerNameRaw, isPartner, canManage, canAdd, fixedExpenses, variableExpenses }: Props) {
+  const partnerName = partnerNameRaw || "השותף";
   const activeFixed = fixedExpenses.filter((e) => !e.endDate);
   const endedFixed = fixedExpenses.filter((e) => e.endDate);
 
@@ -84,8 +94,8 @@ export function BranchExpenses({ branchId, isPartner, canManage, canAdd, fixedEx
             מאזן הוצאות (סטטוס בלבד, לא מחובר להנה"ח המרכזית)
           </h3>
           {net === 0 && <p className="text-sm text-muted">מאוזן — אין חובות הדדיים</p>}
-          {net > 0 && <p className="text-sm font-bold text-teal">השותף חייב לך ₪{net.toLocaleString()}</p>}
-          {net < 0 && <p className="text-sm font-bold text-red-600">אתה חייב לשותף ₪{Math.abs(net).toLocaleString()}</p>}
+          {net > 0 && <p className="text-sm font-bold text-teal">{partnerName} חייב ל{OWNER_NAME} ₪{net.toLocaleString()}</p>}
+          {net < 0 && <p className="text-sm font-bold text-red-600">{OWNER_NAME} חייב ל{partnerName} ₪{Math.abs(net).toLocaleString()}</p>}
         </div>
       )}
 
@@ -117,7 +127,7 @@ export function BranchExpenses({ branchId, isPartner, canManage, canAdd, fixedEx
               ))}
             </select>
           </div>
-          {isPartner && <PayerFields />}
+          {isPartner && <PayerFields partnerName={partnerName} />}
           <div className="col-span-2 md:col-span-3">
             <button type="submit" className={BTN}>+ הוסף הוצאה קבועה</button>
           </div>
@@ -130,7 +140,7 @@ export function BranchExpenses({ branchId, isPartner, canManage, canAdd, fixedEx
             <div key={e.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-card-border bg-[#f9fafb] p-3">
               <div>
                 <p className="text-sm font-bold text-ink">{e.name} — ₪{(e.amount || 0).toLocaleString()}/חודש</p>
-                <p className="text-xs text-muted">{e.category || "ללא קטגוריה"} · מתחיל {e.startDate}{isPartner ? ` · ${paymentNote(e.paidBy, e.owedBy)}` : ""}</p>
+                <p className="text-xs text-muted">{e.category || "ללא קטגוריה"} · מתחיל {e.startDate}{isPartner ? ` · ${paymentNote(e.paidBy, e.owedBy, partnerName)}` : ""}</p>
               </div>
               <div className="flex items-center gap-2">
                 {canManage && (
@@ -157,7 +167,7 @@ export function BranchExpenses({ branchId, isPartner, canManage, canAdd, fixedEx
                 <div key={e.id} className="flex items-center justify-between gap-2 rounded-lg border border-card-border bg-[#f4f6f9] p-3 opacity-70">
                   <div>
                     <p className="text-sm font-bold text-ink">{e.name} — ₪{(e.amount || 0).toLocaleString()}/חודש</p>
-                    <p className="text-xs text-muted">{e.startDate} – {e.endDate}{isPartner ? ` · ${paymentNote(e.paidBy, e.owedBy)}` : ""}</p>
+                    <p className="text-xs text-muted">{e.startDate} – {e.endDate}{isPartner ? ` · ${paymentNote(e.paidBy, e.owedBy, partnerName)}` : ""}</p>
                   </div>
                   {canManage && (
 <form action={deleteFixedExpenseAction.bind(null, e.id, branchId)}>
@@ -199,7 +209,7 @@ export function BranchExpenses({ branchId, isPartner, canManage, canAdd, fixedEx
               ))}
             </select>
           </div>
-          {isPartner && <PayerFields />}
+          {isPartner && <PayerFields partnerName={partnerName} />}
           <div className="col-span-2 md:col-span-3">
             <button type="submit" className={BTN}>+ הוסף הוצאה חד פעמית</button>
           </div>
@@ -212,7 +222,7 @@ export function BranchExpenses({ branchId, isPartner, canManage, canAdd, fixedEx
             <div key={e.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-card-border bg-[#f9fafb] p-3">
               <div>
                 <p className="text-sm font-bold text-ink">{e.desc} — ₪{(e.amount || 0).toLocaleString()}</p>
-                <p className="text-xs text-muted">{e.category || "ללא קטגוריה"} · {e.date}{isPartner ? ` · ${paymentNote(e.paidBy, e.owedBy)}` : ""}</p>
+                <p className="text-xs text-muted">{e.category || "ללא קטגוריה"} · {e.date}{isPartner ? ` · ${paymentNote(e.paidBy, e.owedBy, partnerName)}` : ""}</p>
               </div>
               {canManage && (
 <form action={deleteVariableExpenseAction.bind(null, e.id, branchId)}>
