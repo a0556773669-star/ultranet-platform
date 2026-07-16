@@ -7,7 +7,7 @@ import { getAdminFirestore } from "@/lib/firebase-admin";
 import type { PermKey } from "@/lib/perms";
 import { NAV_ITEMS, visibleFor, type NavItem } from "@/lib/nav-items";
 import HomeClock from "./home-clock";
-import { getInventorySnapshotAction } from "./inventory/actions";
+import { getInventorySnapshotAction } from "./(computer-rooms)/inventory/actions";
 import type {
   AccountingIncome,
   AccountingExpense,
