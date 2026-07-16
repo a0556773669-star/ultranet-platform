@@ -206,6 +206,10 @@ pnpm dev        # turbo run dev — מריץ web + api
   ל-owner או למי שיש לו `perms.charging`; אם ללקוח יש `gatewayToken`+`cardExpiry`
   שמורים הוא מחייב ישירות דרך הטוקן (`token-charge-button.tsx` → `/api/rentals/charge`),
   אחרת נופל חזרה להזנת כרטיס ידנית באייפרם (`nedarim-charge-capture.tsx`).
+  לצד זה כפתור "קבלה (מזומן/העברה)" (`issueCashReceiptAction`, גם הוא מוגבל
+  ל-`perms.charging`) מפיק ושולח קבלת EZcount ידנית עבור תשלום מזומן/העברה.
+  חיוב אשראי מצליח (דרך `/api/rentals/charge`) מפיק קבלת EZcount אוטומטית
+  ושולח אותה במייל ללקוח, כל עוד מוגדר לסניף מסלול עם `receiptsProvider: "ezcount"`.
 - **`/mine`** — ההשכרות שלי.
 - **`/expenses`** — הוצאות סניף השכרות.
 - **`/accounting`** — הנה"ח ברמת סניף השכרות: תצוגת סניף/בעלים, סימון העברות
@@ -228,6 +232,10 @@ pnpm dev        # turbo run dev — מריץ web + api
 ### הנהלת חשבונות (`/dashboard/accounting`) — perm: accounting
 הכנסות/הוצאות מרכזיות (`n_ah_income` / `n_ah_expenses`), גבייה (`collect-modal.tsx`,
 `lib/collection-charge.ts`), ומסלולי גבייה (`/routes`, `n_collection_routes`).
+יצירה/עריכה/מחיקה של מסלול - owner בלבד (`createCollectionRouteAction` /
+`updateCollectionRouteAction` / `deleteCollectionRouteAction`, `/routes/[id]`
+לעריכה). שדות הסוד (apiKey/apiSecret/receiptsApiKey/receiptsApiSecret) לא
+מוצגים מחדש בטופס העריכה - משאירים ריק כדי לא לשנות אותם.
 חישובי התחשבנות ב-`lib/branch-accounting.ts` / `branch-accounting-data.ts`.
 
 ### הדרכות (`/dashboard/tutorials`)
@@ -248,11 +256,24 @@ pnpm dev        # turbo run dev — מריץ web + api
   קודם מסלול משויך לסניף (`branch.collectionRouteId`), אחרת מסלול גלובלי
   (`branchScope === null`) כברירת מחדל של הבעלים. חיוב דרך `/api/rentals/charge`
   ו-`lib/collection-charge.ts`. שמירת טוקן בלבד, לא כרטיס.
-- **Resend** — שליחת מיילים מצד שרת (קודי כניסה וכו').
-- **EmailJS** (`@emailjs/browser`) — שליחת מיילים מהלקוח.
+- **Resend** — מותקן כתלות (`apps/web/package.json`) אך **לא בשימוש כרגע בשום
+  מקום בקוד** - זמין לשימוש עתידי.
+- **EmailJS** (`@emailjs/browser`) — שליחת קודי התחברות/אימות מכשיר מהלקוח
+  (`login/email-code-form.tsx`, `verify-device/verify-device-form.tsx`). זו
+  שיטת שליחת המיילים היחידה הפעילה כרגע במערכת.
+- **EZcount** (`lib/ezcount.ts`) — הפקת קבלות (מסמך מסוג 400, ללא מע"מ) ושליחתן
+  אוטומטית במייל ללקוח. `resolveEzcountCreds(branchId)` פותר creds (מפתח API +
+  developer_email) מ-`n_collection_routes` לפי אותו דפוס resolve-per-branch
+  של `resolveNedarimCreds` (מסלול ספציפי לסניף → מסלול גלובלי `branchScope
+  === null`). `createEzcountReceipt(...)` שולח ל-`api.ezcount.co.il/api/createDoc`.
+  מופעל אוטומטית אחרי חיוב אשראי מוצלח (`/api/rentals/charge`), וגם ידנית עבור
+  תשלומי מזומן/העברה דרך `issueCashReceiptAction`.
 - **מסלולי גבייה** (`n_collection_routes`) — הפשטה מעל ספקי סליקה
   (`nedarim_plus` / `tranzila` / `cardcom` / `payplus` / `meshulam` / manual)
-  וספקי קבלות (`icount` / `green_invoice`), כולל יעד הפקדה ועמלות.
+  וספקי קבלות (`ezcount` / `icount` / `green_invoice`), כולל יעד הפקדה ועמלות.
+  **חשוב:** מלבד `nedarim_plus` (סליקה בפועל) ו-`ezcount` (הפקת קבלות בפועל),
+  שאר הספקים (גם לסליקה וגם לקבלות) עדיין placeholder בלבד - `chargeViaRoute`
+  לא מבצע קריאת API אמיתית עבורם, רק רישום הנה"ח מדומה.
 
 ---
 

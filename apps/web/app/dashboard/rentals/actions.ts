@@ -6,6 +6,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { getAdminFirestore } from "@/lib/firebase-admin";
 import { chargeViaRoute } from "@/lib/collection-charge";
+import { resolveEzcountCreds, createEzcountReceipt } from "@/lib/ezcount";
 import { Timestamp } from "firebase-admin/firestore";
 import type { RentalClient, Laptop, Stick, Rental, Branch } from "@ultranet/shared-types";
 import { parseClientsWorkbook } from "@/lib/client-excel";
@@ -239,7 +240,12 @@ export async function deleteClientAction(id: string) {
 }
 
 
-export async function markRentalPaidAction(rentalId: string, paymentMethod: "cash" | "nedarim" | "route", routeId?: string) {
+export async function markRentalPaidAction(
+  rentalId: string,
+  paymentMethod: "cash" | "nedarim" | "route",
+  routeId?: string,
+  receiptPdfLink?: string
+) {
   await requireSession();
   const db = getAdminFirestore();
   const ref = db.collection("n_rentals").doc(rentalId);
@@ -247,7 +253,7 @@ export async function markRentalPaidAction(rentalId: string, paymentMethod: "cas
   const rental = snap.data() as Omit<Rental, "id"> | undefined;
   if (!rental) throw new Error("השכרה לא נמצאה");
   const amount = rental.finalPrice ?? rental.calcPrice;
-  let receiptIssued = false;
+  let receiptIssued = !!receiptPdfLink;
 
   const effectiveRouteId = routeId || rental.collectionRouteId;
   if (paymentMethod === "route" && effectiveRouteId) {
@@ -272,10 +278,53 @@ export async function markRentalPaidAction(rentalId: string, paymentMethod: "cas
     });
   }
 
-  await ref.set({ paid: true, paymentMethod, receiptIssued }, { merge: true });
+  await ref.set(
+    stripUndefined({ paid: true, paymentMethod, receiptIssued, receiptPdfLink }),
+    { merge: true }
+  );
   revalidatePath("/dashboard/rentals");
   revalidatePath("/dashboard");
   return { ok: true };
+}
+
+export async function issueCashReceiptAction(rentalId: string) {
+  const session = await requireSession();
+  const role = session.user?.role;
+  const perms = (session.user as { perms?: Partial<Record<string, boolean>> } | undefined)?.perms;
+  if (role !== "owner" && !perms?.charging) {
+    return { ok: false as const, message: "אין לך הרשאה להפיק קבלות" };
+  }
+
+  const db = getAdminFirestore();
+  const rentalSnap = await db.collection("n_rentals").doc(rentalId).get();
+  const rental = rentalSnap.data() as Omit<Rental, "id"> | undefined;
+  if (!rental) return { ok: false as const, message: "השכרה לא נמצאה" };
+
+  const clientSnap = await db.collection("n_rental_clients").doc(rental.clientId).get();
+  const client = clientSnap.data() as RentalClient | undefined;
+  if (!client) return { ok: false as const, message: "לקוח לא נמצא" };
+
+  const creds = await resolveEzcountCreds(rental.branchId);
+  if (!creds) {
+    return { ok: false as const, message: "לא הוגדר ספק קבלות (EZcount) לסניף זה" };
+  }
+
+  const amount = rental.finalPrice ?? rental.calcPrice;
+  const result = await createEzcountReceipt({
+    creds,
+    amount,
+    clientName: client.name,
+    clientEmail: client.email,
+    clientIdNum: client.idNum,
+    desc: "תשלום השכרה - מזומן/העברה",
+    paymentType: 1,
+  });
+  if (!result.ok) {
+    return { ok: false as const, message: result.message };
+  }
+
+  await markRentalPaidAction(rentalId, "cash", undefined, result.pdfLink);
+  return { ok: true as const, pdfLink: result.pdfLink };
 }
 
 export async function closeRentalAction(
@@ -302,12 +351,13 @@ export async function closeRentalAction(
 
 export async function closeRentalWithChargeAction(
   rentalId: string,
-  data: { returnDate: string; finalPrice: number; priceOverrideReason?: string; notes?: string }
+  data: { returnDate: string; finalPrice: number; priceOverrideReason?: string; notes?: string },
+  receiptPdfLink?: string
 ) {
   await requireSession();
   // הגבייה המידית (נדרים פלוס) כבר בוצעה בהצלחה בצד הלקוח לפני קריאה לפעולה זו -
   // כאן רק מסמנים שולם וסוגרים את ההשכרה יחד, כדי שלא יישאר מצב ביניים של "חויב אך לא סגור".
-  await markRentalPaidAction(rentalId, "nedarim");
+  await markRentalPaidAction(rentalId, "nedarim", undefined, receiptPdfLink);
   await closeRentalAction(rentalId, data);
   return { ok: true };
 }

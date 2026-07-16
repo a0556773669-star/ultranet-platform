@@ -12,7 +12,7 @@ export type CollectionProvider =
   | "payplus"
   | "meshulam"
   | "other";
-export type ReceiptsProvider = "none" | "icount" | "green_invoice";
+export type ReceiptsProvider = "none" | "icount" | "green_invoice" | "ezcount";
 export type DepositsTo = "owner" | "branch";
 export type RouteStatus = "not_connected" | "connected" | "paused";
 
@@ -187,6 +187,7 @@ export interface Rental {
   paid: boolean;
   paymentMethod?: string;
   receiptIssued?: boolean;
+  receiptPdfLink?: string;
   collectionRouteId?: string | null;
   pickupLoc?: string;
   returnLoc?: string;

@@ -11,7 +11,7 @@ export function TokenChargeButton({
   clientId: string;
   initialAmount: number;
   cardLast4?: string;
-  onDone: (result: { ok: boolean; message?: string }) => void;
+  onDone: (result: { ok: boolean; message?: string; receiptPdfLink?: string; receiptError?: string }) => void;
 }) {
   const [amount, setAmount] = useState(String(initialAmount));
   const [pending, setPending] = useState(false);
@@ -35,7 +35,7 @@ export function TokenChargeButton({
       });
       const data = await res.json();
       if (data.success) {
-        onDone({ ok: true });
+        onDone({ ok: true, receiptPdfLink: data.receiptPdfLink, receiptError: data.receiptError });
       } else if (data.ambiguous) {
         setAmbiguous(true);
         setError(data.message ?? "לא ברור אם החיוב בוצע - יש לבדוק ידנית");
