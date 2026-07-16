@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { getAdminFirestore } from "@/lib/firebase-admin";
-import type { Branch, BranchType } from "@ultranet/shared-types";
+import type { Branch } from "@ultranet/shared-types";
 
 async function requireOwner() {
   const session = await getServerSession(authOptions);
@@ -27,7 +27,7 @@ function stripUndefined<T extends Record<string, unknown>>(obj: T): T {
 
 function parseBranchForm(formData: FormData): Omit<Branch, "id"> {
   const name = String(formData.get("name") ?? "").trim();
-  const branchType = String(formData.get("branchType") ?? "computers") as BranchType;
+  const branchType = "computers" as const;
   const location = String(formData.get("location") ?? "").trim() || undefined;
   const isMine = formData.get("isMine") === "on";
   const partnerName = String(formData.get("partnerName") ?? "").trim() || undefined;

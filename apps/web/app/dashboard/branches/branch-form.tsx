@@ -9,12 +9,6 @@ type BranchFormProps = {
   initial?: Partial<Branch>;
 };
 
-const TYPE_OPTIONS: { value: Branch["branchType"]; label: string }[] = [
-  { value: "computers", label: "מחשבים" },
-  { value: "rentals", label: "השכרות" },
-  { value: "coworking", label: "משרד שיתופי" },
-];
-
 const FIELD = "w-full rounded-lg border border-card-border bg-[#f4f6f9] px-3 py-2 text-sm focus:border-teal focus:bg-white focus:outline-none";
 const LABEL = "mb-1 block text-xs font-semibold text-muted";
 
@@ -28,21 +22,9 @@ export function BranchForm({ action, initial }: BranchFormProps) {
         <input name="name" required defaultValue={initial?.name} className={FIELD} />
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <label className={LABEL}>סוג סניף</label>
-          <select name="branchType" defaultValue={initial?.branchType ?? "computers"} className={FIELD}>
-            {TYPE_OPTIONS.map((o) => (
-              <option key={o.value} value={o.value}>
-                {o.label}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label className={LABEL}>מיקום</label>
-          <input name="location" defaultValue={initial?.location} className={FIELD} />
-        </div>
+      <div>
+        <label className={LABEL}>מיקום</label>
+        <input name="location" defaultValue={initial?.location} className={FIELD} />
       </div>
 
       <label className="flex items-center gap-2 rounded-lg border border-card-border bg-[#f4f6f9] px-3 py-2.5 text-sm font-semibold text-ink">
