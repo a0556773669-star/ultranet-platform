@@ -81,6 +81,10 @@ export async function createEzcountReceipt(params: EzcountReceiptParams): Promis
   const body = {
     api_key: creds.apiKey,
     developer_email: creds.developerEmail,
+    // required by EZcount whenever the account is registered as a "distributor" -
+    // for a single-business account (not proxying other EZcount users) this is
+    // just the account's own api_key.
+    created_by_api_key: creds.apiKey,
     type: 400,
     customer_name: clientName,
     customer_email: clientEmail || undefined,
