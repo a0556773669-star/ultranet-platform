@@ -2,7 +2,6 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { getAdminFirestore } from "@/lib/firebase-admin";
 import { resolveNedarimCreds } from "@/lib/nedarim";
-import { resolveEzcountCreds, createEzcountReceipt } from "@/lib/ezcount";
 import { NextRequest, NextResponse } from "next/server";
 
 const NEDARIUM_API = "https://matara.pro/nedarimplus/V6/Files/WebServices/DebitCard.aspx";
@@ -127,34 +126,14 @@ export async function POST(req: NextRequest) {
         createdAt: new Date(),
       });
 
-      let receipt: { pdfLink?: string; message?: string } = {};
-      const ezcountCreds = await resolveEzcountCreds(client.branchId);
-      if (ezcountCreds) {
-        const receiptResult = await createEzcountReceipt({
-          creds: ezcountCreds,
-          amount,
-          clientName: client.name || "",
-          clientEmail: client.email,
-          clientIdNum: client.idNum,
-          desc: "תשלום השכרה - כרטיס אשראי",
-          paymentType: 3,
-          cardLast4: client.cardLast4,
-        });
-        if (receiptResult.ok) {
-          receipt = { pdfLink: receiptResult.pdfLink };
-        } else {
-          console.error("EZcount receipt error:", receiptResult.message);
-          receipt = { message: receiptResult.message };
-        }
-      }
-
+      // אין צורך ליצור כאן קבלת EZcount בנפרד: נדרים פלוס יוצרים קבלה אוטומטית
+      // בעצמם על כל חיוב מוצלח (אינטגרציה ישירה בצד שלהם) - קריאה נוספת שלנו
+      // הייתה יוצרת קבלה כפולה.
       return NextResponse.json({
         success: true,
         message: "חיוב בוצע בהצלחה",
         confirmation: result.Confirmation,
         nedarium_id: nedarimId,
-        receiptPdfLink: receipt.pdfLink,
-        receiptError: receipt.message,
       });
     } else {
       await db.collection("n_rental_transactions").add({
