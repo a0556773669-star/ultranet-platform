@@ -7,6 +7,7 @@ import {
   createVariableExpenseAction,
   deleteVariableExpenseAction,
 } from "./actions";
+import { SubmitButton } from "../submit-button";
 
 const CATEGORIES = ["שכירות", "חשמל ומים", "משכורות", "ציוד ותחזוקה", "שיווק ופרסום", "ביטוח", "אחר"];
 
@@ -119,7 +120,7 @@ export function BranchExpenses({ branchId, isPartner, canManage, canAdd, fixedEx
           </div>
           {isPartner && <PayerFields />}
           <div className="col-span-2 md:col-span-3">
-            <button type="submit" className={BTN}>+ הוסף הוצאה קבועה</button>
+            <SubmitButton pendingLabel="שומר..." className={BTN}>+ הוסף הוצאה קבועה</SubmitButton>
           </div>
         </form>
 )}
@@ -201,7 +202,7 @@ export function BranchExpenses({ branchId, isPartner, canManage, canAdd, fixedEx
           </div>
           {isPartner && <PayerFields />}
           <div className="col-span-2 md:col-span-3">
-            <button type="submit" className={BTN}>+ הוסף הוצאה חד פעמית</button>
+            <SubmitButton pendingLabel="שומר..." className={BTN}>+ הוסף הוצאה חד פעמית</SubmitButton>
           </div>
         </form>
 )}

@@ -7,7 +7,13 @@ import { getAdminFirestore } from "@/lib/firebase-admin";
 import type { Branch, FixedExpense, VariableExpense } from "@ultranet/shared-types";
 import { BranchExpenses } from "../branch-expenses";
 
-export default async function BranchExpensesPage({ params }: { params: { id: string } }) {
+export default async function BranchExpensesPage({
+  params,
+  searchParams,
+}: {
+  params: { id: string };
+  searchParams?: { success?: string };
+}) {
   const session = await getServerSession(authOptions);
   if (!session) redirect("/login");
   const isOwner = session.user?.role === "owner";
@@ -48,6 +54,18 @@ export default async function BranchExpensesPage({ params }: { params: { id: str
           בחירת סניף אחר
         </Link>
       </div>
+
+      {searchParams?.success === "fixed" && (
+        <div className="rounded-card border border-teal-200 bg-teal-50 p-3 text-sm font-semibold text-teal-700">
+          ההוצאה הקבועה נשמרה בהצלחה.
+        </div>
+      )}
+      {searchParams?.success === "variable" && (
+        <div className="rounded-card border border-teal-200 bg-teal-50 p-3 text-sm font-semibold text-teal-700">
+          ההוצאה נשמרה בהצלחה.
+        </div>
+      )}
+
       <BranchExpenses branchId={branch.id} isPartner={isPartner} canManage={isOwner} canAdd={isOwner || isPartner} fixedExpenses={visibleFixed} variableExpenses={visibleVariable} />
     </div>
   );

@@ -137,7 +137,7 @@ export async function createClientAction(formData: FormData) {
   if (depositType === "credit") {
     redirect(`/dashboard/rentals/clients/${ref.id}?openCard=1`);
   }
-  redirect("/dashboard/rentals/clients");
+  redirect("/dashboard/rentals/clients?success=1");
 }
 
 export async function saveClientCardTokenAction(clientId: string, token: string, last4: string, cardExpiry?: string) {

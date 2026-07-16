@@ -15,6 +15,7 @@ export default async function RentalClientsPage({
     imported?: string;
     updated?: string;
     skipped?: string;
+    success?: string;
   };
 }) {
   const session = await requireModuleAccess("rentals");
@@ -84,6 +85,12 @@ export default async function RentalClientsPage({
         <div className="mb-4 rounded-card border border-teal-200 bg-teal-50 p-3 text-sm font-semibold text-teal-700">
           הייבוא הסתיים: נוצרו {searchParams?.imported ?? 0} לקוחות חדשים, עודכנו {searchParams?.updated ?? 0} קיימים
           {Number(searchParams?.skipped ?? 0) > 0 && `, דולגו ${searchParams?.skipped} שורות`}.
+        </div>
+      )}
+
+      {searchParams?.success === "1" && (
+        <div className="mb-4 rounded-card border border-teal-200 bg-teal-50 p-3 text-sm font-semibold text-teal-700">
+          הלקוח נשמר בהצלחה.
         </div>
       )}
 

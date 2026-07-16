@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type { Branch, RentalClient } from "@ultranet/shared-types";
+import { SubmitButton } from "../submit-button";
 
 const FIELD =
   "w-full rounded-lg border border-card-border bg-[#f4f6f9] px-3 py-2 text-sm focus:border-teal focus:bg-white focus:outline-none";
@@ -105,8 +106,8 @@ export function ClientForm({
         </div>
       )}
 
-      <button
-        type="submit"
+      <SubmitButton
+        pendingLabel="שומר..."
         className="rounded-[10px] bg-gradient-to-br from-teal to-teal-light px-5 py-2 text-sm font-bold text-white shadow-primary transition hover:opacity-90 sm:col-span-2"
       >
         {initial
@@ -114,7 +115,7 @@ export function ClientForm({
           : depositType === "credit"
             ? "שמור פרטי לקוח ועבור למילוי פרטי אשראי"
             : "הוסף לקוח"}
-      </button>
+      </SubmitButton>
     </form>
   );
 }

@@ -41,7 +41,7 @@ export async function createFixedExpenseAction(branchId: string, formData: FormD
   const data: Omit<FixedExpense, "id"> = { branchId, name, amount, startDate, category, paidBy, owedBy };
   await getAdminFirestore().collection("n_fixed_expenses").add(stripUndefined(data));
   revalidatePath(`/dashboard/rentals/expenses/${branchId}`);
-  redirect(`/dashboard/rentals/expenses/${branchId}`);
+  redirect(`/dashboard/rentals/expenses/${branchId}?success=fixed`);
 }
 
 export async function endFixedExpenseAction(id: string, branchId: string, formData: FormData) {
@@ -74,7 +74,7 @@ export async function createVariableExpenseAction(branchId: string, formData: Fo
   const data: Omit<VariableExpense, "id"> = { branchId, desc, amount, date, month, category, paidBy, owedBy };
   await getAdminFirestore().collection("n_var_expenses").add(stripUndefined(data));
   revalidatePath(`/dashboard/rentals/expenses/${branchId}`);
-  redirect(`/dashboard/rentals/expenses/${branchId}`);
+  redirect(`/dashboard/rentals/expenses/${branchId}?success=variable`);
 }
 
 export async function deleteVariableExpenseAction(id: string, branchId: string) {
