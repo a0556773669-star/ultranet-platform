@@ -10,6 +10,7 @@ import {
   closeRentalWithChargeAction,
   deleteRentalAction,
   issueCashReceiptAction,
+  updateRentalAction,
 } from "../actions";
 import { NedarimChargeCapture } from "../clients/nedarim-charge-capture";
 import { TokenChargeButton } from "./token-charge-button";
@@ -89,6 +90,13 @@ export function ActiveRentalRow({
   const [actionError, setActionError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [issuingReceipt, setIssuingReceipt] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
+  const [editStartDate, setEditStartDate] = useState(startDate);
+  const [editPricingVariant, setEditPricingVariant] = useState<"normal" | "noInternet">(
+    pricingVariant === "noInternet" ? "noInternet" : "normal"
+  );
+  const [editError, setEditError] = useState<string | null>(null);
+  const [editSaving, setEditSaving] = useState(false);
 
   const autoPrice = useMemo(() => {
     const days = calcRentalDays(startDate, returnDate);
@@ -185,6 +193,29 @@ export function ActiveRentalRow({
     });
   }
 
+  function handleSaveEdit() {
+    if (!editStartDate) {
+      setEditError("יש לבחור תאריך התחלה");
+      return;
+    }
+    setEditError(null);
+    setEditSaving(true);
+    startTransition(async () => {
+      try {
+        await updateRentalAction(rentalId, {
+          startDate: editStartDate,
+          pricingVariant: kind === "laptop" ? editPricingVariant : undefined,
+        });
+        setEditOpen(false);
+        router.refresh();
+      } catch (e) {
+        setEditError(e instanceof Error ? e.message : "שגיאה בעדכון ההשכרה");
+      } finally {
+        setEditSaving(false);
+      }
+    });
+  }
+
   function handleDelete() {
     if (!confirm("למחוק את השכרה לצמיתוצ")) return;
     setDeleting(true);
@@ -217,6 +248,62 @@ export function ActiveRentalRow({
         <tr className="border-t border-card-border bg-[#f8fafc]">
           <td colSpan={showBranch ? 6 : 5} className="px-[11px] py-4">
             <div className="flex flex-col gap-3" onClick={(e) => e.stopPropagation()}>
+              <div className="rounded-lg border border-card-border bg-white p-3">
+                <div className="mb-2 flex items-center justify-between">
+                  <span className="text-xs font-bold text-muted">עריכת פרטי ההשכרה</span>
+                  <button
+                    type="button"
+                    onClick={() => setEditOpen((v) => !v)}
+                    className="text-xs font-bold text-teal-dark hover:underline"
+                  >
+                    {editOpen ? "סגירה" : "עריכה"}
+                  </button>
+                </div>
+                {editOpen && (
+                  <div className="flex flex-col gap-2">
+                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                      <div>
+                        <label className="mb-1 block text-xs font-semibold text-muted">תאריך התחלה</label>
+                        <input
+                          type="date"
+                          value={editStartDate}
+                          onChange={(e) => setEditStartDate(e.target.value)}
+                          className="w-full rounded-lg border border-card-border bg-white px-3 py-1.5 text-sm"
+                        />
+                      </div>
+                      {kind === "laptop" && laptopRates?.altPricing && (
+                        <div className="flex items-end gap-4 text-xs">
+                          <label className="flex items-center gap-1.5">
+                            <input
+                              type="radio"
+                              checked={editPricingVariant === "normal"}
+                              onChange={() => setEditPricingVariant("normal")}
+                            />
+                            עם אינטרנט
+                          </label>
+                          <label className="flex items-center gap-1.5">
+                            <input
+                              type="radio"
+                              checked={editPricingVariant === "noInternet"}
+                              onChange={() => setEditPricingVariant("noInternet")}
+                            />
+                            בלי אינטרנט
+                          </label>
+                        </div>
+                      )}
+                    </div>
+                    {editError && <p className="text-xs font-bold text-red-600">{editError}</p>}
+                    <button
+                      type="button"
+                      disabled={editSaving}
+                      onClick={handleSaveEdit}
+                      className={`${BTN} self-start bg-gradient-to-br from-teal to-teal-light text-white`}
+                    >
+                      {editSaving ? "שומר..." : "שמירת שינויים"}
+                    </button>
+                  </div>
+                )}
+              </div>
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
                 <div>
                   <label className="mb-1 block text-xs font-semibold text-muted">תאריך החזרה</label>

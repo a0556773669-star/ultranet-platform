@@ -64,6 +64,7 @@ export interface FixedExpense {
   category?: string;
   paidBy?: string;
   owedBy?: string;
+  createdByEmail?: string;
 }
 
 /** collection: n_var_expenses */
@@ -78,6 +79,7 @@ export interface VariableExpense {
   owedBy?: string;
     date: string;
     month: string; // YYYY-MM
+  createdByEmail?: string;
 }
 
 /** collection: n_branch_income (manual/rental/coworking income entries for partner branches) */

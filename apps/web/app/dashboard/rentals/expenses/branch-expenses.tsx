@@ -58,13 +58,18 @@ type Props = {
   isPartner: boolean;
   canManage: boolean;
   canAdd: boolean;
+  currentUserEmail?: string;
   fixedExpenses: FixedExpense[];
   variableExpenses: VariableExpense[];
 };
 
-export function BranchExpenses({ branchId, isPartner, canManage, canAdd, fixedExpenses, variableExpenses }: Props) {
+export function BranchExpenses({ branchId, isPartner, canManage, canAdd, currentUserEmail, fixedExpenses, variableExpenses }: Props) {
   const activeFixed = fixedExpenses.filter((e) => !e.endDate);
   const endedFixed = fixedExpenses.filter((e) => e.endDate);
+
+  function canManageExpense(e: { createdByEmail?: string }) {
+    return canManage || (!!currentUserEmail && !!e.createdByEmail && e.createdByEmail === currentUserEmail);
+  }
 
   let net = 0;
   if (isPartner) {
@@ -133,13 +138,13 @@ export function BranchExpenses({ branchId, isPartner, canManage, canAdd, fixedEx
                 <p className="text-xs text-muted">{e.category || "ללא קטגוריה"} · מתחיל {e.startDate}{isPartner ? ` · ${paymentNote(e.paidBy, e.owedBy)}` : ""}</p>
               </div>
               <div className="flex items-center gap-2">
-                {canManage && (
+                {canManageExpense(e) && (
 <form action={endFixedExpenseAction.bind(null, e.id, branchId)} className="flex items-center gap-1">
                   <input name="endDate" type="date" className="rounded-lg border border-card-border bg-white px-2 py-1 text-xs" />
                   <button type="submit" className="rounded-lg border border-card-border bg-white px-2 py-1 text-xs font-bold text-ink hover:bg-[#f4f6f9]">סיום</button>
                 </form>
 )}
-                {canManage && (
+                {canManageExpense(e) && (
 <form action={deleteFixedExpenseAction.bind(null, e.id, branchId)}>
                   <button type="submit" className="rounded-lg border border-red-200 bg-white px-2 py-1 text-xs font-bold text-red-600 hover:bg-red-50">מחיקה</button>
                 </form>
@@ -159,7 +164,7 @@ export function BranchExpenses({ branchId, isPartner, canManage, canAdd, fixedEx
                     <p className="text-sm font-bold text-ink">{e.name} — ₪{(e.amount || 0).toLocaleString()}/חודש</p>
                     <p className="text-xs text-muted">{e.startDate} – {e.endDate}{isPartner ? ` · ${paymentNote(e.paidBy, e.owedBy)}` : ""}</p>
                   </div>
-                  {canManage && (
+                  {canManageExpense(e) && (
 <form action={deleteFixedExpenseAction.bind(null, e.id, branchId)}>
                     <button type="submit" className="rounded-lg border border-red-200 bg-white px-2 py-1 text-xs font-bold text-red-600 hover:bg-red-50">מחיקה</button>
                   </form>
@@ -214,7 +219,7 @@ export function BranchExpenses({ branchId, isPartner, canManage, canAdd, fixedEx
                 <p className="text-sm font-bold text-ink">{e.desc} — ₪{(e.amount || 0).toLocaleString()}</p>
                 <p className="text-xs text-muted">{e.category || "ללא קטגוריה"} · {e.date}{isPartner ? ` · ${paymentNote(e.paidBy, e.owedBy)}` : ""}</p>
               </div>
-              {canManage && (
+              {canManageExpense(e) && (
 <form action={deleteVariableExpenseAction.bind(null, e.id, branchId)}>
                 <button type="submit" className="rounded-lg border border-red-200 bg-white px-2 py-1 text-xs font-bold text-red-600 hover:bg-red-50">מחיקה</button>
               </form>

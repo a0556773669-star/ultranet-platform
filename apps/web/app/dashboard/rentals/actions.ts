@@ -383,6 +383,17 @@ export async function createRentalAction(formData: FormData) {
     redirect("/dashboard/rentals/new?error=missing");
   }
 
+  const conflictSnap = await getAdminFirestore()
+    .collection("n_rentals")
+    .where("itemId", "==", itemId)
+    .where("kind", "==", kind)
+    .where("status", "==", "active")
+    .limit(1)
+    .get();
+  if (!conflictSnap.empty) {
+    redirect("/dashboard/rentals/new?error=item-busy");
+  }
+
   let calcPrice = 0;
   if (kind === "laptop") {
     const laptopDoc = await getAdminFirestore().collection("n_laptops").doc(itemId).get();
@@ -417,6 +428,43 @@ export async function createRentalAction(formData: FormData) {
   await getAdminFirestore().collection("n_rentals").add(stripUndefined(data));
   revalidatePath("/dashboard/rentals");
   redirect("/dashboard/rentals");
+}
+
+export async function updateRentalAction(
+  rentalId: string,
+  data: { startDate: string; pricingVariant?: "normal" | "noInternet" }
+) {
+  await requireSession();
+  if (!data.startDate) {
+    throw new Error("חובה לבחור תאריך התחלה");
+  }
+  const db = getAdminFirestore();
+  const ref = db.collection("n_rentals").doc(rentalId);
+  const snap = await ref.get();
+  const rental = snap.data() as Omit<Rental, "id"> | undefined;
+  if (!rental) throw new Error("השכרה לא נמצאה");
+  if (rental.status !== "active") throw new Error("אפשר לערוך רק השכרה פעילה");
+
+  let calcPrice = rental.calcPrice;
+  const pricingVariant = rental.kind === "laptop" ? (data.pricingVariant ?? "normal") : undefined;
+  if (rental.kind === "laptop") {
+    const laptopDoc = await db.collection("n_laptops").doc(rental.itemId).get();
+    const laptop = laptopDoc.data() as Omit<Laptop, "id"> | undefined;
+    if (laptop) {
+      calcPrice =
+        pricingVariant === "noInternet" && laptop.altPricing
+          ? (laptop.noInternetDayPrice ?? laptop.dayPrice)
+          : laptop.dayPrice;
+    }
+  } else {
+    const stickDoc = await db.collection("n_sticks").doc(rental.itemId).get();
+    const stick = stickDoc.data() as Omit<Stick, "id"> | undefined;
+    if (stick) calcPrice = stick.day1;
+  }
+
+  await ref.set(stripUndefined({ startDate: data.startDate, pricingVariant, calcPrice }), { merge: true });
+  revalidatePath("/dashboard/rentals");
+  revalidatePath("/dashboard");
 }
 
 export async function markReturnedAction(id: string) {

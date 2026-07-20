@@ -3,7 +3,7 @@
 > מסמך חי. יש לעדכן אותו בכל שינוי פיצ'ר, מודול, מודל נתונים או אינטגרציה
 > (ראה כלל תחזוקת התיעוד ב-[`CLAUDE.md`](CLAUDE.md)).
 >
-> עודכן לאחרונה: 2026-07-15
+> עודכן לאחרונה: 2026-07-20
 
 ## תוכן עניינים
 1. [סקירה כללית](#1-סקירה-כללית)
@@ -151,8 +151,8 @@ pnpm dev        # turbo run dev — מריץ web + api
 |--------|-------|-------|
 | `n_branches` | `Branch` | סניפים; סוג (`computers`/`rentals`/`coworking`), אחוזי בעלים/שותף, סניף-אב, מסלול גבייה, דגלי גבייה/קבלות |
 | `n_users` | `AppUser` | משתמשים; תפקיד, סניף, `perms`, `viewClientBranchIds` |
-| `n_fixed_expenses` | `FixedExpense` | הוצאות קבועות לסניף |
-| `n_var_expenses` | `VariableExpense` | הוצאות משתנות (לפי חודש) |
+| `n_fixed_expenses` | `FixedExpense` | הוצאות קבועות לסניף; `createdByEmail` מזהה מי רשם (לצורך הרשאת מחיקה/סיום לשותף על הוצאות שהוא רשם) |
+| `n_var_expenses` | `VariableExpense` | הוצאות משתנות (לפי חודש); `createdByEmail` מזהה מי רשם |
 | `n_branch_income` | `BranchIncome` | הכנסות סניף (שותפים) |
 | `n_tasks` | `Task` | משימות (דחיפות, חזרתיות, בוצע) |
 | `n_sub_locations` | `SubLocation` | תתי-מיקומים בסניף |
@@ -189,7 +189,11 @@ pnpm dev        # turbo run dev — מריץ web + api
 
 ### השכרות (`/dashboard/rentals`) — perm: rentals
 - **`/`** — סקירת השכרות (טאבים: `rentals-tabs.tsx`).
-- **`/new`** — יצירת השכרה חדשה (`new-rental-form.tsx`).
+- **`/new`** — יצירת השכרה חדשה (`new-rental-form.tsx`). `createRentalAction`
+  בודק שאין כבר השכרה **פעילה** על אותו פריט (`itemId`+`kind`, `n_rentals`
+  `status == "active"`) ומחזיר שגיאה (`?error=item-busy`) אם כן — לא ניתן
+  לפתוח שתי השכרות פעילות על אותו מחשב/סטיק בו-זמנית; ה-UI גם מנטרל
+  (disabled) מראש פריטים מושכרים ברשימת הבחירה.
 - **`/laptops`** — ניהול מחשבים ניידים + תמחור (CRUD).
 - **`/clients`** — לקוחות: כרטיס לקוח, לכידת כרטיס אשראי וטוקניזציה
   (`nedarim-card-capture.tsx`), חיוב (`client-charge-section.tsx`,
@@ -210,8 +214,17 @@ pnpm dev        # turbo run dev — מריץ web + api
   ל-`perms.charging`) מפיק ושולח קבלת EZcount ידנית עבור תשלום מזומן/העברה.
   חיוב אשראי מצליח (דרך `/api/rentals/charge`) מפיק קבלת EZcount אוטומטית
   ושולח אותה במייל ללקוח, כל עוד מוגדר לסניף מסלול עם `receiptsProvider: "ezcount"`.
+  בפאנל המורחב של שורת השכרה פעילה יש גם קטע "עריכת פרטי ההשכרה"
+  (`updateRentalAction`) לעריכת תאריך התחלה (ואופציית "בלי אינטרנט" למחשב עם
+  `altPricing`) של השכרה פעילה קיימת; המחיר המחושב (`calcPrice`) מחושב מחדש
+  בהתאם בצד השרת.
 - **`/mine`** — ההשכרות שלי.
-- **`/expenses`** — הוצאות סניף השכרות.
+- **`/expenses`** — הוצאות סניף השכרות. הוספת הוצאה (`createFixedExpenseAction`/
+  `createVariableExpenseAction`) שומרת גם `createdByEmail` של מי שרשם אותה.
+  בעלים יכול לנהל (לסיים הוצאה קבועה / למחוק) כל הוצאה; שותף יכול לנהל רק
+  הוצאה שהוא עצמו רשם (`createdByEmail` תואם למייל המחובר) — למשל למחוק הוצאה
+  שנרשמה בטעות, לא הוצאות שהבעלים רשם (`requireOwnerOrCreator` ב-`actions.ts`,
+  היגיון ה-UI ב-`branch-expenses.tsx`).
 - **`/accounting`** — הנה"ח ברמת סניף השכרות: תצוגת סניף/בעלים, סימון העברות
   (`mark-transferred-button.tsx`, `n_branch_transfers`).
 - **`/branches`** — ניהול סניפי השכרה + audit הרשאות.

@@ -14,13 +14,15 @@ export default async function NewRentalPage({
   const onlyMine = searchParams?.mine === "1";
 
   const db = getAdminFirestore();
-  const [branchesSnap, clientsSnap, laptopsSnap, sticksSnap, routesSnap] = await Promise.all([
+  const [branchesSnap, clientsSnap, laptopsSnap, sticksSnap, routesSnap, activeRentalsSnap] = await Promise.all([
     db.collection("n_branches").where("branchType", "==", "rentals").get(),
     db.collection("n_rental_clients").get(),
     db.collection("n_laptops").get(),
     db.collection("n_sticks").get(),
     db.collection("n_collection_routes").get(),
+    db.collection("n_rentals").where("status", "==", "active").get(),
   ]);
+  const busyItemIds = new Set(activeRentalsSnap.docs.map((d) => String(d.data().itemId ?? "")));
   const allBranches = branchesSnap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<Branch, "id">) }) as Branch);
   const branches = role === "owner" ? (onlyMine ? allBranches.filter((b) => b.isMine === true) : allBranches) : allBranches.filter((b) => b.id === myBranchId);
   const clients = clientsSnap.docs.map(
@@ -40,10 +42,12 @@ export default async function NewRentalPage({
   return (
     <div className="max-w-2xl">
       <h1 className="mb-6 text-[21px] font-extrabold text-ink">השכרה חדשה</h1>
-      {(searchParams?.error === "missing" || searchParams?.error === "no-branch" || noBranch) && (
+      {(searchParams?.error === "missing" || searchParams?.error === "no-branch" || searchParams?.error === "item-busy" || noBranch) && (
         <div className="mb-4 rounded-card border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-700">
           {noBranch || searchParams?.error === "no-branch"
             ? "החשבון שלך לא משויך כרגע לסניף. נסה להתנתק ולהתחבר מחדש (השיוך מתעדכן אוטומטית תוך כ-2 דקות), או פנה לבעלים לשיוך סניף בעמוד המשתמשים."
+            : searchParams?.error === "item-busy"
+            ? "הפריט שנבחר כבר מושכר כרגע - אי אפשר לפתוח עליו השכרה נוספת עד שיוחזר."
             : "חובה לבחור לקוח, מחשב/סטיק ותאריך התחלה לפני השמירה."}
         </div>
       )}
@@ -56,6 +60,7 @@ export default async function NewRentalPage({
           routes={routes}
           defaultBranchId={defaultBranchId}
           lockBranch={role !== "owner" || onlyMine}
+          busyItemIds={Array.from(busyItemIds)}
         />
       )}
     </div>

@@ -13,6 +13,7 @@ type Props = {
   routes: CollectionRoute[];
   defaultBranchId: string;
   lockBranch: boolean;
+  busyItemIds: string[];
 };
 
 const FIELD =
@@ -27,7 +28,9 @@ export function NewRentalForm({
   routes,
   defaultBranchId,
   lockBranch,
+  busyItemIds,
 }: Props) {
+  const busySet = useMemo(() => new Set(busyItemIds), [busyItemIds]);
   const [branchId, setBranchId] = useState(defaultBranchId);
   const [startDate, setStartDate] = useState("");
   const [kind, setKind] = useState<"laptop" | "stick">("laptop");
@@ -132,8 +135,8 @@ export function NewRentalForm({
           >
             <option value="">בחר מחשב</option>
             {branchLaptops.map((l) => (
-              <option key={l.id} value={l.id}>
-                {l.name} ({l.dayPrice} ₪/יום)
+              <option key={l.id} value={l.id} disabled={busySet.has(l.id)}>
+                {l.name} ({l.dayPrice} ₪/יום){busySet.has(l.id) ? " — מושכר" : ""}
               </option>
             ))}
           </select>
@@ -150,8 +153,8 @@ export function NewRentalForm({
           >
             <option value="">בחר סטיק</option>
             {branchSticks.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.name} ({s.day1} ₪/יום ראשון)
+              <option key={s.id} value={s.id} disabled={busySet.has(s.id)}>
+                {s.name} ({s.day1} ₪/יום ראשון){busySet.has(s.id) ? " — מושכר" : ""}
               </option>
             ))}
           </select>
