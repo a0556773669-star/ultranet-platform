@@ -51,20 +51,24 @@ export async function importClientsAction(formData: FormData) {
 
   let created = 0;
   let updated = 0;
-  let skipped = errors.length;
+  const skipReasons: string[] = [...errors];
 
   for (const row of rows) {
     let branchId = myBranchId ?? "";
     if (isOwner) {
       const resolved = row.branchName ? branchIdByName.get(row.branchName.trim()) : undefined;
       if (!resolved) {
-        skipped++;
+        skipReasons.push(
+          row.branchName
+            ? `הלקוח "${row.name}": לא נמצא סניף השכרות בשם "${row.branchName}" (ודא שם מדויק כפי שמופיע במערכת)`
+            : `הלקוח "${row.name}": עמודת הסניף ריקה`
+        );
         continue;
       }
       branchId = resolved;
     }
     if (!branchId) {
-      skipped++;
+      skipReasons.push(`הלקוח "${row.name}": המשתמש שלך אינו משויך לסניף - פנה למנהל המערכת`);
       continue;
     }
 
@@ -109,7 +113,14 @@ export async function importClientsAction(formData: FormData) {
   }
 
   revalidatePath("/dashboard/rentals/clients");
-  redirect(`/dashboard/rentals/clients?imported=${created}&updated=${updated}&skipped=${skipped}`);
+  const params = new URLSearchParams();
+  params.set("imported", String(created));
+  params.set("updated", String(updated));
+  params.set("skipped", String(skipReasons.length));
+  const MAX_REASONS = 8;
+  for (const reason of skipReasons.slice(0, MAX_REASONS)) params.append("reason", reason);
+  if (skipReasons.length > MAX_REASONS) params.set("reasonMore", String(skipReasons.length - MAX_REASONS));
+  redirect(`/dashboard/rentals/clients?${params.toString()}`);
 }
 
 export async function createClientAction(formData: FormData) {
