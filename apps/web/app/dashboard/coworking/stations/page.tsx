@@ -17,9 +17,9 @@ export default async function StationsPage() {
     db.collection("n_cw_stations").get(),
     db.collection("n_branches").get(),
   ]);
-  const branches = branchesSnap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<Branch, "id">) }) as Branch);
+  const branches = branchesSnap.docs.map((d) => ({ ...(d.data() as Omit<Branch, "id">), id: d.id }) as Branch);
   const allStations = stationsSnap.docs.map(
-    (d) => ({ id: d.id, ...(d.data() as Omit<CoworkingStation, "id">) }) as CoworkingStation,
+    (d) => ({ ...(d.data() as Omit<CoworkingStation, "id">), id: d.id }) as CoworkingStation,
   );
   const stations = role === "owner" ? allStations : allStations.filter((s) => s.branchId === myBranchId);
   const branchName = (id: string) => branches.find((b) => b.id === id)?.name ?? "-";

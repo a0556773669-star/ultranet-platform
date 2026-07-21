@@ -86,10 +86,17 @@ export interface VariableExpense {
 
 /**
  * collection: n_branch_income (manual/rental/coworking income entries for partner branches).
- * Also used for computer-room branches' monthly income tracking row
- * (/dashboard/computer-rooms-accounting): one manual row per branch per month, purely for
- * viewing setup-investment vs. profit per branch. Deliberately NOT written to n_ah_income -
- * it does not reconcile into the main ledger or the home dashboard totals.
+ * Also used for:
+ *  - rentals branches: owner-only manual income log (/dashboard/rentals/expenses/[id]) that IS
+ *    merged into the branch's real income figures/partner-settlement calc
+ *    (computeBranchFinancials, lib/branch-accounting-data.ts) exactly like a real rental
+ *    payment - `collectedByOwner` says who currently holds that cash, same meaning as a real
+ *    rental's payment method/route for that calc.
+ *  - computer-room branches' monthly income tracking row (/dashboard/computer-rooms-accounting):
+ *    one manual row per branch per month, purely for viewing setup-investment vs. profit per
+ *    branch - NOT merged into any calculation there.
+ * Deliberately NEVER written to n_ah_income in either case - it does not reconcile into the main
+ * ledger or the home dashboard totals.
  */
 export interface BranchIncome {
     id: string;
@@ -100,6 +107,9 @@ export interface BranchIncome {
     month: string;
     collectionRouteId?: string | null;
     paymentMethod?: string;
+    /** rentals only: true if the owner already personally holds this cash (mirrors
+     *  isCollectedByOwner for real rentals) - affects the partner-settlement direction. */
+    collectedByOwner?: boolean;
 }
 
 /** collection: n_tasks */

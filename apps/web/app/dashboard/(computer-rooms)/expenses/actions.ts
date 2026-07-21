@@ -102,6 +102,10 @@ export async function updateFixedExpenseAction(id: string, branchId: string, for
   const data = { name, amount, startDate, category: category ?? FieldValue.delete(), paidBy, owedBy };
   await ref.set(data, { merge: true });
   revalidatePath(`/dashboard/expenses/${branchId}`);
+  revalidatePath("/dashboard/accounting");
+  revalidatePath("/dashboard/computer-rooms-accounting");
+  revalidatePath(`/dashboard/computer-rooms-accounting/${branchId}`);
+  revalidatePath("/dashboard");
 }
 
 export async function createVariableExpenseAction(branchId: string, formData: FormData) {
@@ -195,6 +199,9 @@ export async function updateVariableExpenseAction(id: string, branchId: string, 
   await ref.set(data, { merge: true });
   revalidatePath(`/dashboard/expenses/${branchId}`);
   revalidatePath("/dashboard/accounting");
+  revalidatePath("/dashboard/computer-rooms-accounting");
+  revalidatePath(`/dashboard/computer-rooms-accounting/${branchId}`);
+  revalidatePath("/dashboard");
 }
 
 export async function deleteVariableExpenseAction(id: string, branchId: string) {

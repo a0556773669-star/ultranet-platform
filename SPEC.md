@@ -153,7 +153,7 @@ pnpm dev        # turbo run dev — מריץ web + api
 | `n_users` | `AppUser` | משתמשים; תפקיד, סניף, `perms`, `viewClientBranchIds` |
 | `n_fixed_expenses` | `FixedExpense` | הוצאות קבועות לסניף |
 | `n_var_expenses` | `VariableExpense` | הוצאות משתנות (לפי חודש) |
-| `n_branch_income` | `BranchIncome` | הכנסות סניף (שותפים); גם שורות הכנסה חודשיות ידניות לדשבורד "השקעה מול רווח" של חדרי מחשבים - לא נכתב ל-`n_ah_income` |
+| `n_branch_income` | `BranchIncome` | הכנסות סניף; שורות הכנסה ידניות owner-only בדף `/dashboard/rentals/expenses/[id]` - מתחשבנות כמו השכרה רגילה בחישוב ההשכרות (`computeBranchFinancials`), וגם שורות ידניות נפרדות בדשבורד "השקעה מול רווח" של חדרי מחשבים (שם לא מחושבות בשום מקום) - בשני המקרים לעולם לא נכתב ל-`n_ah_income`, לא משפיע על הנה"ח הראשית |
 | `n_tasks` | `Task` | משימות (דחיפות, חזרתיות, בוצע) |
 | `n_sub_locations` | `SubLocation` | תתי-מיקומים בסניף |
 | `n_devices` | `Device` | מכשירים/מחשבים בחדרי מחשבים |
@@ -217,6 +217,9 @@ pnpm dev        # turbo run dev — מריץ web + api
 - **`/computer-rooms-accounting`** (perm: `computers`) — דשבורד "השקעה מול רווח" פר סניף חדר
   מחשבים: **עלות הקמה** (`Branch.setupCost`), **הוצאות עד היום כולל הקמה** (הקמה + הוצאות
   הסניף + חלקו בהוצאות המשותפות), **הכנסות עד היום**, ו**רווח מוחזק** (הכנסות פחות הוצאות).
+  עלות ההקמה נספרת גם ב**סה"כ הוצאות בהנה"ח הראשית** (`loadComputerRoomSetupCostTotal`,
+  `apps/web/lib/computer-room-accounting.ts`) - במלואה, כהוצאת בעלים, ללא תלות בחודש/יום (זה
+  סכום חד-פעמי, לא עסקה מתוארכת).
   ההכנסות כאן הן שורה ידנית אחת לחודש שמוסיפים לכל סניף (`n_branch_income`,
   `addBranchIncomeAction`) - **מעקב סטטוס בלבד**, לא נכתב ל-`n_ah_income` ולכן לא מתחשבן
   בהנה"ח הראשית ולא בדף הבית. owner רואה סקירת כל הסניפים ונכנס לכל סניף בנפרד; partner/עובד
@@ -228,7 +231,15 @@ pnpm dev        # turbo run dev — מריץ web + api
 - **`/new`** — יצירת השכרה חדשה (`new-rental-form.tsx`). בחירת הלקוח מתבצעת דרך
   `CustomerCombobox` (`customer-combobox.tsx`) — תיבת חיפוש-והשלמה שמסננת בזמן
   הקלדה לפי שם/טלפון מתוך לקוחות הסניף שנבחר (סינון בצד הלקוח על רשימה שכבר
-  נטענה), ולא רשימה נפתחת מלאה; בחירת סניף מאפסת את הלקוח שנבחר.
+  נטענה), ולא רשימה נפתחת מלאה; בחירת סניף מאפסת את הלקוח שנבחר. מכיוון
+  שהשכרה נשארת `status: "active"` ללא תאריך סיום קבוע עד להחזרה מפורשת
+  (`markReturnedAction`/`closeRentalAction`), לא ניתן לפתוח השכרה נוספת על אותו
+  פריט (מחשב/סטיק) כל עוד יש לו כבר השכרה פעילה: הדף טוען את רשימת ה-`itemId`
+  המושכרים כרגע (`n_rentals` עם `status == "active"`) ומעביר אותה ל-`NewRentalForm`,
+  שמנטרלת ומסמנת "מושכר כרגע" את האפשרויות המתאימות בתיבת הבחירה ומציגה הודעת
+  אזהרה; `createRentalAction` (`../actions.ts`) חוסם את היצירה גם בצד השרת
+  (`error=already-rented`) למקרה מרוץ שבו שני משתמשים מנסים להשכיר את אותו
+  פריט בו-זמנית.
 - **`/laptops`** — ניהול מחשבים ניידים + תמחור (CRUD).
 - **`/clients`** — לקוחות: מסך הרשימה נפתח ללא טופס הוספה גלוי — כפתור
   "הוספת לקוח" בפינה השמאלית העליונה (`clients-header.tsx`, קומפוננטת
@@ -269,7 +280,16 @@ pnpm dev        # turbo run dev — מריץ web + api
 - **`/expenses`** — הוצאות סניף השכרות (`n_fixed_expenses`/`n_var_expenses`), כולל "סניף" מדומה
   **`shared-rentals`** (`SHARED_RENTALS_BRANCH_ID`, `apps/web/lib/expense-shared-scope.ts`)
   להוצאות משותפות לכל סניפי ההשכרות יחד. ראו סעיף 8 (חדרי מחשבים → `/expenses`) ו-10 להסבר
-  המלא על איך הוצאות אלה מתחשבנות בהנה"ח הראשית.
+  המלא על איך הוצאות אלה מתחשבנות בהנה"ח הראשית. באותו דף, לכל סניף אמיתי (לא `shared-rentals`)
+  יש גם קטע **"הכנסות" - owner בלבד** (`addBranchIncomeAction`/`deleteBranchIncomeAction`,
+  `apps/web/app/dashboard/rentals/expenses/actions.ts`): הזנה ידנית של הבעלים (למשל הכנסות
+  ישנות שלא נרשמו כהשכרות במערכת), נכתבת ל-`n_branch_income` עם שדה `collectedByOwner` (מוצג
+  רק כשלסניף יש שותף - "מי מחזיק כרגע בכסף", אני/השותף). היא **מתנהגת כמו הכנסת השכרה רגילה**:
+  `buildManualIncomeLines` (`apps/web/lib/branch-accounting-data.ts`) ממזגת אותה לתוך אותן
+  income lines ש-`computeBranchFinancials` בונה מהשכרות אמיתיות, כך שהיא נכנסת ל"הכנסות
+  החודש"/"הכנסות עד היום" ולמאזן ההעברה החודשית ב-`/dashboard/rentals/accounting` בדיוק כמו כל
+  הכנסת השכרה אחרת. מה שכן נשאר זהה לכל הכנסת השכרה: היא **לעולם לא** נכתבת ל-`n_ah_income` -
+  מגיעה להנה"ח הראשית רק אם הבעלים מקליד אותה שם ידנית (סוג הכנסה `laptops`).
 - **`/accounting`** — הנה"ח ברמת סניף השכרות: תצוגת סניף/בעלים, סימון העברות
   (`mark-transferred-button.tsx`, `n_branch_transfers`).
 - **`/branches`** — ניהול סניפי השכרה + audit הרשאות.
@@ -334,6 +354,13 @@ paidBy, owedBy)` (`apps/web/lib/branch-accounting.ts`), שדורש **שני** ת
   במלואו, בלי חלוקה פר-סניף) - החודש ועד היום - ומתווספת מעל סכום `n_ah_expenses` בדף
   `/dashboard/accounting` (סה"כ הוצאות) ובדף הבית (הוצאות החודש). אין ל"היום" (יומי) משמעות
   עבור הוצאה חודשית קבועה, ולכן היא לא נכללת בחישובי "הוצאות היום".
+- **עלות הקמת סניפי חדרי מחשבים (`Branch.setupCost`)** - נספרת גם היא, בנפרד מהכלל של
+  `ownerLedgerExpenseAmount` למעלה (אין `paidBy`/`owedBy` על שדה ההקמה - זו תמיד הוצאת בעלים
+  במלואה). `loadComputerRoomSetupCostTotal` (`apps/web/lib/computer-room-accounting.ts`) מסכמת
+  בזמן אמת את `setupCost` של כל סניפי `computers` ומתווספת מעל `n_ah_expenses` ב-
+  `/dashboard/accounting` (סה"כ הוצאות) - בדיוק כמו הוצאות קבועות, גם זו לא רשומה מתוארכת ולא
+  משפיעה על "הוצאות היום"/"הוצאות החודש" (אין לה תאריך משמעותי, זה סכום חד-פעמי מצטבר). ראו גם
+  `/computer-rooms-accounting` בסעיף 8.
 - **חשוב:** `ownerExpenseBurden(amount, owedBy)` (בלי תלות ב-`paidBy`) עדיין קיימת בנפרד
   ומשמשת את דשבורדי "השקעה מול רווח" (`computeBranchFinancials` בהשכרות,
   `computer-room-accounting.ts` בחדרי מחשבים) - שם רוצים את העלות הכלכלית האמיתית של הסניף

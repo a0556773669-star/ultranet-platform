@@ -44,7 +44,7 @@ export async function importClientsAction(formData: FormData) {
 
   const db = getAdminFirestore();
   const branchesSnap = await db.collection("n_branches").where("branchType", "==", "rentals").get();
-  const branches = branchesSnap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<Branch, "id">) }));
+  const branches = branchesSnap.docs.map((d) => ({ ...(d.data() as Omit<Branch, "id">), id: d.id }));
   const branchIdByName = new Map(branches.map((b) => [b.name.trim(), b.id]));
 
   let created = 0;
@@ -374,6 +374,16 @@ export async function createRentalAction(formData: FormData) {
   }
   if (!clientId || !itemId || !startDate) {
     redirect("/dashboard/rentals/new?error=missing");
+  }
+
+  const activeForItem = await getAdminFirestore()
+    .collection("n_rentals")
+    .where("itemId", "==", itemId)
+    .where("status", "==", "active")
+    .limit(1)
+    .get();
+  if (!activeForItem.empty) {
+    redirect("/dashboard/rentals/new?error=already-rented");
   }
 
   let calcPrice = 0;

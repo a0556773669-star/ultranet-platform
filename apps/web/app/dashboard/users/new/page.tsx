@@ -8,7 +8,7 @@ export default async function NewUserPage() {
   await requireOwner();
   const db = getAdminFirestore();
   const branchesSnap = await db.collection("n_branches").get();
-  const branches = branchesSnap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<Branch, "id">) })) as Branch[];
+  const branches = branchesSnap.docs.map((d) => ({ ...(d.data() as Omit<Branch, "id">), id: d.id })) as Branch[];
 
   return (
     <div>

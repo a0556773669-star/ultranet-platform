@@ -32,7 +32,7 @@ export default async function UsersPage() {
     branchesSnap.docs.map((d) => [d.id, (d.data().name as string | undefined) ?? d.id])
   );
   const users = usersSnap.docs
-    .map((d) => ({ id: d.id, ...(d.data() as Omit<AppUser, "id">) }))
+    .map((d) => ({ ...(d.data() as Omit<AppUser, "id">), id: d.id }))
     .sort((a, b) => a.name.localeCompare(b.name, "he"));
 
   return (

@@ -1,8 +1,10 @@
 /**
  * Investment-vs-profit tracking for חדרי מחשבים (computer-room) branches.
  * Deliberately separate from n_ah_income/n_ah_expenses (the main ledger): this is a
- * per-branch view of setup cost, money spent, and money in, for owner/partner visibility only.
- * It never reconciles into the main accounting totals or the home dashboard.
+ * per-branch view of money spent (beyond setup) and money in, for owner/partner visibility only.
+ * It never reconciles into the main accounting totals or the home dashboard - EXCEPT for setup
+ * cost itself (see loadComputerRoomSetupCostTotal below), which the owner funds in full and
+ * which IS included in the main ledger's total expenses (/dashboard/accounting).
  */
 import { getAdminFirestore } from "./firebase-admin";
 import type { Branch, FixedExpense, VariableExpense, BranchIncome } from "@ultranet/shared-types";
@@ -61,14 +63,14 @@ export async function loadComputerRoomAccounting(): Promise<ComputerRoomAccounti
   ]);
 
   const branches = branchesSnap.docs
-    .map((d) => ({ id: d.id, ...(d.data() as Omit<Branch, "id">) }) as Branch)
+    .map((d) => ({ ...(d.data() as Omit<Branch, "id">), id: d.id }) as Branch)
     .sort((a, b) => a.name.localeCompare(b.name, "he"));
 
-  const allFixed = fixedSnap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<FixedExpense, "id">) }) as FixedExpense);
+  const allFixed = fixedSnap.docs.map((d) => ({ ...(d.data() as Omit<FixedExpense, "id">), id: d.id }) as FixedExpense);
   const allVariable = variableSnap.docs.map(
-    (d) => ({ id: d.id, ...(d.data() as Omit<VariableExpense, "id">) }) as VariableExpense,
+    (d) => ({ ...(d.data() as Omit<VariableExpense, "id">), id: d.id }) as VariableExpense,
   );
-  const allIncome = incomeSnap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<BranchIncome, "id">) }) as BranchIncome);
+  const allIncome = incomeSnap.docs.map((d) => ({ ...(d.data() as Omit<BranchIncome, "id">), id: d.id }) as BranchIncome);
 
   const branchIds = new Set(branches.map((b) => b.id));
   const month = currentMonth();
@@ -106,4 +108,16 @@ export async function loadComputerRoomAccounting(): Promise<ComputerRoomAccounti
   }
 
   return { branches, statsByBranch, sharedFixed, sharedVariable, sharedExpenseTotal, incomesByBranch };
+}
+
+/**
+ * Total one-time setup cost across all computer-room branches (Branch.setupCost). Counted in
+ * full as the owner's expense (the owner is the one who funds/records branch setup) - included
+ * in the main ledger's total expenses (/dashboard/accounting) on top of n_ah_expenses. Not a
+ * dated transaction (no month/today bucket), so it only affects the all-time total, not
+ * month/today breakdowns.
+ */
+export async function loadComputerRoomSetupCostTotal(): Promise<number> {
+  const snap = await getAdminFirestore().collection("n_branches").where("branchType", "==", "computers").get();
+  return snap.docs.reduce((sum, d) => sum + ((d.data() as { setupCost?: number }).setupCost ?? 0), 0);
 }

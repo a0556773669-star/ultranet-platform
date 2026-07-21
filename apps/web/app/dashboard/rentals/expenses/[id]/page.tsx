@@ -4,7 +4,7 @@ import { Banknote, ArrowLeft } from "lucide-react";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { getAdminFirestore } from "@/lib/firebase-admin";
-import type { Branch, FixedExpense, VariableExpense } from "@ultranet/shared-types";
+import type { Branch, FixedExpense, VariableExpense, BranchIncome } from "@ultranet/shared-types";
 import { SHARED_RENTALS_BRANCH_ID } from "@/lib/expense-shared-scope";
 import { getOwnerName, resolveSharedPartnerName, branchPartnerName } from "@/lib/owner-name";
 import { BranchExpenses } from "../branch-expenses";
@@ -43,15 +43,23 @@ export default async function BranchExpensesPage({ params }: { params: { id: str
     db.collection("n_var_expenses").where("branchId", "==", params.id).get(),
   ]);
   const fixedExpenses = fixedSnap.docs
-    .map((d) => ({ id: d.id, ...(d.data() as Omit<FixedExpense, "id">) }) as FixedExpense)
+    .map((d) => ({ ...(d.data() as Omit<FixedExpense, "id">), id: d.id }) as FixedExpense)
     .sort((a, b) => b.startDate.localeCompare(a.startDate));
   const variableExpenses = variableSnap.docs
-    .map((d) => ({ id: d.id, ...(d.data() as Omit<VariableExpense, "id">) }) as VariableExpense)
+    .map((d) => ({ ...(d.data() as Omit<VariableExpense, "id">), id: d.id }) as VariableExpense)
     .sort((a, b) => b.date.localeCompare(a.date));
 
   const hiddenFromPartner = (e: { paidBy?: string; owedBy?: string }) => e.paidBy === "owner" && e.owedBy === "owner";
   const visibleFixed = isOwner || !isPartner ? fixedExpenses : fixedExpenses.filter((e) => !hiddenFromPartner(e));
   const visibleVariable = isOwner || !isPartner ? variableExpenses : variableExpenses.filter((e) => !hiddenFromPartner(e));
+
+  let branchIncomes: BranchIncome[] = [];
+  if (isOwner && !isShared) {
+    const incomeSnap = await db.collection("n_branch_income").where("branchId", "==", params.id).get();
+    branchIncomes = incomeSnap.docs
+      .map((d) => ({ ...(d.data() as Omit<BranchIncome, "id">), id: d.id }) as BranchIncome)
+      .sort((a, b) => b.date.localeCompare(a.date));
+  }
 
   return (
     <div className="flex flex-col gap-4">
@@ -73,6 +81,8 @@ export default async function BranchExpensesPage({ params }: { params: { id: str
         partnerName={partnerName}
         canManage={isOwner || isPartner}
         canAdd={isOwner || isPartner}
+        isOwner={isOwner}
+        branchIncomes={branchIncomes}
         fixedExpenses={visibleFixed}
         variableExpenses={visibleVariable}
       />

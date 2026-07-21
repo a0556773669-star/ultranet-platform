@@ -22,7 +22,7 @@ export default async function ExpensesHomePage() {
 
   const db = getAdminFirestore();
   const snap = await db.collection("n_branches").where("branchType", "==", "rentals").get();
-  const branches = snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<Branch, "id">) }) as Branch);
+  const branches = snap.docs.map((d) => ({ ...(d.data() as Omit<Branch, "id">), id: d.id }) as Branch);
 
   return (
     <div>

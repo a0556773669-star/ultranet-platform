@@ -8,6 +8,7 @@ import CollectModal from "./collect-modal";
 import { DeleteEntryButton } from "./delete-entry-button";
 import { EditExpenseModal } from "./edit-expense-modal";
 import { loadOwnerFixedExpenseBurden } from "@/lib/owner-expense-burden";
+import { loadComputerRoomSetupCostTotal } from "@/lib/computer-room-accounting";
 
 const BUSINESS_LABELS: Record<string, string> = {
   computers: "מחשבים",
@@ -43,17 +44,17 @@ export default async function AccountingPage() {
     db.collection("n_branches").get(),
   ]);
   const income = incomeSnap.docs
-    .map((d) => ({ id: d.id, ...(d.data() as Omit<AccountingIncome, "id">) }) as AccountingIncome)
+    .map((d) => ({ ...(d.data() as Omit<AccountingIncome, "id">), id: d.id }) as AccountingIncome)
     .sort((a, b) => b.date.localeCompare(a.date));
   const expenses = expenseSnap.docs
-    .map((d) => ({ id: d.id, ...(d.data() as Omit<AccountingExpense, "id">) }) as AccountingExpense)
+    .map((d) => ({ ...(d.data() as Omit<AccountingExpense, "id">), id: d.id }) as AccountingExpense)
     .sort((a, b) => b.date.localeCompare(a.date));
 
   const routes = routesSnap.docs.map(
-    (d) => ({ id: d.id, ...(d.data() as Omit<CollectionRoute, "id">) }) as CollectionRoute,
+    (d) => ({ ...(d.data() as Omit<CollectionRoute, "id">), id: d.id }) as CollectionRoute,
   );
 
-  const branches = branchesSnap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<Branch, "id">) }) as Branch);
+  const branches = branchesSnap.docs.map((d) => ({ ...(d.data() as Omit<Branch, "id">), id: d.id }) as Branch);
   const laptopBranches = branches
     .filter((b) => b.branchType === "rentals")
     .sort((a, b) => a.name.localeCompare(b.name, "he"));
@@ -63,9 +64,11 @@ export default async function AccountingPage() {
   const creditDefaultDate = `${new Date().toISOString().slice(0, 7)}-10`;
 
   const fixedExpenseBurden = await loadOwnerFixedExpenseBurden();
+  const computerRoomSetupCostTotal = await loadComputerRoomSetupCostTotal();
 
   const totalIncome = income.reduce((sum, i) => sum + i.amount, 0);
-  const totalExpenses = expenses.reduce((sum, e) => sum + e.amount, 0) + fixedExpenseBurden.toDate;
+  const totalExpenses =
+    expenses.reduce((sum, e) => sum + e.amount, 0) + fixedExpenseBurden.toDate + computerRoomSetupCostTotal;
 
   return (
     <div>
@@ -92,7 +95,11 @@ export default async function AccountingPage() {
           <span className="absolute right-0 top-0 h-full w-1 bg-red-500" />
           <p className="text-[11px] font-bold uppercase tracking-wide text-muted">סה&quot;כ הוצאות</p>
           <p className="mt-1 text-2xl font-black text-red-600">{totalExpenses.toLocaleString()} ₪</p>
-          <p className="mt-1 text-[11px] text-muted">כולל ₪{Math.round(fixedExpenseBurden.toDate).toLocaleString()} חלק הבעלים בהוצאות קבועות (ניידים + חדרי מחשבים)</p>
+          <p className="mt-1 text-[11px] text-muted">
+            כולל ₪{Math.round(fixedExpenseBurden.toDate).toLocaleString()} חלק הבעלים בהוצאות
+            קבועות (ניידים + חדרי מחשבים), וכולל ₪{Math.round(computerRoomSetupCostTotal).toLocaleString()}
+            {" "}עלות הקמת סניפי חדרי מחשבים
+          </p>
         </div>
         <div className="relative overflow-hidden rounded-card border border-card-border bg-white p-4 shadow-card">
           <span className="absolute right-0 top-0 h-full w-1 bg-teal" />
@@ -158,7 +165,9 @@ export default async function AccountingPage() {
         שילם בפועל&quot; = אני), ואז רק את החלק שבאמת נשאר עליי (לפי &quot;על מי החוב&quot;): הוצאה
         שכל החוב עליה על השותף לא נספרת בכלל, הוצאה משותפת נספרת לפי חצי, והוצאה שכולה עליי
         נספרת במלואה. הוצאה שהשותף שילם בפועל לא נספרת כאן כלל, גם אם חלק/כל החוב עליי - היא
-        מתקזזת מול ההעברה החודשית שלו אליי במקום (ולא נגבית בפועל בנפרד).
+        מתקזזת מול ההעברה החודשית שלו אליי במקום (ולא נגבית בפועל בנפרד). עלות הקמת סניפי חדרי
+        מחשבים (&quot;עלות הקמה&quot; בטופס הסניף) נספרת כאן במלואה כהוצאת בעלים, כי אני זה שמממן
+        אותה.
       </p>
       <div className="mb-6 grid grid-cols-1 gap-3 lg:grid-cols-2">
         <form action={createExpenseAction} className="flex flex-col gap-2.5 rounded-card border border-card-border bg-white p-4 shadow-card">

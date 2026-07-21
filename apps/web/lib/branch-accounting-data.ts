@@ -7,6 +7,7 @@ import type {
   CollectionRoute,
   Laptop,
   BranchTransfer,
+  BranchIncome,
 } from "@ultranet/shared-types";
 import {
   ownerExpenseBurden,
@@ -66,6 +67,17 @@ function buildIncomeLines(rentals: Rental[], routesById: Map<string, CollectionR
     });
 }
 
+/** Owner's manual income log (n_branch_income) treated exactly like real rental income - merged
+ *  into the same income lines so it counts in "הכנסות החודש"/"הכנסות עד היום" and the
+ *  partner-settlement calc, without ever touching n_ah_income (the main ledger). */
+function buildManualIncomeLines(entries: BranchIncome[]): DatedIncomeLine[] {
+  return entries.map((i) => ({
+    amount: i.amount || 0,
+    collectedByOwner: i.collectedByOwner ?? false,
+    month: i.date.slice(0, 7),
+  }));
+}
+
 export interface BranchFinancials {
   branch: Branch;
   incomeThisMonth: number; // partner's P&L share
@@ -90,25 +102,28 @@ export interface BranchAccountingRawData {
   laptopsByBranch: Map<string, Laptop[]>;
   routesById: Map<string, CollectionRoute>;
   transfersByBranchMonth: Map<string, BranchTransfer>; // key: `${branchId}|${month}`
+  branchIncomeByBranch: Map<string, BranchIncome[]>;
 }
 
 export async function loadBranchAccountingRawData(): Promise<BranchAccountingRawData> {
   const db = getAdminFirestore();
-  const [branchesSnap, fixedSnap, variableSnap, rentalsSnap, laptopsSnap, routesSnap, transfersSnap] = await Promise.all([
-    db.collection("n_branches").get(),
-    db.collection("n_fixed_expenses").get(),
-    db.collection("n_var_expenses").get(),
-    db.collection("n_rentals").get(),
-    db.collection("n_laptops").get(),
-    db.collection("n_collection_routes").get(),
-    db.collection("n_branch_transfers").get(),
-  ]);
+  const [branchesSnap, fixedSnap, variableSnap, rentalsSnap, laptopsSnap, routesSnap, transfersSnap, branchIncomeSnap] =
+    await Promise.all([
+      db.collection("n_branches").get(),
+      db.collection("n_fixed_expenses").get(),
+      db.collection("n_var_expenses").get(),
+      db.collection("n_rentals").get(),
+      db.collection("n_laptops").get(),
+      db.collection("n_collection_routes").get(),
+      db.collection("n_branch_transfers").get(),
+      db.collection("n_branch_income").get(),
+    ]);
 
-  const branches = branchesSnap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<Branch, "id">) }) as Branch);
+  const branches = branchesSnap.docs.map((d) => ({ ...(d.data() as Omit<Branch, "id">), id: d.id }) as Branch);
 
   const fixedByBranch = new Map<string, FixedExpense[]>();
   for (const d of fixedSnap.docs) {
-    const e = { id: d.id, ...(d.data() as Omit<FixedExpense, "id">) } as FixedExpense;
+    const e = { ...(d.data() as Omit<FixedExpense, "id">), id: d.id } as FixedExpense;
     const arr = fixedByBranch.get(e.branchId) ?? [];
     arr.push(e);
     fixedByBranch.set(e.branchId, arr);
@@ -116,7 +131,7 @@ export async function loadBranchAccountingRawData(): Promise<BranchAccountingRaw
 
   const variableByBranch = new Map<string, VariableExpense[]>();
   for (const d of variableSnap.docs) {
-    const e = { id: d.id, ...(d.data() as Omit<VariableExpense, "id">) } as VariableExpense;
+    const e = { ...(d.data() as Omit<VariableExpense, "id">), id: d.id } as VariableExpense;
     const arr = variableByBranch.get(e.branchId) ?? [];
     arr.push(e);
     variableByBranch.set(e.branchId, arr);
@@ -124,7 +139,7 @@ export async function loadBranchAccountingRawData(): Promise<BranchAccountingRaw
 
   const rentalsByBranch = new Map<string, Rental[]>();
   for (const d of rentalsSnap.docs) {
-    const r = { id: d.id, ...(d.data() as Omit<Rental, "id">) } as Rental;
+    const r = { ...(d.data() as Omit<Rental, "id">), id: d.id } as Rental;
     const arr = rentalsByBranch.get(r.branchId) ?? [];
     arr.push(r);
     rentalsByBranch.set(r.branchId, arr);
@@ -132,7 +147,7 @@ export async function loadBranchAccountingRawData(): Promise<BranchAccountingRaw
 
   const laptopsByBranch = new Map<string, Laptop[]>();
   for (const d of laptopsSnap.docs) {
-    const l = { id: d.id, ...(d.data() as Omit<Laptop, "id">) } as Laptop;
+    const l = { ...(d.data() as Omit<Laptop, "id">), id: d.id } as Laptop;
     const arr = laptopsByBranch.get(l.branchId) ?? [];
     arr.push(l);
     laptopsByBranch.set(l.branchId, arr);
@@ -140,16 +155,33 @@ export async function loadBranchAccountingRawData(): Promise<BranchAccountingRaw
 
   const routesById = new Map<string, CollectionRoute>();
   for (const d of routesSnap.docs) {
-    routesById.set(d.id, { id: d.id, ...(d.data() as Omit<CollectionRoute, "id">) } as CollectionRoute);
+    routesById.set(d.id, { ...(d.data() as Omit<CollectionRoute, "id">), id: d.id } as CollectionRoute);
   }
 
   const transfersByBranchMonth = new Map<string, BranchTransfer>();
   for (const d of transfersSnap.docs) {
-    const t = { id: d.id, ...(d.data() as Omit<BranchTransfer, "id">) } as BranchTransfer;
+    const t = { ...(d.data() as Omit<BranchTransfer, "id">), id: d.id } as BranchTransfer;
     transfersByBranchMonth.set(`${t.branchId}|${t.month}`, t);
   }
 
-  return { branches, fixedByBranch, variableByBranch, rentalsByBranch, laptopsByBranch, routesById, transfersByBranchMonth };
+  const branchIncomeByBranch = new Map<string, BranchIncome[]>();
+  for (const d of branchIncomeSnap.docs) {
+    const i = { ...(d.data() as Omit<BranchIncome, "id">), id: d.id } as BranchIncome;
+    const arr = branchIncomeByBranch.get(i.branchId) ?? [];
+    arr.push(i);
+    branchIncomeByBranch.set(i.branchId, arr);
+  }
+
+  return {
+    branches,
+    fixedByBranch,
+    variableByBranch,
+    rentalsByBranch,
+    laptopsByBranch,
+    routesById,
+    transfersByBranchMonth,
+    branchIncomeByBranch,
+  };
 }
 
 /** ownerPct for a branch's own split (not counting parent-branch cuts). */
@@ -165,8 +197,10 @@ export function computeBranchFinancials(branch: Branch, raw: BranchAccountingRaw
   const rentals = raw.rentalsByBranch.get(branch.id) ?? [];
   const laptops = raw.laptopsByBranch.get(branch.id) ?? [];
 
+  const branchIncome = raw.branchIncomeByBranch.get(branch.id) ?? [];
+
   const expenseLines = expandExpenseLines(fixed, variable, month);
-  const incomeLines = buildIncomeLines(rentals, raw.routesById);
+  const incomeLines = [...buildIncomeLines(rentals, raw.routesById), ...buildManualIncomeLines(branchIncome)];
 
   const ownerPct = branchOwnerPct(branch);
   const partnerPct = 100 - ownerPct;

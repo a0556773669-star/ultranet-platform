@@ -26,6 +26,7 @@ export default async function RentalsAccountingPage({
   const isOwner = session.user?.role === "owner";
   const myBranchId = session.user?.branchId;
 
+  const db = getAdminFirestore();
   const raw = await loadBranchAccountingRawData();
   const month = getCurrentMonth();
   const rentalsBranches = raw.branches.filter((b) => b.branchType === "rentals");
@@ -74,18 +75,17 @@ export default async function RentalsAccountingPage({
     );
   }
 
-  const db = getAdminFirestore();
   const [incomeSnap, expenseSnap] = await Promise.all([
     db.collection("n_ah_income").get(),
     db.collection("n_ah_expenses").get(),
   ]);
 
   const income = incomeSnap.docs
-    .map((d) => ({ id: d.id, ...(d.data() as Omit<AccountingIncome, "id">) }) as AccountingIncome)
+    .map((d) => ({ ...(d.data() as Omit<AccountingIncome, "id">), id: d.id }) as AccountingIncome)
     .filter((i) => i.business === "rentals")
     .sort((a, b) => b.date.localeCompare(a.date));
   const expenses = expenseSnap.docs
-    .map((d) => ({ id: d.id, ...(d.data() as Omit<AccountingExpense, "id">) }) as AccountingExpense)
+    .map((d) => ({ ...(d.data() as Omit<AccountingExpense, "id">), id: d.id }) as AccountingExpense)
     .filter((e) => e.business === "rentals")
     .sort((a, b) => b.date.localeCompare(a.date));
 

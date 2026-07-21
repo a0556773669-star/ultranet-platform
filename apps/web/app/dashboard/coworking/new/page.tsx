@@ -14,10 +14,10 @@ export default async function NewCoworkingClientPage() {
     db.collection("n_branches").get(),
     db.collection("n_cw_stations").get(),
   ]);
-  const allBranches = branchesSnap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<Branch, "id">) }) as Branch);
+  const allBranches = branchesSnap.docs.map((d) => ({ ...(d.data() as Omit<Branch, "id">), id: d.id }) as Branch);
   const branches = role === "owner" ? allBranches : allBranches.filter((b) => b.id === myBranchId);
   const stations = stationsSnap.docs.map(
-    (d) => ({ id: d.id, ...(d.data() as Omit<CoworkingStation, "id">) }) as CoworkingStation,
+    (d) => ({ ...(d.data() as Omit<CoworkingStation, "id">), id: d.id }) as CoworkingStation,
   );
 
   const defaultBranchId = role === "owner" ? (branches[0]?.id ?? "") : (myBranchId ?? "");

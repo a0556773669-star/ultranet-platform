@@ -16,15 +16,15 @@ async function loadData() {
     db.collection("n_branches").where("branchType", "==", "rentals").get(),
     db.collection("n_collection_routes").get(),
   ]);
-  const rentals = rentalsSnap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<Rental, "id">) }) as Rental);
+  const rentals = rentalsSnap.docs.map((d) => ({ ...(d.data() as Omit<Rental, "id">), id: d.id }) as Rental);
   const clients = new Map(clientsSnap.docs.map((d) => [d.id, d.data() as RentalClient]));
-  const laptopsList = laptopsSnap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<Laptop, "id">) }) as Laptop);
-  const sticksList = sticksSnap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<Stick, "id">) }) as Stick);
+  const laptopsList = laptopsSnap.docs.map((d) => ({ ...(d.data() as Omit<Laptop, "id">), id: d.id }) as Laptop);
+  const sticksList = sticksSnap.docs.map((d) => ({ ...(d.data() as Omit<Stick, "id">), id: d.id }) as Stick);
   const laptops = new Map(laptopsList.map((l) => [l.id, l]));
   const sticks = new Map(sticksList.map((s) => [s.id, s]));
-  const branchesList = branchesSnap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<Branch, "id">) }) as Branch);
+  const branchesList = branchesSnap.docs.map((d) => ({ ...(d.data() as Omit<Branch, "id">), id: d.id }) as Branch);
   const branches = new Map(branchesList.map((b) => [b.id, b]));
-  const routesList = routesSnap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<CollectionRoute, "id">) }) as CollectionRoute);
+  const routesList = routesSnap.docs.map((d) => ({ ...(d.data() as Omit<CollectionRoute, "id">), id: d.id }) as CollectionRoute);
   return { rentals, clients, laptops, sticks, laptopsList, sticksList, branches, branchesList, routesList };
 }
 

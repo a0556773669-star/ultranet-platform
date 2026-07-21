@@ -7,7 +7,7 @@ import { requireModuleAccess } from "@/lib/perms";
 async function listBranches(): Promise<Branch[]> {
   const snap = await getAdminFirestore().collection("n_branches").where("branchType", "==", "computers").get();
   return snap.docs
-    .map((d) => ({ id: d.id, ...(d.data() as Omit<Branch, "id">) }) as Branch)
+    .map((d) => ({ ...(d.data() as Omit<Branch, "id">), id: d.id }) as Branch)
     .sort((a, b) => a.name.localeCompare(b.name, "he"));
 }
 

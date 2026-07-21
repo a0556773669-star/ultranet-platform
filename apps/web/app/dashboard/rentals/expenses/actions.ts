@@ -4,7 +4,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { getAdminFirestore } from "@/lib/firebase-admin";
 import { FieldValue } from "firebase-admin/firestore";
-import type { Branch, FixedExpense, VariableExpense } from "@ultranet/shared-types";
+import type { Branch, FixedExpense, VariableExpense, BranchIncome } from "@ultranet/shared-types";
 import { SHARED_RENTALS_BRANCH_ID } from "@/lib/expense-shared-scope";
 import { createLinkedOwnerLedgerExpense, deleteLinkedOwnerLedgerExpense } from "@/lib/branch-expense-ledger";
 
@@ -99,6 +99,9 @@ export async function updateFixedExpenseAction(id: string, branchId: string, for
   const data = { name, amount, startDate, category: category ?? FieldValue.delete(), paidBy, owedBy };
   await ref.set(data, { merge: true });
   revalidatePath(`/dashboard/rentals/expenses/${branchId}`);
+  revalidatePath("/dashboard/accounting");
+  revalidatePath("/dashboard/rentals/accounting");
+  revalidatePath("/dashboard");
 }
 
 export async function createVariableExpenseAction(branchId: string, formData: FormData) {
@@ -191,6 +194,8 @@ export async function updateVariableExpenseAction(id: string, branchId: string, 
   await ref.set(data, { merge: true });
   revalidatePath(`/dashboard/rentals/expenses/${branchId}`);
   revalidatePath("/dashboard/accounting");
+  revalidatePath("/dashboard/rentals/accounting");
+  revalidatePath("/dashboard");
 }
 
 export async function deleteVariableExpenseAction(id: string, branchId: string) {
@@ -202,4 +207,44 @@ export async function deleteVariableExpenseAction(id: string, branchId: string) 
   revalidatePath("/dashboard/accounting");
   revalidatePath("/dashboard/rentals/accounting");
   revalidatePath("/dashboard");
+}
+
+/**
+ * Owner-only manual income log for a rentals branch (e.g. backfilling historical income that
+ * predates the system, or one-off income that didn't go through a rental record). Writes to
+ * n_branch_income, but is treated exactly like a real rental payment: buildManualIncomeLines
+ * (lib/branch-accounting-data.ts) merges it into the same income lines computeBranchFinancials
+ * uses, so it counts in "הכנסות החודש"/"הכנסות עד היום" and the partner-settlement calc on
+ * /dashboard/rentals/accounting, just like all other rentals income. What it deliberately never
+ * does is write to n_ah_income - like all rentals income, it stays internal to the rentals
+ * module and only reaches the main ledger if the owner types it there manually (the "ניידים"
+ * income type).
+ */
+export async function addBranchIncomeAction(branchId: string, formData: FormData) {
+  await requireOwner();
+  const date = String(formData.get("date") ?? "").trim();
+  const amount = Number(formData.get("amount")) || 0;
+  const desc = String(formData.get("desc") ?? "").trim();
+  const collectedByOwner = String(formData.get("collectedByOwner") ?? "partner") === "owner";
+  if (!date || !amount) {
+    throw new Error("חובה למלא תאריך וסכום");
+  }
+  const data: Omit<BranchIncome, "id"> = stripUndefined({
+    branchId,
+    amount,
+    desc: desc || "הכנסה",
+    date,
+    month: date.slice(0, 7),
+    collectedByOwner,
+  });
+  await getAdminFirestore().collection("n_branch_income").add(data);
+  revalidatePath(`/dashboard/rentals/expenses/${branchId}`);
+  revalidatePath("/dashboard/rentals/accounting");
+}
+
+export async function deleteBranchIncomeAction(id: string, branchId: string) {
+  await requireOwner();
+  await getAdminFirestore().collection("n_branch_income").doc(id).delete();
+  revalidatePath(`/dashboard/rentals/expenses/${branchId}`);
+  revalidatePath("/dashboard/rentals/accounting");
 }
