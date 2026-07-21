@@ -197,7 +197,9 @@ pnpm dev        # turbo run dev — מריץ web + api
   מתחלקת שווה בשווה בין הסניפים בחישוב "הוצאות עד היום" בדשבורד ההשקעה-מול-רווח
   (`/computer-rooms-accounting`, ראו להלן), אך **לא** מתחלקת כשהיא מתחשבנת בהנה"ח הראשית (שם
   היא נספרת פעם אחת במלואה, ראו סעיף 10). מסך הבחירה (`/dashboard/expenses`) מציג גם קישור
-  ייעודי להוצאות המשותפות.
+  ייעודי להוצאות המשותפות. שדות "מי שילם בפועל"/"על מי החוב" (`paidBy`/`owedBy`) מוצגים עם
+  שמות אמיתיים - לא "אני"/"השותף" - דרך `apps/web/lib/owner-name.ts`; זה כולל גם את הסניף
+  המדומה המשותף, שקודם לא איפשר לבחור כלל מי שילם.
 - **`/computer-rooms-accounting`** (perm: `computers`) — דשבורד "השקעה מול רווח" פר סניף חדר
   מחשבים: **עלות הקמה** (`Branch.setupCost`), **הוצאות עד היום כולל הקמה** (הקמה + הוצאות
   הסניף + חלקו בהוצאות המשותפות), **הכנסות עד היום**, ו**רווח מוחזק** (הכנסות פחות הוצאות).
@@ -396,6 +398,7 @@ paidBy, owedBy)` (`apps/web/lib/branch-accounting.ts`), שדורש **שני** ת
 | `apps/web/lib/expense-shared-scope.ts` | סנטינלים `SHARED_RENTALS_BRANCH_ID`/`SHARED_COMPUTERS_BRANCH_ID` להוצאות משותפות לכל הסניפים |
 | `apps/web/lib/branch-expense-ledger.ts` | יצירה/מחיקה של רשומת `n_ah_expenses` מקושרת מהוצאה חד-פעמית (חלק הבעלים בלבד) |
 | `apps/web/lib/owner-expense-burden.ts` | חלק הבעלים בהוצאות קבועות/חוזרות (ניידים+חדרי מחשבים), מחושב בזמן אמת עבור הנה"ח הראשית ודף הבית |
+| `apps/web/lib/owner-name.ts` | שמות אמיתיים (לא "אני"/"השותף") לשדות "מי שילם"/"על מי החוב" במסכי הוצאות - `getOwnerName` (שם המשתמש עם `role: "owner"`) ו-`resolveSharedPartnerName` (שם השותף ל"סניף" המדומה המשותף, כשכל סניפי השותפות במודול מסכימים על אותו שותף) |
 | `apps/web/lib/device-trust.ts` | אימות/אמון מכשיר |
 | `apps/web/middleware.ts` | middleware של Next (הגנת נתיבים) |
 | `apps/api/src/branches/*` | מודול NestJS לדוגמה (branches) |

@@ -6,6 +6,7 @@ import { authOptions } from "@/lib/auth";
 import { getAdminFirestore } from "@/lib/firebase-admin";
 import type { Branch, FixedExpense, VariableExpense } from "@ultranet/shared-types";
 import { SHARED_RENTALS_BRANCH_ID } from "@/lib/expense-shared-scope";
+import { getOwnerName, resolveSharedPartnerName, branchPartnerName } from "@/lib/owner-name";
 import { BranchExpenses } from "../branch-expenses";
 
 export default async function BranchExpensesPage({ params }: { params: { id: string } }) {
@@ -21,6 +22,8 @@ export default async function BranchExpensesPage({ params }: { params: { id: str
   const db = getAdminFirestore();
   let branch: Branch | null = null;
   let isPartner = false;
+  let partnerName = "השותף";
+  const ownerName = await getOwnerName(isOwner ? session.user?.name : undefined);
 
   if (!isShared) {
     const doc = await db.collection("n_branches").doc(params.id).get();
@@ -28,6 +31,11 @@ export default async function BranchExpensesPage({ params }: { params: { id: str
     branch = { id: doc.id, ...(doc.data() as Omit<Branch, "id">) } as Branch;
     if (!isOwner && branch.parentBranchId) redirect("/dashboard/rentals");
     isPartner = branch.isMine === false;
+    partnerName = branchPartnerName(branch);
+  } else {
+    const resolved = await resolveSharedPartnerName("rentals");
+    isPartner = resolved.hasPartner;
+    partnerName = resolved.partnerName;
   }
 
   const [fixedSnap, variableSnap] = await Promise.all([
@@ -61,6 +69,8 @@ export default async function BranchExpensesPage({ params }: { params: { id: str
         branchId={params.id}
         isShared={isShared}
         isPartner={isPartner}
+        ownerName={ownerName}
+        partnerName={partnerName}
         canManage={isOwner}
         canAdd={isOwner || isPartner}
         fixedExpenses={visibleFixed}
