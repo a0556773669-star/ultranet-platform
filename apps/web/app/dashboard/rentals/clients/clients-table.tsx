@@ -2,7 +2,7 @@
 
 import { Fragment, useMemo, useState } from "react";
 import Link from "next/link";
-import { Check, X } from "lucide-react";
+import { Check, Search, X } from "lucide-react";
 import type { RentalClient, Branch } from "@ultranet/shared-types";
 import { TokenChargeButton } from "../manage/token-charge-button";
 
@@ -22,18 +22,26 @@ export function ClientsTable({
   canCharge: boolean;
 }) {
   const [scope, setScope] = useState<Scope>("mine");
+  const [search, setSearch] = useState("");
   const [openChargeId, setOpenChargeId] = useState<string | null>(null);
   const [chargeResult, setChargeResult] = useState<Record<string, string>>({});
 
   const myScopeSet = useMemo(() => new Set(myScopeBranchIds), [myScopeBranchIds]);
   const branchName = (id: string) => branches.find((b) => b.id === id)?.name ?? "-";
 
-  const visibleClients =
-    scope === "mine" ? clients.filter((c) => myScopeSet.has(c.branchId)) : clients;
+  const scopedClients = scope === "mine" ? clients.filter((c) => myScopeSet.has(c.branchId)) : clients;
+
+  const visibleClients = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return scopedClients;
+    return scopedClients.filter(
+      (c) => c.name.toLowerCase().includes(q) || (c.phone ?? "").includes(q)
+    );
+  }, [scopedClients, search]);
 
   return (
     <div>
-      <div className="mb-3 flex items-center gap-2">
+      <div className="mb-3 flex flex-wrap items-center gap-2">
         <button
           type="button"
           onClick={() => setScope("mine")}
@@ -56,7 +64,22 @@ export function ClientsTable({
         >
           הצג את של כולם
         </button>
+        <div className="relative mr-auto w-full max-w-xs">
+          <Search className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="חיפוש לקוח לפי שם או טלפון..."
+            className="w-full rounded-[10px] border border-card-border bg-white py-1.5 pl-3 pr-9 text-xs focus:border-teal focus:outline-none"
+          />
+        </div>
       </div>
+      {search && (
+        <p className="mb-2 text-xs font-semibold text-muted">
+          נמצאו {visibleClients.length} לקוחות תואמים
+        </p>
+      )}
 
       <div className="overflow-hidden rounded-card border border-card-border bg-white shadow-card">
         <table className="w-full text-[13px]">

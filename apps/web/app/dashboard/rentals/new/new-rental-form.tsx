@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import type { ChangeEvent } from "react";
 import type { Branch, RentalClient, Laptop, Stick, CollectionRoute } from "@ultranet/shared-types";
 import { createRentalAction } from "../actions";
+import { CustomerCombobox } from "../customer-combobox";
 
 type Props = {
   branches: Branch[];
@@ -29,6 +30,7 @@ export function NewRentalForm({
   lockBranch,
 }: Props) {
   const [branchId, setBranchId] = useState(defaultBranchId);
+  const [clientId, setClientId] = useState("");
   const [startDate, setStartDate] = useState("");
   const [kind, setKind] = useState<"laptop" | "stick">("laptop");
   const [itemId, setItemId] = useState("");
@@ -71,7 +73,10 @@ export function NewRentalForm({
           name="branchId"
           value={branchId}
           disabled={lockBranch}
-          onChange={(e: ChangeEvent<HTMLSelectElement>) => setBranchId(e.target.value)}
+          onChange={(e: ChangeEvent<HTMLSelectElement>) => {
+            setBranchId(e.target.value);
+            setClientId("");
+          }}
           className={FIELD}
         >
           {branches.map((b) => (
@@ -84,14 +89,7 @@ export function NewRentalForm({
 
       <div>
         <label className={LABEL}>לקוח</label>
-        <select name="clientId" required className={FIELD}>
-          <option value="">בחר לקוח</option>
-          {branchClients.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.name}
-            </option>
-          ))}
-        </select>
+        <CustomerCombobox clients={branchClients} value={clientId} onChange={setClientId} />
       </div>
 
       <div>
@@ -213,7 +211,8 @@ export function NewRentalForm({
 
       <button
         type="submit"
-        className="mt-1 self-start rounded-[10px] bg-gradient-to-br from-teal to-teal-light px-6 py-2 text-sm font-bold text-white shadow-primary transition hover:opacity-90"
+        disabled={!clientId}
+        className="mt-1 self-start rounded-[10px] bg-gradient-to-br from-teal to-teal-light px-6 py-2 text-sm font-bold text-white shadow-primary transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
       >
         התחל השכרה
       </button>
