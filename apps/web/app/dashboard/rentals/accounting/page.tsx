@@ -37,7 +37,7 @@ export default async function RentalsAccountingPage({
       const transfer = raw.transfersByBranchMonth.get(`${myBranch.id}|${month}`);
       return (
         <div className="max-w-3xl">
-          <h1 className="mb-4 text-[21px] font-extrabold text-ink">הנה"ח - {myBranch.name}</h1>
+          <h1 className="mb-4 text-[21px] font-extrabold text-ink">הנה&quot;ח - {myBranch.name}</h1>
           <BranchAccountingView financials={financials} transfer={transfer} month={month} showSettlement />
         </div>
       );

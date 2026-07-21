@@ -88,7 +88,7 @@ export function BranchExpenses({ branchId, isShared, isPartner, canManage, canAd
         <div className="rounded-card border border-card-border bg-white p-4 shadow-card">
           <h3 className="mb-2 flex items-center gap-1.5 text-sm font-bold text-ink">
             <Scale className="h-4 w-4" />
-            מאזן הוצאות (סטטוס בלבד, לא מחובר להנה"ח המרכזית)
+            מאזן הוצאות (סטטוס בלבד, לא מחובר להנה&quot;ח המרכזית)
           </h3>
           {net === 0 && <p className="text-sm text-muted">מאוזן — אין חובות הדדיים</p>}
           {net > 0 && <p className="text-sm font-bold text-teal">השותף חייב לך ₪{net.toLocaleString()}</p>}

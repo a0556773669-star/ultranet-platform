@@ -174,7 +174,8 @@ pnpm dev        # turbo run dev — מריץ web + api
 | `n_login_codes` | — | קודי כניסה חד-פעמיים עם תפוגה |
 
 > הערה: `RentalClient` שומר `cardLast4` (תצוגה בלבד), `cardExpiry` (MM/YY,
-> לא רגיש) ו-`gatewayToken` — לעולם לא PAN מלא.
+> לא רגיש) ו-`gatewayToken` — לעולם לא PAN מלא. שדה נוסף: `referralSource`
+> (רשות, טקסט חופשי) — מאיפה הלקוח הגיע אלינו, למעקב שיווקי.
 
 ---
 
@@ -210,7 +211,14 @@ pnpm dev        # turbo run dev — מריץ web + api
 - **`/`** — סקירת השכרות (טאבים: `rentals-tabs.tsx`).
 - **`/new`** — יצירת השכרה חדשה (`new-rental-form.tsx`).
 - **`/laptops`** — ניהול מחשבים ניידים + תמחור (CRUD).
-- **`/clients`** — לקוחות: כרטיס לקוח, לכידת כרטיס אשראי וטוקניזציה
+- **`/clients`** — לקוחות: מסך הרשימה נפתח ללא טופס הוספה גלוי — כפתור
+  "הוספת לקוח" בפינה השמאלית העליונה (`clients-header.tsx`, קומפוננטת
+  `use client` שמכילה גם את כותרת העמוד) פותח/סוגר את `client-form.tsx`
+  בתצוגה מקומית; לאחר שמירה מוצלחת ה-Server Action מבצע `redirect` חזרה
+  ל-`/dashboard/rentals/clients` והטופס חוזר סגור כברירת מחדל. בכשל ולידציה
+  (`?error=missing`) הטופס נפתח אוטומטית כדי להציג את השגיאה בהקשר. הטופס
+  כולל שדה רשות "מאיפה הגיע אלינו" (`referralSource`, טקסט חופשי) למעקב
+  שיווקי. כרטיס לקוח, לכידת כרטיס אשראי וטוקניזציה
   (`nedarim-card-capture.tsx`), חיוב (`client-charge-section.tsx`,
   `nedarim-charge-capture.tsx`), ייצוא/ייבוא אקסל. טבלת הלקוחות
   (`clients-table.tsx`) כוללת כפתורי סינון "הצג את שלי" (הסניף של המשתמש +

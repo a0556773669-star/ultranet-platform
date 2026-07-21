@@ -1,9 +1,8 @@
-import { Users } from "lucide-react";
 import { requireModuleAccess } from "@/lib/perms";
 import { getAdminFirestore } from "@/lib/firebase-admin";
 import type { RentalClient, Branch } from "@ultranet/shared-types";
 import { createClientAction, importClientsAction } from "../actions";
-import { ClientForm } from "./client-form";
+import { ClientsHeader } from "./clients-header";
 import { ClientsTable } from "./clients-table";
 
 export default async function RentalClientsPage({
@@ -48,10 +47,13 @@ export default async function RentalClientsPage({
 
   return (
     <div>
-      <h1 className="mb-4 flex items-center gap-1.5 text-[21px] font-extrabold text-ink">
-        לקוחות
-        <Users className="h-5 w-5" />
-      </h1>
+      <ClientsHeader
+        action={createClientAction}
+        branches={branches}
+        isOwner={isOwner}
+        myBranchId={myBranchId}
+        defaultOpen={searchParams?.error === "missing"}
+      />
 
       <div className="mb-4 flex flex-wrap items-center gap-2">
         <a
@@ -117,8 +119,6 @@ export default async function RentalClientsPage({
           פעולה זו מותרת רק לבעלים.
         </div>
       )}
-
-      <ClientForm action={createClientAction} branches={branches} isOwner={isOwner} myBranchId={myBranchId} />
 
       <ClientsTable
         clients={clients}
