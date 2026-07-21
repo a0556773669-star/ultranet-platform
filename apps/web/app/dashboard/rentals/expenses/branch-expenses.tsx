@@ -1,6 +1,6 @@
-import { Scale, Calendar, Receipt } from "lucide-react";
-import type { FixedExpense, VariableExpense } from "@ultranet/shared-types";
-import { createFixedExpenseAction, createVariableExpenseAction } from "./actions";
+import { Scale, Calendar, Receipt, Wallet } from "lucide-react";
+import type { FixedExpense, VariableExpense, BranchIncome } from "@ultranet/shared-types";
+import { createFixedExpenseAction, createVariableExpenseAction, addBranchIncomeAction, deleteBranchIncomeAction } from "./actions";
 import { EditFixedExpenseModal, EditVariableExpenseModal } from "./edit-expense-modals";
 import { EndFixedExpenseControl, DeleteFixedExpenseButton, DeleteVariableExpenseButton } from "./expense-action-buttons";
 
@@ -60,11 +60,25 @@ type Props = {
   partnerName: string;
   canManage: boolean;
   canAdd: boolean;
+  isOwner: boolean;
+  branchIncomes: BranchIncome[];
   fixedExpenses: FixedExpense[];
   variableExpenses: VariableExpense[];
 };
 
-export function BranchExpenses({ branchId, isShared, isPartner, ownerName, partnerName, canManage, canAdd, fixedExpenses, variableExpenses }: Props) {
+export function BranchExpenses({
+  branchId,
+  isShared,
+  isPartner,
+  ownerName,
+  partnerName,
+  canManage,
+  canAdd,
+  isOwner,
+  branchIncomes,
+  fixedExpenses,
+  variableExpenses,
+}: Props) {
   const activeFixed = fixedExpenses.filter((e) => !e.endDate);
   const endedFixed = fixedExpenses.filter((e) => e.endDate);
 
@@ -226,6 +240,52 @@ export function BranchExpenses({ branchId, isShared, isPartner, ownerName, partn
           ))}
         </div>
       </div>
+
+      {isOwner && !isShared && (
+        <div className="rounded-card border border-card-border bg-white p-4 shadow-card">
+          <h3 className="mb-1 flex items-center gap-1.5 text-sm font-bold text-ink">
+            <Wallet className="h-4 w-4" />
+            הכנסות (מעקב פרטי בלבד)
+          </h3>
+          <p className="mb-3 text-xs text-muted">
+            לוג הכנסות אישי שלך - למשל להזנת הכנסות ישנות שלא נרשמו כהשכרות במערכת. לא נכתב
+            ל-n_ah_income ולא נכנס להנה&quot;ח הראשית או לחישוב &quot;כמה {partnerName} חייב&quot;
+            בדף הנה&quot;ח ההשכרות.
+          </p>
+          <form action={addBranchIncomeAction.bind(null, branchId)} className="mb-4 grid grid-cols-2 gap-2 md:grid-cols-3">
+            <div>
+              <label className={LABEL}>תאריך</label>
+              <input name="date" type="date" className={FIELD} required />
+            </div>
+            <div>
+              <label className={LABEL}>תיאור (לא חובה)</label>
+              <input name="desc" className={FIELD} placeholder="הכנסה" />
+            </div>
+            <div>
+              <label className={LABEL}>סכום</label>
+              <input name="amount" type="number" step="0.01" className={FIELD} required />
+            </div>
+            <div className="col-span-2 md:col-span-3">
+              <button type="submit" className={BTN}>+ הוסף הכנסה</button>
+            </div>
+          </form>
+
+          <div className="flex flex-col gap-2">
+            {branchIncomes.length === 0 && <p className="text-sm text-muted">אין הכנסות רשומות</p>}
+            {branchIncomes.map((i) => (
+              <div key={i.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-card-border bg-[#f9fafb] p-3">
+                <div>
+                  <p className="text-sm font-bold text-ink">{i.desc} — ₪{(i.amount || 0).toLocaleString()}</p>
+                  <p className="text-xs text-muted">{i.date}</p>
+                </div>
+                <form action={deleteBranchIncomeAction.bind(null, i.id, branchId)}>
+                  <button type="submit" className="rounded-lg border border-red-200 bg-white px-2 py-1 text-xs font-bold text-red-600 hover:bg-red-50">מחיקה</button>
+                </form>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

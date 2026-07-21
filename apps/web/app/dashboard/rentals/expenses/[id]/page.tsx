@@ -4,7 +4,7 @@ import { Banknote, ArrowLeft } from "lucide-react";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { getAdminFirestore } from "@/lib/firebase-admin";
-import type { Branch, FixedExpense, VariableExpense } from "@ultranet/shared-types";
+import type { Branch, FixedExpense, VariableExpense, BranchIncome } from "@ultranet/shared-types";
 import { SHARED_RENTALS_BRANCH_ID } from "@/lib/expense-shared-scope";
 import { getOwnerName, resolveSharedPartnerName, branchPartnerName } from "@/lib/owner-name";
 import { BranchExpenses } from "../branch-expenses";
@@ -53,6 +53,14 @@ export default async function BranchExpensesPage({ params }: { params: { id: str
   const visibleFixed = isOwner || !isPartner ? fixedExpenses : fixedExpenses.filter((e) => !hiddenFromPartner(e));
   const visibleVariable = isOwner || !isPartner ? variableExpenses : variableExpenses.filter((e) => !hiddenFromPartner(e));
 
+  let branchIncomes: BranchIncome[] = [];
+  if (isOwner && !isShared) {
+    const incomeSnap = await db.collection("n_branch_income").where("branchId", "==", params.id).get();
+    branchIncomes = incomeSnap.docs
+      .map((d) => ({ id: d.id, ...(d.data() as Omit<BranchIncome, "id">) }) as BranchIncome)
+      .sort((a, b) => b.date.localeCompare(a.date));
+  }
+
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
@@ -73,6 +81,8 @@ export default async function BranchExpensesPage({ params }: { params: { id: str
         partnerName={partnerName}
         canManage={isOwner}
         canAdd={isOwner || isPartner}
+        isOwner={isOwner}
+        branchIncomes={branchIncomes}
         fixedExpenses={visibleFixed}
         variableExpenses={visibleVariable}
       />

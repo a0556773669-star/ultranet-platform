@@ -4,7 +4,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { getAdminFirestore } from "@/lib/firebase-admin";
 import { FieldValue } from "firebase-admin/firestore";
-import type { Branch, FixedExpense, VariableExpense } from "@ultranet/shared-types";
+import type { Branch, FixedExpense, VariableExpense, BranchIncome } from "@ultranet/shared-types";
 import { SHARED_RENTALS_BRANCH_ID } from "@/lib/expense-shared-scope";
 import { createLinkedOwnerLedgerExpense, deleteLinkedOwnerLedgerExpense } from "@/lib/branch-expense-ledger";
 
@@ -193,4 +193,37 @@ export async function deleteVariableExpenseAction(id: string, branchId: string) 
   revalidatePath("/dashboard/accounting");
   revalidatePath("/dashboard/rentals/accounting");
   revalidatePath("/dashboard");
+}
+
+/**
+ * Owner-only manual income log for a rentals branch (e.g. backfilling historical income that
+ * predates the system). Writes to n_branch_income - deliberately does NOT touch n_ah_income and
+ * does NOT feed the real-transaction-based totals on /dashboard/rentals/accounting
+ * (computeBranchFinancials), so it never reconciles into the main ledger or affects the
+ * partner-settlement calculation. Purely a private reference log for the owner, same model as
+ * the computer-rooms investment dashboard.
+ */
+export async function addBranchIncomeAction(branchId: string, formData: FormData) {
+  await requireOwner();
+  const date = String(formData.get("date") ?? "").trim();
+  const amount = Number(formData.get("amount")) || 0;
+  const desc = String(formData.get("desc") ?? "").trim();
+  if (!date || !amount) {
+    throw new Error("חובה למלא תאריך וסכום");
+  }
+  const data: Omit<BranchIncome, "id"> = stripUndefined({
+    branchId,
+    amount,
+    desc: desc || "הכנסה",
+    date,
+    month: date.slice(0, 7),
+  });
+  await getAdminFirestore().collection("n_branch_income").add(data);
+  revalidatePath(`/dashboard/rentals/expenses/${branchId}`);
+}
+
+export async function deleteBranchIncomeAction(id: string, branchId: string) {
+  await requireOwner();
+  await getAdminFirestore().collection("n_branch_income").doc(id).delete();
+  revalidatePath(`/dashboard/rentals/expenses/${branchId}`);
 }

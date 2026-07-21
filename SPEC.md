@@ -153,7 +153,7 @@ pnpm dev        # turbo run dev — מריץ web + api
 | `n_users` | `AppUser` | משתמשים; תפקיד, סניף, `perms`, `viewClientBranchIds` |
 | `n_fixed_expenses` | `FixedExpense` | הוצאות קבועות לסניף |
 | `n_var_expenses` | `VariableExpense` | הוצאות משתנות (לפי חודש) |
-| `n_branch_income` | `BranchIncome` | הכנסות סניף (שותפים); גם שורות הכנסה חודשיות ידניות לדשבורד "השקעה מול רווח" של חדרי מחשבים - לא נכתב ל-`n_ah_income` |
+| `n_branch_income` | `BranchIncome` | הכנסות סניף (שותפים); גם שורות הכנסה ידניות (owner-only) בדף `/dashboard/rentals/expenses/[id]` ובדשבורד "השקעה מול רווח" של חדרי מחשבים - לא נכתב ל-`n_ah_income`, לא משפיע על הנה"ח הראשית |
 | `n_tasks` | `Task` | משימות (דחיפות, חזרתיות, בוצע) |
 | `n_sub_locations` | `SubLocation` | תתי-מיקומים בסניף |
 | `n_devices` | `Device` | מכשירים/מחשבים בחדרי מחשבים |
@@ -267,7 +267,13 @@ pnpm dev        # turbo run dev — מריץ web + api
 - **`/expenses`** — הוצאות סניף השכרות (`n_fixed_expenses`/`n_var_expenses`), כולל "סניף" מדומה
   **`shared-rentals`** (`SHARED_RENTALS_BRANCH_ID`, `apps/web/lib/expense-shared-scope.ts`)
   להוצאות משותפות לכל סניפי ההשכרות יחד. ראו סעיף 8 (חדרי מחשבים → `/expenses`) ו-10 להסבר
-  המלא על איך הוצאות אלה מתחשבנות בהנה"ח הראשית.
+  המלא על איך הוצאות אלה מתחשבנות בהנה"ח הראשית. באותו דף, לכל סניף אמיתי (לא `shared-rentals`)
+  יש גם קטע **"הכנסות" - owner בלבד** (`addBranchIncomeAction`/`deleteBranchIncomeAction`,
+  `apps/web/app/dashboard/rentals/expenses/actions.ts`): לוג הכנסות ידני פרטי לבעלים (למשל
+  הכנסות ישנות שלא נרשמו כהשכרות במערכת), נכתב ל-`n_branch_income`. בכוונה **לא** מתחשבן
+  בהנה"ח הראשית ו**לא** נכנס לחישוב `computeBranchFinancials`/`/dashboard/rentals/accounting`
+  (וממילא לא משפיע על "כמה השותף חייב") - זהה במודל ל"הכנסות" בדשבורד ההשקעה-מול-רווח של
+  חדרי מחשבים.
 - **`/accounting`** — הנה"ח ברמת סניף השכרות: תצוגת סניף/בעלים, סימון העברות
   (`mark-transferred-button.tsx`, `n_branch_transfers`).
 - **`/branches`** — ניהול סניפי השכרה + audit הרשאות.
