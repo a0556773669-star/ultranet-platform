@@ -397,7 +397,14 @@ export async function createRentalAction(formData: FormData) {
     redirect(`/dashboard/rentals/new?error=${role !== "owner" ? "no-branch" : "missing"}`);
   }
   if (!clientId || !itemId || !startDate) {
-    redirect("/dashboard/rentals/new?error=missing");
+    const missing = [
+      !clientId && "לקוח",
+      !itemId && "מחשב/סטיק",
+      !startDate && "תאריך התחלה",
+    ]
+      .filter(Boolean)
+      .join(", ");
+    redirect(`/dashboard/rentals/new?error=missing&missingFields=${encodeURIComponent(missing)}`);
   }
 
   const activeForItem = await getAdminFirestore()
