@@ -5,9 +5,7 @@ import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { getAdminFirestore } from "@/lib/firebase-admin";
-import { chargeViaRoute } from "@/lib/collection-charge";
 import { resolveEzcountCreds, createEzcountReceipt } from "@/lib/ezcount";
-import { Timestamp } from "firebase-admin/firestore";
 import type { RentalClient, Laptop, Stick, Rental, Branch } from "@ultranet/shared-types";
 import { parseClientsWorkbook } from "@/lib/client-excel";
 import { calcRentalPrice, calcRentalDays } from "@/lib/rental-pricing";
@@ -253,10 +251,16 @@ export async function deleteClientAction(id: string) {
 }
 
 
+/**
+ * Marks a rental as paid. Deliberately never writes to n_ah_income (the main ledger): rental
+ * income only reaches the main accounting when the owner manually adds it there via the
+ * "ניידים" income type (/dashboard/accounting) - this action is purely internal rental-tracking
+ * bookkeeping (n_rentals), independent of the main ledger.
+ */
 export async function markRentalPaidAction(
   rentalId: string,
   paymentMethod: "cash" | "nedarim" | "route",
-  routeId?: string,
+  _routeId?: string,
   receiptPdfLink?: string
 ) {
   await requireSession();
@@ -265,31 +269,7 @@ export async function markRentalPaidAction(
   const snap = await ref.get();
   const rental = snap.data() as Omit<Rental, "id"> | undefined;
   if (!rental) throw new Error("השכרה לא נמצאה");
-  const amount = rental.finalPrice ?? rental.calcPrice;
-  let receiptIssued = !!receiptPdfLink;
-
-  const effectiveRouteId = routeId || rental.collectionRouteId;
-  if (paymentMethod === "route" && effectiveRouteId) {
-    const result = await chargeViaRoute({
-      routeId: effectiveRouteId,
-      amount,
-      desc: "השכרה #" + rentalId,
-      business: "rentals",
-    });
-    if (!result.ok) throw new Error(result.message);
-    receiptIssued = true;
-  } else {
-    const date = new Date().toISOString().slice(0, 10);
-    await db.collection("n_ah_income").add({
-      date,
-      amount,
-      desc: "השכרה #" + rentalId + " (" + (paymentMethod === "nedarim" ? "נדרים פלאס" : "מזומן") + ")",
-      business: "rentals",
-      type: "cash",
-      month: date.slice(0, 7),
-      createdAt: Timestamp.now(),
-    });
-  }
+  const receiptIssued = !!receiptPdfLink;
 
   await ref.set(
     stripUndefined({ paid: true, paymentMethod, receiptIssued, receiptPdfLink }),
@@ -436,24 +416,14 @@ export async function markReturnedAction(id: string) {
   await requireSession();
   const db = getAdminFirestore();
   const rentalRef = db.collection("n_rentals").doc(id);
-  const snap = await rentalRef.get();
-  const rental = snap.data() as Omit<Rental, "id"> | undefined;
+  // Return only updates status/returnDate - it never auto-charges or auto-marks paid (that used
+  // to silently write to n_ah_income via chargeViaRoute on every return with a route). Unpaid
+  // returned rentals show up in the "לא שולם" list (/dashboard/rentals/manage) for the owner to
+  // collect explicitly; income only reaches the main ledger via a manual entry there.
   await rentalRef.set(
     { status: "returned", returnDate: new Date().toISOString().slice(0, 10) },
     { merge: true },
   );
-  if (rental && rental.collectionRouteId && !rental.paid) {
-    const amount = rental.finalPrice ?? rental.calcPrice;
-    const result = await chargeViaRoute({
-      routeId: rental.collectionRouteId,
-      amount,
-      desc: "גביית השכרה #" + id,
-      business: "rentals",
-    });
-    if (result.ok) {
-      await rentalRef.set({ paid: true, paymentMethod: "route" }, { merge: true });
-    }
-  }
   revalidatePath("/dashboard/rentals");
 }
 
