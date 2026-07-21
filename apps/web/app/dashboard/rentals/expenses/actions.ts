@@ -197,18 +197,21 @@ export async function deleteVariableExpenseAction(id: string, branchId: string) 
 
 /**
  * Owner-only manual income log for a rentals branch (e.g. backfilling historical income that
- * predates the system). Writes to n_branch_income - deliberately does NOT touch n_ah_income and
- * does NOT feed the real-transaction-based totals/settlement calc on /dashboard/rentals/accounting
- * (computeBranchFinancials), so it never reconciles into the main ledger or affects the
- * partner-settlement calculation. It IS shown to the owner as a separate, clearly-labeled total
- * on that same page (BranchAccountingView's "הכנסות שהזנתי ידנית" box) - visible, but not merged
- * into the official figures above it.
+ * predates the system, or one-off income that didn't go through a rental record). Writes to
+ * n_branch_income, but is treated exactly like a real rental payment: buildManualIncomeLines
+ * (lib/branch-accounting-data.ts) merges it into the same income lines computeBranchFinancials
+ * uses, so it counts in "הכנסות החודש"/"הכנסות עד היום" and the partner-settlement calc on
+ * /dashboard/rentals/accounting, just like all other rentals income. What it deliberately never
+ * does is write to n_ah_income - like all rentals income, it stays internal to the rentals
+ * module and only reaches the main ledger if the owner types it there manually (the "ניידים"
+ * income type).
  */
 export async function addBranchIncomeAction(branchId: string, formData: FormData) {
   await requireOwner();
   const date = String(formData.get("date") ?? "").trim();
   const amount = Number(formData.get("amount")) || 0;
   const desc = String(formData.get("desc") ?? "").trim();
+  const collectedByOwner = String(formData.get("collectedByOwner") ?? "partner") === "owner";
   if (!date || !amount) {
     throw new Error("חובה למלא תאריך וסכום");
   }
@@ -218,6 +221,7 @@ export async function addBranchIncomeAction(branchId: string, formData: FormData
     desc: desc || "הכנסה",
     date,
     month: date.slice(0, 7),
+    collectedByOwner,
   });
   await getAdminFirestore().collection("n_branch_income").add(data);
   revalidatePath(`/dashboard/rentals/expenses/${branchId}`);

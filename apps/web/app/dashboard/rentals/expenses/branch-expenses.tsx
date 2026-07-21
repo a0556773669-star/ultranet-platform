@@ -245,12 +245,13 @@ export function BranchExpenses({
         <div className="rounded-card border border-card-border bg-white p-4 shadow-card">
           <h3 className="mb-1 flex items-center gap-1.5 text-sm font-bold text-ink">
             <Wallet className="h-4 w-4" />
-            הכנסות (מעקב פרטי בלבד)
+            הכנסות
           </h3>
           <p className="mb-3 text-xs text-muted">
-            לוג הכנסות אישי שלך - למשל להזנת הכנסות ישנות שלא נרשמו כהשכרות במערכת. לא נכתב
-            ל-n_ah_income ולא נכנס להנה&quot;ח הראשית או לחישוב &quot;כמה {partnerName} חייב&quot;
-            בדף הנה&quot;ח ההשכרות.
+            הזנה ידנית שלך - למשל הכנסות ישנות שלא נרשמו כהשכרות במערכת. מתנהגת בדיוק כמו הכנסה
+            רגילה של הסניף: נכנסת ל&quot;הכנסות החודש&quot;/&quot;הכנסות עד היום&quot; בדף
+            הנה&quot;ח ההשכרות, וכמו כל הכנסה אחרת בהשכרות - לא נכתבת ל-n_ah_income ולא מתחשבנת
+            אוטומטית בהנה&quot;ח הראשית.
           </p>
           <form action={addBranchIncomeAction.bind(null, branchId)} className="mb-4 grid grid-cols-2 gap-2 md:grid-cols-3">
             <div>
@@ -265,6 +266,15 @@ export function BranchExpenses({
               <label className={LABEL}>סכום</label>
               <input name="amount" type="number" step="0.01" className={FIELD} required />
             </div>
+            {isPartner && (
+              <div>
+                <label className={LABEL}>מי מחזיק כרגע בכסף</label>
+                <select name="collectedByOwner" defaultValue="partner" className={FIELD}>
+                  <option value="partner">{partnerName}</option>
+                  <option value="owner">{ownerName}</option>
+                </select>
+              </div>
+            )}
             <div className="col-span-2 md:col-span-3">
               <button type="submit" className={BTN}>+ הוסף הכנסה</button>
             </div>
@@ -276,7 +286,9 @@ export function BranchExpenses({
               <div key={i.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-card-border bg-[#f9fafb] p-3">
                 <div>
                   <p className="text-sm font-bold text-ink">{i.desc} — ₪{(i.amount || 0).toLocaleString()}</p>
-                  <p className="text-xs text-muted">{i.date}</p>
+                  <p className="text-xs text-muted">
+                    {i.date}{isPartner ? ` · מוחזק אצל: ${i.collectedByOwner ? ownerName : partnerName}` : ""}
+                  </p>
                 </div>
                 <form action={deleteBranchIncomeAction.bind(null, i.id, branchId)}>
                   <button type="submit" className="rounded-lg border border-red-200 bg-white px-2 py-1 text-xs font-bold text-red-600 hover:bg-red-50">מחיקה</button>

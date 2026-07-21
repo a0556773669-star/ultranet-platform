@@ -1,7 +1,7 @@
 import { BarChart3, Plus, Minus, Wallet, Banknote } from "lucide-react";
 import { requireModuleAccess } from "@/lib/perms";
 import { getAdminFirestore } from "@/lib/firebase-admin";
-import type { AccountingIncome, AccountingExpense, BranchIncome } from "@ultranet/shared-types";
+import type { AccountingIncome, AccountingExpense } from "@ultranet/shared-types";
 import {
   createIncomeAction,
   createExpenseAction,
@@ -59,16 +59,6 @@ export default async function RentalsAccountingPage({
     const parentFinancials = parents.map((p) => computeBranchFinancials(p, raw, month));
 
     const selectedBranch = searchParams?.branchId ? rentalsBranches.find((b) => b.id === searchParams.branchId) : undefined;
-
-    let manualIncomeToDate = 0;
-    if (selectedBranch) {
-      const manualIncomeSnap = await db.collection("n_branch_income").where("branchId", "==", selectedBranch.id).get();
-      manualIncomeToDate = manualIncomeSnap.docs.reduce(
-        (sum, d) => sum + ((d.data() as Omit<BranchIncome, "id">).amount || 0),
-        0,
-      );
-    }
-
     ownerDrillDown = (
       <div className="mb-6 space-y-4">
         <OwnerBranchesOverview parents={parentFinancials} childrenByParent={childrenByParent} />
@@ -79,7 +69,6 @@ export default async function RentalsAccountingPage({
             month={month}
             showSettlement={false}
             isOwner
-            manualIncomeToDate={manualIncomeToDate}
           />
         )}
       </div>
