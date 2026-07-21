@@ -30,6 +30,18 @@ export function ownerExpenseBurden(amount: number, owedBy?: string): number {
   return amount; // undefined/"owner" -> fully the owner's cost
 }
 
+/**
+ * The amount that should actually hit the owner's cash ledger (n_ah_expenses) for an expense.
+ * Only counts when the owner physically paid it (paidBy === "owner") - if the partner fronted
+ * the cash, the owner never had a real cash outflow; whatever the owner owes for it instead
+ * nets out of the partner's month-end settlement transfer (expenseNetToOwner/computeMonthlySettlement),
+ * so recording it again here as a separate expense would double-count it.
+ */
+export function ownerLedgerExpenseAmount(amount: number, paidBy?: string, owedBy?: string): number {
+  if (paidBy === "partner") return 0;
+  return ownerExpenseBurden(amount, owedBy);
+}
+
 export interface RentalIncomeLine {
   amount: number;
   /** true if this specific payment already sits with the owner directly (e.g. direct Nedarim charge,

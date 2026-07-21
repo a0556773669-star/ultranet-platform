@@ -153,9 +153,11 @@ export default async function AccountingPage() {
 
       <p className="mb-2 text-xs text-muted">
         הוצאות מהוצאות/הנה&quot;ח ניידים וחדרי מחשבים (`/dashboard/rentals/expenses`,
-        `/dashboard/expenses`) מתחשבנות כאן אוטומטית - אבל רק חלק הבעלים בפועל (לפי &quot;על מי
-        החוב&quot; שנבחר בהוספת ההוצאה): הוצאה שכולה על השותף לא נספרת בכלל, הוצאה משותפת נספרת
-        לפי חצי, והוצאה שכולה עלי נספרת במלואה.
+        `/dashboard/expenses`) מתחשבנות כאן אוטומטית - אבל רק אם שילמתי אותן בפועל (&quot;מי
+        שילם בפועל&quot; = אני), ואז רק את החלק שבאמת נשאר עליי (לפי &quot;על מי החוב&quot;): הוצאה
+        שכל החוב עליה על השותף לא נספרת בכלל, הוצאה משותפת נספרת לפי חצי, והוצאה שכולה עליי
+        נספרת במלואה. הוצאה שהשותף שילם בפועל לא נספרת כאן כלל, גם אם חלק/כל החוב עליי - היא
+        מתקזזת מול ההעברה החודשית שלו אליי במקום (ולא נגבית בפועל בנפרד).
       </p>
       <div className="mb-6 grid grid-cols-1 gap-3 lg:grid-cols-2">
         <form action={createExpenseAction} className="flex flex-col gap-2.5 rounded-card border border-card-border bg-white p-4 shadow-card">
