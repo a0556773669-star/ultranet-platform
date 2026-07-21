@@ -8,6 +8,13 @@ import type { Branch, FixedExpense, VariableExpense, BranchIncome } from "@ultra
 import { SHARED_RENTALS_BRANCH_ID } from "@/lib/expense-shared-scope";
 import { createLinkedOwnerLedgerExpense, deleteLinkedOwnerLedgerExpense } from "@/lib/branch-expense-ledger";
 
+async function requireOwner() {
+  const session = await getServerSession(authOptions);
+  if (!session) throw new Error("לא מחובר");
+  if (session.user?.role !== "owner") throw new Error("אין הרשאה");
+  return session;
+}
+
 async function requireBranchAccess(branchId: string) {
   const session = await getServerSession(authOptions);
   if (!session) throw new Error("לא מחובר");
