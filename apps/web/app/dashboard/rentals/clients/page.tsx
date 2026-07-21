@@ -66,6 +66,12 @@ export default async function RentalClientsPage({
         >
           הורדת תבנית לייבוא
         </a>
+        <a
+          href="/dashboard/rentals/clients/complete-cards"
+          className="rounded-[10px] border border-card-border bg-white px-3 py-1.5 text-xs font-bold text-ink transition hover:bg-[#f4f6f9]"
+        >
+          השלמת כרטיסים חסרים
+        </a>
         <form
           action={importClientsAction}
           className="flex items-center gap-2 rounded-[10px] border border-card-border bg-white px-3 py-1.5"
