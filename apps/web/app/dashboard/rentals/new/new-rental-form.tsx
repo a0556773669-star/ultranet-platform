@@ -14,6 +14,8 @@ type Props = {
   routes: CollectionRoute[];
   defaultBranchId: string;
   lockBranch: boolean;
+  rentedLaptopIds: string[];
+  rentedStickIds: string[];
 };
 
 const FIELD =
@@ -28,6 +30,8 @@ export function NewRentalForm({
   routes,
   defaultBranchId,
   lockBranch,
+  rentedLaptopIds,
+  rentedStickIds,
 }: Props) {
   const [branchId, setBranchId] = useState(defaultBranchId);
   const [clientId, setClientId] = useState("");
@@ -36,12 +40,18 @@ export function NewRentalForm({
   const [itemId, setItemId] = useState("");
   const [pricingVariant, setPricingVariant] = useState<"normal" | "noInternet">("normal");
 
+  const rentedLaptopSet = useMemo(() => new Set(rentedLaptopIds), [rentedLaptopIds]);
+  const rentedStickSet = useMemo(() => new Set(rentedStickIds), [rentedStickIds]);
+
   const branchClients = clients.filter((c) => c.branchId === branchId);
   const branchLaptops = laptops.filter((l) => l.branchId === branchId);
   const branchSticks = sticks.filter((s) => s.branchId === branchId);
 
   const selectedLaptop = branchLaptops.find((l) => l.id === itemId);
   const selectedStick = branchSticks.find((s) => s.id === itemId);
+  const selectedItemAlreadyRented =
+    (kind === "laptop" && itemId ? rentedLaptopSet.has(itemId) : false) ||
+    (kind === "stick" && itemId ? rentedStickSet.has(itemId) : false);
 
   const dayPriceRef = useMemo(() => {
     if (kind === "laptop" && selectedLaptop) {
@@ -129,11 +139,14 @@ export function NewRentalForm({
             className={FIELD}
           >
             <option value="">בחר מחשב</option>
-            {branchLaptops.map((l) => (
-              <option key={l.id} value={l.id}>
-                {l.name} ({l.dayPrice} ₪/יום)
-              </option>
-            ))}
+            {branchLaptops.map((l) => {
+              const rented = rentedLaptopSet.has(l.id);
+              return (
+                <option key={l.id} value={l.id} disabled={rented}>
+                  {l.name} ({l.dayPrice} ₪/יום){rented ? " — מושכר כרגע" : ""}
+                </option>
+              );
+            })}
           </select>
         </div>
       ) : (
@@ -147,12 +160,21 @@ export function NewRentalForm({
             className={FIELD}
           >
             <option value="">בחר סטיק</option>
-            {branchSticks.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.name} ({s.day1} ₪/יום ראשון)
-              </option>
-            ))}
+            {branchSticks.map((s) => {
+              const rented = rentedStickSet.has(s.id);
+              return (
+                <option key={s.id} value={s.id} disabled={rented}>
+                  {s.name} ({s.day1} ₪/יום ראשון){rented ? " — מושכר כרגע" : ""}
+                </option>
+              );
+            })}
           </select>
+        </div>
+      )}
+
+      {selectedItemAlreadyRented && (
+        <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700">
+          מחשב/סטיק זה כבר מושכר כרגע ולא ניתן לפתוח עבורו השכרה נוספת עד להחזרתו.
         </div>
       )}
 
@@ -211,7 +233,7 @@ export function NewRentalForm({
 
       <button
         type="submit"
-        disabled={!clientId}
+        disabled={!clientId || selectedItemAlreadyRented}
         className="mt-1 self-start rounded-[10px] bg-gradient-to-br from-teal to-teal-light px-6 py-2 text-sm font-bold text-white shadow-primary transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
       >
         התחל השכרה

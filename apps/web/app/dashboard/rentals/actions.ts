@@ -242,7 +242,7 @@ export async function updateClientAction(id: string, formData: FormData) {
 
 export async function deleteClientAction(id: string) {
   const session = await requireSession();
-  if (session.user?.role !== "owner") {
+  if (session.user?.role !== "owner" && session.user?.role !== "partner") {
     redirect("/dashboard/rentals/clients?error=forbidden");
   }
   await getAdminFirestore().collection("n_rental_clients").doc(id).delete();
@@ -355,6 +355,30 @@ export async function closeRentalWithChargeAction(
   return { ok: true };
 }
 
+export async function updateRentalHistoryAction(
+  rentalId: string,
+  data: { startDate: string; returnDate: string; finalPrice: number; notes?: string }
+) {
+  await requireSession();
+  if (!data.startDate || !data.returnDate) {
+    throw new Error("חובה למלא תאריך התחלה ותאריך החזרה");
+  }
+  await getAdminFirestore()
+    .collection("n_rentals")
+    .doc(rentalId)
+    .set(
+      stripUndefined({
+        startDate: data.startDate,
+        returnDate: data.returnDate,
+        finalPrice: data.finalPrice,
+        notes: data.notes,
+      }),
+      { merge: true }
+    );
+  revalidatePath("/dashboard/rentals");
+  revalidatePath("/dashboard");
+}
+
 export async function createRentalAction(formData: FormData) {
   const session = await requireSession();
   const role = session.user?.role;
@@ -381,6 +405,16 @@ export async function createRentalAction(formData: FormData) {
       .filter(Boolean)
       .join(", ");
     redirect(`/dashboard/rentals/new?error=missing&missingFields=${encodeURIComponent(missing)}`);
+  }
+
+  const activeForItem = await getAdminFirestore()
+    .collection("n_rentals")
+    .where("itemId", "==", itemId)
+    .where("status", "==", "active")
+    .limit(1)
+    .get();
+  if (!activeForItem.empty) {
+    redirect("/dashboard/rentals/new?error=already-rented");
   }
 
   let calcPrice = 0;

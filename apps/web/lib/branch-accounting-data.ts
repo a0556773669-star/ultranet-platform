@@ -7,6 +7,7 @@ import type {
   CollectionRoute,
   Laptop,
   BranchTransfer,
+  BranchIncome,
 } from "@ultranet/shared-types";
 import {
   ownerExpenseBurden,
@@ -66,6 +67,17 @@ function buildIncomeLines(rentals: Rental[], routesById: Map<string, CollectionR
     });
 }
 
+/** Owner's manual income log (n_branch_income) treated exactly like real rental income - merged
+ *  into the same income lines so it counts in "הכנסות החודש"/"הכנסות עד היום" and the
+ *  partner-settlement calc, without ever touching n_ah_income (the main ledger). */
+function buildManualIncomeLines(entries: BranchIncome[]): DatedIncomeLine[] {
+  return entries.map((i) => ({
+    amount: i.amount || 0,
+    collectedByOwner: i.collectedByOwner ?? false,
+    month: i.date.slice(0, 7),
+  }));
+}
+
 export interface BranchFinancials {
   branch: Branch;
   incomeThisMonth: number; // partner's P&L share
@@ -90,19 +102,22 @@ export interface BranchAccountingRawData {
   laptopsByBranch: Map<string, Laptop[]>;
   routesById: Map<string, CollectionRoute>;
   transfersByBranchMonth: Map<string, BranchTransfer>; // key: `${branchId}|${month}`
+  branchIncomeByBranch: Map<string, BranchIncome[]>;
 }
 
 export async function loadBranchAccountingRawData(): Promise<BranchAccountingRawData> {
   const db = getAdminFirestore();
-  const [branchesSnap, fixedSnap, variableSnap, rentalsSnap, laptopsSnap, routesSnap, transfersSnap] = await Promise.all([
-    db.collection("n_branches").get(),
-    db.collection("n_fixed_expenses").get(),
-    db.collection("n_var_expenses").get(),
-    db.collection("n_rentals").get(),
-    db.collection("n_laptops").get(),
-    db.collection("n_collection_routes").get(),
-    db.collection("n_branch_transfers").get(),
-  ]);
+  const [branchesSnap, fixedSnap, variableSnap, rentalsSnap, laptopsSnap, routesSnap, transfersSnap, branchIncomeSnap] =
+    await Promise.all([
+      db.collection("n_branches").get(),
+      db.collection("n_fixed_expenses").get(),
+      db.collection("n_var_expenses").get(),
+      db.collection("n_rentals").get(),
+      db.collection("n_laptops").get(),
+      db.collection("n_collection_routes").get(),
+      db.collection("n_branch_transfers").get(),
+      db.collection("n_branch_income").get(),
+    ]);
 
   const branches = branchesSnap.docs.map((d) => ({ ...(d.data() as Omit<Branch, "id">), id: d.id }) as Branch);
 
@@ -149,7 +164,24 @@ export async function loadBranchAccountingRawData(): Promise<BranchAccountingRaw
     transfersByBranchMonth.set(`${t.branchId}|${t.month}`, t);
   }
 
-  return { branches, fixedByBranch, variableByBranch, rentalsByBranch, laptopsByBranch, routesById, transfersByBranchMonth };
+  const branchIncomeByBranch = new Map<string, BranchIncome[]>();
+  for (const d of branchIncomeSnap.docs) {
+    const i = { ...(d.data() as Omit<BranchIncome, "id">), id: d.id } as BranchIncome;
+    const arr = branchIncomeByBranch.get(i.branchId) ?? [];
+    arr.push(i);
+    branchIncomeByBranch.set(i.branchId, arr);
+  }
+
+  return {
+    branches,
+    fixedByBranch,
+    variableByBranch,
+    rentalsByBranch,
+    laptopsByBranch,
+    routesById,
+    transfersByBranchMonth,
+    branchIncomeByBranch,
+  };
 }
 
 /** ownerPct for a branch's own split (not counting parent-branch cuts). */
@@ -165,8 +197,10 @@ export function computeBranchFinancials(branch: Branch, raw: BranchAccountingRaw
   const rentals = raw.rentalsByBranch.get(branch.id) ?? [];
   const laptops = raw.laptopsByBranch.get(branch.id) ?? [];
 
+  const branchIncome = raw.branchIncomeByBranch.get(branch.id) ?? [];
+
   const expenseLines = expandExpenseLines(fixed, variable, month);
-  const incomeLines = buildIncomeLines(rentals, raw.routesById);
+  const incomeLines = [...buildIncomeLines(rentals, raw.routesById), ...buildManualIncomeLines(branchIncome)];
 
   const ownerPct = branchOwnerPct(branch);
   const partnerPct = 100 - ownerPct;

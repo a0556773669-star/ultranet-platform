@@ -23,6 +23,7 @@ export default async function EditClientPage({
   const isOwner = role === "owner";
   const perms = (session.user as { perms?: Partial<Record<string, boolean>> } | undefined)?.perms;
   const canCharge = isOwner || !!perms?.charging;
+  const canDeleteClient = isOwner || role === "partner";
 
   const db = getAdminFirestore();
   const [clientDoc, branchesSnap] = await Promise.all([
@@ -79,7 +80,7 @@ export default async function EditClientPage({
           clientIdNum={client.idNum}
         />
       )}
-      {isOwner && <DeleteClientButton action={boundDelete} />}
+      {canDeleteClient && <DeleteClientButton action={boundDelete} />}
     </div>
   );
 }

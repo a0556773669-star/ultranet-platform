@@ -26,6 +26,7 @@ export default async function RentalsAccountingPage({
   const isOwner = session.user?.role === "owner";
   const myBranchId = session.user?.branchId;
 
+  const db = getAdminFirestore();
   const raw = await loadBranchAccountingRawData();
   const month = getCurrentMonth();
   const rentalsBranches = raw.branches.filter((b) => b.branchType === "rentals");
@@ -74,7 +75,6 @@ export default async function RentalsAccountingPage({
     );
   }
 
-  const db = getAdminFirestore();
   const [incomeSnap, expenseSnap] = await Promise.all([
     db.collection("n_ah_income").get(),
     db.collection("n_ah_expenses").get(),
