@@ -5,6 +5,7 @@ import { requireModuleAccess } from "@/lib/perms";
 import { getAdminFirestore } from "@/lib/firebase-admin";
 import type { Branch, FixedExpense, VariableExpense } from "@ultranet/shared-types";
 import { SHARED_EXPENSE_BRANCH_ID } from "@/lib/computer-room-accounting";
+import { getOwnerName, resolveSharedPartnerName, branchPartnerName } from "@/lib/owner-name";
 import { BranchExpenses } from "../branch-expenses";
 
 export default async function ComputerRoomBranchExpensesPage({ params }: { params: { id: string } }) {
@@ -19,6 +20,8 @@ export default async function ComputerRoomBranchExpensesPage({ params }: { param
   const db = getAdminFirestore();
   let branch: Branch | null = null;
   let isPartner = false;
+  let partnerName = "השותף";
+  const ownerName = await getOwnerName(isOwner ? session.user?.name : undefined);
 
   if (!isShared) {
     const doc = await db.collection("n_branches").doc(params.id).get();
@@ -26,6 +29,11 @@ export default async function ComputerRoomBranchExpensesPage({ params }: { param
     branch = { id: doc.id, ...(doc.data() as Omit<Branch, "id">) } as Branch;
     if (branch.branchType !== "computers") notFound();
     isPartner = branch.isMine === false;
+    partnerName = branchPartnerName(branch);
+  } else {
+    const resolved = await resolveSharedPartnerName("computers");
+    isPartner = resolved.hasPartner;
+    partnerName = resolved.partnerName;
   }
 
   const [fixedSnap, variableSnap] = await Promise.all([
@@ -59,6 +67,8 @@ export default async function ComputerRoomBranchExpensesPage({ params }: { param
         branchId={params.id}
         isShared={isShared}
         isPartner={isPartner}
+        ownerName={ownerName}
+        partnerName={partnerName}
         canManage={isOwner}
         canAdd={isOwner || isPartner}
         fixedExpenses={visibleFixed}

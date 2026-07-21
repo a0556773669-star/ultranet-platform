@@ -10,9 +10,6 @@ import {
 
 const CATEGORIES = ["שכירות", "חשמל ומים", "משכורות", "ציוד ותחזוקה", "שיווק ופרסום", "ביטוח", "אחר"];
 
-const PAID_LABELS: Record<string, string> = { owner: "אני", partner: "השותף" };
-const OWED_LABELS: Record<string, string> = { owner: "עלי (הכל)", partner: "עליו (הכל)", shared: "משותף (חצי-חצי)" };
-
 const FIELD = "w-full rounded-lg border border-card-border bg-[#f4f6f9] px-3 py-2 text-sm focus:border-teal focus:bg-white focus:outline-none";
 const LABEL = "mb-1 block text-xs font-semibold text-muted";
 const BTN = "rounded-[10px] bg-gradient-to-br from-teal to-teal-light px-4 py-2 text-xs font-bold text-white shadow-primary transition hover:opacity-90";
@@ -25,27 +22,33 @@ function netToOwner(amount: number, paidBy?: string, owedBy?: string): number {
   return p === "owner" ? amount : -amount;
 }
 
-function paymentNote(paidBy?: string, owedBy?: string) {
+function paymentNote(paidBy: string | undefined, owedBy: string | undefined, ownerName: string, partnerName: string) {
+  const paidLabels: Record<string, string> = { owner: ownerName, partner: partnerName };
+  const owedLabels: Record<string, string> = {
+    owner: `על ${ownerName} (הכל)`,
+    partner: `על ${partnerName} (הכל)`,
+    shared: "משותף (חצי-חצי)",
+  };
   const p = paidBy === "partner" ? "partner" : "owner";
   const o = owedBy === "partner" ? "partner" : owedBy === "shared" ? "shared" : "owner";
-  return `שילם: ${PAID_LABELS[p]} · חוב: ${OWED_LABELS[o]}`;
+  return `שילם: ${paidLabels[p]} · חוב: ${owedLabels[o]}`;
 }
 
-function PayerFields() {
+function PayerFields({ ownerName, partnerName }: { ownerName: string; partnerName: string }) {
   return (
     <>
       <div>
         <label className={LABEL}>מי שילם בפועל</label>
         <select name="paidBy" defaultValue="owner" className={FIELD}>
-          <option value="owner">אני</option>
-          <option value="partner">השותף</option>
+          <option value="owner">{ownerName}</option>
+          <option value="partner">{partnerName}</option>
         </select>
       </div>
       <div>
         <label className={LABEL}>על מי החוב</label>
         <select name="owedBy" defaultValue="owner" className={FIELD}>
-          <option value="owner">עלי בלבד</option>
-          <option value="partner">על השותף בלבד</option>
+          <option value="owner">על {ownerName} בלבד</option>
+          <option value="partner">על {partnerName} בלבד</option>
           <option value="shared">משותף (חצי-חצי)</option>
         </select>
       </div>
@@ -57,13 +60,15 @@ type Props = {
   branchId: string;
   isShared?: boolean;
   isPartner: boolean;
+  ownerName: string;
+  partnerName: string;
   canManage: boolean;
   canAdd: boolean;
   fixedExpenses: FixedExpense[];
   variableExpenses: VariableExpense[];
 };
 
-export function BranchExpenses({ branchId, isShared, isPartner, canManage, canAdd, fixedExpenses, variableExpenses }: Props) {
+export function BranchExpenses({ branchId, isShared, isPartner, ownerName, partnerName, canManage, canAdd, fixedExpenses, variableExpenses }: Props) {
   const activeFixed = fixedExpenses.filter((e) => !e.endDate);
   const endedFixed = fixedExpenses.filter((e) => e.endDate);
 
@@ -88,16 +93,16 @@ export function BranchExpenses({ branchId, isShared, isPartner, canManage, canAd
         <div className="rounded-card border border-card-border bg-white p-4 shadow-card">
           <h3 className="mb-2 flex items-center gap-1.5 text-sm font-bold text-ink">
             <Scale className="h-4 w-4" />
-            מאזן חובות מול השותף (סטטוס בלבד, לא קשור להנה&quot;ח המרכזית)
+            מאזן חובות בין {ownerName} ל{partnerName} (סטטוס בלבד, לא קשור להנה&quot;ח המרכזית)
           </h3>
           <p className="mb-2 text-xs text-muted">
-            זה רק מי-חייב-למי ביניכם. הוצאה ששילמת אתה בפועל - חלקך בה (לפי &quot;על מי החוב&quot;)
-            כן מתחשבן בהנה&quot;ח המרכזית כרגיל. הוצאה שהשותף שילם בפועל לא מתחשבנת שם כלל, גם אם
-            חלק/כל החוב עליך - היא רק מקטינה את מה שהוא יעביר לך בסוף החודש.
+            זה רק מי-חייב-למי ביניכם. הוצאה ש{ownerName} שילם בפועל - חלקו בה (לפי &quot;על מי החוב&quot;)
+            כן מתחשבן בהנה&quot;ח המרכזית כרגיל. הוצאה ש{partnerName} שילם בפועל לא מתחשבנת שם כלל, גם אם
+            חלק/כל החוב על {ownerName} - היא רק מקטינה את מה ש{partnerName} יעביר בסוף החודש.
           </p>
           {net === 0 && <p className="text-sm text-muted">מאוזן — אין חובות הדדיים</p>}
-          {net > 0 && <p className="text-sm font-bold text-teal">השותף חייב לך ₪{net.toLocaleString()}</p>}
-          {net < 0 && <p className="text-sm font-bold text-red-600">אתה חייב לשותף ₪{Math.abs(net).toLocaleString()}</p>}
+          {net > 0 && <p className="text-sm font-bold text-teal">{partnerName} חייב ל{ownerName} ₪{net.toLocaleString()}</p>}
+          {net < 0 && <p className="text-sm font-bold text-red-600">{ownerName} חייב ל{partnerName} ₪{Math.abs(net).toLocaleString()}</p>}
         </div>
       )}
 
@@ -129,7 +134,7 @@ export function BranchExpenses({ branchId, isShared, isPartner, canManage, canAd
                 ))}
               </select>
             </div>
-            {isPartner && <PayerFields />}
+            {isPartner && <PayerFields ownerName={ownerName} partnerName={partnerName} />}
             <div className="col-span-2 md:col-span-3">
               <button type="submit" className={BTN}>+ הוסף הוצאה קבועה</button>
             </div>
@@ -142,7 +147,7 @@ export function BranchExpenses({ branchId, isShared, isPartner, canManage, canAd
             <div key={e.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-card-border bg-[#f9fafb] p-3">
               <div>
                 <p className="text-sm font-bold text-ink">{e.name} — ₪{(e.amount || 0).toLocaleString()}/חודש</p>
-                <p className="text-xs text-muted">{e.category || "ללא קטגוריה"} · מתחיל {e.startDate}{isPartner ? ` · ${paymentNote(e.paidBy, e.owedBy)}` : ""}</p>
+                <p className="text-xs text-muted">{e.category || "ללא קטגוריה"} · מתחיל {e.startDate}{isPartner ? ` · ${paymentNote(e.paidBy, e.owedBy, ownerName, partnerName)}` : ""}</p>
               </div>
               <div className="flex items-center gap-2">
                 {canManage && (
@@ -169,7 +174,7 @@ export function BranchExpenses({ branchId, isShared, isPartner, canManage, canAd
                 <div key={e.id} className="flex items-center justify-between gap-2 rounded-lg border border-card-border bg-[#f4f6f9] p-3 opacity-70">
                   <div>
                     <p className="text-sm font-bold text-ink">{e.name} — ₪{(e.amount || 0).toLocaleString()}/חודש</p>
-                    <p className="text-xs text-muted">{e.startDate} – {e.endDate}{isPartner ? ` · ${paymentNote(e.paidBy, e.owedBy)}` : ""}</p>
+                    <p className="text-xs text-muted">{e.startDate} – {e.endDate}{isPartner ? ` · ${paymentNote(e.paidBy, e.owedBy, ownerName, partnerName)}` : ""}</p>
                   </div>
                   {canManage && (
                     <form action={deleteFixedExpenseAction.bind(null, e.id, branchId)}>
@@ -211,7 +216,7 @@ export function BranchExpenses({ branchId, isShared, isPartner, canManage, canAd
                 ))}
               </select>
             </div>
-            {isPartner && <PayerFields />}
+            {isPartner && <PayerFields ownerName={ownerName} partnerName={partnerName} />}
             <div className="col-span-2 md:col-span-3">
               <button type="submit" className={BTN}>+ הוסף הוצאה חד פעמית</button>
             </div>
@@ -224,7 +229,7 @@ export function BranchExpenses({ branchId, isShared, isPartner, canManage, canAd
             <div key={e.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-card-border bg-[#f9fafb] p-3">
               <div>
                 <p className="text-sm font-bold text-ink">{e.desc} — ₪{(e.amount || 0).toLocaleString()}</p>
-                <p className="text-xs text-muted">{e.category || "ללא קטגוריה"} · {e.date}{isPartner ? ` · ${paymentNote(e.paidBy, e.owedBy)}` : ""}</p>
+                <p className="text-xs text-muted">{e.category || "ללא קטגוריה"} · {e.date}{isPartner ? ` · ${paymentNote(e.paidBy, e.owedBy, ownerName, partnerName)}` : ""}</p>
               </div>
               {canManage && (
                 <form action={deleteVariableExpenseAction.bind(null, e.id, branchId)}>
