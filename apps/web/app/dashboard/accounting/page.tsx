@@ -6,6 +6,7 @@ import type { AccountingIncome, AccountingExpense, CollectionRoute, Branch } fro
 import { createIncomeAction, createExpenseAction, deleteIncomeAction, deleteExpenseAction } from "./actions";
 import CollectModal from "./collect-modal";
 import { DeleteEntryButton } from "./delete-entry-button";
+import { EditExpenseModal } from "./edit-expense-modal";
 import { loadOwnerFixedExpenseBurden } from "@/lib/owner-expense-burden";
 
 const BUSINESS_LABELS: Record<string, string> = {
@@ -225,6 +226,7 @@ export default async function AccountingPage() {
                   <div className="mt-0.5 text-[11px] text-muted">{e.date}</div>
                 </div>
                 <div className="min-w-[75px] text-left font-extrabold text-red-600">{e.amount.toLocaleString()} ₪</div>
+                <EditExpenseModal expense={e} />
                 <form action={bound}>
                   <DeleteEntryButton confirmText={"למחק את ההוצאה?"} />
                 </form>

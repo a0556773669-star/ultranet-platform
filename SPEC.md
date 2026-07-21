@@ -190,7 +190,12 @@ pnpm dev        # turbo run dev — מריץ web + api
 
 - **`/expenses`** (perm: `computers`) — הוצאות קבועות/חד-פעמיות פר סניף חדר מחשבים
   (`n_fixed_expenses` / `n_var_expenses`, אותו מודל בדיוק כמו ב-`/dashboard/rentals/expenses`).
-  בנוסף קיים "סניף" מדומה **`shared-computers`** (`SHARED_COMPUTERS_BRANCH_ID`, מיוצא גם בתור
+  לכל הוצאה (קבועה או חד-פעמית) יש כפתור **עריכה** (owner בלבד, `canManage`) הפותח מודל
+  לעריכת כל השדות - שם/תיאור, סכום, תאריך, קטגוריה, ו"מי שילם בפועל"/"על מי החוב" עבור
+  סניפי שותף (`updateFixedExpenseAction` / `updateVariableExpenseAction` ב-`actions.ts`).
+  עריכת הוצאה חד-פעמית מוחקת ויוצרת מחדש את רשומת ה-`n_ah_expenses` המקושרת (אם יש) לפי
+  הנתונים החדשים, באותו אופן שבו `createLinkedOwnerLedgerExpense`/`deleteLinkedOwnerLedgerExpense`
+  עובדים ביצירה/מחיקה. בנוסף קיים "סניף" מדומה **`shared-computers`** (`SHARED_COMPUTERS_BRANCH_ID`, מיוצא גם בתור
   `SHARED_EXPENSE_BRANCH_ID` מ-`apps/web/lib/computer-room-accounting.ts` לתאימות; המקבילה
   בניידים היא `SHARED_RENTALS_BRANCH_ID`, שתיהן מוגדרות ב-`apps/web/lib/expense-shared-scope.ts`)
   עבור הוצאות המשותפות לכל סניפי חדרי המחשבים יחד (למשל פרסום/רישיונות משותפים) - עלותן
@@ -274,6 +279,8 @@ pnpm dev        # turbo run dev — מריץ web + api
 ### הנהלת חשבונות (`/dashboard/accounting`) — perm: accounting
 הכנסות/הוצאות מרכזיות (`n_ah_income` / `n_ah_expenses`), גבייה (`collect-modal.tsx`,
 `lib/collection-charge.ts`), ומסלולי גבייה (`/routes`, `n_collection_routes`).
+לכל הוצאה ברשימת "הוצאות אחרונות" יש כפתור **עריכה** (`edit-expense-modal.tsx`, owner בלבד)
+לעריכת תאריך/תיאור/סכום/עסק (`updateExpenseAction`), בנוסף לכפתור המחיקה הקיים.
 
 **הכנסות (`n_ah_income`) - 3 סוגים בלבד, אלה היחידים שמתחשבנים בהנה"ח הראשית ובדף הבית:**
 טופס ההוספה ב-`/dashboard/accounting` (וגם הטופס המקוצר ב-`/dashboard/rentals/accounting`)
