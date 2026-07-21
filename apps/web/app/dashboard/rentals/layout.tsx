@@ -13,7 +13,7 @@ export default async function RentalsLayout({ children }: { children: React.Reac
           <Laptop className="h-4 w-4" />
           {"השכרות"}
         </h1>
-        <p className="text-sm text-muted">סניפים, מחשבים, לקוחות, השכרות והנה\"ח</p>
+        <p className="text-sm text-muted">סניפים, מחשבים, לקוחות, השכרות והנה&quot;ח</p>
       </div>
       <RentalsTabs isOwner={isOwner} />
       {children}
