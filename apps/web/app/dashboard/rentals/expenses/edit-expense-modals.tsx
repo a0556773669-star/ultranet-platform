@@ -10,21 +10,31 @@ const CATEGORIES = ["שכירות", "חשמל ומים", "משכורות", "צי
 const FIELD = "w-full rounded-lg border border-card-border bg-[#f4f6f9] px-3 py-2 text-sm focus:border-teal focus:bg-white focus:outline-none";
 const LABEL = "mb-1 block text-xs font-semibold text-muted";
 
-function PayerFields({ paidBy, owedBy }: { paidBy?: string; owedBy?: string }) {
+function PayerFields({
+  paidBy,
+  owedBy,
+  ownerName,
+  partnerName,
+}: {
+  paidBy?: string;
+  owedBy?: string;
+  ownerName: string;
+  partnerName: string;
+}) {
   return (
     <>
       <div>
         <label className={LABEL}>מי שילם בפועל</label>
         <select name="paidBy" defaultValue={paidBy === "partner" ? "partner" : "owner"} className={FIELD}>
-          <option value="owner">אני</option>
-          <option value="partner">השותף</option>
+          <option value="owner">{ownerName}</option>
+          <option value="partner">{partnerName}</option>
         </select>
       </div>
       <div>
         <label className={LABEL}>על מי החוב</label>
         <select name="owedBy" defaultValue={owedBy === "partner" ? "partner" : owedBy === "shared" ? "shared" : "owner"} className={FIELD}>
-          <option value="owner">עלי בלבד</option>
-          <option value="partner">על השותף בלבד</option>
+          <option value="owner">על {ownerName} בלבד</option>
+          <option value="partner">על {partnerName} בלבד</option>
           <option value="shared">משותף (חצי-חצי)</option>
         </select>
       </div>
@@ -51,7 +61,19 @@ function Modal({ title, onClose, children }: { title: string; onClose: () => voi
   );
 }
 
-export function EditFixedExpenseModal({ expense, branchId, isPartner }: { expense: FixedExpense; branchId: string; isPartner: boolean }) {
+export function EditFixedExpenseModal({
+  expense,
+  branchId,
+  isPartner,
+  ownerName,
+  partnerName,
+}: {
+  expense: FixedExpense;
+  branchId: string;
+  isPartner: boolean;
+  ownerName: string;
+  partnerName: string;
+}) {
   const [open, setOpen] = useState(false);
   const update = updateFixedExpenseAction.bind(null, expense.id, branchId);
 
@@ -90,7 +112,9 @@ export function EditFixedExpenseModal({ expense, branchId, isPartner }: { expens
                 ))}
               </select>
             </div>
-            {isPartner && <PayerFields paidBy={expense.paidBy} owedBy={expense.owedBy} />}
+            {isPartner && (
+              <PayerFields paidBy={expense.paidBy} owedBy={expense.owedBy} ownerName={ownerName} partnerName={partnerName} />
+            )}
             <div className="col-span-2">
               <button type="submit" className="rounded-[10px] bg-gradient-to-br from-teal to-teal-light px-5 py-2 text-xs font-bold text-white shadow-primary transition hover:opacity-90">
                 שמירה
@@ -103,7 +127,19 @@ export function EditFixedExpenseModal({ expense, branchId, isPartner }: { expens
   );
 }
 
-export function EditVariableExpenseModal({ expense, branchId, isPartner }: { expense: VariableExpense; branchId: string; isPartner: boolean }) {
+export function EditVariableExpenseModal({
+  expense,
+  branchId,
+  isPartner,
+  ownerName,
+  partnerName,
+}: {
+  expense: VariableExpense;
+  branchId: string;
+  isPartner: boolean;
+  ownerName: string;
+  partnerName: string;
+}) {
   const [open, setOpen] = useState(false);
   const update = updateVariableExpenseAction.bind(null, expense.id, branchId);
 
@@ -142,7 +178,9 @@ export function EditVariableExpenseModal({ expense, branchId, isPartner }: { exp
                 ))}
               </select>
             </div>
-            {isPartner && <PayerFields paidBy={expense.paidBy} owedBy={expense.owedBy} />}
+            {isPartner && (
+              <PayerFields paidBy={expense.paidBy} owedBy={expense.owedBy} ownerName={ownerName} partnerName={partnerName} />
+            )}
             <div className="col-span-2">
               <button type="submit" className="rounded-[10px] bg-gradient-to-br from-teal to-teal-light px-5 py-2 text-xs font-bold text-white shadow-primary transition hover:opacity-90">
                 שמירה
