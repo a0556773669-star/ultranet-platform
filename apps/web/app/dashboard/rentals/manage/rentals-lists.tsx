@@ -16,6 +16,8 @@ type LaptopRates = {
 };
 type StickRates = { day1: number; day2: number; day3plus: number };
 
+export type ItemOption = { id: string; name: string };
+
 export type ActiveRowData = {
   rentalId: string;
   startDate: string;
@@ -27,7 +29,9 @@ export type ActiveRowData = {
   clientIdNum?: string;
   cardLast4?: string;
   hasCardToken: boolean;
+  itemId: string;
   itemName: string;
+  itemOptions: ItemOption[];
   branchName: string;
   showBranch: boolean;
   calcPrice: number;
@@ -36,15 +40,18 @@ export type ActiveRowData = {
   stickRates?: StickRates;
   hasRoute: boolean;
   nedarimCreds: { mosadId: string; apiValid: string } | null;
-  isOwner: boolean;
+  canDelete: boolean;
   canCharge: boolean;
 };
 
 export type HistoryRowData = {
   rentalId: string;
+  clientId: string;
   clientName: string;
   clientPhone?: string;
+  itemId: string;
   itemName: string;
+  itemOptions: ItemOption[];
   branchName: string;
   startDate: string;
   returnDate?: string;
@@ -52,7 +59,7 @@ export type HistoryRowData = {
   notes?: string;
   paid: boolean;
   routes: { id: string; name: string }[];
-  isOwner: boolean;
+  canDelete: boolean;
 };
 
 function matchesSearch(name: string, phone: string | undefined, q: string) {
@@ -130,7 +137,9 @@ export function RentalsLists({
                   clientIdNum={r.clientIdNum}
                   cardLast4={r.cardLast4}
                   hasCardToken={r.hasCardToken}
+                  itemId={r.itemId}
                   itemName={r.itemName}
+                  itemOptions={r.itemOptions}
                   branchName={r.branchName}
                   showBranch={r.showBranch}
                   calcPrice={r.calcPrice}
@@ -139,7 +148,7 @@ export function RentalsLists({
                   stickRates={r.stickRates}
                   hasRoute={r.hasRoute}
                   nedarimCreds={r.nedarimCreds}
-                  isOwner={r.isOwner}
+                  canDelete={r.canDelete}
                   canCharge={r.canCharge}
                 />
               ))}

@@ -2,6 +2,7 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { Check } from "lucide-react";
 import { calcRentalDays, calcRentalPrice, calcStickPrice } from "@/lib/rental-pricing";
 import {
@@ -10,9 +11,11 @@ import {
   closeRentalWithChargeAction,
   deleteRentalAction,
   issueCashReceiptAction,
+  updateRentalItemAction,
 } from "../actions";
 import { NedarimChargeCapture } from "../clients/nedarim-charge-capture";
 import { TokenChargeButton } from "./token-charge-button";
+import type { ItemOption } from "./rentals-lists";
 
 type LaptopRates = {
   dayPrice: number;
@@ -36,10 +39,12 @@ type Props = {
   clientIdNum?: string;
   cardLast4?: string;
   hasCardToken: boolean;
+  itemId: string;
   itemName: string;
+  itemOptions: ItemOption[];
   branchName: string;
   showBranch: boolean;
-  isOwner?: boolean;
+  canDelete?: boolean;
   calcPrice: number;
   notes?: string;
   laptopRates?: LaptopRates;
@@ -63,10 +68,12 @@ export function ActiveRentalRow({
   clientIdNum,
   cardLast4,
   hasCardToken,
+  itemId,
   itemName,
+  itemOptions,
   branchName,
   showBranch,
-  isOwner,
+  canDelete,
   calcPrice,
   notes: initialNotes,
   laptopRates,
@@ -89,6 +96,7 @@ export function ActiveRentalRow({
   const [actionError, setActionError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [issuingReceipt, setIssuingReceipt] = useState(false);
+  const [itemPending, setItemPending] = useState(false);
 
   const autoPrice = useMemo(() => {
     const days = calcRentalDays(startDate, returnDate);
@@ -201,10 +209,34 @@ export function ActiveRentalRow({
     });
   }
 
+  function handleItemChange(newItemId: string) {
+    if (!newItemId || newItemId === itemId) return;
+    setItemPending(true);
+    setActionError(null);
+    startTransition(async () => {
+      try {
+        await updateRentalItemAction(rentalId, newItemId);
+        router.refresh();
+      } catch (e) {
+        setActionError(e instanceof Error ? e.message : "שגיאה בשינוי הפריט");
+      } finally {
+        setItemPending(false);
+      }
+    });
+  }
+
   return (
     <>
       <tr className="cursor-pointer border-t border-card-border transition hover:bg-[#f8fafc]" onClick={() => setExpanded((v) => !v)}>
-        <td className="px-[11px] py-2 font-semibold text-ink">{clientName}</td>
+        <td className="px-[11px] py-2 font-semibold text-ink">
+          <Link
+            href={`/dashboard/rentals/clients/${clientId}`}
+            onClick={(e) => e.stopPropagation()}
+            className="hover:underline"
+          >
+            {clientName}
+          </Link>
+        </td>
         <td className="px-[11px] py-2 text-muted">{itemName}</td>
         {showBranch && <td className="px-[11px] py-2 text-muted">{branchName}</td>}
         <td className="px-[11px] py-2 text-muted">{startDate}</td>
@@ -217,6 +249,19 @@ export function ActiveRentalRow({
         <tr className="border-t border-card-border bg-[#f8fafc]">
           <td colSpan={showBranch ? 6 : 5} className="px-[11px] py-4">
             <div className="flex flex-col gap-3" onClick={(e) => e.stopPropagation()}>
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-muted">פריט (מחשב/סטיק)</label>
+                <select
+                  value={itemId}
+                  disabled={itemPending}
+                  onChange={(e) => handleItemChange(e.target.value)}
+                  className="w-full max-w-xs rounded-lg border border-card-border bg-white px-3 py-1.5 text-sm disabled:opacity-50"
+                >
+                  {itemOptions.map((it) => (
+                    <option key={it.id} value={it.id}>{it.name}</option>
+                  ))}
+                </select>
+              </div>
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
                 <div>
                   <label className="mb-1 block text-xs font-semibold text-muted">תאריך החזרה</label>
@@ -377,7 +422,7 @@ export function ActiveRentalRow({
                 >
                   {pending ? "מעבד..." : "סגירה"}
                 </button>
-                {isOwner && (
+                {canDelete && (
                   <button
                     type="button"
                     disabled={deleting}

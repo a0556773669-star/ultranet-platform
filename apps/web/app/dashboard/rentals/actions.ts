@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { getAdminFirestore } from "@/lib/firebase-admin";
+import { FieldValue } from "firebase-admin/firestore";
 import { resolveEzcountCreds, createEzcountReceipt } from "@/lib/ezcount";
 import type { RentalClient, Laptop, Stick, Rental, Branch } from "@ultranet/shared-types";
 import { parseClientsWorkbook } from "@/lib/client-excel";
@@ -463,10 +464,61 @@ export async function markReturnedAction(id: string) {
 
 export async function deleteRentalAction(rentalId: string) {
   const session = await requireSession();
-  if (session.user?.role !== "owner") {
-    throw new Error("רק מנהל יכול למחוק השכרה");
+  if (session.user?.role !== "owner" && session.user?.role !== "partner") {
+    throw new Error("רק מנהל או שותף יכולים למחוק השכרה");
   }
   await getAdminFirestore().collection("n_rentals").doc(rentalId).delete();
+  revalidatePath("/dashboard/rentals");
+  revalidatePath("/dashboard");
+}
+
+/**
+ * Reassigns a rental to a different laptop/stick of the same kind - e.g. fixing a data-entry
+ * mistake ("wrong computer number"). Only checked against other *active* rentals: a returned
+ * rental's itemId is just a historical record, so retargeting it can't create a double-booking.
+ */
+export async function updateRentalItemAction(rentalId: string, itemId: string) {
+  await requireSession();
+  const db = getAdminFirestore();
+  const ref = db.collection("n_rentals").doc(rentalId);
+  const snap = await ref.get();
+  const rental = snap.data() as Omit<Rental, "id"> | undefined;
+  if (!rental) throw new Error("השכרה לא נמצאה");
+
+  const itemCollection = rental.kind === "stick" ? "n_sticks" : "n_laptops";
+  const itemDoc = await db.collection(itemCollection).doc(itemId).get();
+  const item = itemDoc.data() as { branchId?: string } | undefined;
+  if (!item || item.branchId !== rental.branchId) {
+    throw new Error("הפריט שנבחר לא שייך לסניף הזה");
+  }
+
+  if (rental.status === "active") {
+    const clash = await db
+      .collection("n_rentals")
+      .where("itemId", "==", itemId)
+      .where("status", "==", "active")
+      .limit(1)
+      .get();
+    if (!clash.empty && clash.docs[0]!.id !== rentalId) {
+      throw new Error("הפריט הזה כבר מושכר בהשכרה פעילה אחרת");
+    }
+  }
+
+  await ref.set({ itemId }, { merge: true });
+  revalidatePath("/dashboard/rentals");
+  revalidatePath("/dashboard");
+}
+
+/** Reverts a mistaken "mark as paid" back to unpaid - purely internal bookkeeping (n_rentals), same as markRentalPaidAction. */
+export async function markRentalUnpaidAction(rentalId: string) {
+  await requireSession();
+  await getAdminFirestore()
+    .collection("n_rentals")
+    .doc(rentalId)
+    .set(
+      { paid: false, paymentMethod: FieldValue.delete(), receiptIssued: false, receiptPdfLink: FieldValue.delete() },
+      { merge: true },
+    );
   revalidatePath("/dashboard/rentals");
   revalidatePath("/dashboard");
 }
