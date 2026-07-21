@@ -260,7 +260,10 @@ pnpm dev        # turbo run dev — מריץ web + api
   (`gatewayToken` + `cardExpiry`) מוצג בשורה כפתור "חייב" (מוצג רק ל-`owner`
   או למי שיש לו `perms.charging`), שפותח את `TokenChargeButton` הקיים
   (`../manage/token-charge-button.tsx`) וקורא ל-`/api/rentals/charge` לחיוב
-  ישיר דרך הטוקן השמור, ללא הזנת פרטי כרטיס מחדש.
+  ישיר דרך הטוקן השמור, ללא הזנת פרטי כרטיס מחדש. בדף עריכת לקוח בודד
+  (`/clients/[id]`) מוצג כפתור "מחק לקוח" (`delete-client-button.tsx`) ל-`owner`
+  ול-`partner` בלבד (`deleteClientAction` ב-`../actions.ts` חוסם גם בצד השרת
+  תפקידים אחרים ומפנה ל-`?error=forbidden`).
 - **`/clients/complete-cards`** — מסך עזר להשלמת טוקניזציה בכמות: מציג בתור
   את כל הלקוחות בהיקף המשתמש שאין להם `cardLast4` שמור, עם `NedarimCardCapture`
   פתוח לכל לקוח בתורו (מתקדם אוטומטית ללקוח הבא אחרי שמירה מוצלחת, ניתן גם
@@ -276,6 +279,11 @@ pnpm dev        # turbo run dev — מריץ web + api
   ל-`perms.charging`) מפיק ושולח קבלת EZcount ידנית עבור תשלום מזומן/העברה.
   חיוב אשראי מצליח (דרך `/api/rentals/charge`) מפיק קבלת EZcount אוטומטית
   ושולח אותה במייל ללקוח, כל עוד מוגדר לסניף מסלול עם `receiptsProvider: "ezcount"`.
+  בטבלת ה"היסטוריה" כל שורה כוללת כפתור "עריכה" (`history-rental-row.tsx`)
+  הפותח טופס inline לעדכון תאריך התחלה, תאריך החזרה, מחיר סופי והערות
+  (`updateRentalHistoryAction` ב-`../actions.ts`) — פתוח לכל מי שיש לו גישה
+  למודול (לא owner-בלבד, בדומה ל-`closeRentalAction`); מחיקת השכרה
+  (`DeleteHistoryRentalButton`) נשארת מוגבלת ל-owner.
 - **`/mine`** — ההשכרות שלי.
 - **`/expenses`** — הוצאות סניף השכרות (`n_fixed_expenses`/`n_var_expenses`), כולל "סניף" מדומה
   **`shared-rentals`** (`SHARED_RENTALS_BRANCH_ID`, `apps/web/lib/expense-shared-scope.ts`)

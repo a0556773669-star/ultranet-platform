@@ -139,6 +139,7 @@ function routesForBranch(branchId: string): { id: string; name: string }[] {
       startDate: r.startDate,
       returnDate: r.returnDate ?? r.endDate,
       price: r.finalPrice ?? r.calcPrice,
+      notes: r.notes,
       paid: !!r.paid,
       routes: routesForBranch(r.branchId),
       isOwner: role === "owner",

@@ -242,7 +242,7 @@ export async function updateClientAction(id: string, formData: FormData) {
 
 export async function deleteClientAction(id: string) {
   const session = await requireSession();
-  if (session.user?.role !== "owner") {
+  if (session.user?.role !== "owner" && session.user?.role !== "partner") {
     redirect("/dashboard/rentals/clients?error=forbidden");
   }
   await getAdminFirestore().collection("n_rental_clients").doc(id).delete();
@@ -353,6 +353,30 @@ export async function closeRentalWithChargeAction(
   await markRentalPaidAction(rentalId, "nedarim", undefined, receiptPdfLink);
   await closeRentalAction(rentalId, data);
   return { ok: true };
+}
+
+export async function updateRentalHistoryAction(
+  rentalId: string,
+  data: { startDate: string; returnDate: string; finalPrice: number; notes?: string }
+) {
+  await requireSession();
+  if (!data.startDate || !data.returnDate) {
+    throw new Error("חובה למלא תאריך התחלה ותאריך החזרה");
+  }
+  await getAdminFirestore()
+    .collection("n_rentals")
+    .doc(rentalId)
+    .set(
+      stripUndefined({
+        startDate: data.startDate,
+        returnDate: data.returnDate,
+        finalPrice: data.finalPrice,
+        notes: data.notes,
+      }),
+      { merge: true }
+    );
+  revalidatePath("/dashboard/rentals");
+  revalidatePath("/dashboard");
 }
 
 export async function createRentalAction(formData: FormData) {

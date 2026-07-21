@@ -3,8 +3,7 @@
 import { useMemo, useState } from "react";
 import { Search } from "lucide-react";
 import { ActiveRentalRow } from "./active-rental-row";
-import { UnpaidRowActions } from "./unpaid-row-actions";
-import { DeleteHistoryRentalButton } from "./delete-history-rental-button";
+import { HistoryRentalRow } from "./history-rental-row";
 
 type LaptopRates = {
   dayPrice: number;
@@ -50,6 +49,7 @@ export type HistoryRowData = {
   startDate: string;
   returnDate?: string;
   price: number;
+  notes?: string;
   paid: boolean;
   routes: { id: string; name: string }[];
   isOwner: boolean;
@@ -173,27 +173,7 @@ export function RentalsLists({
             </thead>
             <tbody>
               {visibleHistory.map((r) => (
-                <tr
-                  key={r.rentalId}
-                  className={`border-t border-card-border transition hover:bg-[#f8fafc] ${!r.paid ? "bg-red-50" : ""}`}
-                >
-                  <td className="px-[11px] py-2 text-muted">{r.clientName}</td>
-                  <td className="px-[11px] py-2 text-muted">{r.itemName}</td>
-                  <td className="px-[11px] py-2 text-muted">{r.branchName}</td>
-                  <td className="px-[11px] py-2 text-muted">{r.startDate}</td>
-                  <td className="px-[11px] py-2 text-muted">{r.returnDate}</td>
-                  <td className="px-[11px] py-2 font-semibold text-ink">{r.price} ₪</td>
-                  <td className="px-[11px] py-2">
-                    {r.paid ? (
-                      <span className="rounded-full bg-teal-bg px-2 py-0.5 text-[11px] font-bold text-teal-dark">שולם</span>
-                    ) : (
-                      <UnpaidRowActions rentalId={r.rentalId} routes={r.routes} />
-                    )}
-                  </td>
-                  <td className="px-[11px] py-2 text-left">
-                    {r.isOwner && <DeleteHistoryRentalButton rentalId={r.rentalId} />}
-                  </td>
-                </tr>
+                <HistoryRentalRow key={r.rentalId} r={r} />
               ))}
             </tbody>
           </table>
