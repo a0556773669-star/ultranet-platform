@@ -91,8 +91,9 @@ export function BranchExpenses({ branchId, isShared, isPartner, canManage, canAd
             מאזן חובות מול השותף (סטטוס בלבד, לא קשור להנה&quot;ח המרכזית)
           </h3>
           <p className="mb-2 text-xs text-muted">
-            זה רק מי-חייב-למי ביניכם. חלק הבעלים בפועל בכל הוצאה (לפי &quot;על מי החוב&quot;) כן
-            מתחשבן בהנה&quot;ח המרכזית כרגיל.
+            זה רק מי-חייב-למי ביניכם. הוצאה ששילמת אתה בפועל - חלקך בה (לפי &quot;על מי החוב&quot;)
+            כן מתחשבן בהנה&quot;ח המרכזית כרגיל. הוצאה שהשותף שילם בפועל לא מתחשבנת שם כלל, גם אם
+            חלק/כל החוב עליך - היא רק מקטינה את מה שהוא יעביר לך בסוף החודש.
           </p>
           {net === 0 && <p className="text-sm text-muted">מאוזן — אין חובות הדדיים</p>}
           {net > 0 && <p className="text-sm font-bold text-teal">השותף חייב לך ₪{net.toLocaleString()}</p>}

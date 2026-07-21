@@ -85,6 +85,7 @@ export async function createVariableExpenseAction(branchId: string, formData: Fo
     business: "computers",
     desc: `${desc} — ${branchLabel}`,
     amount,
+    paidBy,
     owedBy,
     date,
   });

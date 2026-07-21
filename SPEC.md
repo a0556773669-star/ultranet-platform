@@ -271,24 +271,34 @@ pnpm dev        # turbo run dev — מריץ web + api
 3. **`cash`** (מזומן) - תאריך + בחירת קופה מתוך סניפי `computers` (`branchId` = איזו קופה
    נלקח ממנה המזומן) + סכום. `business` נקבע אוטומטית ל-`computers`.
 
-**הוצאות (`n_ah_expenses`) - מתחשבנות אוטומטית מהוצאות הסניפים, אבל רק חלק הבעלים:**
+**הוצאות (`n_ah_expenses`) - מתחשבנות אוטומטית מהוצאות הסניפים, אבל רק כשהבעלים באמת שילם:**
 בניגוד להכנסות, הוצאות סניף (ניידים וחדרי מחשבים, כולל ה"סניפים" המשותפים) *כן* מתחשבנות
-בהנה"ח הראשית ובדף הבית - אבל לא הסכום המלא, אלא רק `ownerExpenseBurden(amount, owedBy)`
-(`apps/web/lib/branch-accounting.ts`): הוצאה שכל החוב עליה `owedBy: "partner"` לא נספרת בכלל
-(0 עלי), `owedBy: "shared"` נספרת לפי חצי, ו-`owedBy: "owner"`/ברירת מחדל נספרת במלואה. זה
-בלתי תלוי במי *שילם* בפועל (`paidBy`) - רק במי *חייב* את הכסף.
+בהנה"ח הראשית ובדף הבית - אבל לא תמיד, ולא הסכום המלא. הכלל הוא `ownerLedgerExpenseAmount(amount,
+paidBy, owedBy)` (`apps/web/lib/branch-accounting.ts`), שדורש **שני** תנאים לפני שמשהו נכנס
+להנה"ח הראשית בכלל:
+1. **`paidBy: "owner"`** - הבעלים הוא זה ששילם בפועל. אם השותף שילם (`paidBy: "partner"`), שום
+   דבר לא נכנס להנה"ח הראשית, **גם אם חלק/כל החוב על הבעלים** (`owedBy`) - כי לא היתה יציאת
+   מזומן אמיתית מהבעלים; במקום זאת זה מתקזז מול ההעברה החודשית שהשותף מעביר לבעלים בסוף
+   החודש (`expenseNetToOwner`/`computeMonthlySettlement`, אותו קובץ) - לא נגבה בנפרד.
+2. רק כש-(1) מתקיים, נבדק `owedBy`: `"partner"` → 0 (לא באמת עלות של הבעלים), `"shared"` →
+   חצי, `"owner"`/ברירת מחדל → הסכום המלא.
 - **הוצאות חד-פעמיות (`n_var_expenses`)** - כתובת מייד ל-`n_ah_expenses` בזמן היצירה
   (`createLinkedOwnerLedgerExpense`, `apps/web/lib/branch-expense-ledger.ts`), עם `business`
-  מתאים (`rentals`/`computers`) ו-`amount` = חלק הבעלים בלבד. ה-id של הרשומה נשמר בשדה
-  `VariableExpense.linkedAhExpenseId` ונמחק יחד עם ההוצאה (`deleteLinkedOwnerLedgerExpense`).
-  אם חלק הבעלים הוא 0 - לא נוצרת רשומה כלל.
+  מתאים (`rentals`/`computers`) ו-`amount` = `ownerLedgerExpenseAmount`. ה-id של הרשומה נשמר
+  בשדה `VariableExpense.linkedAhExpenseId` ונמחק יחד עם ההוצאה (`deleteLinkedOwnerLedgerExpense`).
+  אם הסכום הוא 0 (השותף שילם, או שהחוב כולו עליו) - לא נוצרת רשומה כלל.
 - **הוצאות קבועות/חוזרות (`n_fixed_expenses`)** - **לא** נכתבות כרשומות מתוארכות ל-`n_ah_expenses`
   (הוצאה חוזרת מדי חודש, לא אירוע חד-פעמי). במקום זאת, `loadOwnerFixedExpenseBurden`
-  (`apps/web/lib/owner-expense-burden.ts`) מחשבת בזמן אמת את סך חלק הבעלים בכל ההוצאות הקבועות
-  הפעילות (ניידים + חדרי מחשבים, כולל שני ה"סניפים" המשותפים - כל אחד נספר במלואו, בלי חלוקה
-  פר-סניף) - החודש ועד היום - ומתווספת מעל סכום `n_ah_expenses` בדף `/dashboard/accounting`
-  (סה"כ הוצאות) ובדף הבית (הוצאות החודש). אין ל"היום" (יומי) משמעות עבור הוצאה חודשית קבועה,
-  ולכן היא לא נכללת בחישובי "הוצאות היום".
+  (`apps/web/lib/owner-expense-burden.ts`) מחשבת בזמן אמת את סך `ownerLedgerExpenseAmount` בכל
+  ההוצאות הקבועות הפעילות (ניידים + חדרי מחשבים, כולל שני ה"סניפים" המשותפים - כל אחד נספר
+  במלואו, בלי חלוקה פר-סניף) - החודש ועד היום - ומתווספת מעל סכום `n_ah_expenses` בדף
+  `/dashboard/accounting` (סה"כ הוצאות) ובדף הבית (הוצאות החודש). אין ל"היום" (יומי) משמעות
+  עבור הוצאה חודשית קבועה, ולכן היא לא נכללת בחישובי "הוצאות היום".
+- **חשוב:** `ownerExpenseBurden(amount, owedBy)` (בלי תלות ב-`paidBy`) עדיין קיימת בנפרד
+  ומשמשת את דשבורדי "השקעה מול רווח" (`computeBranchFinancials` בהשכרות,
+  `computer-room-accounting.ts` בחדרי מחשבים) - שם רוצים את העלות הכלכלית האמיתית של הסניף
+  בלי קשר למי פיזית שילם. `ownerLedgerExpenseAmount` (עם `paidBy`) משמש *רק* להזנה להנה"ח
+  הראשית (`n_ah_expenses`), ששם חשובה יציאת המזומן בפועל.
 
 ערכי `type` הישנים (`fixed`/`variable`) נשארים בטיפוס לתאימות לאחור בלבד (רשומות ישנות) -
 לא נוצרות יותר על ידי ה-UI. שדה `branchId` (אופציונלי) נוסף ל-`AccountingIncome` עבור
