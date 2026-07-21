@@ -82,6 +82,9 @@ export async function updateFixedExpenseAction(id: string, branchId: string, for
   const data = { name, amount, startDate, category: category ?? FieldValue.delete(), paidBy, owedBy };
   await getAdminFirestore().collection("n_fixed_expenses").doc(id).set(data, { merge: true });
   revalidatePath(`/dashboard/rentals/expenses/${branchId}`);
+  revalidatePath("/dashboard/accounting");
+  revalidatePath("/dashboard/rentals/accounting");
+  revalidatePath("/dashboard");
 }
 
 export async function createVariableExpenseAction(branchId: string, formData: FormData) {
@@ -175,6 +178,8 @@ export async function updateVariableExpenseAction(id: string, branchId: string, 
   await db.collection("n_var_expenses").doc(id).set(data, { merge: true });
   revalidatePath(`/dashboard/rentals/expenses/${branchId}`);
   revalidatePath("/dashboard/accounting");
+  revalidatePath("/dashboard/rentals/accounting");
+  revalidatePath("/dashboard");
 }
 
 export async function deleteVariableExpenseAction(id: string, branchId: string) {
