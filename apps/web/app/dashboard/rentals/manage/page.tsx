@@ -4,9 +4,7 @@ import { requireModuleAccess } from "@/lib/perms";
 import { getAdminFirestore } from "@/lib/firebase-admin";
 import { resolveNedarimCreds } from "@/lib/nedarim";
 import type { Rental, RentalClient, Laptop, Stick, Branch, CollectionRoute } from "@ultranet/shared-types";
-import { ActiveRentalRow } from "./active-rental-row";
-import { UnpaidRowActions } from "./unpaid-row-actions";
-import { DeleteHistoryRentalButton } from "./delete-history-rental-button";
+import { RentalsLists, type ActiveRowData, type HistoryRowData } from "./rentals-lists";
 
 async function loadData() {
   const db = getAdminFirestore();
@@ -84,6 +82,68 @@ function routesForBranch(branchId: string): { id: string; name: string }[] {
       branchName: branches.get(r.branchId)?.name ?? "-",
     };
   }
+
+  const activeRows: ActiveRowData[] = active.map((r) => {
+    const info = rowInfo(r);
+    const item = r.kind === "stick" ? sticks.get(r.itemId) : laptops.get(r.itemId);
+    const laptopRates =
+      r.kind === "laptop" && item
+        ? {
+            dayPrice: (item as Laptop).dayPrice,
+            weekPrice: (item as Laptop).weekPrice,
+            monthPrice: (item as Laptop).monthPrice,
+            altPricing: (item as Laptop).altPricing,
+            noInternetDayPrice: (item as Laptop).noInternetDayPrice,
+            noInternetWeekPrice: (item as Laptop).noInternetWeekPrice,
+            noInternetMonthPrice: (item as Laptop).noInternetMonthPrice,
+          }
+        : undefined;
+    const stickRates =
+      r.kind === "stick" && item
+        ? { day1: (item as Stick).day1, day2: (item as Stick).day2, day3plus: (item as Stick).day3plus }
+        : undefined;
+    const creds = credsMap.get(r.branchId) ?? null;
+    return {
+      rentalId: r.id,
+      startDate: r.startDate,
+      kind: r.kind,
+      pricingVariant: r.pricingVariant,
+      clientId: r.clientId,
+      clientName: info.clientName,
+      clientPhone: info.clientPhone,
+      clientIdNum: info.clientIdNum,
+      cardLast4: info.cardLast4,
+      hasCardToken: info.hasCardToken,
+      itemName: info.itemName,
+      branchName: info.branchName,
+      showBranch: role === "owner",
+      calcPrice: r.calcPrice,
+      notes: r.notes,
+      laptopRates,
+      stickRates,
+      hasRoute: !!r.collectionRouteId,
+      nedarimCreds: canCharge && creds ? { mosadId: creds.mosadId, apiValid: creds.apiValid } : null,
+      isOwner: role === "owner",
+      canCharge,
+    };
+  });
+
+  const historyRows: HistoryRowData[] = history.map((r) => {
+    const info = rowInfo(r);
+    return {
+      rentalId: r.id,
+      clientName: info.clientName,
+      clientPhone: info.clientPhone,
+      itemName: info.itemName,
+      branchName: info.branchName,
+      startDate: r.startDate,
+      returnDate: r.returnDate ?? r.endDate,
+      price: r.finalPrice ?? r.calcPrice,
+      paid: !!r.paid,
+      routes: routesForBranch(r.branchId),
+      isOwner: role === "owner",
+    };
+  });
 
   return (
     <div className="flex flex-col gap-4">
@@ -164,140 +224,7 @@ function routesForBranch(branchId: string): { id: string; name: string }[] {
         })
       )}
 
-      <div className="mb-3 mt-4 flex items-center justify-between text-xs font-bold uppercase tracking-wide text-muted">
-        <span>השכרות פעילות</span>
-        <span className="rounded-full bg-[#f4f6f9] px-2.5 py-0.5 text-ink normal-case">{active.length}</span>
-      </div>
-      {active.length === 0 ? (
-        <div className="mb-8 rounded-card border border-dashed border-card-border bg-white py-10 text-center text-sm text-muted">
-          אין השכרות פעילות
-        </div>
-      ) : (
-        <div className="mb-8 overflow-hidden rounded-card border border-card-border bg-white shadow-card">
-          <table className="w-full text-[13px]">
-            <thead className="bg-[#f4f6f9] text-muted">
-              <tr>
-                <th className="px-[11px] py-[9px] text-right text-[11px] font-bold uppercase tracking-wide">לקוח</th>
-                <th className="px-[11px] py-[9px] text-right text-[11px] font-bold uppercase tracking-wide">פריט</th>
-                {role === "owner" && (
-                  <th className="px-[11px] py-[9px] text-right text-[11px] font-bold uppercase tracking-wide">סניף</th>
-                )}
-                <th className="px-[11px] py-[9px] text-right text-[11px] font-bold uppercase tracking-wide">התחלה</th>
-                <th className="px-[11px] py-[9px] text-right text-[11px] font-bold uppercase tracking-wide">מחיר משוער</th>
-                <th className="px-[11px] py-[9px]"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {active.map((r) => {
-                const info = rowInfo(r);
-                const item = r.kind === "stick" ? sticks.get(r.itemId) : laptops.get(r.itemId);
-                const laptopRates =
-                  r.kind === "laptop" && item
-                    ? {
-                        dayPrice: (item as Laptop).dayPrice,
-                        weekPrice: (item as Laptop).weekPrice,
-                        monthPrice: (item as Laptop).monthPrice,
-                        altPricing: (item as Laptop).altPricing,
-                        noInternetDayPrice: (item as Laptop).noInternetDayPrice,
-                        noInternetWeekPrice: (item as Laptop).noInternetWeekPrice,
-                        noInternetMonthPrice: (item as Laptop).noInternetMonthPrice,
-                      }
-                    : undefined;
-                const stickRates =
-                  r.kind === "stick" && item
-                    ? {
-                        day1: (item as Stick).day1,
-                        day2: (item as Stick).day2,
-                        day3plus: (item as Stick).day3plus,
-                      }
-                    : undefined;
-                const creds = credsMap.get(r.branchId) ?? null;
-                return (
-                  <ActiveRentalRow
-                    key={r.id}
-                    rentalId={r.id}
-                    startDate={r.startDate}
-                    kind={r.kind}
-                    pricingVariant={r.pricingVariant}
-                    clientId={r.clientId}
-                    clientName={info.clientName}
-                    clientPhone={info.clientPhone}
-                    clientIdNum={info.clientIdNum}
-                    cardLast4={info.cardLast4}
-                    hasCardToken={info.hasCardToken}
-                    itemName={info.itemName}
-                    branchName={info.branchName}
-                    showBranch={role === "owner"}
-                    calcPrice={r.calcPrice}
-                    notes={r.notes}
-                    laptopRates={laptopRates}
-                    stickRates={stickRates}
-                    hasRoute={!!r.collectionRouteId}
-                    nedarimCreds={canCharge && creds ? { mosadId: creds.mosadId, apiValid: creds.apiValid } : null}
-                    isOwner={role === "owner"}
-                  canCharge={canCharge}
-            />
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      <div className="mb-3 flex items-center justify-between text-xs font-bold uppercase tracking-wide text-muted">
-        <span>היסטוריה אחרונה</span>
-        <span className="rounded-full bg-[#f4f6f9] px-2.5 py-0.5 text-ink normal-case">{history.length}</span>
-      </div>
-      {history.length === 0 ? (
-        <div className="rounded-card border border-dashed border-card-border bg-white py-10 text-center text-sm text-muted">
-          אין היסטוריה עדיין
-        </div>
-      ) : (
-        <div className="overflow-hidden rounded-card border border-card-border bg-white shadow-card">
-          <table className="w-full text-[13px]">
-            <thead className="bg-[#f4f6f9] text-muted">
-              <tr>
-                <th className="px-[11px] py-[9px] text-right text-[11px] font-bold uppercase tracking-wide">לקוח</th>
-                <th className="px-[11px] py-[9px] text-right text-[11px] font-bold uppercase tracking-wide">פריט</th>
-            <th className="px-[11px] py-[9px] text-right text-[11px] font-bold uppercase tracking-wide">סניף</th>
-                <th className="px-[11px] py-[9px] text-right text-[11px] font-bold uppercase tracking-wide">התחלה</th>
-                <th className="px-[11px] py-[9px] text-right text-[11px] font-bold uppercase tracking-wide">החזרה</th>
-                <th className="px-[11px] py-[9px] text-right text-[11px] font-bold uppercase tracking-wide">מחיר</th>
-                <th className="px-[11px] py-[9px] text-right text-[11px] font-bold uppercase tracking-wide">תשלום</th>
-                <th className="px-[11px] py-[9px] text-right text-[11px] font-bold uppercase tracking-wide"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {history.map((r) => {
-                const info = rowInfo(r);
-                return (
-                  <tr
-                    key={r.id}
-                    className={`border-t border-card-border transition hover:bg-[#f8fafc] ${!r.paid ? "bg-red-50" : ""}`}
-                  >
-                    <td className="px-[11px] py-2 text-muted">{info.clientName}</td>
-                    <td className="px-[11px] py-2 text-muted">{info.itemName}</td>
-                <td className="px-[11px] py-2 text-muted">{info.branchName}</td>
-                    <td className="px-[11px] py-2 text-muted">{r.startDate}</td>
-                    <td className="px-[11px] py-2 text-muted">{r.returnDate ?? r.endDate}</td>
-                    <td className="px-[11px] py-2 font-semibold text-ink">{(r.finalPrice ?? r.calcPrice)} ₪</td>
-                    <td className="px-[11px] py-2">
-                      {r.paid ? (
-                        <span className="rounded-full bg-teal-bg px-2 py-0.5 text-[11px] font-bold text-teal-dark">שולם</span>
-                      ) : (
-                        <UnpaidRowActions rentalId={r.id} routes={routesForBranch(r.branchId)} />
-                      )}
-                    </td>
-                    <td className="px-[11px] py-2 text-left">
-                      {role === "owner" && <DeleteHistoryRentalButton rentalId={r.id} />}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      )}
+      <RentalsLists active={activeRows} history={historyRows} showBranchColumn={role === "owner"} />
     </div>
   );
 }
