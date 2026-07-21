@@ -41,10 +41,10 @@ export default async function ComputerRoomBranchExpensesPage({ params }: { param
     db.collection("n_var_expenses").where("branchId", "==", params.id).get(),
   ]);
   const fixedExpenses = fixedSnap.docs
-    .map((d) => ({ id: d.id, ...(d.data() as Omit<FixedExpense, "id">) }) as FixedExpense)
+    .map((d) => ({ ...(d.data() as Omit<FixedExpense, "id">), id: d.id }) as FixedExpense)
     .sort((a, b) => b.startDate.localeCompare(a.startDate));
   const variableExpenses = variableSnap.docs
-    .map((d) => ({ id: d.id, ...(d.data() as Omit<VariableExpense, "id">) }) as VariableExpense)
+    .map((d) => ({ ...(d.data() as Omit<VariableExpense, "id">), id: d.id }) as VariableExpense)
     .sort((a, b) => b.date.localeCompare(a.date));
 
   const hiddenFromPartner = (e: { paidBy?: string; owedBy?: string }) => e.paidBy === "owner" && e.owedBy === "owner";

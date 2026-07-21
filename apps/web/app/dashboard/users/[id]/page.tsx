@@ -16,7 +16,7 @@ export default async function EditUserPage({ params }: { params: { id: string } 
     notFound();
   }
   const user = { id: doc.id, ...(doc.data() as Omit<AppUser, "id">) };
-  const branches = branchesSnap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<Branch, "id">) })) as Branch[];
+  const branches = branchesSnap.docs.map((d) => ({ ...(d.data() as Omit<Branch, "id">), id: d.id })) as Branch[];
   const boundUpdate = updateUserAction.bind(null, params.id);
 
   return (

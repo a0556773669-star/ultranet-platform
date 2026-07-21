@@ -13,7 +13,7 @@ async function loadData() {
     db.collection("n_branches").get(),
   ]);
   const clients = clientsSnap.docs.map(
-    (d) => ({ id: d.id, ...(d.data() as Omit<CoworkingClient, "id">) }) as CoworkingClient,
+    (d) => ({ ...(d.data() as Omit<CoworkingClient, "id">), id: d.id }) as CoworkingClient,
   );
   const stations = new Map(stationsSnap.docs.map((d) => [d.id, d.data() as CoworkingStation]));
   const branches = new Map(branchesSnap.docs.map((d) => [d.id, d.data() as Branch]));

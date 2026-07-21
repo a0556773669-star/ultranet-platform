@@ -24,9 +24,9 @@ export default async function CollectionRoutesPage() {
     db.collection("n_branches").get(),
   ]);
   const routes = routesSnap.docs.map(
-    (d) => ({ id: d.id, ...(d.data() as Omit<CollectionRoute, "id">) }) as CollectionRoute,
+    (d) => ({ ...(d.data() as Omit<CollectionRoute, "id">), id: d.id }) as CollectionRoute,
   );
-  const branches = branchesSnap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<Branch, "id">) }) as Branch);
+  const branches = branchesSnap.docs.map((d) => ({ ...(d.data() as Omit<Branch, "id">), id: d.id }) as Branch);
   const branchName = (id: string | null) =>
     id ? (branches.find((b) => b.id === id)?.name ?? "-") : "כל הסניפים";
 

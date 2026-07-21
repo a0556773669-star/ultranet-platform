@@ -34,7 +34,7 @@ export default async function EditClientPage({
   if (!isOwner && client.branchId !== myBranchId) notFound();
 
   const branches = branchesSnap.docs.map(
-    (d) => ({ id: d.id, ...(d.data() as Omit<Branch, "id">) }) as Branch
+    (d) => ({ ...(d.data() as Omit<Branch, "id">), id: d.id }) as Branch
   );
   const nedarimCreds = await resolveNedarimCreds(client.branchId);
 

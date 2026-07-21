@@ -15,10 +15,10 @@ export async function GET() {
     db.collection("n_rental_clients").get(),
     db.collection("n_branches").where("branchType", "==", "rentals").get(),
   ]);
-  const branches = branchesSnap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<Branch, "id">) }));
+  const branches = branchesSnap.docs.map((d) => ({ ...(d.data() as Omit<Branch, "id">), id: d.id }));
   const branchNameById = Object.fromEntries(branches.map((b) => [b.id, b.name]));
   const allClients = clientsSnap.docs.map(
-    (d) => ({ id: d.id, ...(d.data() as Omit<RentalClient, "id">) })
+    (d) => ({ ...(d.data() as Omit<RentalClient, "id">), id: d.id })
   ) as RentalClient[];
   const clients = isOwner ? allClients : allClients.filter((c) => c.branchId === myBranchId);
 

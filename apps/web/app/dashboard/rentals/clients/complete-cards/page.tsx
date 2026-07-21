@@ -19,12 +19,12 @@ export default async function CompleteCardsPage() {
     db.collection("n_branches").where("branchType", "==", "rentals").get(),
   ]);
   const branches = branchesSnap.docs.map(
-    (d) => ({ id: d.id, ...(d.data() as Omit<Branch, "id">) }) as Branch
+    (d) => ({ ...(d.data() as Omit<Branch, "id">), id: d.id }) as Branch
   );
   const branchNameById = new Map(branches.map((b) => [b.id, b.name]));
 
   const allClients = clientsSnap.docs.map(
-    (d) => ({ id: d.id, ...(d.data() as Omit<RentalClient, "id">) }) as RentalClient
+    (d) => ({ ...(d.data() as Omit<RentalClient, "id">), id: d.id }) as RentalClient
   );
   const scopedClients = isOwner
     ? allClients

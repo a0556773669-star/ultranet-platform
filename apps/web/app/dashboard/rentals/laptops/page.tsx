@@ -16,8 +16,8 @@ export default async function LaptopsPage() {
     db.collection("n_laptops").get(),
     db.collection("n_branches").where("branchType", "==", "rentals").get(),
   ]);
-  const branches = branchesSnap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<Branch, "id">) }) as Branch);
-  const allLaptops = laptopsSnap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<Laptop, "id">) }) as Laptop);
+  const branches = branchesSnap.docs.map((d) => ({ ...(d.data() as Omit<Branch, "id">), id: d.id }) as Branch);
+  const allLaptops = laptopsSnap.docs.map((d) => ({ ...(d.data() as Omit<Laptop, "id">), id: d.id }) as Laptop);
   const laptops = role === "owner" ? allLaptops : allLaptops.filter((l) => l.branchId === myBranchId);
   const branchName = (id: string) => branches.find((b) => b.id === id)?.name ?? "-";
 

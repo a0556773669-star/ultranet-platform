@@ -63,14 +63,14 @@ export async function loadComputerRoomAccounting(): Promise<ComputerRoomAccounti
   ]);
 
   const branches = branchesSnap.docs
-    .map((d) => ({ id: d.id, ...(d.data() as Omit<Branch, "id">) }) as Branch)
+    .map((d) => ({ ...(d.data() as Omit<Branch, "id">), id: d.id }) as Branch)
     .sort((a, b) => a.name.localeCompare(b.name, "he"));
 
-  const allFixed = fixedSnap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<FixedExpense, "id">) }) as FixedExpense);
+  const allFixed = fixedSnap.docs.map((d) => ({ ...(d.data() as Omit<FixedExpense, "id">), id: d.id }) as FixedExpense);
   const allVariable = variableSnap.docs.map(
-    (d) => ({ id: d.id, ...(d.data() as Omit<VariableExpense, "id">) }) as VariableExpense,
+    (d) => ({ ...(d.data() as Omit<VariableExpense, "id">), id: d.id }) as VariableExpense,
   );
-  const allIncome = incomeSnap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<BranchIncome, "id">) }) as BranchIncome);
+  const allIncome = incomeSnap.docs.map((d) => ({ ...(d.data() as Omit<BranchIncome, "id">), id: d.id }) as BranchIncome);
 
   const branchIds = new Set(branches.map((b) => b.id));
   const month = currentMonth();

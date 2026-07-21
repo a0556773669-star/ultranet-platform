@@ -43,10 +43,10 @@ export default async function BranchExpensesPage({ params }: { params: { id: str
     db.collection("n_var_expenses").where("branchId", "==", params.id).get(),
   ]);
   const fixedExpenses = fixedSnap.docs
-    .map((d) => ({ id: d.id, ...(d.data() as Omit<FixedExpense, "id">) }) as FixedExpense)
+    .map((d) => ({ ...(d.data() as Omit<FixedExpense, "id">), id: d.id }) as FixedExpense)
     .sort((a, b) => b.startDate.localeCompare(a.startDate));
   const variableExpenses = variableSnap.docs
-    .map((d) => ({ id: d.id, ...(d.data() as Omit<VariableExpense, "id">) }) as VariableExpense)
+    .map((d) => ({ ...(d.data() as Omit<VariableExpense, "id">), id: d.id }) as VariableExpense)
     .sort((a, b) => b.date.localeCompare(a.date));
 
   const hiddenFromPartner = (e: { paidBy?: string; owedBy?: string }) => e.paidBy === "owner" && e.owedBy === "owner";
@@ -57,7 +57,7 @@ export default async function BranchExpensesPage({ params }: { params: { id: str
   if (isOwner && !isShared) {
     const incomeSnap = await db.collection("n_branch_income").where("branchId", "==", params.id).get();
     branchIncomes = incomeSnap.docs
-      .map((d) => ({ id: d.id, ...(d.data() as Omit<BranchIncome, "id">) }) as BranchIncome)
+      .map((d) => ({ ...(d.data() as Omit<BranchIncome, "id">), id: d.id }) as BranchIncome)
       .sort((a, b) => b.date.localeCompare(a.date));
   }
 

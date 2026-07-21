@@ -44,17 +44,17 @@ export default async function AccountingPage() {
     db.collection("n_branches").get(),
   ]);
   const income = incomeSnap.docs
-    .map((d) => ({ id: d.id, ...(d.data() as Omit<AccountingIncome, "id">) }) as AccountingIncome)
+    .map((d) => ({ ...(d.data() as Omit<AccountingIncome, "id">), id: d.id }) as AccountingIncome)
     .sort((a, b) => b.date.localeCompare(a.date));
   const expenses = expenseSnap.docs
-    .map((d) => ({ id: d.id, ...(d.data() as Omit<AccountingExpense, "id">) }) as AccountingExpense)
+    .map((d) => ({ ...(d.data() as Omit<AccountingExpense, "id">), id: d.id }) as AccountingExpense)
     .sort((a, b) => b.date.localeCompare(a.date));
 
   const routes = routesSnap.docs.map(
-    (d) => ({ id: d.id, ...(d.data() as Omit<CollectionRoute, "id">) }) as CollectionRoute,
+    (d) => ({ ...(d.data() as Omit<CollectionRoute, "id">), id: d.id }) as CollectionRoute,
   );
 
-  const branches = branchesSnap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<Branch, "id">) }) as Branch);
+  const branches = branchesSnap.docs.map((d) => ({ ...(d.data() as Omit<Branch, "id">), id: d.id }) as Branch);
   const laptopBranches = branches
     .filter((b) => b.branchType === "rentals")
     .sort((a, b) => a.name.localeCompare(b.name, "he"));

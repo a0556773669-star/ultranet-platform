@@ -19,11 +19,11 @@ export default async function NewRentalBranchPage() {
   ]);
 
   const routes = routesSnap.docs
-    .map((d) => ({ id: d.id, ...(d.data() as Omit<CollectionRoute, "id">) }) as CollectionRoute)
+    .map((d) => ({ ...(d.data() as Omit<CollectionRoute, "id">), id: d.id }) as CollectionRoute)
     .map((r) => ({ id: r.id, name: r.name }));
 
   const parentOptions = branchesSnap.docs
-    .map((d) => ({ id: d.id, ...(d.data() as Omit<Branch, "id">) }) as Branch)
+    .map((d) => ({ ...(d.data() as Omit<Branch, "id">), id: d.id }) as Branch)
     .map((b) => ({ id: b.id, name: b.name }));
 
   return (
