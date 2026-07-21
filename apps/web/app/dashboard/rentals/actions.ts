@@ -355,6 +355,30 @@ export async function closeRentalWithChargeAction(
   return { ok: true };
 }
 
+export async function updateRentalHistoryAction(
+  rentalId: string,
+  data: { startDate: string; returnDate: string; finalPrice: number; notes?: string }
+) {
+  await requireSession();
+  if (!data.startDate || !data.returnDate) {
+    throw new Error("חובה למלא תאריך התחלה ותאריך החזרה");
+  }
+  await getAdminFirestore()
+    .collection("n_rentals")
+    .doc(rentalId)
+    .set(
+      stripUndefined({
+        startDate: data.startDate,
+        returnDate: data.returnDate,
+        finalPrice: data.finalPrice,
+        notes: data.notes,
+      }),
+      { merge: true }
+    );
+  revalidatePath("/dashboard/rentals");
+  revalidatePath("/dashboard");
+}
+
 export async function createRentalAction(formData: FormData) {
   const session = await requireSession();
   const role = session.user?.role;
