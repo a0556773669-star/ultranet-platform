@@ -6,7 +6,7 @@ import { NewRentalForm } from "./new-rental-form";
 export default async function NewRentalPage({
   searchParams,
 }: {
-  searchParams?: { error?: string; mine?: string };
+  searchParams?: { error?: string; mine?: string; missingFields?: string };
 }) {
   const session = await requireModuleAccess("rentals");
   const role = session.user?.role;
@@ -44,7 +44,9 @@ export default async function NewRentalPage({
         <div className="mb-4 rounded-card border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-700">
           {noBranch || searchParams?.error === "no-branch"
             ? "החשבון שלך לא משויך כרגע לסניף. נסה להתנתק ולהתחבר מחדש (השיוך מתעדכן אוטומטית תוך כ-2 דקות), או פנה לבעלים לשיוך סניף בעמוד המשתמשים."
-            : "חובה לבחור לקוח, מחשב/סטיק ותאריך התחלה לפני השמירה."}
+            : searchParams?.missingFields
+              ? `חובה למלא: ${searchParams.missingFields} לפני השמירה.`
+              : "חובה לבחור לקוח, מחשב/סטיק ותאריך התחלה לפני השמירה."}
         </div>
       )}
       {!noBranch && (
