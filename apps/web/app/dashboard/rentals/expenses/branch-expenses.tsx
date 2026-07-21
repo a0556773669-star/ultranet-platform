@@ -55,6 +55,7 @@ function PayerFields({ namePrefix = "" }: { namePrefix?: string }) {
 
 type Props = {
   branchId: string;
+  isShared?: boolean;
   isPartner: boolean;
   canManage: boolean;
   canAdd: boolean;
@@ -62,7 +63,7 @@ type Props = {
   variableExpenses: VariableExpense[];
 };
 
-export function BranchExpenses({ branchId, isPartner, canManage, canAdd, fixedExpenses, variableExpenses }: Props) {
+export function BranchExpenses({ branchId, isShared, isPartner, canManage, canAdd, fixedExpenses, variableExpenses }: Props) {
   const activeFixed = fixedExpenses.filter((e) => !e.endDate);
   const endedFixed = fixedExpenses.filter((e) => e.endDate);
 
@@ -77,6 +78,12 @@ export function BranchExpenses({ branchId, isPartner, canManage, canAdd, fixedEx
 
   return (
     <div className="flex flex-col gap-4">
+      {isShared && (
+        <div className="rounded-card border border-card-border bg-[#f4f6f9] p-4 text-sm text-muted">
+          הוצאות משותפות לכל סניפי ההשכרות - חלקו של הבעלים בהן מתחשבן בהנה&quot;ח הראשית כמו כל הוצאה אחרת.
+        </div>
+      )}
+
       {isPartner && (
         <div className="rounded-card border border-card-border bg-white p-4 shadow-card">
           <h3 className="mb-2 flex items-center gap-1.5 text-sm font-bold text-ink">

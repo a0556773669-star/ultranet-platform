@@ -6,6 +6,7 @@ import type { AccountingIncome, AccountingExpense, CollectionRoute, Branch } fro
 import { createIncomeAction, createExpenseAction, deleteIncomeAction, deleteExpenseAction } from "./actions";
 import CollectModal from "./collect-modal";
 import { DeleteEntryButton } from "./delete-entry-button";
+import { loadOwnerFixedExpenseBurden } from "@/lib/owner-expense-burden";
 
 const BUSINESS_LABELS: Record<string, string> = {
   computers: "מחשבים",
@@ -60,8 +61,10 @@ export default async function AccountingPage() {
     .sort((a, b) => a.name.localeCompare(b.name, "he"));
   const creditDefaultDate = `${new Date().toISOString().slice(0, 7)}-10`;
 
+  const fixedExpenseBurden = await loadOwnerFixedExpenseBurden();
+
   const totalIncome = income.reduce((sum, i) => sum + i.amount, 0);
-  const totalExpenses = expenses.reduce((sum, e) => sum + e.amount, 0);
+  const totalExpenses = expenses.reduce((sum, e) => sum + e.amount, 0) + fixedExpenseBurden.toDate;
 
   return (
     <div>
@@ -88,6 +91,7 @@ export default async function AccountingPage() {
           <span className="absolute right-0 top-0 h-full w-1 bg-red-500" />
           <p className="text-[11px] font-bold uppercase tracking-wide text-muted">סה&quot;כ הוצאות</p>
           <p className="mt-1 text-2xl font-black text-red-600">{totalExpenses.toLocaleString()} ₪</p>
+          <p className="mt-1 text-[11px] text-muted">כולל ₪{Math.round(fixedExpenseBurden.toDate).toLocaleString()} חלק הבעלים בהוצאות קבועות (ניידים + חדרי מחשבים)</p>
         </div>
         <div className="relative overflow-hidden rounded-card border border-card-border bg-white p-4 shadow-card">
           <span className="absolute right-0 top-0 h-full w-1 bg-teal" />
@@ -147,6 +151,12 @@ export default async function AccountingPage() {
         </form>
       </div>
 
+      <p className="mb-2 text-xs text-muted">
+        הוצאות מהוצאות/הנה&quot;ח ניידים וחדרי מחשבים (`/dashboard/rentals/expenses`,
+        `/dashboard/expenses`) מתחשבנות כאן אוטומטית - אבל רק חלק הבעלים בפועל (לפי &quot;על מי
+        החוב&quot; שנבחר בהוספת ההוצאה): הוצאה שכולה על השותף לא נספרת בכלל, הוצאה משותפת נספרת
+        לפי חצי, והוצאה שכולה עלי נספרת במלואה.
+      </p>
       <div className="mb-6 grid grid-cols-1 gap-3 lg:grid-cols-2">
         <form action={createExpenseAction} className="flex flex-col gap-2.5 rounded-card border border-card-border bg-white p-4 shadow-card">
           <h2 className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-muted"><Upload className="h-4 w-4" />הוספת הוצאה</h2>

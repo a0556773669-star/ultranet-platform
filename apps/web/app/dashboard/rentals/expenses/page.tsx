@@ -1,10 +1,11 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { Banknote, Building2, ArrowRight } from "lucide-react";
+import { Banknote, Building2, Layers, ArrowRight } from "lucide-react";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { getAdminFirestore } from "@/lib/firebase-admin";
 import type { Branch } from "@ultranet/shared-types";
+import { SHARED_RENTALS_BRANCH_ID } from "@/lib/expense-shared-scope";
 
 export default async function ExpensesHomePage() {
   const session = await getServerSession(authOptions);
@@ -30,6 +31,16 @@ export default async function ExpensesHomePage() {
         הוצאות — בחר סניף
       </h1>
       <div className="flex flex-col gap-2">
+        <Link
+          href={`/dashboard/rentals/expenses/${SHARED_RENTALS_BRANCH_ID}`}
+          className="flex items-center justify-between rounded-card border border-dashed border-card-border bg-[#f8fafc] p-4 shadow-card transition hover:bg-[#f1f5f9]"
+        >
+          <span className="flex items-center gap-1.5 font-bold text-ink">
+            <Layers className="h-4 w-4" />
+            הוצאות משותפות (כל הסניפים)
+          </span>
+          <ArrowRight className="h-4 w-4 text-muted" />
+        </Link>
         {branches.length === 0 && (
           <div className="rounded-card border border-card-border bg-white p-5 text-center text-sm text-muted shadow-card">
             אין עדיין סניפים

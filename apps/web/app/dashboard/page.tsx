@@ -15,6 +15,7 @@ import type {
   Rental,
 } from "@ultranet/shared-types";
 import type { BranchKey, InventoryItem } from "@/lib/legacy-inventory";
+import { loadOwnerFixedExpenseBurden } from "@/lib/owner-expense-burden";
 
 export default async function DashboardHomePage() {
   const session = await getServerSession(authOptions);
@@ -59,6 +60,10 @@ export default async function DashboardHomePage() {
       if (data.date === todayStr) todayExpenses += data.amount;
       if ((data.month || data.date?.slice(0, 7)) === monthStr) monthExpenses += data.amount;
     });
+    // owner's burden of active fixed/recurring branch expenses (ניידים + חדרי מחשבים) - computed
+    // live rather than dated rows, so it's added on top here instead of coming from n_ah_expenses.
+    const fixedBurden = await loadOwnerFixedExpenseBurden();
+    monthExpenses += fixedBurden.thisMonth;
     moneyStats = { todayIncome, todayExpenses, monthIncome, monthExpenses };
   }
 

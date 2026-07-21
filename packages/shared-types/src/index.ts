@@ -78,6 +78,10 @@ export interface VariableExpense {
   owedBy?: string;
     date: string;
     month: string; // YYYY-MM
+  /** id of the matching n_ah_expenses doc auto-created for the owner's economic burden
+   *  (ownerExpenseBurden of amount/owedBy) when this expense was added; undefined if the
+   *  owner's burden was 0 (e.g. owedBy === "partner"). Deleted together with this expense. */
+  linkedAhExpenseId?: string;
 }
 
 /**

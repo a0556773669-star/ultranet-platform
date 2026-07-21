@@ -189,10 +189,14 @@ pnpm dev        # turbo run dev — מריץ web + api
 
 - **`/expenses`** (perm: `computers`) — הוצאות קבועות/חד-פעמיות פר סניף חדר מחשבים
   (`n_fixed_expenses` / `n_var_expenses`, אותו מודל בדיוק כמו ב-`/dashboard/rentals/expenses`).
-  בנוסף קיים "סניף" מדומה **`shared`** (`SHARED_EXPENSE_BRANCH_ID`,
-  `apps/web/lib/computer-room-accounting.ts`) עבור הוצאות המשותפות לכל סניפי חדרי המחשבים יחד
-  (למשל פרסום/רישיונות משותפים) - עלותן מתחלקת שווה בשווה בין הסניפים בחישוב "הוצאות עד היום"
-  בדשבורד ההנה"ח. מסך הבחירה (`/dashboard/expenses`) מציג גם קישור ייעודי להוצאות המשותפות.
+  בנוסף קיים "סניף" מדומה **`shared-computers`** (`SHARED_COMPUTERS_BRANCH_ID`, מיוצא גם בתור
+  `SHARED_EXPENSE_BRANCH_ID` מ-`apps/web/lib/computer-room-accounting.ts` לתאימות; המקבילה
+  בניידים היא `SHARED_RENTALS_BRANCH_ID`, שתיהן מוגדרות ב-`apps/web/lib/expense-shared-scope.ts`)
+  עבור הוצאות המשותפות לכל סניפי חדרי המחשבים יחד (למשל פרסום/רישיונות משותפים) - עלותן
+  מתחלקת שווה בשווה בין הסניפים בחישוב "הוצאות עד היום" בדשבורד ההשקעה-מול-רווח
+  (`/computer-rooms-accounting`, ראו להלן), אך **לא** מתחלקת כשהיא מתחשבנת בהנה"ח הראשית (שם
+  היא נספרת פעם אחת במלואה, ראו סעיף 10). מסך הבחירה (`/dashboard/expenses`) מציג גם קישור
+  ייעודי להוצאות המשותפות.
 - **`/computer-rooms-accounting`** (perm: `computers`) — דשבורד "השקעה מול רווח" פר סניף חדר
   מחשבים: **עלות הקמה** (`Branch.setupCost`), **הוצאות עד היום כולל הקמה** (הקמה + הוצאות
   הסניף + חלקו בהוצאות המשותפות), **הכנסות עד היום**, ו**רווח מוחזק** (הכנסות פחות הוצאות).
@@ -232,7 +236,10 @@ pnpm dev        # turbo run dev — מריץ web + api
   חיוב אשראי מצליח (דרך `/api/rentals/charge`) מפיק קבלת EZcount אוטומטית
   ושולח אותה במייל ללקוח, כל עוד מוגדר לסניף מסלול עם `receiptsProvider: "ezcount"`.
 - **`/mine`** — ההשכרות שלי.
-- **`/expenses`** — הוצאות סניף השכרות.
+- **`/expenses`** — הוצאות סניף השכרות (`n_fixed_expenses`/`n_var_expenses`), כולל "סניף" מדומה
+  **`shared-rentals`** (`SHARED_RENTALS_BRANCH_ID`, `apps/web/lib/expense-shared-scope.ts`)
+  להוצאות משותפות לכל סניפי ההשכרות יחד. ראו סעיף 8 (חדרי מחשבים → `/expenses`) ו-10 להסבר
+  המלא על איך הוצאות אלה מתחשבנות בהנה"ח הראשית.
 - **`/accounting`** — הנה"ח ברמת סניף השכרות: תצוגת סניף/בעלים, סימון העברות
   (`mark-transferred-button.tsx`, `n_branch_transfers`).
 - **`/branches`** — ניהול סניפי השכרה + audit הרשאות.
@@ -263,6 +270,25 @@ pnpm dev        # turbo run dev — מריץ web + api
    `business` = `general`.
 3. **`cash`** (מזומן) - תאריך + בחירת קופה מתוך סניפי `computers` (`branchId` = איזו קופה
    נלקח ממנה המזומן) + סכום. `business` נקבע אוטומטית ל-`computers`.
+
+**הוצאות (`n_ah_expenses`) - מתחשבנות אוטומטית מהוצאות הסניפים, אבל רק חלק הבעלים:**
+בניגוד להכנסות, הוצאות סניף (ניידים וחדרי מחשבים, כולל ה"סניפים" המשותפים) *כן* מתחשבנות
+בהנה"ח הראשית ובדף הבית - אבל לא הסכום המלא, אלא רק `ownerExpenseBurden(amount, owedBy)`
+(`apps/web/lib/branch-accounting.ts`): הוצאה שכל החוב עליה `owedBy: "partner"` לא נספרת בכלל
+(0 עלי), `owedBy: "shared"` נספרת לפי חצי, ו-`owedBy: "owner"`/ברירת מחדל נספרת במלואה. זה
+בלתי תלוי במי *שילם* בפועל (`paidBy`) - רק במי *חייב* את הכסף.
+- **הוצאות חד-פעמיות (`n_var_expenses`)** - כתובת מייד ל-`n_ah_expenses` בזמן היצירה
+  (`createLinkedOwnerLedgerExpense`, `apps/web/lib/branch-expense-ledger.ts`), עם `business`
+  מתאים (`rentals`/`computers`) ו-`amount` = חלק הבעלים בלבד. ה-id של הרשומה נשמר בשדה
+  `VariableExpense.linkedAhExpenseId` ונמחק יחד עם ההוצאה (`deleteLinkedOwnerLedgerExpense`).
+  אם חלק הבעלים הוא 0 - לא נוצרת רשומה כלל.
+- **הוצאות קבועות/חוזרות (`n_fixed_expenses`)** - **לא** נכתבות כרשומות מתוארכות ל-`n_ah_expenses`
+  (הוצאה חוזרת מדי חודש, לא אירוע חד-פעמי). במקום זאת, `loadOwnerFixedExpenseBurden`
+  (`apps/web/lib/owner-expense-burden.ts`) מחשבת בזמן אמת את סך חלק הבעלים בכל ההוצאות הקבועות
+  הפעילות (ניידים + חדרי מחשבים, כולל שני ה"סניפים" המשותפים - כל אחד נספר במלואו, בלי חלוקה
+  פר-סניף) - החודש ועד היום - ומתווספת מעל סכום `n_ah_expenses` בדף `/dashboard/accounting`
+  (סה"כ הוצאות) ובדף הבית (הוצאות החודש). אין ל"היום" (יומי) משמעות עבור הוצאה חודשית קבועה,
+  ולכן היא לא נכללת בחישובי "הוצאות היום".
 
 ערכי `type` הישנים (`fixed`/`variable`) נשארים בטיפוס לתאימות לאחור בלבד (רשומות ישנות) -
 לא נוצרות יותר על ידי ה-UI. שדה `branchId` (אופציונלי) נוסף ל-`AccountingIncome` עבור
@@ -343,6 +369,9 @@ pnpm dev        # turbo run dev — מריץ web + api
 | `apps/web/lib/collection-charge.ts` | לוגיקת חיוב/גבייה |
 | `apps/web/lib/branch-accounting*.ts` | חישובי הנה"ח והתחשבנות סניפי השכרות |
 | `apps/web/lib/computer-room-accounting.ts` | חישובי "השקעה מול רווח" פר סניף חדר מחשבים (הקמה/הוצאות/הכנסות/רווח) |
+| `apps/web/lib/expense-shared-scope.ts` | סנטינלים `SHARED_RENTALS_BRANCH_ID`/`SHARED_COMPUTERS_BRANCH_ID` להוצאות משותפות לכל הסניפים |
+| `apps/web/lib/branch-expense-ledger.ts` | יצירה/מחיקה של רשומת `n_ah_expenses` מקושרת מהוצאה חד-פעמית (חלק הבעלים בלבד) |
+| `apps/web/lib/owner-expense-burden.ts` | חלק הבעלים בהוצאות קבועות/חוזרות (ניידים+חדרי מחשבים), מחושב בזמן אמת עבור הנה"ח הראשית ודף הבית |
 | `apps/web/lib/device-trust.ts` | אימות/אמון מכשיר |
 | `apps/web/middleware.ts` | middleware של Next (הגנת נתיבים) |
 | `apps/api/src/branches/*` | מודול NestJS לדוגמה (branches) |

@@ -4,7 +4,9 @@ import { revalidatePath } from "next/cache";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { getAdminFirestore } from "@/lib/firebase-admin";
-import type { FixedExpense, VariableExpense } from "@ultranet/shared-types";
+import type { Branch, FixedExpense, VariableExpense } from "@ultranet/shared-types";
+import { SHARED_RENTALS_BRANCH_ID } from "@/lib/expense-shared-scope";
+import { createLinkedOwnerLedgerExpense, deleteLinkedOwnerLedgerExpense } from "@/lib/branch-expense-ledger";
 
 async function requireOwner() {
   const session = await getServerSession(authOptions);
@@ -17,6 +19,7 @@ async function requireBranchAccess(branchId: string) {
   const session = await getServerSession(authOptions);
   if (!session) throw new Error("לא מחובר");
   if (session.user?.role === "owner") return session;
+  if (branchId === SHARED_RENTALS_BRANCH_ID) throw new Error("אין הרשאה");
   if (session.user?.branchId === branchId) return session;
   throw new Error("אין הרשאה");
 }
@@ -71,15 +74,46 @@ export async function createVariableExpenseAction(branchId: string, formData: Fo
     throw new Error("חובה למלא תיאור, סכום ותאריך");
   }
   const month = date.slice(0, 7);
-  const data: Omit<VariableExpense, "id"> = { branchId, desc, amount, date, month, category, paidBy, owedBy };
-  await getAdminFirestore().collection("n_var_expenses").add(stripUndefined(data));
+
+  const db = getAdminFirestore();
+  let branchLabel = "כל סניפי ההשכרות";
+  if (branchId !== SHARED_RENTALS_BRANCH_ID) {
+    const branchDoc = await db.collection("n_branches").doc(branchId).get();
+    branchLabel = (branchDoc.data() as Omit<Branch, "id"> | undefined)?.name ?? branchLabel;
+  }
+  const linkedAhExpenseId = await createLinkedOwnerLedgerExpense({
+    business: "rentals",
+    desc: `${desc} — ${branchLabel}`,
+    amount,
+    owedBy,
+    date,
+  });
+
+  const data: Omit<VariableExpense, "id"> = {
+    branchId,
+    desc,
+    amount,
+    date,
+    month,
+    category,
+    paidBy,
+    owedBy,
+    linkedAhExpenseId,
+  };
+  await db.collection("n_var_expenses").add(stripUndefined(data));
   revalidatePath(`/dashboard/rentals/expenses/${branchId}`);
+  revalidatePath("/dashboard/accounting");
   redirect(`/dashboard/rentals/expenses/${branchId}`);
 }
 
 export async function deleteVariableExpenseAction(id: string, branchId: string) {
   await requireOwner();
-  await getAdminFirestore().collection("n_var_expenses").doc(id).delete();
+  const db = getAdminFirestore();
+  const doc = await db.collection("n_var_expenses").doc(id).get();
+  const linkedAhExpenseId = (doc.data() as Omit<VariableExpense, "id"> | undefined)?.linkedAhExpenseId;
+  await deleteLinkedOwnerLedgerExpense(linkedAhExpenseId);
+  await db.collection("n_var_expenses").doc(id).delete();
   revalidatePath(`/dashboard/rentals/expenses/${branchId}`);
+  revalidatePath("/dashboard/accounting");
   redirect(`/dashboard/rentals/expenses/${branchId}`);
 }

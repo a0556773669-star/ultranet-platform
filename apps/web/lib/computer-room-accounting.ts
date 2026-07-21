@@ -7,10 +7,11 @@
 import { getAdminFirestore } from "./firebase-admin";
 import type { Branch, FixedExpense, VariableExpense, BranchIncome } from "@ultranet/shared-types";
 import { monthsBetween } from "./branch-accounting";
+import { SHARED_COMPUTERS_BRANCH_ID } from "./expense-shared-scope";
 
 /** Sentinel branchId for fixed/variable expenses that apply to all computer-room branches together
  *  (e.g. shared advertising, shared software) rather than to one specific branch. */
-export const SHARED_EXPENSE_BRANCH_ID = "shared";
+export const SHARED_EXPENSE_BRANCH_ID = SHARED_COMPUTERS_BRANCH_ID;
 
 export function currentMonth(): string {
   return new Date().toISOString().slice(0, 7);
