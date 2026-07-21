@@ -166,7 +166,7 @@ export async function loadBranchAccountingRawData(): Promise<BranchAccountingRaw
 
   const branchIncomeByBranch = new Map<string, BranchIncome[]>();
   for (const d of branchIncomeSnap.docs) {
-    const i = { id: d.id, ...(d.data() as Omit<BranchIncome, "id">) } as BranchIncome;
+    const i = { ...(d.data() as Omit<BranchIncome, "id">), id: d.id } as BranchIncome;
     const arr = branchIncomeByBranch.get(i.branchId) ?? [];
     arr.push(i);
     branchIncomeByBranch.set(i.branchId, arr);
