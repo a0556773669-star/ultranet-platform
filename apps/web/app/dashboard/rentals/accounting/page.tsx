@@ -207,9 +207,7 @@ export default async function RentalsAccountingPage({
                   </div>
                   <div className="min-w-[75px] text-left font-extrabold text-emerald-600">{i.amount.toLocaleString()} ₪</div>
                   {isOwner && (
-                    <form action={bound}>
-                      <DeleteEntryButton confirmText="למחוק את ההכנסה?" />
-                    </form>
+                    <DeleteEntryButton confirmText="למחוק את ההכנסה?" action={bound} successText="ההכנסה נמחקה בהצלחה" />
                   )}
                 </div>
               );
@@ -238,9 +236,7 @@ export default async function RentalsAccountingPage({
                   </div>
                   <div className="min-w-[75px] text-left font-extrabold text-red-600">{e.amount.toLocaleString()} ₪</div>
                   {isOwner && (
-                    <form action={bound}>
-                      <DeleteEntryButton confirmText="למחוק את ההוצאה?" />
-                    </form>
+                    <DeleteEntryButton confirmText="למחוק את ההוצאה?" action={bound} successText="ההוצאה נמחקה בהצלחה" />
                   )}
                 </div>
               );

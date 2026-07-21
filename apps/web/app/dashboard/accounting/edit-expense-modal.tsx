@@ -1,16 +1,34 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { Pencil, X } from "lucide-react";
 import type { AccountingExpense } from "@ultranet/shared-types";
 import { updateExpenseAction } from "./actions";
+import { useToast } from "@/lib/toast";
 
 const FIELD =
   "rounded-lg border border-card-border bg-[#f4f6f9] px-3 py-2 text-sm focus:border-teal focus:bg-white focus:outline-none";
 
 export function EditExpenseModal({ expense }: { expense: AccountingExpense }) {
   const [open, setOpen] = useState(false);
+  const [isPending, startTransition] = useTransition();
+  const router = useRouter();
+  const { showSuccess, showError, toastNode } = useToast();
   const update = updateExpenseAction.bind(null, expense.id);
+
+  function handleSubmit(formData: FormData) {
+    startTransition(async () => {
+      try {
+        await update(formData);
+        router.refresh();
+        setOpen(false);
+        showSuccess("ההוצאה עודכנה בהצלחה");
+      } catch (err) {
+        showError(err instanceof Error ? err.message : "אירעה שגיאה בעדכון ההוצאה");
+      }
+    });
+  }
 
   return (
     <>
@@ -33,13 +51,7 @@ export function EditExpenseModal({ expense }: { expense: AccountingExpense }) {
                 <X className="h-4 w-4" />
               </button>
             </div>
-            <form
-              action={async (formData: FormData) => {
-                await update(formData);
-                setOpen(false);
-              }}
-              className="flex flex-col gap-2.5"
-            >
+            <form action={handleSubmit} className="flex flex-col gap-2.5">
               <input type="date" name="date" defaultValue={expense.date} required className={FIELD} />
               <input name="desc" defaultValue={expense.desc} placeholder="תיאור" className={FIELD} />
               <input type="number" name="amount" min={0} defaultValue={expense.amount} placeholder="סכום" required className={FIELD} />
@@ -51,14 +63,16 @@ export function EditExpenseModal({ expense }: { expense: AccountingExpense }) {
               </select>
               <button
                 type="submit"
-                className="self-start rounded-[10px] bg-gradient-to-br from-teal to-teal-light px-5 py-2 text-sm font-bold text-white shadow-primary transition hover:opacity-90"
+                disabled={isPending}
+                className="self-start rounded-[10px] bg-gradient-to-br from-teal to-teal-light px-5 py-2 text-sm font-bold text-white shadow-primary transition hover:opacity-90 disabled:opacity-50"
               >
-                שמירה
+                {isPending ? "שומר..." : "שמירה"}
               </button>
             </form>
           </div>
         </div>
       )}
+      {toastNode}
     </>
   );
 }

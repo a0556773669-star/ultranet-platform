@@ -1,5 +1,4 @@
 "use server";
-import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
@@ -48,7 +47,6 @@ export async function createFixedExpenseAction(branchId: string, formData: FormD
   revalidatePath("/dashboard/accounting");
   revalidatePath("/dashboard/rentals/accounting");
   revalidatePath("/dashboard");
-  redirect(`/dashboard/rentals/expenses/${branchId}`);
 }
 
 export async function endFixedExpenseAction(id: string, branchId: string, formData: FormData) {
@@ -59,7 +57,6 @@ export async function endFixedExpenseAction(id: string, branchId: string, formDa
   revalidatePath("/dashboard/accounting");
   revalidatePath("/dashboard/rentals/accounting");
   revalidatePath("/dashboard");
-  redirect(`/dashboard/rentals/expenses/${branchId}`);
 }
 
 export async function deleteFixedExpenseAction(id: string, branchId: string) {
@@ -69,7 +66,6 @@ export async function deleteFixedExpenseAction(id: string, branchId: string) {
   revalidatePath("/dashboard/accounting");
   revalidatePath("/dashboard/rentals/accounting");
   revalidatePath("/dashboard");
-  redirect(`/dashboard/rentals/expenses/${branchId}`);
 }
 
 export async function updateFixedExpenseAction(id: string, branchId: string, formData: FormData) {
@@ -86,7 +82,6 @@ export async function updateFixedExpenseAction(id: string, branchId: string, for
   const data = { name, amount, startDate, category: category ?? FieldValue.delete(), paidBy, owedBy };
   await getAdminFirestore().collection("n_fixed_expenses").doc(id).set(data, { merge: true });
   revalidatePath(`/dashboard/rentals/expenses/${branchId}`);
-  redirect(`/dashboard/rentals/expenses/${branchId}`);
 }
 
 export async function createVariableExpenseAction(branchId: string, formData: FormData) {
@@ -133,7 +128,6 @@ export async function createVariableExpenseAction(branchId: string, formData: Fo
   revalidatePath("/dashboard/accounting");
   revalidatePath("/dashboard/rentals/accounting");
   revalidatePath("/dashboard");
-  redirect(`/dashboard/rentals/expenses/${branchId}`);
 }
 
 export async function updateVariableExpenseAction(id: string, branchId: string, formData: FormData) {
@@ -181,7 +175,6 @@ export async function updateVariableExpenseAction(id: string, branchId: string, 
   await db.collection("n_var_expenses").doc(id).set(data, { merge: true });
   revalidatePath(`/dashboard/rentals/expenses/${branchId}`);
   revalidatePath("/dashboard/accounting");
-  redirect(`/dashboard/rentals/expenses/${branchId}`);
 }
 
 export async function deleteVariableExpenseAction(id: string, branchId: string) {
@@ -195,5 +188,4 @@ export async function deleteVariableExpenseAction(id: string, branchId: string) 
   revalidatePath("/dashboard/accounting");
   revalidatePath("/dashboard/rentals/accounting");
   revalidatePath("/dashboard");
-  redirect(`/dashboard/rentals/expenses/${branchId}`);
 }

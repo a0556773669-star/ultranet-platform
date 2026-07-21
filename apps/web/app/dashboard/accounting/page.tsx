@@ -203,9 +203,7 @@ export default async function AccountingPage() {
                   </div>
                 </div>
                 <div className="min-w-[75px] text-left font-extrabold text-emerald-600">{i.amount.toLocaleString()} ₪</div>
-                <form action={bound}>
-                  <DeleteEntryButton confirmText={"למחק את ההכנסה?"} />
-                </form>
+                <DeleteEntryButton confirmText={"למחק את ההכנסה?"} action={bound} successText="ההכנסה נמחקה בהצלחה" />
               </div>
             );
           })}
@@ -227,9 +225,7 @@ export default async function AccountingPage() {
                 </div>
                 <div className="min-w-[75px] text-left font-extrabold text-red-600">{e.amount.toLocaleString()} ₪</div>
                 <EditExpenseModal expense={e} />
-                <form action={bound}>
-                  <DeleteEntryButton confirmText={"למחק את ההוצאה?"} />
-                </form>
+                <DeleteEntryButton confirmText={"למחק את ההוצאה?"} action={bound} successText="ההוצאה נמחקה בהצלחה" />
               </div>
             );
           })}
