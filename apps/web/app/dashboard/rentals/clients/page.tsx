@@ -15,6 +15,8 @@ export default async function RentalClientsPage({
     imported?: string;
     updated?: string;
     skipped?: string;
+    reason?: string | string[];
+    reasonMore?: string;
   };
 }) {
   const session = await requireModuleAccess("rentals");
@@ -82,8 +84,20 @@ export default async function RentalClientsPage({
       )}
       {(searchParams?.imported !== undefined || searchParams?.updated !== undefined) && (
         <div className="mb-4 rounded-card border border-teal-200 bg-teal-50 p-3 text-sm font-semibold text-teal-700">
-          הייבוא הסתיים: נוצרו {searchParams?.imported ?? 0} לקוחות חדשים, עודכנו {searchParams?.updated ?? 0} קיימים
-          {Number(searchParams?.skipped ?? 0) > 0 && `, דולגו ${searchParams?.skipped} שורות`}.
+          <div>
+            הייבוא הסתיים: נוצרו {searchParams?.imported ?? 0} לקוחות חדשים, עודכנו {searchParams?.updated ?? 0} קיימים
+            {Number(searchParams?.skipped ?? 0) > 0 && `, דולגו ${searchParams?.skipped} שורות`}.
+          </div>
+          {searchParams?.reason && (
+            <ul className="mt-2 list-inside list-disc space-y-0.5 text-xs font-normal text-teal-800">
+              {(Array.isArray(searchParams.reason) ? searchParams.reason : [searchParams.reason]).map(
+                (reason, i) => (
+                  <li key={i}>{reason}</li>
+                )
+              )}
+              {searchParams?.reasonMore && <li>ועוד {searchParams.reasonMore} שורות שדולגו מסיבות דומות</li>}
+            </ul>
+          )}
         </div>
       )}
 
