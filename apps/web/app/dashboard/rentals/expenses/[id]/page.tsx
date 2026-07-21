@@ -71,7 +71,7 @@ export default async function BranchExpensesPage({ params }: { params: { id: str
         isPartner={isPartner}
         ownerName={ownerName}
         partnerName={partnerName}
-        canManage={isOwner}
+        canManage={isOwner || isPartner}
         canAdd={isOwner || isPartner}
         fixedExpenses={visibleFixed}
         variableExpenses={visibleVariable}

@@ -8,13 +8,6 @@ import type { Branch, FixedExpense, VariableExpense } from "@ultranet/shared-typ
 import { SHARED_RENTALS_BRANCH_ID } from "@/lib/expense-shared-scope";
 import { createLinkedOwnerLedgerExpense, deleteLinkedOwnerLedgerExpense } from "@/lib/branch-expense-ledger";
 
-async function requireOwner() {
-  const session = await getServerSession(authOptions);
-  if (!session) throw new Error("לא מחובר");
-  if (session.user?.role !== "owner") throw new Error("אין הרשאה");
-  return session;
-}
-
 async function requireBranchAccess(branchId: string) {
   const session = await getServerSession(authOptions);
   if (!session) throw new Error("לא מחובר");
@@ -28,6 +21,27 @@ function stripUndefined<T extends Record<string, any>>(obj: T): T {
   const out: any = {};
   for (const k in obj) if (obj[k] !== undefined) out[k] = obj[k];
   return out;
+}
+
+/**
+ * requireBranchAccess only proves the caller may act on `branchId` - it says nothing about
+ * whether `id` actually belongs to that branch. Without this check a partner could pass their
+ * own (permitted) branchId alongside another branch's expense id and mutate/delete it.
+ */
+async function loadOwnedFixedExpense(id: string, branchId: string) {
+  const ref = getAdminFirestore().collection("n_fixed_expenses").doc(id);
+  const doc = await ref.get();
+  const data = doc.data() as Omit<FixedExpense, "id"> | undefined;
+  if (!data || data.branchId !== branchId) throw new Error("ההוצאה לא נמצאה בסניף הזה");
+  return { ref, data };
+}
+
+async function loadOwnedVariableExpense(id: string, branchId: string) {
+  const ref = getAdminFirestore().collection("n_var_expenses").doc(id);
+  const doc = await ref.get();
+  const data = doc.data() as Omit<VariableExpense, "id"> | undefined;
+  if (!data || data.branchId !== branchId) throw new Error("ההוצאה לא נמצאה בסניף הזה");
+  return { ref, data };
 }
 
 export async function createFixedExpenseAction(branchId: string, formData: FormData) {
@@ -50,9 +64,10 @@ export async function createFixedExpenseAction(branchId: string, formData: FormD
 }
 
 export async function endFixedExpenseAction(id: string, branchId: string, formData: FormData) {
-  await requireOwner();
+  await requireBranchAccess(branchId);
+  const { ref } = await loadOwnedFixedExpense(id, branchId);
   const endDate = String(formData.get("endDate") ?? "").trim() || new Date().toISOString().slice(0, 10);
-  await getAdminFirestore().collection("n_fixed_expenses").doc(id).set({ endDate }, { merge: true });
+  await ref.set({ endDate }, { merge: true });
   revalidatePath(`/dashboard/rentals/expenses/${branchId}`);
   revalidatePath("/dashboard/accounting");
   revalidatePath("/dashboard/rentals/accounting");
@@ -60,8 +75,9 @@ export async function endFixedExpenseAction(id: string, branchId: string, formDa
 }
 
 export async function deleteFixedExpenseAction(id: string, branchId: string) {
-  await requireOwner();
-  await getAdminFirestore().collection("n_fixed_expenses").doc(id).delete();
+  await requireBranchAccess(branchId);
+  const { ref } = await loadOwnedFixedExpense(id, branchId);
+  await ref.delete();
   revalidatePath(`/dashboard/rentals/expenses/${branchId}`);
   revalidatePath("/dashboard/accounting");
   revalidatePath("/dashboard/rentals/accounting");
@@ -69,7 +85,8 @@ export async function deleteFixedExpenseAction(id: string, branchId: string) {
 }
 
 export async function updateFixedExpenseAction(id: string, branchId: string, formData: FormData) {
-  await requireOwner();
+  await requireBranchAccess(branchId);
+  const { ref } = await loadOwnedFixedExpense(id, branchId);
   const name = String(formData.get("name") ?? "").trim();
   const amount = Number(formData.get("amount")) || 0;
   const startDate = String(formData.get("startDate") ?? "").trim();
@@ -80,7 +97,7 @@ export async function updateFixedExpenseAction(id: string, branchId: string, for
     throw new Error("חובה למלא שם ותאריך התחלה");
   }
   const data = { name, amount, startDate, category: category ?? FieldValue.delete(), paidBy, owedBy };
-  await getAdminFirestore().collection("n_fixed_expenses").doc(id).set(data, { merge: true });
+  await ref.set(data, { merge: true });
   revalidatePath(`/dashboard/rentals/expenses/${branchId}`);
 }
 
@@ -131,7 +148,7 @@ export async function createVariableExpenseAction(branchId: string, formData: Fo
 }
 
 export async function updateVariableExpenseAction(id: string, branchId: string, formData: FormData) {
-  await requireOwner();
+  await requireBranchAccess(branchId);
   const desc = String(formData.get("desc") ?? "").trim();
   const amount = Number(formData.get("amount")) || 0;
   const date = String(formData.get("date") ?? "").trim();
@@ -144,9 +161,8 @@ export async function updateVariableExpenseAction(id: string, branchId: string, 
   const month = date.slice(0, 7);
 
   const db = getAdminFirestore();
-  const existingDoc = await db.collection("n_var_expenses").doc(id).get();
-  const existing = existingDoc.data() as Omit<VariableExpense, "id"> | undefined;
-  await deleteLinkedOwnerLedgerExpense(existing?.linkedAhExpenseId);
+  const { ref, data: existing } = await loadOwnedVariableExpense(id, branchId);
+  await deleteLinkedOwnerLedgerExpense(existing.linkedAhExpenseId);
 
   let branchLabel = "כל סניפי ההשכרות";
   if (branchId !== SHARED_RENTALS_BRANCH_ID) {
@@ -172,18 +188,16 @@ export async function updateVariableExpenseAction(id: string, branchId: string, 
     owedBy,
     linkedAhExpenseId: linkedAhExpenseId ?? FieldValue.delete(),
   };
-  await db.collection("n_var_expenses").doc(id).set(data, { merge: true });
+  await ref.set(data, { merge: true });
   revalidatePath(`/dashboard/rentals/expenses/${branchId}`);
   revalidatePath("/dashboard/accounting");
 }
 
 export async function deleteVariableExpenseAction(id: string, branchId: string) {
-  await requireOwner();
-  const db = getAdminFirestore();
-  const doc = await db.collection("n_var_expenses").doc(id).get();
-  const linkedAhExpenseId = (doc.data() as Omit<VariableExpense, "id"> | undefined)?.linkedAhExpenseId;
-  await deleteLinkedOwnerLedgerExpense(linkedAhExpenseId);
-  await db.collection("n_var_expenses").doc(id).delete();
+  await requireBranchAccess(branchId);
+  const { ref, data: existing } = await loadOwnedVariableExpense(id, branchId);
+  await deleteLinkedOwnerLedgerExpense(existing.linkedAhExpenseId);
+  await ref.delete();
   revalidatePath(`/dashboard/rentals/expenses/${branchId}`);
   revalidatePath("/dashboard/accounting");
   revalidatePath("/dashboard/rentals/accounting");

@@ -69,7 +69,7 @@ export default async function ComputerRoomBranchExpensesPage({ params }: { param
         isPartner={isPartner}
         ownerName={ownerName}
         partnerName={partnerName}
-        canManage={isOwner}
+        canManage={isOwner || isPartner}
         canAdd={isOwner || isPartner}
         fixedExpenses={visibleFixed}
         variableExpenses={visibleVariable}
