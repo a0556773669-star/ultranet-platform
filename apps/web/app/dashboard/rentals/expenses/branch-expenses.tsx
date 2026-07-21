@@ -7,6 +7,7 @@ import {
   createVariableExpenseAction,
   deleteVariableExpenseAction,
 } from "./actions";
+import { EditFixedExpenseModal, EditVariableExpenseModal } from "./edit-expense-modals";
 
 const CATEGORIES = ["שכירות", "חשמל ומים", "משכורות", "ציוד ותחזוקה", "שיווק ופרסום", "ביטוח", "אחר"];
 
@@ -150,6 +151,7 @@ export function BranchExpenses({ branchId, isShared, isPartner, ownerName, partn
                 <p className="text-xs text-muted">{e.category || "ללא קטגוריה"} · מתחיל {e.startDate}{isPartner ? ` · ${paymentNote(e.paidBy, e.owedBy, ownerName, partnerName)}` : ""}</p>
               </div>
               <div className="flex items-center gap-2">
+                {canManage && <EditFixedExpenseModal expense={e} branchId={branchId} isPartner={isPartner} ownerName={ownerName} partnerName={partnerName} />}
                 {canManage && (
 <form action={endFixedExpenseAction.bind(null, e.id, branchId)} className="flex items-center gap-1">
                   <input name="endDate" type="date" className="rounded-lg border border-card-border bg-white px-2 py-1 text-xs" />
@@ -176,11 +178,14 @@ export function BranchExpenses({ branchId, isShared, isPartner, ownerName, partn
                     <p className="text-sm font-bold text-ink">{e.name} — ₪{(e.amount || 0).toLocaleString()}/חודש</p>
                     <p className="text-xs text-muted">{e.startDate} – {e.endDate}{isPartner ? ` · ${paymentNote(e.paidBy, e.owedBy, ownerName, partnerName)}` : ""}</p>
                   </div>
-                  {canManage && (
+                  <div className="flex items-center gap-2">
+                    {canManage && <EditFixedExpenseModal expense={e} branchId={branchId} isPartner={isPartner} ownerName={ownerName} partnerName={partnerName} />}
+                    {canManage && (
 <form action={deleteFixedExpenseAction.bind(null, e.id, branchId)}>
-                    <button type="submit" className="rounded-lg border border-red-200 bg-white px-2 py-1 text-xs font-bold text-red-600 hover:bg-red-50">מחיקה</button>
-                  </form>
+                      <button type="submit" className="rounded-lg border border-red-200 bg-white px-2 py-1 text-xs font-bold text-red-600 hover:bg-red-50">מחיקה</button>
+                    </form>
 )}
+                  </div>
                 </div>
               ))}
             </div>
@@ -231,11 +236,14 @@ export function BranchExpenses({ branchId, isShared, isPartner, ownerName, partn
                 <p className="text-sm font-bold text-ink">{e.desc} — ₪{(e.amount || 0).toLocaleString()}</p>
                 <p className="text-xs text-muted">{e.category || "ללא קטגוריה"} · {e.date}{isPartner ? ` · ${paymentNote(e.paidBy, e.owedBy, ownerName, partnerName)}` : ""}</p>
               </div>
-              {canManage && (
+              <div className="flex items-center gap-2">
+                {canManage && <EditVariableExpenseModal expense={e} branchId={branchId} isPartner={isPartner} ownerName={ownerName} partnerName={partnerName} />}
+                {canManage && (
 <form action={deleteVariableExpenseAction.bind(null, e.id, branchId)}>
-                <button type="submit" className="rounded-lg border border-red-200 bg-white px-2 py-1 text-xs font-bold text-red-600 hover:bg-red-50">מחיקה</button>
-              </form>
+                  <button type="submit" className="rounded-lg border border-red-200 bg-white px-2 py-1 text-xs font-bold text-red-600 hover:bg-red-50">מחיקה</button>
+                </form>
 )}
+              </div>
             </div>
           ))}
         </div>

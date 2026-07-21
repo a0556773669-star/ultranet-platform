@@ -120,6 +120,25 @@ export async function deleteExpenseAction(id: string) {
   revalidatePath("/dashboard/rentals/accounting");
 }
 
+export async function updateExpenseAction(id: string, formData: FormData) {
+  await requireOwner();
+  const date = String(formData.get("date") ?? "");
+  const amount = Number(formData.get("amount") ?? 0);
+  if (!date || !amount) {
+    throw new Error("תאריך וסכום הם שדות חובה");
+  }
+  const data: Omit<AccountingExpense, "id"> = {
+    date,
+    amount,
+    desc: String(formData.get("desc") ?? "").trim(),
+    business: String(formData.get("business") ?? "general") as AccountingExpense["business"],
+    month: date.slice(0, 7),
+  };
+  await getAdminFirestore().collection("n_ah_expenses").doc(id).set(data, { merge: true });
+  revalidatePath("/dashboard/accounting");
+  revalidatePath("/dashboard/rentals/accounting");
+}
+
 export async function createCollectionRouteAction(formData: FormData) {
   await requireOwner();
   const name = String(formData.get("name") ?? "").trim();
