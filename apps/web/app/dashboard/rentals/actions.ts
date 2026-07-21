@@ -242,7 +242,7 @@ export async function updateClientAction(id: string, formData: FormData) {
 
 export async function deleteClientAction(id: string) {
   const session = await requireSession();
-  if (session.user?.role !== "owner") {
+  if (session.user?.role !== "owner" && session.user?.role !== "partner") {
     redirect("/dashboard/rentals/clients?error=forbidden");
   }
   await getAdminFirestore().collection("n_rental_clients").doc(id).delete();

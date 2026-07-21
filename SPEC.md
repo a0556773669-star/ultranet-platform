@@ -255,7 +255,10 @@ pnpm dev        # turbo run dev — מריץ web + api
   (`gatewayToken` + `cardExpiry`) מוצג בשורה כפתור "חייב" (מוצג רק ל-`owner`
   או למי שיש לו `perms.charging`), שפותח את `TokenChargeButton` הקיים
   (`../manage/token-charge-button.tsx`) וקורא ל-`/api/rentals/charge` לחיוב
-  ישיר דרך הטוקן השמור, ללא הזנת פרטי כרטיס מחדש.
+  ישיר דרך הטוקן השמור, ללא הזנת פרטי כרטיס מחדש. בדף עריכת לקוח בודד
+  (`/clients/[id]`) מוצג כפתור "מחק לקוח" (`delete-client-button.tsx`) ל-`owner`
+  ול-`partner` בלבד (`deleteClientAction` ב-`../actions.ts` חוסם גם בצד השרת
+  תפקידים אחרים ומפנה ל-`?error=forbidden`).
 - **`/clients/complete-cards`** — מסך עזר להשלמת טוקניזציה בכמות: מציג בתור
   את כל הלקוחות בהיקף המשתמש שאין להם `cardLast4` שמור, עם `NedarimCardCapture`
   פתוח לכל לקוח בתורו (מתקדם אוטומטית ללקוח הבא אחרי שמירה מוצלחת, ניתן גם

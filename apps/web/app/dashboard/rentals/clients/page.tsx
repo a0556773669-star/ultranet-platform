@@ -116,7 +116,7 @@ export default async function RentalClientsPage({
       )}
       {searchParams?.error === "forbidden" && (
         <div className="mb-4 rounded-card border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-700">
-          פעולה זו מותרת רק לבעלים.
+          פעולה זו מותרת לבעלים ושותפים בלבד.
         </div>
       )}
 
