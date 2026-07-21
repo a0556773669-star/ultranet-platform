@@ -1,9 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { Pencil, X } from "lucide-react";
 import type { FixedExpense, VariableExpense } from "@ultranet/shared-types";
 import { updateFixedExpenseAction, updateVariableExpenseAction } from "./actions";
+import { useToast } from "@/lib/toast";
 
 const CATEGORIES = ["שכירות", "חשמל ומים", "משכורות", "ציוד ותחזוקה", "שיווק ופרסום", "ביטוח", "אחר"];
 
@@ -75,7 +77,23 @@ export function EditFixedExpenseModal({
   partnerName: string;
 }) {
   const [open, setOpen] = useState(false);
+  const [isPending, startTransition] = useTransition();
+  const router = useRouter();
+  const { showSuccess, showError, toastNode } = useToast();
   const update = updateFixedExpenseAction.bind(null, expense.id, branchId);
+
+  function handleSubmit(formData: FormData) {
+    startTransition(async () => {
+      try {
+        await update(formData);
+        router.refresh();
+        setOpen(false);
+        showSuccess("ההוצאה עודכנה בהצלחה");
+      } catch (err) {
+        showError(err instanceof Error ? err.message : "אירעה שגיאה בעדכון ההוצאה");
+      }
+    });
+  }
 
   return (
     <>
@@ -84,13 +102,7 @@ export function EditFixedExpenseModal({
       </button>
       {open && (
         <Modal title="עריכת הוצאה קבועה" onClose={() => setOpen(false)}>
-          <form
-            action={async (formData: FormData) => {
-              await update(formData);
-              setOpen(false);
-            }}
-            className="grid grid-cols-2 gap-2"
-          >
+          <form action={handleSubmit} className="grid grid-cols-2 gap-2">
             <div className="col-span-2">
               <label className={LABEL}>שם ההוצאה</label>
               <input name="name" defaultValue={expense.name} className={FIELD} required />
@@ -116,13 +128,18 @@ export function EditFixedExpenseModal({
               <PayerFields paidBy={expense.paidBy} owedBy={expense.owedBy} ownerName={ownerName} partnerName={partnerName} />
             )}
             <div className="col-span-2">
-              <button type="submit" className="rounded-[10px] bg-gradient-to-br from-teal to-teal-light px-5 py-2 text-xs font-bold text-white shadow-primary transition hover:opacity-90">
-                שמירה
+              <button
+                type="submit"
+                disabled={isPending}
+                className="rounded-[10px] bg-gradient-to-br from-teal to-teal-light px-5 py-2 text-xs font-bold text-white shadow-primary transition hover:opacity-90 disabled:opacity-50"
+              >
+                {isPending ? "שומר..." : "שמירה"}
               </button>
             </div>
           </form>
         </Modal>
       )}
+      {toastNode}
     </>
   );
 }
@@ -141,7 +158,23 @@ export function EditVariableExpenseModal({
   partnerName: string;
 }) {
   const [open, setOpen] = useState(false);
+  const [isPending, startTransition] = useTransition();
+  const router = useRouter();
+  const { showSuccess, showError, toastNode } = useToast();
   const update = updateVariableExpenseAction.bind(null, expense.id, branchId);
+
+  function handleSubmit(formData: FormData) {
+    startTransition(async () => {
+      try {
+        await update(formData);
+        router.refresh();
+        setOpen(false);
+        showSuccess("ההוצאה עודכנה בהצלחה");
+      } catch (err) {
+        showError(err instanceof Error ? err.message : "אירעה שגיאה בעדכון ההוצאה");
+      }
+    });
+  }
 
   return (
     <>
@@ -150,13 +183,7 @@ export function EditVariableExpenseModal({
       </button>
       {open && (
         <Modal title="עריכת הוצאה חד פעמית" onClose={() => setOpen(false)}>
-          <form
-            action={async (formData: FormData) => {
-              await update(formData);
-              setOpen(false);
-            }}
-            className="grid grid-cols-2 gap-2"
-          >
+          <form action={handleSubmit} className="grid grid-cols-2 gap-2">
             <div className="col-span-2">
               <label className={LABEL}>תיאור</label>
               <input name="desc" defaultValue={expense.desc} className={FIELD} required />
@@ -182,13 +209,18 @@ export function EditVariableExpenseModal({
               <PayerFields paidBy={expense.paidBy} owedBy={expense.owedBy} ownerName={ownerName} partnerName={partnerName} />
             )}
             <div className="col-span-2">
-              <button type="submit" className="rounded-[10px] bg-gradient-to-br from-teal to-teal-light px-5 py-2 text-xs font-bold text-white shadow-primary transition hover:opacity-90">
-                שמירה
+              <button
+                type="submit"
+                disabled={isPending}
+                className="rounded-[10px] bg-gradient-to-br from-teal to-teal-light px-5 py-2 text-xs font-bold text-white shadow-primary transition hover:opacity-90 disabled:opacity-50"
+              >
+                {isPending ? "שומר..." : "שמירה"}
               </button>
             </div>
           </form>
         </Modal>
       )}
+      {toastNode}
     </>
   );
 }

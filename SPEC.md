@@ -195,7 +195,11 @@ pnpm dev        # turbo run dev — מריץ web + api
   סניפי שותף (`updateFixedExpenseAction` / `updateVariableExpenseAction` ב-`actions.ts`).
   עריכת הוצאה חד-פעמית מוחקת ויוצרת מחדש את רשומת ה-`n_ah_expenses` המקושרת (אם יש) לפי
   הנתונים החדשים, באותו אופן שבו `createLinkedOwnerLedgerExpense`/`deleteLinkedOwnerLedgerExpense`
-  עובדים ביצירה/מחיקה. בנוסף קיים "סניף" מדומה **`shared-computers`** (`SHARED_COMPUTERS_BRANCH_ID`, מיוצא גם בתור
+  עובדים ביצירה/מחיקה. פעולות עריכה/מחיקה/סיום (`expense-action-buttons.tsx`,
+  `edit-expense-modals.tsx`) קוראות ל-Server Action ישירות מהלקוח (לא דרך `<form action>` פשוט),
+  ומריצות `router.refresh()` + הודעת "בוצע בהצלחה" (`lib/toast.tsx`) בסיום - כדי למנוע את
+  התופעה שבה `redirect()` לאותו נתיב לא רענן בפועל את הרשימה בלי רענון ידני. בנוסף קיים
+  "סניף" מדומה **`shared-computers`** (`SHARED_COMPUTERS_BRANCH_ID`, מיוצא גם בתור
   `SHARED_EXPENSE_BRANCH_ID` מ-`apps/web/lib/computer-room-accounting.ts` לתאימות; המקבילה
   בניידים היא `SHARED_RENTALS_BRANCH_ID`, שתיהן מוגדרות ב-`apps/web/lib/expense-shared-scope.ts`)
   עבור הוצאות המשותפות לכל סניפי חדרי המחשבים יחד (למשל פרסום/רישיונות משותפים) - עלותן

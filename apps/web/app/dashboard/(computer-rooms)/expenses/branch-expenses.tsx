@@ -1,13 +1,8 @@
 import { Scale, Calendar, Receipt } from "lucide-react";
 import type { FixedExpense, VariableExpense } from "@ultranet/shared-types";
-import {
-  createFixedExpenseAction,
-  endFixedExpenseAction,
-  deleteFixedExpenseAction,
-  createVariableExpenseAction,
-  deleteVariableExpenseAction,
-} from "./actions";
+import { createFixedExpenseAction, createVariableExpenseAction } from "./actions";
 import { EditFixedExpenseModal, EditVariableExpenseModal } from "./edit-expense-modals";
+import { EndFixedExpenseControl, DeleteFixedExpenseButton, DeleteVariableExpenseButton } from "./expense-action-buttons";
 
 const CATEGORIES = ["שכירות", "חשמל ומים", "משכורות", "ציוד ותחזוקה", "שיווק ופרסום", "ביטוח", "אחר"];
 
@@ -152,17 +147,8 @@ export function BranchExpenses({ branchId, isShared, isPartner, ownerName, partn
               </div>
               <div className="flex items-center gap-2">
                 {canManage && <EditFixedExpenseModal expense={e} branchId={branchId} isPartner={isPartner} ownerName={ownerName} partnerName={partnerName} />}
-                {canManage && (
-                  <form action={endFixedExpenseAction.bind(null, e.id, branchId)} className="flex items-center gap-1">
-                    <input name="endDate" type="date" className="rounded-lg border border-card-border bg-white px-2 py-1 text-xs" />
-                    <button type="submit" className="rounded-lg border border-card-border bg-white px-2 py-1 text-xs font-bold text-ink hover:bg-[#f4f6f9]">סיום</button>
-                  </form>
-                )}
-                {canManage && (
-                  <form action={deleteFixedExpenseAction.bind(null, e.id, branchId)}>
-                    <button type="submit" className="rounded-lg border border-red-200 bg-white px-2 py-1 text-xs font-bold text-red-600 hover:bg-red-50">מחיקה</button>
-                  </form>
-                )}
+                {canManage && <EndFixedExpenseControl id={e.id} branchId={branchId} />}
+                {canManage && <DeleteFixedExpenseButton id={e.id} branchId={branchId} />}
               </div>
             </div>
           ))}
@@ -180,11 +166,7 @@ export function BranchExpenses({ branchId, isShared, isPartner, ownerName, partn
                   </div>
                   <div className="flex items-center gap-2">
                     {canManage && <EditFixedExpenseModal expense={e} branchId={branchId} isPartner={isPartner} ownerName={ownerName} partnerName={partnerName} />}
-                    {canManage && (
-                      <form action={deleteFixedExpenseAction.bind(null, e.id, branchId)}>
-                        <button type="submit" className="rounded-lg border border-red-200 bg-white px-2 py-1 text-xs font-bold text-red-600 hover:bg-red-50">מחיקה</button>
-                      </form>
-                    )}
+                    {canManage && <DeleteFixedExpenseButton id={e.id} branchId={branchId} />}
                   </div>
                 </div>
               ))}
@@ -238,11 +220,7 @@ export function BranchExpenses({ branchId, isShared, isPartner, ownerName, partn
               </div>
               <div className="flex items-center gap-2">
                 {canManage && <EditVariableExpenseModal expense={e} branchId={branchId} isPartner={isPartner} ownerName={ownerName} partnerName={partnerName} />}
-                {canManage && (
-                  <form action={deleteVariableExpenseAction.bind(null, e.id, branchId)}>
-                    <button type="submit" className="rounded-lg border border-red-200 bg-white px-2 py-1 text-xs font-bold text-red-600 hover:bg-red-50">מחיקה</button>
-                  </form>
-                )}
+                {canManage && <DeleteVariableExpenseButton id={e.id} branchId={branchId} />}
               </div>
             </div>
           ))}
