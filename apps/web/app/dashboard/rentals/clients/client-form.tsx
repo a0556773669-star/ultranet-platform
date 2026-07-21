@@ -64,6 +64,10 @@ export function ClientForm({
         <label className={LABEL}>כתובת</label>
         <input name="address" defaultValue={initial?.address} className={FIELD} />
       </div>
+      <div className="sm:col-span-2">
+        <label className={LABEL}>מאיפה הגיע אלינו (רשות)</label>
+        <input name="referralSource" defaultValue={initial?.referralSource} className={FIELD} />
+      </div>
 
       <div className="flex items-center gap-2">
         <input

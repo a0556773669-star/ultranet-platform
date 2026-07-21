@@ -167,6 +167,7 @@ export interface RentalClient {
   cardLast4?: string; // display-only reference, never store full PAN
   cardExpiry?: string; // MM/YY, non-sensitive
   gatewayToken?: string; // set by payment gateway tokenization (Nedarim Plus), never raw card data
+  referralSource?: string; // free text: how the client found us
 }
 
 /** collection: n_rentals */
