@@ -45,6 +45,9 @@ export async function createFixedExpenseAction(branchId: string, formData: FormD
   const data: Omit<FixedExpense, "id"> = { branchId, name, amount, startDate, category, paidBy, owedBy };
   await getAdminFirestore().collection("n_fixed_expenses").add(stripUndefined(data));
   revalidatePath(`/dashboard/rentals/expenses/${branchId}`);
+  revalidatePath("/dashboard/accounting");
+  revalidatePath("/dashboard/rentals/accounting");
+  revalidatePath("/dashboard");
   redirect(`/dashboard/rentals/expenses/${branchId}`);
 }
 
@@ -53,6 +56,9 @@ export async function endFixedExpenseAction(id: string, branchId: string, formDa
   const endDate = String(formData.get("endDate") ?? "").trim() || new Date().toISOString().slice(0, 10);
   await getAdminFirestore().collection("n_fixed_expenses").doc(id).set({ endDate }, { merge: true });
   revalidatePath(`/dashboard/rentals/expenses/${branchId}`);
+  revalidatePath("/dashboard/accounting");
+  revalidatePath("/dashboard/rentals/accounting");
+  revalidatePath("/dashboard");
   redirect(`/dashboard/rentals/expenses/${branchId}`);
 }
 
@@ -60,6 +66,9 @@ export async function deleteFixedExpenseAction(id: string, branchId: string) {
   await requireOwner();
   await getAdminFirestore().collection("n_fixed_expenses").doc(id).delete();
   revalidatePath(`/dashboard/rentals/expenses/${branchId}`);
+  revalidatePath("/dashboard/accounting");
+  revalidatePath("/dashboard/rentals/accounting");
+  revalidatePath("/dashboard");
   redirect(`/dashboard/rentals/expenses/${branchId}`);
 }
 
@@ -122,6 +131,8 @@ export async function createVariableExpenseAction(branchId: string, formData: Fo
   await db.collection("n_var_expenses").add(stripUndefined(data));
   revalidatePath(`/dashboard/rentals/expenses/${branchId}`);
   revalidatePath("/dashboard/accounting");
+  revalidatePath("/dashboard/rentals/accounting");
+  revalidatePath("/dashboard");
   redirect(`/dashboard/rentals/expenses/${branchId}`);
 }
 
@@ -182,5 +193,7 @@ export async function deleteVariableExpenseAction(id: string, branchId: string) 
   await db.collection("n_var_expenses").doc(id).delete();
   revalidatePath(`/dashboard/rentals/expenses/${branchId}`);
   revalidatePath("/dashboard/accounting");
+  revalidatePath("/dashboard/rentals/accounting");
+  revalidatePath("/dashboard");
   redirect(`/dashboard/rentals/expenses/${branchId}`);
 }
