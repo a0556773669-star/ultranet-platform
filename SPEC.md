@@ -190,9 +190,14 @@ pnpm dev        # turbo run dev — מריץ web + api
 
 - **`/expenses`** (perm: `computers`) — הוצאות קבועות/חד-פעמיות פר סניף חדר מחשבים
   (`n_fixed_expenses` / `n_var_expenses`, אותו מודל בדיוק כמו ב-`/dashboard/rentals/expenses`).
-  לכל הוצאה (קבועה או חד-פעמית) יש כפתור **עריכה** (owner בלבד, `canManage`) הפותח מודל
-  לעריכת כל השדות - שם/תיאור, סכום, תאריך, קטגוריה, ו"מי שילם בפועל"/"על מי החוב" עבור
-  סניפי שותף (`updateFixedExpenseAction` / `updateVariableExpenseAction` ב-`actions.ts`).
+  לכל הוצאה (קבועה או חד-פעמית) יש כפתור **עריכה** הפותח מודל לעריכת כל השדות - שם/תיאור,
+  סכום, תאריך, קטגוריה, ו"מי שילם בפועל"/"על מי החוב" עבור סניפי שותף
+  (`updateFixedExpenseAction` / `updateVariableExpenseAction` ב-`actions.ts`). `canManage`
+  (עריכה/מחיקה/סיום) פתוח ל-owner **וגם** לשותף בסניף שלו עצמו (`isOwner || isPartner` ב-
+  `[id]/page.tsx`) - לא רק ל-owner כמו קודם; ה-Server Actions עצמם אוכפים זאת דרך
+  `requireBranchAccess(branchId)` וגם מוודאים ש-`id` שהתקבל שייך בפועל לאותו `branchId`
+  (`loadOwnedFixedExpense`/`loadOwnedVariableExpense`) כדי שרשות פעולה על הסניף שלך לא תאפשר
+  למחוק/לערוך הוצאה של סניף אחר.
   עריכת הוצאה חד-פעמית מוחקת ויוצרת מחדש את רשומת ה-`n_ah_expenses` המקושרת (אם יש) לפי
   הנתונים החדשים, באותו אופן שבו `createLinkedOwnerLedgerExpense`/`deleteLinkedOwnerLedgerExpense`
   עובדים ביצירה/מחיקה. פעולות עריכה/מחיקה/סיום (`expense-action-buttons.tsx`,
