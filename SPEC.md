@@ -153,7 +153,7 @@ pnpm dev        # turbo run dev — מריץ web + api
 | `n_users` | `AppUser` | משתמשים; תפקיד, סניף, `perms`, `viewClientBranchIds` |
 | `n_fixed_expenses` | `FixedExpense` | הוצאות קבועות לסניף |
 | `n_var_expenses` | `VariableExpense` | הוצאות משתנות (לפי חודש) |
-| `n_branch_income` | `BranchIncome` | הכנסות סניף (שותפים); גם שורות הכנסה ידניות (owner-only) בדף `/dashboard/rentals/expenses/[id]` ובדשבורד "השקעה מול רווח" של חדרי מחשבים - לא נכתב ל-`n_ah_income`, לא משפיע על הנה"ח הראשית |
+| `n_branch_income` | `BranchIncome` | הכנסות סניף; שורות הכנסה ידניות owner-only בדף `/dashboard/rentals/expenses/[id]` - מתחשבנות כמו השכרה רגילה בחישוב ההשכרות (`computeBranchFinancials`), וגם שורות ידניות נפרדות בדשבורד "השקעה מול רווח" של חדרי מחשבים (שם לא מחושבות בשום מקום) - בשני המקרים לעולם לא נכתב ל-`n_ah_income`, לא משפיע על הנה"ח הראשית |
 | `n_tasks` | `Task` | משימות (דחיפות, חזרתיות, בוצע) |
 | `n_sub_locations` | `SubLocation` | תתי-מיקומים בסניף |
 | `n_devices` | `Device` | מכשירים/מחשבים בחדרי מחשבים |
@@ -269,11 +269,14 @@ pnpm dev        # turbo run dev — מריץ web + api
   להוצאות משותפות לכל סניפי ההשכרות יחד. ראו סעיף 8 (חדרי מחשבים → `/expenses`) ו-10 להסבר
   המלא על איך הוצאות אלה מתחשבנות בהנה"ח הראשית. באותו דף, לכל סניף אמיתי (לא `shared-rentals`)
   יש גם קטע **"הכנסות" - owner בלבד** (`addBranchIncomeAction`/`deleteBranchIncomeAction`,
-  `apps/web/app/dashboard/rentals/expenses/actions.ts`): לוג הכנסות ידני פרטי לבעלים (למשל
-  הכנסות ישנות שלא נרשמו כהשכרות במערכת), נכתב ל-`n_branch_income`. בכוונה **לא** מתחשבן
-  בהנה"ח הראשית ו**לא** נכנס לחישוב `computeBranchFinancials`/`/dashboard/rentals/accounting`
-  (וממילא לא משפיע על "כמה השותף חייב") - זהה במודל ל"הכנסות" בדשבורד ההשקעה-מול-רווח של
-  חדרי מחשבים.
+  `apps/web/app/dashboard/rentals/expenses/actions.ts`): הזנה ידנית של הבעלים (למשל הכנסות
+  ישנות שלא נרשמו כהשכרות במערכת), נכתבת ל-`n_branch_income` עם שדה `collectedByOwner` (מוצג
+  רק כשלסניף יש שותף - "מי מחזיק כרגע בכסף", אני/השותף). היא **מתנהגת כמו הכנסת השכרה רגילה**:
+  `buildManualIncomeLines` (`apps/web/lib/branch-accounting-data.ts`) ממזגת אותה לתוך אותן
+  income lines ש-`computeBranchFinancials` בונה מהשכרות אמיתיות, כך שהיא נכנסת ל"הכנסות
+  החודש"/"הכנסות עד היום" ולמאזן ההעברה החודשית ב-`/dashboard/rentals/accounting` בדיוק כמו כל
+  הכנסת השכרה אחרת. מה שכן נשאר זהה לכל הכנסת השכרה: היא **לעולם לא** נכתבת ל-`n_ah_income` -
+  מגיעה להנה"ח הראשית רק אם הבעלים מקליד אותה שם ידנית (סוג הכנסה `laptops`).
 - **`/accounting`** — הנה"ח ברמת סניף השכרות: תצוגת סניף/בעלים, סימון העברות
   (`mark-transferred-button.tsx`, `n_branch_transfers`).
 - **`/branches`** — ניהול סניפי השכרה + audit הרשאות.
