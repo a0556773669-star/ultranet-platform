@@ -271,9 +271,11 @@ pnpm dev        # turbo run dev — מריץ web + api
   יש גם קטע **"הכנסות" - owner בלבד** (`addBranchIncomeAction`/`deleteBranchIncomeAction`,
   `apps/web/app/dashboard/rentals/expenses/actions.ts`): לוג הכנסות ידני פרטי לבעלים (למשל
   הכנסות ישנות שלא נרשמו כהשכרות במערכת), נכתב ל-`n_branch_income`. בכוונה **לא** מתחשבן
-  בהנה"ח הראשית ו**לא** נכנס לחישוב `computeBranchFinancials`/`/dashboard/rentals/accounting`
-  (וממילא לא משפיע על "כמה השותף חייב") - זהה במודל ל"הכנסות" בדשבורד ההשקעה-מול-רווח של
-  חדרי מחשבים.
+  בהנה"ח הראשית ו**לא** נכנס לחישוב `computeBranchFinancials`/מאזן ההעברה החודשית (וממילא לא
+  משפיע על "כמה השותף חייב") - זהה במודל ל"הכנסות" בדשבורד ההשקעה-מול-רווח של חדרי מחשבים.
+  **כן מוצג** לעומת זאת ל-owner בעמוד `/dashboard/rentals/accounting` (`BranchAccountingView`,
+  ה-prop `manualIncomeToDate`) - כתיבה נפרדת ומסומנת בבירור ("מעקב פרטי בלבד"), לא מוזגת לתוך
+  תיבות "הכנסות עד היום"/"הכנסות החודש" הרשמיות.
 - **`/accounting`** — הנה"ח ברמת סניף השכרות: תצוגת סניף/בעלים, סימון העברות
   (`mark-transferred-button.tsx`, `n_branch_transfers`).
 - **`/branches`** — ניהול סניפי השכרה + audit הרשאות.

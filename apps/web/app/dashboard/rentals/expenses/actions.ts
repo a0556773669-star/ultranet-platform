@@ -198,10 +198,11 @@ export async function deleteVariableExpenseAction(id: string, branchId: string) 
 /**
  * Owner-only manual income log for a rentals branch (e.g. backfilling historical income that
  * predates the system). Writes to n_branch_income - deliberately does NOT touch n_ah_income and
- * does NOT feed the real-transaction-based totals on /dashboard/rentals/accounting
+ * does NOT feed the real-transaction-based totals/settlement calc on /dashboard/rentals/accounting
  * (computeBranchFinancials), so it never reconciles into the main ledger or affects the
- * partner-settlement calculation. Purely a private reference log for the owner, same model as
- * the computer-rooms investment dashboard.
+ * partner-settlement calculation. It IS shown to the owner as a separate, clearly-labeled total
+ * on that same page (BranchAccountingView's "הכנסות שהזנתי ידנית" box) - visible, but not merged
+ * into the official figures above it.
  */
 export async function addBranchIncomeAction(branchId: string, formData: FormData) {
   await requireOwner();
@@ -220,10 +221,12 @@ export async function addBranchIncomeAction(branchId: string, formData: FormData
   });
   await getAdminFirestore().collection("n_branch_income").add(data);
   revalidatePath(`/dashboard/rentals/expenses/${branchId}`);
+  revalidatePath("/dashboard/rentals/accounting");
 }
 
 export async function deleteBranchIncomeAction(id: string, branchId: string) {
   await requireOwner();
   await getAdminFirestore().collection("n_branch_income").doc(id).delete();
   revalidatePath(`/dashboard/rentals/expenses/${branchId}`);
+  revalidatePath("/dashboard/rentals/accounting");
 }

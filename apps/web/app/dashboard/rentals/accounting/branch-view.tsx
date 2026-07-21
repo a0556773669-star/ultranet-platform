@@ -23,12 +23,16 @@ export function BranchAccountingView({
   month,
   showSettlement,
   isOwner = false,
+  manualIncomeToDate,
 }: {
   financials: BranchFinancials;
   transfer: BranchTransfer | undefined;
   month: string;
   showSettlement: boolean;
   isOwner?: boolean;
+  /** owner-only private income log total (n_branch_income) - shown separately, never merged
+   *  into the official incomeToDate/settlement figures above. */
+  manualIncomeToDate?: number;
 }) {
   const f = financials;
   const isFirstOfMonth = new Date().getDate() === 1;
@@ -75,6 +79,17 @@ export function BranchAccountingView({
           ) : (
             <div className="text-sm text-muted">אין העברה נדרשת החודש.</div>
           )}
+        </div>
+      )}
+
+      {isOwner && !!manualIncomeToDate && (
+        <div className="rounded-card border border-dashed border-card-border bg-[#f8fafc] p-4">
+          <div className="text-xs text-muted">הכנסות שהזנתי ידנית (עד היום) - מעקב פרטי בלבד</div>
+          <div className="mt-1 text-xl font-extrabold text-ink">{money(manualIncomeToDate)}</div>
+          <p className="mt-1 text-[11px] text-muted">
+            לא כלול ב&quot;הכנסות עד היום&quot; למעלה, ולא משפיע על ההעברה החודשית - ניהול והוספה
+            בדף &quot;הוצאות&quot; של הסניף.
+          </p>
         </div>
       )}
 
