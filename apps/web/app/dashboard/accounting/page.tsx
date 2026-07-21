@@ -1,8 +1,8 @@
 import Link from "next/link";
-import { BarChart3, Download, Upload } from "lucide-react";
+import { BarChart3, Download, Upload, Laptop, CreditCard, Banknote } from "lucide-react";
 import { requireModuleAccess } from "@/lib/perms";
 import { getAdminFirestore } from "@/lib/firebase-admin";
-import type { AccountingIncome, AccountingExpense, CollectionRoute } from "@ultranet/shared-types";
+import type { AccountingIncome, AccountingExpense, CollectionRoute, Branch } from "@ultranet/shared-types";
 import { createIncomeAction, createExpenseAction, deleteIncomeAction, deleteExpenseAction } from "./actions";
 import CollectModal from "./collect-modal";
 import { DeleteEntryButton } from "./delete-entry-button";
@@ -15,16 +15,30 @@ const BUSINESS_LABELS: Record<string, string> = {
   other: "אחר",
 };
 
+const INCOME_TYPE_LABELS: Record<string, string> = {
+  laptops: "ניידים",
+  credit: "אשראי מהעסק",
+  cash: "מזומן",
+  fixed: "קבוע",
+  variable: "משתנה",
+};
+
 const FIELD = "rounded-lg border border-card-border bg-[#f4f6f9] px-3 py-2 text-sm focus:border-teal focus:bg-white focus:outline-none";
+
+function branchNameOf(branches: Branch[], branchId?: string) {
+  if (!branchId) return undefined;
+  return branches.find((b) => b.id === branchId)?.name;
+}
 
 export default async function AccountingPage() {
   await requireModuleAccess("accounting");
 
   const db = getAdminFirestore();
-  const [incomeSnap, expenseSnap, routesSnap] = await Promise.all([
+  const [incomeSnap, expenseSnap, routesSnap, branchesSnap] = await Promise.all([
     db.collection("n_ah_income").get(),
     db.collection("n_ah_expenses").get(),
     db.collection("n_collection_routes").get(),
+    db.collection("n_branches").get(),
   ]);
   const income = incomeSnap.docs
     .map((d) => ({ id: d.id, ...(d.data() as Omit<AccountingIncome, "id">) }) as AccountingIncome)
@@ -36,6 +50,15 @@ export default async function AccountingPage() {
   const routes = routesSnap.docs.map(
     (d) => ({ id: d.id, ...(d.data() as Omit<CollectionRoute, "id">) }) as CollectionRoute,
   );
+
+  const branches = branchesSnap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<Branch, "id">) }) as Branch);
+  const laptopBranches = branches
+    .filter((b) => b.branchType === "rentals")
+    .sort((a, b) => a.name.localeCompare(b.name, "he"));
+  const cashRegisterBranches = branches
+    .filter((b) => b.branchType === "computers")
+    .sort((a, b) => a.name.localeCompare(b.name, "he"));
+  const creditDefaultDate = `${new Date().toISOString().slice(0, 7)}-10`;
 
   const totalIncome = income.reduce((sum, i) => sum + i.amount, 0);
   const totalExpenses = expenses.reduce((sum, e) => sum + e.amount, 0);
@@ -75,29 +98,56 @@ export default async function AccountingPage() {
         </div>
       </div>
 
+      <p className="mb-2 text-xs text-muted">
+        אלו 3 סוגי ההכנסה היחידים שמתחשבנים בהנה&quot;ח הראשית ובדף הבית. הכנסות ניידים/חדרי מחשבים
+        הפנימיות (מעקב השקעה מול רווח) מנוהלות במודולים שלהן ואינן משפיעות על המספרים כאן.
+      </p>
       <div className="mb-6 grid grid-cols-1 gap-3 lg:grid-cols-3">
         <form action={createIncomeAction} className="flex flex-col gap-2.5 rounded-card border border-card-border bg-white p-4 shadow-card">
-          <h2 className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-muted"><Download className="h-4 w-4" />הוספת הכנסה</h2>
+          <h2 className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-muted"><Laptop className="h-4 w-4" />הכנסה — ניידים</h2>
+          <input type="hidden" name="type" value="laptops" />
           <input type="date" name="date" required className={FIELD} />
-          <input name="desc" placeholder="תיאור" className={FIELD} />
+          <select name="branchId" required defaultValue="" className={FIELD}>
+            <option value="" disabled>בחר סניף ניידים</option>
+            {laptopBranches.map((b) => (
+              <option key={b.id} value={b.id}>{b.name}</option>
+            ))}
+          </select>
           <input type="number" name="amount" min={0} placeholder="סכום" required className={FIELD} />
-          <select name="business" className={FIELD}>
-            <option value="general">כללי</option>
-            <option value="computers">מחשבים</option>
-            <option value="rentals">השכרות</option>
-            <option value="coworking">משרד שיתופי</option>
-            <option value="other">אחר</option>
-          </select>
-          <select name="type" className={FIELD}>
-            <option value="fixed">קבוע</option>
-            <option value="variable">משתנה</option>
-            <option value="cash">מזומן</option>
-          </select>
           <button type="submit" className="self-start rounded-[10px] bg-gradient-to-br from-teal to-teal-light px-5 py-2 text-sm font-bold text-white shadow-primary transition hover:opacity-90">
             הוספה
           </button>
         </form>
 
+        <form action={createIncomeAction} className="flex flex-col gap-2.5 rounded-card border border-card-border bg-white p-4 shadow-card">
+          <h2 className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-muted"><CreditCard className="h-4 w-4" />הכנסה — אשראי מהעסק</h2>
+          <input type="hidden" name="type" value="credit" />
+          <input type="date" name="date" required defaultValue={creditDefaultDate} className={FIELD} />
+          <input type="number" name="amount" min={0} placeholder="סכום" required className={FIELD} />
+          <p className="text-[11px] text-muted">בדרך כלל מסומן ב-10 לחודש</p>
+          <button type="submit" className="self-start rounded-[10px] bg-gradient-to-br from-teal to-teal-light px-5 py-2 text-sm font-bold text-white shadow-primary transition hover:opacity-90">
+            הוספה
+          </button>
+        </form>
+
+        <form action={createIncomeAction} className="flex flex-col gap-2.5 rounded-card border border-card-border bg-white p-4 shadow-card">
+          <h2 className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-muted"><Banknote className="h-4 w-4" />הכנסה — מזומן</h2>
+          <input type="hidden" name="type" value="cash" />
+          <input type="date" name="date" required className={FIELD} />
+          <select name="branchId" required defaultValue="" className={FIELD}>
+            <option value="" disabled>בחר קופה (סניף חדר מחשבים)</option>
+            {cashRegisterBranches.map((b) => (
+              <option key={b.id} value={b.id}>{b.name}</option>
+            ))}
+          </select>
+          <input type="number" name="amount" min={0} placeholder="סכום" required className={FIELD} />
+          <button type="submit" className="self-start rounded-[10px] bg-gradient-to-br from-teal to-teal-light px-5 py-2 text-sm font-bold text-white shadow-primary transition hover:opacity-90">
+            הוספה
+          </button>
+        </form>
+      </div>
+
+      <div className="mb-6 grid grid-cols-1 gap-3 lg:grid-cols-2">
         <form action={createExpenseAction} className="flex flex-col gap-2.5 rounded-card border border-card-border bg-white p-4 shadow-card">
           <h2 className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-muted"><Upload className="h-4 w-4" />הוספת הוצאה</h2>
           <input type="date" name="date" required className={FIELD} />
@@ -126,11 +176,18 @@ export default async function AccountingPage() {
           <div className="rounded-card border border-card-border bg-white px-4 shadow-card">
             {income.slice(0, 15).map((i) => {
             const bound = deleteIncomeAction.bind(null, i.id);
+            const branchName = branchNameOf(branches, i.branchId);
             return (
               <div key={i.id} className="flex items-center gap-2.5 border-b border-card-border py-2.5 text-[13px] last:border-b-0">
                 <div className="flex-1">
                   <div className="font-bold text-ink">{i.desc || BUSINESS_LABELS[i.business]}</div>
-                  <div className="mt-0.5 text-[11px] text-muted">{i.date}</div>
+                  <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[11px] text-muted">
+                    <span>{i.date}</span>
+                    {INCOME_TYPE_LABELS[i.type] && (
+                      <span className="rounded-full bg-[#f4f6f9] px-2 py-0.5 text-ink">{INCOME_TYPE_LABELS[i.type]}</span>
+                    )}
+                    {branchName && <span>· {branchName}</span>}
+                  </div>
                 </div>
                 <div className="min-w-[75px] text-left font-extrabold text-emerald-600">{i.amount.toLocaleString()} ₪</div>
                 <form action={bound}>

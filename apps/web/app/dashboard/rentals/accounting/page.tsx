@@ -143,11 +143,17 @@ export default async function RentalsAccountingPage({
           >
             <h2 className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-muted">
               <Plus className="h-4 w-4" />
-              {"הוספת הכנסה"}
+              {"הוספת הכנסה — ניידים"}
             </h2>
-            <input type="hidden" name="business" value="rentals" />
+            <input type="hidden" name="type" value="laptops" />
             <input type="date" name="date" required className={FIELD} />
-            <input name="desc" placeholder="תיאור" className={FIELD} />
+            <select name="branchId" required defaultValue="" className={FIELD}>
+              <option value="" disabled>בחר סניף ניידים</option>
+              {rentalsBranches.map((b) => (
+                <option key={b.id} value={b.id}>{b.name}</option>
+              ))}
+            </select>
+            <input name="desc" placeholder="תיאור (לא חובה)" className={FIELD} />
             <input type="number" name="amount" min={0} placeholder="סכום" required className={FIELD} />
             <button
               type="submit"

@@ -32,20 +32,57 @@ function stripUndefined<T extends Record<string, unknown>>(obj: T): T {
 
 export async function createIncomeAction(formData: FormData) {
   await requireOwner();
+  const db = getAdminFirestore();
+  const type = String(formData.get("type") ?? "cash") as AccountingIncome["type"];
   const date = String(formData.get("date") ?? "");
   const amount = Number(formData.get("amount") ?? 0);
   if (!date || !amount) {
     throw new Error("תאריך וסכום הם שדות חובה");
   }
-  const data: Omit<AccountingIncome, "id"> = {
+
+  let business: AccountingIncome["business"] = "general";
+  let branchId: string | undefined;
+  let desc = String(formData.get("desc") ?? "").trim();
+
+  if (type === "laptops") {
+    branchId = String(formData.get("branchId") ?? "").trim();
+    if (!branchId) {
+      throw new Error("נא לבחור סניף ניידים");
+    }
+    business = "rentals";
+    if (!desc) {
+      const branchDoc = await db.collection("n_branches").doc(branchId).get();
+      desc = (branchDoc.data() as { name?: string } | undefined)?.name ?? "הכנסת ניידים";
+    }
+  } else if (type === "cash") {
+    branchId = String(formData.get("branchId") ?? "").trim();
+    if (!branchId) {
+      throw new Error("נא לבחור קופה (סניף חדר מחשבים)");
+    }
+    business = "computers";
+    if (!desc) {
+      const branchDoc = await db.collection("n_branches").doc(branchId).get();
+      const branchName = (branchDoc.data() as { name?: string } | undefined)?.name ?? "";
+      desc = `מזומן מקופה${branchName ? ` — ${branchName}` : ""}`;
+    }
+  } else if (type === "credit") {
+    business = "general";
+    if (!desc) desc = "הכנסות אשראי מהעסק";
+  } else {
+    // legacy "fixed"/"variable" types - only reachable from old data, no longer created by the UI
+    business = String(formData.get("business") ?? "general") as AccountingIncome["business"];
+  }
+
+  const data: Omit<AccountingIncome, "id"> = stripUndefined({
     date,
     amount,
-    desc: String(formData.get("desc") ?? "").trim(),
-    business: String(formData.get("business") ?? "general") as AccountingIncome["business"],
-    type: String(formData.get("type") ?? "fixed") as AccountingIncome["type"],
+    desc,
+    business,
+    type,
     month: date.slice(0, 7),
-  };
-  await getAdminFirestore().collection("n_ah_income").add(data);
+    branchId,
+  });
+  await db.collection("n_ah_income").add(data);
   revalidatePath("/dashboard/accounting");
   revalidatePath("/dashboard/rentals/accounting");
 }

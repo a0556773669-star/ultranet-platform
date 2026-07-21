@@ -3,7 +3,7 @@
 > מסמך חי. יש לעדכן אותו בכל שינוי פיצ'ר, מודול, מודל נתונים או אינטגרציה
 > (ראה כלל תחזוקת התיעוד ב-[`CLAUDE.md`](CLAUDE.md)).
 >
-> עודכן לאחרונה: 2026-07-15
+> עודכן לאחרונה: 2026-07-21
 
 ## תוכן עניינים
 1. [סקירה כללית](#1-סקירה-כללית)
@@ -153,7 +153,7 @@ pnpm dev        # turbo run dev — מריץ web + api
 | `n_users` | `AppUser` | משתמשים; תפקיד, סניף, `perms`, `viewClientBranchIds` |
 | `n_fixed_expenses` | `FixedExpense` | הוצאות קבועות לסניף |
 | `n_var_expenses` | `VariableExpense` | הוצאות משתנות (לפי חודש) |
-| `n_branch_income` | `BranchIncome` | הכנסות סניף (שותפים) |
+| `n_branch_income` | `BranchIncome` | הכנסות סניף (שותפים); גם שורות הכנסה חודשיות ידניות לדשבורד "השקעה מול רווח" של חדרי מחשבים - לא נכתב ל-`n_ah_income` |
 | `n_tasks` | `Task` | משימות (דחיפות, חזרתיות, בוצע) |
 | `n_sub_locations` | `SubLocation` | תתי-מיקומים בסניף |
 | `n_devices` | `Device` | מכשירים/מחשבים בחדרי מחשבים |
@@ -166,7 +166,7 @@ pnpm dev        # turbo run dev — מריץ web + api
 | `n_printers` | `Printer` | מדפסות (טונר, נייר, IP) |
 | `n_cw_stations` | `CoworkingStation` | עמדות במשרד שיתופי |
 | `n_cw_clients` | `CoworkingClient` | לקוחות משרד שיתופי + היסטוריית תשלומים |
-| `n_ah_income` | `AccountingIncome` | הכנסות בהנה"ח מרכזית (בעלים) |
+| `n_ah_income` | `AccountingIncome` | הכנסות בהנה"ח מרכזית (בעלים); 3 סוגים בלבד - `laptops`/`credit`/`cash`, ראו סעיף 8 |
 | `n_ah_expenses` | `AccountingExpense` | הוצאות בהנה"ח מרכזית |
 | `n_collection_routes` | `CollectionRoute` | מסלולי גבייה (ספק תשלום, קבלות, יעד הפקדה, עמלות) |
 | `n_branch_transfers` | `BranchTransfer` | התחשבנות חודשית שותף↔בעלים |
@@ -186,6 +186,21 @@ pnpm dev        # turbo run dev — מריץ web + api
 ### חדרי מחשבים (`/dashboard/computer-rooms`) — perm: branches/computers/tasks
 מכשירים (`n_devices`), מדפסות, קריאות שירות (`/tickets`), משימות (`/tasks`),
 מלאי (`/inventory`), חדשות/עדכונים (`/news`), ניהול סניפים (`/branches`).
+
+- **`/expenses`** (perm: `computers`) — הוצאות קבועות/חד-פעמיות פר סניף חדר מחשבים
+  (`n_fixed_expenses` / `n_var_expenses`, אותו מודל בדיוק כמו ב-`/dashboard/rentals/expenses`).
+  בנוסף קיים "סניף" מדומה **`shared`** (`SHARED_EXPENSE_BRANCH_ID`,
+  `apps/web/lib/computer-room-accounting.ts`) עבור הוצאות המשותפות לכל סניפי חדרי המחשבים יחד
+  (למשל פרסום/רישיונות משותפים) - עלותן מתחלקת שווה בשווה בין הסניפים בחישוב "הוצאות עד היום"
+  בדשבורד ההנה"ח. מסך הבחירה (`/dashboard/expenses`) מציג גם קישור ייעודי להוצאות המשותפות.
+- **`/computer-rooms-accounting`** (perm: `computers`) — דשבורד "השקעה מול רווח" פר סניף חדר
+  מחשבים: **עלות הקמה** (`Branch.setupCost`), **הוצאות עד היום כולל הקמה** (הקמה + הוצאות
+  הסניף + חלקו בהוצאות המשותפות), **הכנסות עד היום**, ו**רווח מוחזק** (הכנסות פחות הוצאות).
+  ההכנסות כאן הן שורה ידנית אחת לחודש שמוסיפים לכל סניף (`n_branch_income`,
+  `addBranchIncomeAction`) - **מעקב סטטוס בלבד**, לא נכתב ל-`n_ah_income` ולכן לא מתחשבן
+  בהנה"ח הראשית ולא בדף הבית. owner רואה סקירת כל הסניפים ונכנס לכל סניף בנפרד; partner/עובד
+  עם הרשאת `computers` רואה ישירות את הסניף שלו. הוספת שורת הכנסה מותרת ל-owner ול-partner של
+  אותו סניף בלבד.
 
 ### השכרות (`/dashboard/rentals`) — perm: rentals
 - **`/`** — סקירת השכרות (טאבים: `rentals-tabs.tsx`).
@@ -238,6 +253,22 @@ pnpm dev        # turbo run dev — מריץ web + api
 ### הנהלת חשבונות (`/dashboard/accounting`) — perm: accounting
 הכנסות/הוצאות מרכזיות (`n_ah_income` / `n_ah_expenses`), גבייה (`collect-modal.tsx`,
 `lib/collection-charge.ts`), ומסלולי גבייה (`/routes`, `n_collection_routes`).
+
+**הכנסות (`n_ah_income`) - 3 סוגים בלבד, אלה היחידים שמתחשבנים בהנה"ח הראשית ובדף הבית:**
+טופס ההוספה ב-`/dashboard/accounting` (וגם הטופס המקוצר ב-`/dashboard/rentals/accounting`)
+בנוי סביב שדה `type`:
+1. **`laptops`** (ניידים) - תאריך + בחירת סניף מתוך סניפי `rentals` (`branchId`) + סכום.
+   `business` נקבע אוטומטית ל-`rentals`.
+2. **`credit`** (אשראי מהעסק) - תאריך (ברירת מחדל ל-10 בחודש הנוכחי) + סכום, ללא סניף.
+   `business` = `general`.
+3. **`cash`** (מזומן) - תאריך + בחירת קופה מתוך סניפי `computers` (`branchId` = איזו קופה
+   נלקח ממנה המזומן) + סכום. `business` נקבע אוטומטית ל-`computers`.
+
+ערכי `type` הישנים (`fixed`/`variable`) נשארים בטיפוס לתאימות לאחור בלבד (רשומות ישנות) -
+לא נוצרות יותר על ידי ה-UI. שדה `branchId` (אופציונלי) נוסף ל-`AccountingIncome` עבור
+`laptops`/`cash`. **חשוב:** ההכנסות הפנימיות של מודול הניידים ומודול חדרי המחשבים (מעקב
+השקעה מול רווח פר סניף, ראו `/dashboard/rentals/accounting` ו-`/dashboard/computer-rooms-accounting`)
+הן נפרדות לגמרי מ-`n_ah_income` ואינן מתחשבנות כאן.
 יצירה/עריכה/מחיקה של מסלול - owner בלבד (`createCollectionRouteAction` /
 `updateCollectionRouteAction` / `deleteCollectionRouteAction`, `/routes/[id]`
 לעריכה). שדות הסוד (apiKey/apiSecret/receiptsApiKey/receiptsApiSecret) לא
@@ -310,7 +341,8 @@ pnpm dev        # turbo run dev — מריץ web + api
 | `apps/web/lib/nedarim.ts` | פתרון creds ל-Nedarim Plus לפי סניף |
 | `apps/web/lib/rental-pricing.ts` | לוגיקת תמחור השכרות |
 | `apps/web/lib/collection-charge.ts` | לוגיקת חיוב/גבייה |
-| `apps/web/lib/branch-accounting*.ts` | חישובי הנה"ח והתחשבנות סניפים |
+| `apps/web/lib/branch-accounting*.ts` | חישובי הנה"ח והתחשבנות סניפי השכרות |
+| `apps/web/lib/computer-room-accounting.ts` | חישובי "השקעה מול רווח" פר סניף חדר מחשבים (הקמה/הוצאות/הכנסות/רווח) |
 | `apps/web/lib/device-trust.ts` | אימות/אמון מכשיר |
 | `apps/web/middleware.ts` | middleware של Next (הגנת נתיבים) |
 | `apps/api/src/branches/*` | מודול NestJS לדוגמה (branches) |

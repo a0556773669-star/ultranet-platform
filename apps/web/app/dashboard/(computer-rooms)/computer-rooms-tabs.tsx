@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Building2, Package, CheckCircle2, Tag, Megaphone, Mail, type LucideIcon } from "lucide-react";
+import { Building2, Package, CheckCircle2, Tag, Megaphone, Mail, Banknote, BarChart3, type LucideIcon } from "lucide-react";
 import type { PermKey } from "@/lib/perms";
 
 type TabItem = { href: string; label: string; icon: LucideIcon; perm?: PermKey };
@@ -14,6 +14,8 @@ const TABS: TabItem[] = [
   { href: "/dashboard/tickets", label: "פניות", icon: Tag, perm: "computers" },
   { href: "/dashboard/news", label: "עדכונים", icon: Megaphone },
   { href: "/dashboard/orders", label: "הזמנות", icon: Mail, perm: "computers" },
+  { href: "/dashboard/expenses", label: "הוצאות", icon: Banknote, perm: "computers" },
+  { href: "/dashboard/computer-rooms-accounting", label: "הנה\"ח", icon: BarChart3, perm: "computers" },
 ];
 
 export function ComputerRoomsTabs({

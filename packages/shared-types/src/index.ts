@@ -80,7 +80,13 @@ export interface VariableExpense {
     month: string; // YYYY-MM
 }
 
-/** collection: n_branch_income (manual/rental/coworking income entries for partner branches) */
+/**
+ * collection: n_branch_income (manual/rental/coworking income entries for partner branches).
+ * Also used for computer-room branches' monthly income tracking row
+ * (/dashboard/computer-rooms-accounting): one manual row per branch per month, purely for
+ * viewing setup-investment vs. profit per branch. Deliberately NOT written to n_ah_income -
+ * it does not reconcile into the main ledger or the home dashboard totals.
+ */
 export interface BranchIncome {
     id: string;
     branchId: string;
@@ -255,15 +261,28 @@ export interface CoworkingClient {
     payments: CoworkingPayment[];
 }
 
-/** collection: n_ah_income (owner-only manual accounting) */
+/**
+ * collection: n_ah_income (owner-only manual accounting).
+ * The only income entries that reconcile into the main ledger (and the home dashboard totals)
+ * come from 3 manual entry types, entered via /dashboard/accounting:
+ *  - "laptops": a laptop-rental branch's income, tied to `branchId` (a `rentals` branch).
+ *  - "credit": card-clearing income from the business as a whole (typically logged around the
+ *    10th of the month), no `branchId`.
+ *  - "cash": cash pulled from a computer-room branch's till, tied to `branchId` (a `computers`
+ *    branch = which till/קופה it came from).
+ * "fixed"/"variable" are legacy type values kept only so old records still render correctly;
+ * new entries are never created with them.
+ */
 export interface AccountingIncome {
     id: string;
     amount: number;
     desc: string;
     business: "computers" | "rentals" | "coworking" | "other" | "general";
-    type: "fixed" | "variable" | "cash";
+    type: "fixed" | "variable" | "cash" | "laptops" | "credit";
     date: string;
     month: string;
+    /** set for type "laptops" (rentals branch) and type "cash" (computers branch / till) */
+    branchId?: string;
 }
 
 /** collection: n_ah_expenses */
