@@ -200,6 +200,9 @@ pnpm dev        # turbo run dev — מריץ web + api
 - **`/computer-rooms-accounting`** (perm: `computers`) — דשבורד "השקעה מול רווח" פר סניף חדר
   מחשבים: **עלות הקמה** (`Branch.setupCost`), **הוצאות עד היום כולל הקמה** (הקמה + הוצאות
   הסניף + חלקו בהוצאות המשותפות), **הכנסות עד היום**, ו**רווח מוחזק** (הכנסות פחות הוצאות).
+  עלות ההקמה נספרת גם ב**סה"כ הוצאות בהנה"ח הראשית** (`loadComputerRoomSetupCostTotal`,
+  `apps/web/lib/computer-room-accounting.ts`) - במלואה, כהוצאת בעלים, ללא תלות בחודש/יום (זה
+  סכום חד-פעמי, לא עסקה מתוארכת).
   ההכנסות כאן הן שורה ידנית אחת לחודש שמוסיפים לכל סניף (`n_branch_income`,
   `addBranchIncomeAction`) - **מעקב סטטוס בלבד**, לא נכתב ל-`n_ah_income` ולכן לא מתחשבן
   בהנה"ח הראשית ולא בדף הבית. owner רואה סקירת כל הסניפים ונכנס לכל סניף בנפרד; partner/עובד
@@ -302,6 +305,13 @@ paidBy, owedBy)` (`apps/web/lib/branch-accounting.ts`), שדורש **שני** ת
   במלואו, בלי חלוקה פר-סניף) - החודש ועד היום - ומתווספת מעל סכום `n_ah_expenses` בדף
   `/dashboard/accounting` (סה"כ הוצאות) ובדף הבית (הוצאות החודש). אין ל"היום" (יומי) משמעות
   עבור הוצאה חודשית קבועה, ולכן היא לא נכללת בחישובי "הוצאות היום".
+- **עלות הקמת סניפי חדרי מחשבים (`Branch.setupCost`)** - נספרת גם היא, בנפרד מהכלל של
+  `ownerLedgerExpenseAmount` למעלה (אין `paidBy`/`owedBy` על שדה ההקמה - זו תמיד הוצאת בעלים
+  במלואה). `loadComputerRoomSetupCostTotal` (`apps/web/lib/computer-room-accounting.ts`) מסכמת
+  בזמן אמת את `setupCost` של כל סניפי `computers` ומתווספת מעל `n_ah_expenses` ב-
+  `/dashboard/accounting` (סה"כ הוצאות) - בדיוק כמו הוצאות קבועות, גם זו לא רשומה מתוארכת ולא
+  משפיעה על "הוצאות היום"/"הוצאות החודש" (אין לה תאריך משמעותי, זה סכום חד-פעמי מצטבר). ראו גם
+  `/computer-rooms-accounting` בסעיף 8.
 - **חשוב:** `ownerExpenseBurden(amount, owedBy)` (בלי תלות ב-`paidBy`) עדיין קיימת בנפרד
   ומשמשת את דשבורדי "השקעה מול רווח" (`computeBranchFinancials` בהשכרות,
   `computer-room-accounting.ts` בחדרי מחשבים) - שם רוצים את העלות הכלכלית האמיתית של הסניף
