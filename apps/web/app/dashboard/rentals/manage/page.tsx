@@ -34,6 +34,7 @@ export default async function RentalsPage({ searchParams }: { searchParams?: { m
   const myBranchId = session.user?.branchId;
   const perms = (session.user as { perms?: Partial<Record<string, boolean>> } | undefined)?.perms;
   const canCharge = role === "owner" || !!perms?.charging;
+  const canDelete = role === "owner" || role === "partner";
   const onlyMine = searchParams?.mine === "1";
 
   const { rentals, clients, laptops, sticks, laptopsList, sticksList, branches, branchesList, routesList } = await loadData();
@@ -67,6 +68,14 @@ function routesForBranch(branchId: string): { id: string; name: string }[] {
     return routesList
       .filter((rt) => !rt.branchScope || rt.branchScope === branchId)
       .map((rt) => ({ id: rt.id, name: rt.name }));
+  }
+
+  function itemOptionsFor(branchId: string, kind: "laptop" | "stick"): { id: string; name: string }[] {
+    const list = kind === "stick" ? sticksList : laptopsList;
+    return list
+      .filter((it) => it.branchId === branchId)
+      .map((it) => ({ id: it.id, name: it.name }))
+      .sort((a, b) => a.name.localeCompare(b.name, "he"));
   }
 
     function rowInfo(r: Rental) {
@@ -114,7 +123,9 @@ function routesForBranch(branchId: string): { id: string; name: string }[] {
       clientIdNum: info.clientIdNum,
       cardLast4: info.cardLast4,
       hasCardToken: info.hasCardToken,
+      itemId: r.itemId,
       itemName: info.itemName,
+      itemOptions: itemOptionsFor(r.branchId, r.kind),
       branchName: info.branchName,
       showBranch: role === "owner",
       calcPrice: r.calcPrice,
@@ -123,7 +134,7 @@ function routesForBranch(branchId: string): { id: string; name: string }[] {
       stickRates,
       hasRoute: !!r.collectionRouteId,
       nedarimCreds: canCharge && creds ? { mosadId: creds.mosadId, apiValid: creds.apiValid } : null,
-      isOwner: role === "owner",
+      canDelete,
       canCharge,
     };
   });
@@ -132,9 +143,12 @@ function routesForBranch(branchId: string): { id: string; name: string }[] {
     const info = rowInfo(r);
     return {
       rentalId: r.id,
+      clientId: r.clientId,
       clientName: info.clientName,
       clientPhone: info.clientPhone,
+      itemId: r.itemId,
       itemName: info.itemName,
+      itemOptions: itemOptionsFor(r.branchId, r.kind),
       branchName: info.branchName,
       startDate: r.startDate,
       returnDate: r.returnDate ?? r.endDate,
@@ -142,7 +156,7 @@ function routesForBranch(branchId: string): { id: string; name: string }[] {
       notes: r.notes,
       paid: !!r.paid,
       routes: routesForBranch(r.branchId),
-      isOwner: role === "owner",
+      canDelete,
     };
   });
 

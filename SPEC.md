@@ -280,10 +280,18 @@ pnpm dev        # turbo run dev — מריץ web + api
   חיוב אשראי מצליח (דרך `/api/rentals/charge`) מפיק קבלת EZcount אוטומטית
   ושולח אותה במייל ללקוח, כל עוד מוגדר לסניף מסלול עם `receiptsProvider: "ezcount"`.
   בטבלת ה"היסטוריה" כל שורה כוללת כפתור "עריכה" (`history-rental-row.tsx`)
-  הפותח טופס inline לעדכון תאריך התחלה, תאריך החזרה, מחיר סופי והערות
-  (`updateRentalHistoryAction` ב-`../actions.ts`) — פתוח לכל מי שיש לו גישה
-  למודול (לא owner-בלבד, בדומה ל-`closeRentalAction`); מחיקת השכרה
-  (`DeleteHistoryRentalButton`) נשארת מוגבלת ל-owner.
+  הפותח טופס inline לעדכון תאריך התחלה, תאריך החזרה, מחיר סופי, הערות ופריט
+  (מחשב/סטיק - `updateRentalItemAction`, בודק שהפריט החדש שייך לאותו סניף
+  ושאינו מושכר בהשכרה פעילה אחרת), (`updateRentalHistoryAction` ב-`../actions.ts`)
+  — פתוח לכל מי שיש לו גישה למודול (לא owner-בלבד, בדומה ל-`closeRentalAction`).
+  שורה ששולמה מציגה גם כפתור "ביטול סימון" (`markRentalUnpaidAction`) להחזרתה
+  ל"לא שולם" במקרה של טעות - פתוח לכל מי שיש לו גישה, כמו סימון "שולם" עצמו.
+  שם הלקוח בכל שורה (פעילה או היסטוריה) הוא קישור לדף עריכת הלקוח
+  (`/dashboard/rentals/clients/[id]`) לתיקון שם/פרטים. מחיקת שורת השכרה
+  (פעילה או היסטוריה - `deleteRentalAction`, `DeleteHistoryRentalButton`) פתוחה
+  ל-owner **וגם** ל-partner (לא employee), כמו `deleteClientAction`; גם בשורה
+  פעילה (`active-rental-row.tsx`) אפשר לשנות את הפריט המושכר מתוך התצוגה
+  המורחבת, באותה בדיקה.
 - **`/mine`** — ההשכרות שלי.
 - **`/expenses`** — הוצאות סניף השכרות (`n_fixed_expenses`/`n_var_expenses`), כולל "סניף" מדומה
   **`shared-rentals`** (`SHARED_RENTALS_BRANCH_ID`, `apps/web/lib/expense-shared-scope.ts`)
