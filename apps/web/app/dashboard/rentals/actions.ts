@@ -376,6 +376,16 @@ export async function createRentalAction(formData: FormData) {
     redirect("/dashboard/rentals/new?error=missing");
   }
 
+  const activeForItem = await getAdminFirestore()
+    .collection("n_rentals")
+    .where("itemId", "==", itemId)
+    .where("status", "==", "active")
+    .limit(1)
+    .get();
+  if (!activeForItem.empty) {
+    redirect("/dashboard/rentals/new?error=already-rented");
+  }
+
   let calcPrice = 0;
   if (kind === "laptop") {
     const laptopDoc = await getAdminFirestore().collection("n_laptops").doc(itemId).get();
