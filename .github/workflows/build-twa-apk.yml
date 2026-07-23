@@ -21,6 +21,14 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      # JDK 9+ writes PKCS12 keystores with a stronger PBES2 format that
+      # Android's apksigner can't read (fails as a cryptic "wrong password"
+      # BadPaddingException even with the correct password). This reverts
+      # keytool/apksigner to the legacy-compatible PKCS12 format - must be
+      # set for the whole job so it's consistent between key creation (init)
+      # and signing (build).
+      JAVA_TOOL_OPTIONS: -Dkeystore.pkcs12.legacy
     steps:
       - uses: actions/checkout@v4
 
