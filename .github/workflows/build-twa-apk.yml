@@ -48,6 +48,13 @@ jobs:
           cat > "$HOME/.bubblewrap/config.json" <<EOF
           {"jdkPath":"$JAVA_HOME","androidSdkPath":"$ANDROID_HOME"}
           EOF
+          # bubblewrap's path validator expects a legacy `tools/` or `bin/`
+          # folder directly under the SDK root; the runner image only ships
+          # the newer `cmdline-tools/latest/bin` layout.
+          if [ ! -e "$ANDROID_HOME/bin" ] && [ -d "$ANDROID_HOME/cmdline-tools/latest/bin" ]; then
+            ln -s "$ANDROID_HOME/cmdline-tools/latest/bin" "$ANDROID_HOME/bin"
+          fi
+          ls -la "$ANDROID_HOME"
 
       - name: Generate TWA project (bubblewrap init)
         env:
