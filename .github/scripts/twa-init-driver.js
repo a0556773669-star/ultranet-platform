@@ -19,6 +19,7 @@ if (!KEYSTORE_PASS || !KEY_PASS || !MANIFEST_URL || !PACKAGE_ID || !PROJECT_DIR)
 // may not appear at all if already configured/cached, so every remaining step
 // is checked on each chunk instead of requiring strict sequence.
 const steps = [
+  ["does not exist. Do you want to create it now?", "Y"],
   ["Do you want Bubblewrap to install the JDK", "Y"],
   ["Do you want Bubblewrap to install the Android SDK", "Y"],
   ["Do you agree to the Android SDK terms", "y"],
