@@ -10,6 +10,20 @@ const nextConfig = {
       ],
     },
   },
+  async headers() {
+    return [
+      {
+        // Never let the SW file itself go stale in a cache/CDN — the browser
+        // must always see byte-for-byte changes to detect a new version.
+        source: "/sw.js",
+        headers: [{ key: "Cache-Control", value: "no-cache" }],
+      },
+      {
+        source: "/manifest.webmanifest",
+        headers: [{ key: "Cache-Control", value: "no-cache" }],
+      },
+    ];
+  },
 };
 
 export default nextConfig;

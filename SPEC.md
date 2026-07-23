@@ -3,7 +3,7 @@
 > מסמך חי. יש לעדכן אותו בכל שינוי פיצ'ר, מודול, מודל נתונים או אינטגרציה
 > (ראה כלל תחזוקת התיעוד ב-[`CLAUDE.md`](CLAUDE.md)).
 >
-> עודכן לאחרונה: 2026-07-21
+> עודכן לאחרונה: 2026-07-23
 
 ## תוכן עניינים
 1. [סקירה כללית](#1-סקירה-כללית)
@@ -431,6 +431,37 @@ paidBy, owedBy)` (`apps/web/lib/branch-accounting.ts`), שדורש **שני** ת
   שאר הספקים (גם לסליקה וגם לקבלות) עדיין placeholder בלבד - `chargeViaRoute`
   לא מבצע קריאת API אמיתית עבורם, רק רישום הנה"ח מדומה.
 
+### PWA — התקנה כאפליקציה (טאבלט / מולטימדיה ברכב)
+
+`apps/web` הוא Progressive Web App מלא. אין קוד native נפרד — אותו Next.js
+app שרץ בדפדפן ניתן ל"התקנה" כאפליקציה עם אייקון ומסך standalone (בלי סרגל
+דפדפן) על טאבלט, ועל כל מערכת מולטימדיה ברכב שמריצה Android אמיתי (כמו רוב
+יחידות ה-head unit שמאפשרות התקנת APK חיצוני) — **דרך אותו APK עטיפה אחד**,
+לא פיתוח נפרד.
+
+- `apps/web/public/manifest.webmanifest` — שם/אייקונים/צבעי מותג/`display:
+  standalone`. `start_url` הוא `/dashboard`.
+- `apps/web/public/icons/` — סט אייקונים (192/512/512-maskable/apple-touch),
+  פלייסהולדר בצבעי המותג (`teal`/`ink`) עד שיוחלף בלוגו אמיתי.
+- `apps/web/public/sw.js` + `apps/web/app/pwa-register.tsx` — Service Worker
+  ורישומו. אסטרטגיה: **network-first** לניווט/דאטה (כדי שכל דיפלוי יתעדכן
+  מיידית כשיש חיבור), **cache-first** רק לנכסים סטטיים עם hash
+  (`/_next/static/...`). ה-cache מנוקה בכל `activate` כך שאין דליפת גרסה ישנה.
+  כשמזוהה Service Worker חדש (=דיפלוי חדש) והוא הופעל, הלקוח מרענן את העמוד
+  אוטומטית.
+- `apps/web/next.config.mjs` — `headers()` ל-`/sw.js` ול-`/manifest.webmanifest`
+  עם `Cache-Control: no-cache` כדי שדפדפנים תמיד יבדקו גרסה עדכנית.
+- **התקנה בפועל**: בדפדפן (Chrome/Edge) על הטאבלט → "התקן אפליקציה" /
+  "הוסף למסך הבית". לחבילת APK אמיתית (להתקנה על מולטימדיה ברכב או פרסום
+  ב-Play Store) יש לעטוף את ה-PWA ב-**TWA** (Trusted Web Activity, בכלי
+  `@bubblewrap/cli`) שמצביע על הדומיין הפרודקשן החי — זו רק "מעטפת" תצוגה,
+  אין קוד native ללוגיקה. יש פלייסהולדר ב-
+  `apps/web/public/.well-known/assetlinks.json` שיש להשלים עם ה-SHA256
+  fingerprint האמיתי של מפתח החתימה לפני build ה-TWA (ראה הערות בקובץ).
+- **עדכונים**: כל עוד מתקינים דרך PWA/TWA (ולא build native עצמאי), כל
+  דיפלוי ל-production משפיע אוטומטית על מה שמותקן בטאבלט/ברכב — אין צורך
+  בהתקנה מחדש.
+
 ---
 
 ## 10. עקרונות מפתח והחלטות ארכיטקטורה
@@ -468,5 +499,9 @@ paidBy, owedBy)` (`apps/web/lib/branch-accounting.ts`), שדורש **שני** ת
 | `apps/web/lib/owner-name.ts` | שמות אמיתיים (לא "אני"/"השותף") לשדות "מי שילם"/"על מי החוב" במסכי הוצאות - `getOwnerName` (שם המשתמש עם `role: "owner"`) ו-`resolveSharedPartnerName` (שם השותף ל"סניף" המדומה המשותף, כשכל סניפי השותפות במודול מסכימים על אותו שותף) |
 | `apps/web/lib/device-trust.ts` | אימות/אמון מכשיר |
 | `apps/web/middleware.ts` | middleware של Next (הגנת נתיבים) |
+| `apps/web/public/manifest.webmanifest` | הגדרת ה-PWA (אייקונים/צבעים/standalone) |
+| `apps/web/public/sw.js` | Service Worker (network-first + cache נכסים סטטיים) |
+| `apps/web/app/pwa-register.tsx` | רישום ה-Service Worker בצד לקוח |
+| `apps/web/public/.well-known/assetlinks.json` | אימות דומיין ל-TWA (Android App Links) |
 | `apps/api/src/branches/*` | מודול NestJS לדוגמה (branches) |
 | `apps/api/src/firebase/*` | מודול Firebase ב-NestJS |
