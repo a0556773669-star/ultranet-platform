@@ -17,6 +17,14 @@ on:
         description: "Android application ID"
         required: false
         default: "il.co.ultranet1.twa"
+      existing_keystore_base64:
+        description: "base64 of an existing android.keystore to reuse (leave empty to generate a new signing key)"
+        required: false
+        default: ""
+      existing_keystore_password:
+        description: "Password for the existing keystore above (required if existing_keystore_base64 is set)"
+        required: false
+        default: ""
 
 jobs:
   build:
@@ -48,10 +56,20 @@ jobs:
           # ignores a different -keypass and encrypts the key entry with
           # storepass anyway, which then makes apksigner's separate
           # --key-pass fail to decrypt it. Use one shared password for both.
-          KEYSTORE_PASS=$(openssl rand -base64 18 | tr -d '/+=' | cut -c1-20)
+          if [ -n "${{ inputs.existing_keystore_password }}" ]; then
+            KEYSTORE_PASS="${{ inputs.existing_keystore_password }}"
+          else
+            KEYSTORE_PASS=$(openssl rand -base64 18 | tr -d '/+=' | cut -c1-20)
+          fi
           echo "::add-mask::$KEYSTORE_PASS"
           echo "KEYSTORE_PASS=$KEYSTORE_PASS" >> "$GITHUB_ENV"
           echo "KEY_PASS=$KEYSTORE_PASS" >> "$GITHUB_ENV"
+
+      - name: Restore existing signing key (if provided)
+        if: inputs.existing_keystore_base64 != ''
+        run: |
+          mkdir -p "${{ github.workspace }}/twa-project"
+          echo "${{ inputs.existing_keystore_base64 }}" | base64 -d > "${{ github.workspace }}/twa-project/android.keystore"
 
       - name: Point bubblewrap at the runner's existing JDK/Android SDK
         run: |
