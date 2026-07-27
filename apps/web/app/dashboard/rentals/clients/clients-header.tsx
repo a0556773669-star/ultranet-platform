@@ -19,6 +19,7 @@ export function ClientsHeader({
   defaultOpen?: boolean;
 }) {
   const [open, setOpen] = useState(!!defaultOpen);
+  const [presetBranchId, setPresetBranchId] = useState<string | undefined>(undefined);
 
   return (
     <div>
@@ -27,23 +28,45 @@ export function ClientsHeader({
           לקוחות
           <Users className="h-5 w-5" />
         </h1>
-        <button
-          type="button"
-          onClick={() => setOpen((v) => !v)}
-          className="flex items-center gap-1.5 rounded-[10px] bg-gradient-to-br from-teal to-teal-light px-4 py-2 text-sm font-bold text-white shadow-primary transition hover:opacity-90"
-        >
+        <div className="flex items-center gap-2">
           {open ? (
-            <>
+            <button
+              type="button"
+              onClick={() => setOpen(false)}
+              className="flex items-center gap-1.5 rounded-[10px] bg-gradient-to-br from-teal to-teal-light px-4 py-2 text-sm font-bold text-white shadow-primary transition hover:opacity-90"
+            >
               <X className="h-4 w-4" />
               ביטול
-            </>
+            </button>
           ) : (
             <>
-              <Plus className="h-4 w-4" />
-              הוספת לקוח
+              {isOwner && myBranchId && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPresetBranchId(myBranchId);
+                    setOpen(true);
+                  }}
+                  className="flex items-center gap-1.5 rounded-[10px] border border-teal bg-white px-4 py-2 text-sm font-bold text-teal-dark transition hover:bg-teal-bg"
+                >
+                  <Plus className="h-4 w-4" />
+                  הוספת לקוח לסניף ראשי
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => {
+                  setPresetBranchId(undefined);
+                  setOpen(true);
+                }}
+                className="flex items-center gap-1.5 rounded-[10px] bg-gradient-to-br from-teal to-teal-light px-4 py-2 text-sm font-bold text-white shadow-primary transition hover:opacity-90"
+              >
+                <Plus className="h-4 w-4" />
+                הוספת לקוח
+              </button>
             </>
           )}
-        </button>
+        </div>
       </div>
 
       {open && (
@@ -52,6 +75,7 @@ export function ClientsHeader({
           branches={branches}
           isOwner={isOwner}
           myBranchId={myBranchId}
+          presetBranchId={presetBranchId}
         />
       )}
     </div>
