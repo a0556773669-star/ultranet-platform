@@ -397,8 +397,10 @@ export async function createRentalAction(formData: FormData) {
   const startDate = String(formData.get("startDate") ?? "");
   const notes = String(formData.get("notes") ?? "").trim() || undefined;
   const collectionRouteId = String(formData.get("collectionRouteId") ?? "").trim() || undefined;
+  const mine = String(formData.get("mine") ?? "").trim() === "1";
+  const mineParam = mine ? "&mine=1" : "";
   if (!branchId) {
-    redirect(`/dashboard/rentals/new?error=${role !== "owner" ? "no-branch" : "missing"}`);
+    redirect(`/dashboard/rentals/new?error=${role !== "owner" ? "no-branch" : "missing"}${mineParam}`);
   }
   if (!clientId || !itemId || !startDate) {
     const missing = [
@@ -408,7 +410,7 @@ export async function createRentalAction(formData: FormData) {
     ]
       .filter(Boolean)
       .join(", ");
-    redirect(`/dashboard/rentals/new?error=missing&missingFields=${encodeURIComponent(missing)}`);
+    redirect(`/dashboard/rentals/new?error=missing&missingFields=${encodeURIComponent(missing)}${mineParam}`);
   }
 
   const activeForItem = await getAdminFirestore()
@@ -418,7 +420,7 @@ export async function createRentalAction(formData: FormData) {
     .limit(1)
     .get();
   if (!activeForItem.empty) {
-    redirect("/dashboard/rentals/new?error=already-rented");
+    redirect(`/dashboard/rentals/new?error=already-rented${mineParam}`);
   }
 
   let calcPrice = 0;
@@ -454,7 +456,7 @@ export async function createRentalAction(formData: FormData) {
   };
   await getAdminFirestore().collection("n_rentals").add(stripUndefined(data));
   revalidatePath("/dashboard/rentals", "layout");
-  redirect("/dashboard/rentals");
+  redirect(mine ? "/dashboard/rentals/mine" : "/dashboard/rentals");
 }
 
 export async function markReturnedAction(id: string) {
