@@ -111,7 +111,7 @@ export async function importClientsAction(formData: FormData) {
     }
   }
 
-  revalidatePath("/dashboard/rentals/clients");
+  revalidatePath("/dashboard/rentals", "layout");
   const params = new URLSearchParams();
   params.set("imported", String(created));
   params.set("updated", String(updated));
@@ -144,7 +144,10 @@ export async function createClientAction(formData: FormData) {
     cardExpiry: depositType === "credit" ? (String(formData.get("cardExpiry") ?? "").trim() || undefined) : undefined,
   };
   const ref = await getAdminFirestore().collection("n_rental_clients").add(stripUndefined(data));
-  revalidatePath("/dashboard/rentals/clients");
+  // Layout-wide, not just /clients: otherwise a client created here can still show as "missing"
+  // right after on /dashboard/rentals/new (stale router cache) until a second, unrelated
+  // navigation happens to invalidate it - this was the "customer doesn't exist on first try" bug.
+  revalidatePath("/dashboard/rentals", "layout");
   if (depositType === "credit") {
     redirect(`/dashboard/rentals/clients/${ref.id}?openCard=1`);
   }
@@ -237,7 +240,7 @@ export async function updateClientAction(id: string, formData: FormData) {
     cardExpiry: depositType === "credit" ? (String(formData.get("cardExpiry") ?? "").trim() || undefined) : undefined,
   };
   await getAdminFirestore().collection("n_rental_clients").doc(id).set(stripUndefined(data), { merge: true });
-  revalidatePath("/dashboard/rentals/clients");
+  revalidatePath("/dashboard/rentals", "layout");
   redirect("/dashboard/rentals/clients");
 }
 
@@ -247,7 +250,7 @@ export async function deleteClientAction(id: string) {
     redirect("/dashboard/rentals/clients?error=forbidden");
   }
   await getAdminFirestore().collection("n_rental_clients").doc(id).delete();
-  revalidatePath("/dashboard/rentals/clients");
+  revalidatePath("/dashboard/rentals", "layout");
   redirect("/dashboard/rentals/clients");
 }
 
@@ -276,7 +279,7 @@ export async function markRentalPaidAction(
     stripUndefined({ paid: true, paymentMethod, receiptIssued, receiptPdfLink }),
     { merge: true }
   );
-  revalidatePath("/dashboard/rentals");
+  revalidatePath("/dashboard/rentals", "layout");
   revalidatePath("/dashboard");
   return { ok: true };
 }
@@ -339,7 +342,7 @@ export async function closeRentalAction(
       }),
       { merge: true }
     );
-  revalidatePath("/dashboard/rentals");
+  revalidatePath("/dashboard/rentals", "layout");
   revalidatePath("/dashboard");
 }
 
@@ -376,7 +379,7 @@ export async function updateRentalHistoryAction(
       }),
       { merge: true }
     );
-  revalidatePath("/dashboard/rentals");
+  revalidatePath("/dashboard/rentals", "layout");
   revalidatePath("/dashboard");
 }
 
@@ -450,7 +453,7 @@ export async function createRentalAction(formData: FormData) {
     paid: false,
   };
   await getAdminFirestore().collection("n_rentals").add(stripUndefined(data));
-  revalidatePath("/dashboard/rentals");
+  revalidatePath("/dashboard/rentals", "layout");
   redirect("/dashboard/rentals");
 }
 
@@ -466,7 +469,7 @@ export async function markReturnedAction(id: string) {
     { status: "returned", returnDate: new Date().toISOString().slice(0, 10) },
     { merge: true },
   );
-  revalidatePath("/dashboard/rentals");
+  revalidatePath("/dashboard/rentals", "layout");
 }
 
 export async function deleteRentalAction(rentalId: string) {
@@ -475,7 +478,7 @@ export async function deleteRentalAction(rentalId: string) {
     throw new Error("רק מנהל או שותף יכולים למחוק השכרה");
   }
   await getAdminFirestore().collection("n_rentals").doc(rentalId).delete();
-  revalidatePath("/dashboard/rentals");
+  revalidatePath("/dashboard/rentals", "layout");
   revalidatePath("/dashboard");
 }
 
@@ -512,7 +515,7 @@ export async function updateRentalItemAction(rentalId: string, itemId: string) {
   }
 
   await ref.set({ itemId }, { merge: true });
-  revalidatePath("/dashboard/rentals");
+  revalidatePath("/dashboard/rentals", "layout");
   revalidatePath("/dashboard");
 }
 
@@ -526,6 +529,6 @@ export async function markRentalUnpaidAction(rentalId: string) {
       { paid: false, paymentMethod: FieldValue.delete(), receiptIssued: false, receiptPdfLink: FieldValue.delete() },
       { merge: true },
     );
-  revalidatePath("/dashboard/rentals");
+  revalidatePath("/dashboard/rentals", "layout");
   revalidatePath("/dashboard");
 }
