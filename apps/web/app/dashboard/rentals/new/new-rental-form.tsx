@@ -46,8 +46,12 @@ export function NewRentalForm({
   const rentedStickSet = useMemo(() => new Set(rentedStickIds), [rentedStickIds]);
 
   const branchClients = clients.filter((c) => c.branchId === branchId);
-  const branchLaptops = laptops.filter((l) => l.branchId === branchId);
-  const branchSticks = sticks.filter((s) => s.branchId === branchId);
+  const branchLaptops = laptops
+    .filter((l) => l.branchId === branchId)
+    .sort((a, b) => a.name.localeCompare(b.name, "he", { numeric: true }));
+  const branchSticks = sticks
+    .filter((s) => s.branchId === branchId)
+    .sort((a, b) => a.name.localeCompare(b.name, "he", { numeric: true }));
 
   const selectedLaptop = branchLaptops.find((l) => l.id === itemId);
   const selectedStick = branchSticks.find((s) => s.id === itemId);

@@ -23,7 +23,9 @@ export default async function LaptopsPage({
   ]);
   const branches = branchesSnap.docs.map((d) => ({ ...(d.data() as Omit<Branch, "id">), id: d.id }) as Branch);
   const allLaptops = laptopsSnap.docs.map((d) => ({ ...(d.data() as Omit<Laptop, "id">), id: d.id }) as Laptop);
-  const laptops = isOwner ? allLaptops : allLaptops.filter((l) => l.branchId === myBranchId);
+  const laptops = (isOwner ? allLaptops : allLaptops.filter((l) => l.branchId === myBranchId)).sort((a, b) =>
+    a.name.localeCompare(b.name, "he", { numeric: true })
+  );
   const branchName = (id: string) => branches.find((b) => b.id === id)?.name ?? "-";
 
   return (

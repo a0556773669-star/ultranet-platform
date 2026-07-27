@@ -75,7 +75,7 @@ function routesForBranch(branchId: string): { id: string; name: string }[] {
     return list
       .filter((it) => it.branchId === branchId)
       .map((it) => ({ id: it.id, name: it.name }))
-      .sort((a, b) => a.name.localeCompare(b.name, "he"));
+      .sort((a, b) => a.name.localeCompare(b.name, "he", { numeric: true }));
   }
 
     function rowInfo(r: Rental) {
@@ -186,8 +186,12 @@ function routesForBranch(branchId: string): { id: string; name: string }[] {
         </div>
       ) : (
         visibleBranches.map((b) => {
-          const bLaptops = laptopsList.filter((l) => l.branchId === b.id);
-          const bSticks = sticksList.filter((s) => s.branchId === b.id);
+          const bLaptops = laptopsList
+            .filter((l) => l.branchId === b.id)
+            .sort((x, y) => x.name.localeCompare(y.name, "he", { numeric: true }));
+          const bSticks = sticksList
+            .filter((s) => s.branchId === b.id)
+            .sort((x, y) => x.name.localeCompare(y.name, "he", { numeric: true }));
           if (bLaptops.length === 0 && bSticks.length === 0) return null;
           return (
             <div key={b.id} className="mb-2">
