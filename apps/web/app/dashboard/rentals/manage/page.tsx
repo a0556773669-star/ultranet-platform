@@ -62,6 +62,11 @@ export default async function RentalsPage({ searchParams }: { searchParams?: { m
     return clients.get(rental.clientId)?.name ?? "לקוח";
   }
 
+  function linkedStickRentedOut(laptopId: string) {
+    const stick = sticksList.find((s) => s.linkedLaptopId === laptopId);
+    return stick ? !!renterName(stick.id, "stick") : false;
+  }
+
 function routesForBranch(branchId: string): { id: string; name: string }[] {
     const branch = branches.get(branchId);
     if (!branch?.allowCollection) return [];
@@ -199,6 +204,7 @@ function routesForBranch(branchId: string): { id: string; name: string }[] {
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
                 {bLaptops.map((l) => {
                   const renter = renterName(l.id, "laptop");
+                  const noInternet = !renter && linkedStickRentedOut(l.id);
                   return (
                     <div
                       key={l.id}
@@ -214,6 +220,7 @@ function routesForBranch(branchId: string): { id: string; name: string }[] {
                         {renter ? "מושכר" : "פנוי"}
                       </div>
                       {renter && <div className="mt-1 truncate text-[11px] text-muted">{renter}</div>}
+                      {noInternet && <div className="mt-1 text-[11px] font-bold text-red-600">ללא אינטרנט</div>}
                     </div>
                   );
                 })}
