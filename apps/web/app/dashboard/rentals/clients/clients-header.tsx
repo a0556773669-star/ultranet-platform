@@ -20,6 +20,7 @@ export function ClientsHeader({
 }) {
   const [open, setOpen] = useState(!!defaultOpen);
   const [presetBranchId, setPresetBranchId] = useState<string | undefined>(undefined);
+  const mainBranch = branches.find((b) => b.name.trim() === "סניף ראשי") ?? branches[0];
 
   return (
     <div>
@@ -40,11 +41,11 @@ export function ClientsHeader({
             </button>
           ) : (
             <>
-              {isOwner && myBranchId && (
+              {isOwner && mainBranch && (
                 <button
                   type="button"
                   onClick={() => {
-                    setPresetBranchId(myBranchId);
+                    setPresetBranchId(mainBranch.id);
                     setOpen(true);
                   }}
                   className="flex items-center gap-1.5 rounded-[10px] border border-teal bg-white px-4 py-2 text-sm font-bold text-teal-dark transition hover:bg-teal-bg"
