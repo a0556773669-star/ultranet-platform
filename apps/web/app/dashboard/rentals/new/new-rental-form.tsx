@@ -16,6 +16,7 @@ type Props = {
   lockBranch: boolean;
   rentedLaptopIds: string[];
   rentedStickIds: string[];
+  onlyMine?: boolean;
 };
 
 const FIELD =
@@ -32,6 +33,7 @@ export function NewRentalForm({
   lockBranch,
   rentedLaptopIds,
   rentedStickIds,
+  onlyMine,
 }: Props) {
   const [branchId, setBranchId] = useState(defaultBranchId);
   const [clientId, setClientId] = useState("");
@@ -77,6 +79,7 @@ export function NewRentalForm({
       action={createRentalAction}
       className="flex flex-col gap-4 rounded-card border border-card-border bg-white p-5 shadow-card"
     >
+      {onlyMine && <input type="hidden" name="mine" value="1" />}
       <div>
         <label className={LABEL}>סניף</label>
         <select

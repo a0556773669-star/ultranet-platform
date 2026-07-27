@@ -69,6 +69,7 @@ export default async function NewRentalPage({
           lockBranch={role !== "owner" || onlyMine}
           rentedLaptopIds={rentedLaptopIds}
           rentedStickIds={rentedStickIds}
+          onlyMine={onlyMine}
         />
       )}
     </div>
