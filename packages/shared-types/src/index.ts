@@ -159,6 +159,12 @@ export interface Laptop {
   stickOnlyMonthPrice?: number;
   /** ISO date - when this computer was added; used for per-computer profit tracking */
   addedDate?: string;
+  /** true if a partner (not the owner) gets a cut of this specific computer's rental income */
+  hasPartner?: boolean;
+  /** free text - who the partner is; falls back to a generic label in the settlement report if empty */
+  partnerName?: string;
+  /** percent of this computer's (and its linked stick's) rental income owed to the partner; defaults to 15 */
+  partnerPct?: number;
 }
 
 /** collection: n_sticks */

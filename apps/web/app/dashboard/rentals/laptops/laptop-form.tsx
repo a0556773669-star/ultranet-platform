@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import type { Branch, Laptop } from "@ultranet/shared-types";
+import type { Branch, Laptop, Stick } from "@ultranet/shared-types";
 
 const FIELD = "w-full rounded-lg border border-card-border bg-[#f4f6f9] px-3 py-2 text-sm focus:border-teal focus:bg-white focus:outline-none";
 const LABEL = "mb-1 block text-xs font-semibold text-muted";
@@ -11,11 +11,14 @@ type Props = {
   branches: Branch[];
   isOwner: boolean;
   initial?: Laptop;
+  /** current pricing of the stick already linked to this laptop, if any (see syncLinkedStick) */
+  initialStick?: Pick<Stick, "day1" | "day2" | "day3plus">;
 };
 
-export function LaptopForm({ action, branches, isOwner, initial }: Props) {
+export function LaptopForm({ action, branches, isOwner, initial, initialStick }: Props) {
   const [hasStick, setHasStick] = useState(!!initial?.hasStick);
   const [altPricing, setAltPricing] = useState(!!initial?.altPricing);
+  const [hasPartner, setHasPartner] = useState(!!initial?.hasPartner);
 
   return (
     <form action={action} className="flex flex-col gap-4 rounded-card border border-card-border bg-white p-5 shadow-card">
@@ -62,12 +65,70 @@ export function LaptopForm({ action, branches, isOwner, initial }: Props) {
           יש סטיק משוייך למחשב זה
         </label>
         {hasStick && (
-          <div className="mt-3">
-            <label className={LABEL}>מספר סים</label>
-            <input name="simNumber" dir="ltr" defaultValue={initial?.simNumber} className={FIELD} />
+          <div className="mt-3 flex flex-col gap-3">
+            <div>
+              <label className={LABEL}>מספר סים</label>
+              <input name="simNumber" dir="ltr" defaultValue={initial?.simNumber} className={FIELD} />
+            </div>
+            <div>
+              <p className="mb-1 text-xs font-bold text-ink">מחיר השכרת הסטיק (מדורג לפי יום)</p>
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className={LABEL}>יום ראשון</label>
+                  <input name="stickDay1" type="number" min={0} defaultValue={initialStick?.day1 ?? 0} className={FIELD} />
+                </div>
+                <div>
+                  <label className={LABEL}>יום שני</label>
+                  <input name="stickDay2" type="number" min={0} defaultValue={initialStick?.day2 ?? 0} className={FIELD} />
+                </div>
+                <div>
+                  <label className={LABEL}>מיום שלישי ואילך (ליום)</label>
+                  <input name="stickDay3plus" type="number" min={0} defaultValue={initialStick?.day3plus ?? 0} className={FIELD} />
+                </div>
+              </div>
+              <p className="mt-1 text-[11px] text-muted">
+                המחירים האלה הם שיקבעו את מחיר השכרת הסטיק כשבוחרים אותו בהשכרה חדשה.
+              </p>
+            </div>
           </div>
         )}
       </div>
+
+      {isOwner && (
+        <div className="rounded-lg border border-card-border bg-[#f9fafb] p-3">
+          <label className="flex items-center gap-2 text-sm font-semibold text-ink">
+            <input
+              type="checkbox"
+              name="hasPartner"
+              defaultChecked={hasPartner}
+              onChange={(e) => setHasPartner(e.target.checked)}
+            />
+            יש שותף שמקבל אחוז מהשכרות המחשב הזה
+          </label>
+          {hasPartner && (
+            <div className="mt-3 grid grid-cols-2 gap-3">
+              <div>
+                <label className={LABEL}>שם השותף (רשות)</label>
+                <input name="partnerName" defaultValue={initial?.partnerName} className={FIELD} />
+              </div>
+              <div>
+                <label className={LABEL}>אחוז לשותף</label>
+                <input
+                  name="partnerPct"
+                  type="number"
+                  min={0}
+                  max={100}
+                  defaultValue={initial?.partnerPct ?? 15}
+                  className={FIELD}
+                />
+              </div>
+            </div>
+          )}
+          <p className="mt-2 text-[11px] text-muted">
+            יופיע בסיכום ההעברה החודשית לשותפים בעמוד הנה&quot;ח ← השכרות.
+          </p>
+        </div>
+      )}
 
       <div className="rounded-lg border border-card-border bg-[#f9fafb] p-3">
         <label className="flex items-center gap-2 text-sm font-semibold text-ink">
