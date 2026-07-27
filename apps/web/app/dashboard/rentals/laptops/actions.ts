@@ -161,15 +161,16 @@ export async function deleteLaptopAction(id: string) {
 }
 
 /**
- * One-time (idempotent, safe to re-run) backfill for laptops that had hasStick set before the
- * auto-sync existed: creates the missing n_sticks doc for each, priced at 0 until the owner edits
- * the computer and fills in the stick pricing. Never touches laptops that already have a linked
+ * Idempotent backfill that gives every laptop a rentable stick, regardless of whether "יש סטיק
+ * משוייך" was ever turned on for it: creates the missing n_sticks doc (priced at 0 until the owner
+ * edits the computer and fills in the stick pricing) and flips hasStick on so the laptop's edit
+ * form shows the stick fields going forward. Never touches laptops that already have a linked
  * stick.
  */
 export async function syncAllSticksAction() {
   await requireOwner();
   const db = getAdminFirestore();
-  const laptopsSnap = await db.collection("n_laptops").where("hasStick", "==", true).get();
+  const laptopsSnap = await db.collection("n_laptops").get();
   let created = 0;
   for (const doc of laptopsSnap.docs) {
     const laptop = doc.data() as Omit<Laptop, "id">;
@@ -186,6 +187,9 @@ export async function syncAllSticksAction() {
         day3plus: 0,
       })
     );
+    if (!laptop.hasStick) {
+      await db.collection("n_laptops").doc(doc.id).set({ hasStick: true }, { merge: true });
+    }
     created++;
   }
   revalidatePath("/dashboard/rentals", "layout");

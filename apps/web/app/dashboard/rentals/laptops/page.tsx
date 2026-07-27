@@ -41,9 +41,9 @@ export default async function LaptopsPage({
               <button
                 type="submit"
                 className="rounded-[10px] border border-card-border bg-white px-4 py-2 text-xs font-bold text-ink hover:bg-[#f4f6f9]"
-                title="יוצר סטיק להשכרה לכל מחשב עם 'יש סטיק משוייך' שעדיין אין לו סטיק תואם"
+                title="יוצר סטיק להשכרה לכל מחשב שעדיין אין לו סטיק תואם (גם אם 'יש סטיק משוייך' לא סומן - זה יסומן אוטומטית)"
               >
-                סנכרון סטיקים חסרים
+                יצירת סטיקים לכל המחשבים
               </button>
             </form>
           )}
@@ -60,7 +60,7 @@ export default async function LaptopsPage({
         <div className="mb-4 rounded-card border border-teal bg-teal-bg p-3 text-sm font-semibold text-teal-dark">
           {Number(searchParams.synced) > 0
             ? `נוצרו ${searchParams.synced} סטיקים חדשים להשכרה.`
-            : "כל המחשבים עם סטיק משוייך כבר מסונכרנים - אין מה לעדכן."}
+            : "לכל המחשבים כבר יש סטיק להשכרה - אין מה לעדכן."}
         </div>
       )}
 

@@ -194,10 +194,10 @@ function routesForBranch(branchId: string): { id: string; name: string }[] {
           const bLaptops = laptopsList
             .filter((l) => l.branchId === b.id)
             .sort((x, y) => x.name.localeCompare(y.name, "he", { numeric: true }));
-          const bSticks = sticksList
-            .filter((s) => s.branchId === b.id)
+          const bRentedSticks = sticksList
+            .filter((s) => s.branchId === b.id && renterName(s.id, "stick"))
             .sort((x, y) => x.name.localeCompare(y.name, "he", { numeric: true }));
-          if (bLaptops.length === 0 && bSticks.length === 0) return null;
+          if (bLaptops.length === 0 && bRentedSticks.length === 0) return null;
           return (
             <div key={b.id} className="mb-2">
               {role === "owner" && <h3 className="mb-2 text-sm font-bold text-ink">{b.name}</h3>}
@@ -224,22 +224,15 @@ function routesForBranch(branchId: string): { id: string; name: string }[] {
                     </div>
                   );
                 })}
-                {bSticks.map((s) => {
+                {bRentedSticks.map((s) => {
                   const renter = renterName(s.id, "stick");
                   return (
-                    <div
-                      key={s.id}
-                      className={`rounded-xl border p-3 text-center text-xs ${
-                        renter ? "border-red-300 bg-red-50" : "border-teal bg-teal-bg"
-                      }`}
-                    >
+                    <div key={s.id} className="rounded-xl border border-red-300 bg-red-50 p-3 text-center text-xs">
                       <div className="flex items-center justify-center gap-1 truncate font-bold text-ink">
                         <Wifi className="h-4 w-4 shrink-0" />
                         {s.name}
                       </div>
-                      <div className={`mt-1 text-[11px] font-semibold ${renter ? "text-red-600" : "text-teal-dark"}`}>
-                        {renter ? "מושכר" : "פנוי"}
-                      </div>
+                      <div className="mt-1 text-[11px] font-semibold text-red-600">מושכר</div>
                       {renter && <div className="mt-1 truncate text-[11px] text-muted">{renter}</div>}
                     </div>
                   );
