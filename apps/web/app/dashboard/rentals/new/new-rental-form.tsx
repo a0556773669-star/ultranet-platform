@@ -1,7 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import type { ChangeEvent } from "react";
+import { useMemo, useRef, useState, useTransition } from "react";
+import type { ChangeEvent, FormEvent } from "react";
 import type { Branch, RentalClient, Laptop, Stick, CollectionRoute } from "@ultranet/shared-types";
 import { createRentalAction } from "../actions";
 import { CustomerCombobox } from "../customer-combobox";
@@ -39,6 +39,9 @@ export function NewRentalForm({
   const [kind, setKind] = useState<"laptop" | "stick">("laptop");
   const [itemId, setItemId] = useState("");
   const [pricingVariant, setPricingVariant] = useState<"normal" | "noInternet">("normal");
+  const notesRef = useRef<HTMLTextAreaElement>(null);
+  const [formError, setFormError] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
 
   const rentedLaptopSet = useMemo(() => new Set(rentedLaptopIds), [rentedLaptopIds]);
   const rentedStickSet = useMemo(() => new Set(rentedStickIds), [rentedStickIds]);
@@ -72,11 +75,43 @@ export function NewRentalForm({
     setPricingVariant("normal");
   }
 
+  /**
+   * Builds the FormData from the component's own state instead of letting the browser collect it
+   * from the DOM on a native <form action={...}> submit. That native path was the source of the
+   * long-standing "חובה לבחור לקוח..." on the very first click even after picking a customer:
+   * whatever the exact cause (the hidden clientId input, focus/blur ordering in the combobox,
+   * etc.), reading straight from React state can never go stale relative to what the user sees on
+   * screen. Missing fields are now reported inline immediately, without a full-page redirect that
+   * used to wipe every field the user had already filled in and forced them to start over.
+   */
+  function handleSubmit(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (pending || selectedItemAlreadyRented) return;
+
+    const missing = [!clientId && "לקוח", !itemId && "מחשב/סטיק", !startDate && "תאריך התחלה"]
+      .filter(Boolean)
+      .join(", ");
+    if (missing) {
+      setFormError(`חובה למלא: ${missing} לפני השמירה.`);
+      return;
+    }
+    setFormError(null);
+
+    const fd = new FormData();
+    fd.set("branchId", branchId);
+    fd.set("clientId", clientId);
+    fd.set("kind", kind);
+    fd.set("itemId", itemId);
+    fd.set("pricingVariant", pricingVariant);
+    fd.set("startDate", startDate);
+    fd.set("notes", notesRef.current?.value ?? "");
+    startTransition(() => {
+      createRentalAction(fd);
+    });
+  }
+
   return (
-    <form
-      action={createRentalAction}
-      className="flex flex-col gap-4 rounded-card border border-card-border bg-white p-5 shadow-card"
-    >
+    <form onSubmit={handleSubmit} className="flex flex-col gap-4 rounded-card border border-card-border bg-white p-5 shadow-card">
       <div>
         <label className={LABEL}>סניף</label>
         <select
@@ -133,7 +168,6 @@ export function NewRentalForm({
           <label className={LABEL}>מחשב</label>
           <select
             name="itemId"
-            required
             value={itemId}
             onChange={(e: ChangeEvent<HTMLSelectElement>) => setItemId(e.target.value)}
             className={FIELD}
@@ -154,7 +188,6 @@ export function NewRentalForm({
           <label className={LABEL}>סטיק</label>
           <select
             name="itemId"
-            required
             value={itemId}
             onChange={(e: ChangeEvent<HTMLSelectElement>) => setItemId(e.target.value)}
             className={FIELD}
@@ -211,7 +244,6 @@ export function NewRentalForm({
         <input
           type="date"
           name="startDate"
-          required
           value={startDate}
           onChange={(e: ChangeEvent<HTMLInputElement>) => setStartDate(e.target.value)}
           className={FIELD}
@@ -227,16 +259,21 @@ export function NewRentalForm({
 
       <div>
         <label className={LABEL}>הערות</label>
-        <textarea name="notes" rows={2} className={FIELD} />
+        <textarea name="notes" ref={notesRef} rows={2} className={FIELD} />
       </div>
 
+      {formError && (
+        <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700">
+          {formError}
+        </div>
+      )}
 
       <button
         type="submit"
-        disabled={!clientId || selectedItemAlreadyRented}
+        disabled={pending || selectedItemAlreadyRented}
         className="mt-1 self-start rounded-[10px] bg-gradient-to-br from-teal to-teal-light px-6 py-2 text-sm font-bold text-white shadow-primary transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
       >
-        התחל השכרה
+        {pending ? "שומר..." : "התחל השכרה"}
       </button>
     </form>
   );
