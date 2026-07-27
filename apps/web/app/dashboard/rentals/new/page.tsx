@@ -34,7 +34,15 @@ export default async function NewRentalPage({
   );
   const activeRentals = activeRentalsSnap.docs.map((d) => d.data() as Omit<Rental, "id">);
   const rentedLaptopIds = activeRentals.filter((r) => r.kind === "laptop").map((r) => r.itemId);
-  const rentedStickIds = activeRentals.filter((r) => r.kind === "stick").map((r) => r.itemId);
+  // שכירת מחשב ברירת מחדל כוללת את הסטיק המשוייך אליו (אלא אם נבחר "בלי אינטרנט") - אז הסטיק
+  // הזה לא באמת פנוי להשכרה נפרדת כל עוד המחשב שלו מושכר "עם אינטרנט".
+  const bundledStickIds = activeRentals
+    .filter((r) => r.kind === "laptop" && r.pricingVariant !== "noInternet")
+    .map((r) => sticks.find((s) => s.linkedLaptopId === r.itemId)?.id)
+    .filter((id): id is string => !!id);
+  const rentedStickIds = Array.from(
+    new Set([...activeRentals.filter((r) => r.kind === "stick").map((r) => r.itemId), ...bundledStickIds])
+  );
 
   const ownerHomeBranchId = myBranchId && myBranchId !== "all" && branches.some((b) => b.id === myBranchId) ? myBranchId : "";
   const defaultBranchId =

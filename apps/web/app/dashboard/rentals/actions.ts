@@ -423,6 +423,26 @@ export async function createRentalAction(formData: FormData) {
     redirect(`/dashboard/rentals/new?error=already-rented${mineParam}`);
   }
 
+  // שכירת סטיק בנפרד: אם הסטיק הזה משוייך למחשב שמושכר כרגע "עם אינטרנט" (ברירת המחדל),
+  // הוא בפועל כבר יצא עם הלקוח של המחשב - אין למכור אותו שוב גם אם אין לו רשומת n_rentals משלו.
+  if (kind === "stick") {
+    const stickDoc = await getAdminFirestore().collection("n_sticks").doc(itemId).get();
+    const linkedLaptopId = (stickDoc.data() as Omit<Stick, "id"> | undefined)?.linkedLaptopId;
+    if (linkedLaptopId) {
+      const bundledRental = await getAdminFirestore()
+        .collection("n_rentals")
+        .where("itemId", "==", linkedLaptopId)
+        .where("status", "==", "active")
+        .where("kind", "==", "laptop")
+        .limit(1)
+        .get();
+      const bundled = bundledRental.docs[0]?.data() as Omit<Rental, "id"> | undefined;
+      if (bundled && bundled.pricingVariant !== "noInternet") {
+        redirect(`/dashboard/rentals/new?error=already-rented${mineParam}`);
+      }
+    }
+  }
+
   let calcPrice = 0;
   if (kind === "laptop") {
     const laptopDoc = await getAdminFirestore().collection("n_laptops").doc(itemId).get();
