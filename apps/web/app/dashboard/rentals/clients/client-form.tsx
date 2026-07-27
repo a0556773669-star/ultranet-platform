@@ -12,12 +12,14 @@ export function ClientForm({
   branches,
   isOwner,
   myBranchId,
+  presetBranchId,
   initial,
 }: {
   action: (formData: FormData) => void;
   branches: Branch[];
   isOwner: boolean;
   myBranchId?: string;
+  presetBranchId?: string;
   initial?: RentalClient;
 }) {
   const [depositType, setDepositType] = useState<"none" | "check" | "credit">(
@@ -32,7 +34,12 @@ export function ClientForm({
       {isOwner ? (
         <div>
           <label className={LABEL}>סניף</label>
-          <select name="branchId" required defaultValue={initial?.branchId} className={FIELD}>
+          <select
+            name="branchId"
+            required
+            defaultValue={initial?.branchId ?? presetBranchId ?? ""}
+            className={FIELD}
+          >
             <option value="">בחר סניף</option>
             {branches.map((b) => (
               <option key={b.id} value={b.id}>

@@ -1,4 +1,4 @@
-import { BarChart3, Plus, Minus, Wallet, Banknote } from "lucide-react";
+import { BarChart3, Plus, Minus, Wallet, Banknote, Users } from "lucide-react";
 import { requireModuleAccess } from "@/lib/perms";
 import { getAdminFirestore } from "@/lib/firebase-admin";
 import type { AccountingIncome, AccountingExpense } from "@ultranet/shared-types";
@@ -14,6 +14,7 @@ const FIELD =
   "rounded-lg border border-card-border bg-[#f4f6f9] px-3 py-2 text-sm focus:border-teal focus:bg-white focus:outline-none";
 
 import { loadBranchAccountingRawData, computeBranchFinancials, currentMonth as getCurrentMonth } from "@/lib/branch-accounting-data";
+import { computePartnerSettlement } from "@/lib/partner-settlement";
 import { BranchAccountingView } from "./branch-view";
 import { OwnerBranchesOverview } from "./owner-overview";
 
@@ -44,6 +45,9 @@ export default async function RentalsAccountingPage({
       );
     }
   }
+
+  const branchNameById = new Map(raw.branches.map((b) => [b.id, b.name]));
+  const partnerSettlement = isOwner ? await computePartnerSettlement(month) : [];
 
   let ownerDrillDown: JSX.Element | null = null;
   if (isOwner) {
@@ -111,6 +115,46 @@ export default async function RentalsAccountingPage({
       </div>
 
       {ownerDrillDown}
+
+      {isOwner && partnerSettlement.length > 0 && (
+        <div className="rounded-card border border-card-border bg-white p-4 shadow-card">
+          <h2 className="mb-3 flex items-center gap-1.5 text-sm font-bold text-ink">
+            <Users className="h-4 w-4" />
+            {`שותפי מחשבים - להעברה בגין ${month}`}
+          </h2>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[560px] text-right text-sm">
+              <thead>
+                <tr className="border-b border-card-border text-xs font-bold uppercase tracking-wide text-muted">
+                  <th className="px-2 py-1.5">שותף</th>
+                  <th className="px-2 py-1.5">סניף</th>
+                  <th className="px-2 py-1.5">מחשבים</th>
+                  <th className="px-2 py-1.5">אחוז</th>
+                  <th className="px-2 py-1.5">מס&apos; השכרות</th>
+                  <th className="px-2 py-1.5">סה&quot;כ הכנסה</th>
+                  <th className="px-2 py-1.5">להעברה לשותף</th>
+                </tr>
+              </thead>
+              <tbody>
+                {partnerSettlement.map((line) => (
+                  <tr key={`${line.branchId}|${line.partnerName}|${line.pct}`} className="border-b border-card-border last:border-b-0">
+                    <td className="px-2 py-1.5 font-semibold text-ink">{line.partnerName}</td>
+                    <td className="px-2 py-1.5 text-muted">{branchNameById.get(line.branchId) ?? "-"}</td>
+                    <td className="px-2 py-1.5 text-muted">{line.computerNames.join(", ")}</td>
+                    <td className="px-2 py-1.5 text-muted">{line.pct}%</td>
+                    <td className="px-2 py-1.5 text-muted">{line.rentalCount}</td>
+                    <td className="px-2 py-1.5 text-muted">{line.totalRevenue.toLocaleString()} ₪</td>
+                    <td className="px-2 py-1.5 font-black text-teal-dark">{line.amountOwed.toLocaleString()} ₪</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p className="mt-2 text-[11px] text-muted">
+            מבוסס על השכרות שהוחזרו במהלך {month} של מחשבים (וסטיקים משוייכים) המסומנים כבעלי שותפות (עמוד &quot;מחשבים&quot;).
+          </p>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-4">
         <div className="rounded-card border border-card-border bg-white p-4 shadow-card">
