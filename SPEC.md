@@ -249,7 +249,13 @@ pnpm dev        # turbo run dev — מריץ web + api
   `laptops/actions.ts`) קוראת ל-`revalidatePath("/dashboard/rentals", "layout")` (ולא רק לנתיב
   הספציפי) - כדי שלקוח/מחשב/סטיק שנוצר עכשיו יופיע מיידית גם ב-`/new`, לא רק בעמוד שבו נוצר;
   בלי זה ה-router cache הצד-לקוח של Next יכול להציג רשימת לקוחות מיושנת ב-`/new` (הבאג של
-  "לקוח לא קיים" בניסיון הראשון, שנפתר בפעם השנייה אחרי ניווט חוזר).
+  "לקוח לא קיים" בניסיון הראשון, שנפתר בפעם השנייה אחרי ניווט חוזר). בנוסף, `NewRentalForm`
+  (`new-rental-form.tsx`) כבר לא משתמש ב-`<form action={createRentalAction}>` הטבעי - השליחה
+  עוברת דרך `onSubmit` שבונה את ה-`FormData` ישירות מה-state של הקומפוננטה (לא סומך על ה-DOM/
+  hidden inputs שה-form אוסף בזמן ה-submit) ומריצה את ה-Server Action דרך `startTransition`;
+  שדות חסרים (לקוח/פריט/תאריך) מוצגים כהודעת שגיאה inline מיידית בלי לאבד את שאר הטופס, במקום
+  redirect מלא ל-`?error=missing` שהיה מרוקן את כל מה שכבר מולא - זה מה שגרם לתחושת "עובד רק
+  בפעם השנייה" גם אחרי שהלקוח כבר נבחר בפועל.
 - **`/laptops`** — ניהול מחשבים ניידים + תמחור (CRUD). כשמסמנים "יש סטיק משוייך למחשב זה"
   (`hasStick`), טופס המחשב (`laptop-form.tsx`) חושף גם שדות תמחור סטיק מדורג (יום ראשון/יום
   שני/מיום שלישי ואילך - `stickDay1`/`stickDay2`/`stickDay3plus`); בשמירה (`createLaptopAction`/
