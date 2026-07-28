@@ -360,8 +360,7 @@ pnpm dev        # turbo run dev — מריץ web + api
   הלקוח (לא hardcoded).
 - **API `/api/rentals/clients/export|template`** — ייצוא/תבנית אקסל של לקוחות.
 
-תמחור השכרה: `lib/rental-pricing.ts` (יום/שבוע/חודש + וריאנטים
-`noInternet` / `stickOnly`).
+תמחור השכרה: `lib/rental-pricing.ts` (יום/שבוע/חודש + וריאנט `noInternet`).
 
 ### משרד שיתופי (`/dashboard/coworking`) — perm: coworking
 עמדות (`/stations`, `n_cw_stations`) ולקוחות (`/new`, `n_cw_clients`) עם

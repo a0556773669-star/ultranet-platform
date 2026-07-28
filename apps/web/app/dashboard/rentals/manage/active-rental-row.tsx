@@ -32,7 +32,7 @@ type Props = {
   rentalId: string;
   startDate: string;
   kind: "laptop" | "stick";
-  pricingVariant?: "normal" | "noInternet" | "stickOnly";
+  pricingVariant?: "normal" | "noInternet";
   clientId: string;
   clientName: string;
   clientPhone?: string;

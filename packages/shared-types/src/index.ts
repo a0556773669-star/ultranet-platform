@@ -154,9 +154,6 @@ export interface Laptop {
   noInternetDayPrice?: number;
   noInternetWeekPrice?: number;
   noInternetMonthPrice?: number;
-  stickOnlyDayPrice?: number;
-  stickOnlyWeekPrice?: number;
-  stickOnlyMonthPrice?: number;
   /** ISO date - when this computer was added; used for per-computer profit tracking */
   addedDate?: string;
   /** true if a partner (not the owner) gets a cut of this specific computer's rental income */
@@ -203,7 +200,7 @@ export interface Rental {
   clientId: string;
   itemId: string;
   kind: "laptop" | "stick";
-  pricingVariant?: "normal" | "noInternet" | "stickOnly";
+  pricingVariant?: "normal" | "noInternet";
   startDate: string;
   endDate?: string;
   calcPrice: number;

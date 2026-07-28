@@ -138,7 +138,7 @@ export function LaptopForm({ action, branches, isOwner, initial, initialStick }:
             defaultChecked={altPricing}
             onChange={(e) => setAltPricing(e.target.checked)}
           />
-          לקבוע מחירים נפרדים למחשב בלי אינטרנט / לסטיק בלבד
+          לקבוע מחיר נפרד למחשב בלי אינטרנט
         </label>
         {altPricing && (
           <div className="mt-3 flex flex-col gap-3">
@@ -159,23 +159,9 @@ export function LaptopForm({ action, branches, isOwner, initial, initialStick }:
                 </div>
               </div>
             </div>
-            <div>
-              <p className="mb-1 text-xs font-bold text-ink">סטיק בלבד</p>
-              <div className="grid grid-cols-3 gap-3">
-                <div>
-                  <label className={LABEL}>ליום</label>
-                  <input name="stickOnlyDayPrice" type="number" min={0} defaultValue={initial?.stickOnlyDayPrice ?? 0} className={FIELD} />
-                </div>
-                <div>
-                  <label className={LABEL}>לשבוע</label>
-                  <input name="stickOnlyWeekPrice" type="number" min={0} defaultValue={initial?.stickOnlyWeekPrice ?? 0} className={FIELD} />
-                </div>
-                <div>
-                  <label className={LABEL}>לחודש</label>
-                  <input name="stickOnlyMonthPrice" type="number" min={0} defaultValue={initial?.stickOnlyMonthPrice ?? 0} className={FIELD} />
-                </div>
-              </div>
-            </div>
+            <p className="text-xs text-muted">
+              {hasStick ? "יש סטיק משוייך למחשב זה — מחיר הסטיק נקבע למעלה." : "אין סטיק משוייך למחשב זה."}
+            </p>
           </div>
         )}
       </div>
