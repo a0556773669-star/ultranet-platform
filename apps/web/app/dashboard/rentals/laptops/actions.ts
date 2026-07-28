@@ -74,9 +74,6 @@ function parseLaptopForm(formData: FormData, branchId: string): Omit<Laptop, "id
   const noInternetDayPrice = altPricing ? Number(formData.get("noInternetDayPrice")) || 0 : undefined;
   const noInternetWeekPrice = altPricing ? Number(formData.get("noInternetWeekPrice")) || 0 : undefined;
   const noInternetMonthPrice = altPricing ? Number(formData.get("noInternetMonthPrice")) || 0 : undefined;
-  const stickOnlyDayPrice = altPricing ? Number(formData.get("stickOnlyDayPrice")) || 0 : undefined;
-  const stickOnlyWeekPrice = altPricing ? Number(formData.get("stickOnlyWeekPrice")) || 0 : undefined;
-  const stickOnlyMonthPrice = altPricing ? Number(formData.get("stickOnlyMonthPrice")) || 0 : undefined;
   const hasPartner = formData.get("hasPartner") === "on";
   const partnerName = hasPartner ? String(formData.get("partnerName") ?? "").trim() || undefined : undefined;
   const partnerPct = hasPartner ? Number(formData.get("partnerPct")) || 15 : undefined;
@@ -92,9 +89,6 @@ function parseLaptopForm(formData: FormData, branchId: string): Omit<Laptop, "id
     noInternetDayPrice,
     noInternetWeekPrice,
     noInternetMonthPrice,
-    stickOnlyDayPrice,
-    stickOnlyWeekPrice,
-    stickOnlyMonthPrice,
     hasPartner,
     partnerName,
     partnerPct,
