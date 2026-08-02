@@ -349,4 +349,10 @@ export interface BranchTransfer {
   transferred: boolean;
   transferredAt?: string;
   note?: string;
+  /** Actual ₪ amount recorded as having changed hands for this branch/month, same sign convention
+   *  as netToOwner (positive = partner paid owner, negative = owner paid partner). Lets the owner
+   *  log partial or catch-up payments that don't match the computed netToOwner exactly. Older
+   *  records that only have `transferred: true` (no amount) are treated as fully settled for
+   *  netToOwner - see `lib/branch-ledger.ts`. */
+  transferredAmount?: number;
 }

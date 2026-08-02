@@ -3,7 +3,7 @@
 > מסמך חי. יש לעדכן אותו בכל שינוי פיצ'ר, מודול, מודל נתונים או אינטגרציה
 > (ראה כלל תחזוקת התיעוד ב-[`CLAUDE.md`](CLAUDE.md)).
 >
-> עודכן לאחרונה: 2026-07-23
+> עודכן לאחרונה: 2026-08-02
 
 ## תוכן עניינים
 1. [סקירה כללית](#1-סקירה-כללית)
@@ -169,7 +169,7 @@ pnpm dev        # turbo run dev — מריץ web + api
 | `n_ah_income` | `AccountingIncome` | הכנסות בהנה"ח מרכזית (בעלים); 3 סוגים בלבד - `laptops`/`credit`/`cash`, ראו סעיף 8 |
 | `n_ah_expenses` | `AccountingExpense` | הוצאות בהנה"ח מרכזית |
 | `n_collection_routes` | `CollectionRoute` | מסלולי גבייה (ספק תשלום, קבלות, יעד הפקדה, עמלות) |
-| `n_branch_transfers` | `BranchTransfer` | התחשבנות חודשית שותף↔בעלים |
+| `n_branch_transfers` | `BranchTransfer` | התחשבנות חודשית שותף↔בעלים; `transferredAmount` (רשות) - הסכום שבפועל נרשם כהועבר לאותו חודש, באותה מוסכמת סימן כמו `netToOwner` (חיובי = לבעלים, שלילי = מהבעלים) - מאפשר לרשום העברה חלקית/מאוחרת שלא תואמת בדיוק את הסכום המחושב. רשומות ישנות בלי השדה הזה (רק `transferred: true`) מטופלות כמסולקות במלואן, ראו `lib/branch-ledger.ts` |
 | `n_approved_emails` | — | מיילים מאושרים לכניסת קוד |
 | `n_login_codes` | — | קודי כניסה חד-פעמיים עם תפוגה |
 
@@ -352,6 +352,22 @@ pnpm dev        # turbo run dev — מריץ web + api
   על מחשבים שונים. זה נפרד לגמרי מהתחשבנות שותף-סניף הקיימת (`Branch.partnerPct`/`myPct`,
   `computeBranchFinancials`) - מיועד לשותפות על מחשבים ספציפיים בתוך סניף שהוא "שלי"
   (`Branch.isMine`), לא על סניף שלם.
+- **`/ledger`** — **"חישוב הנה\"ח" - owner בלבד** (`requireOwner`, גם מוסתר מהטאבים ל-partner/employee ב-
+  `rentals-tabs.tsx`). נבנה כדי לפתור את הבעיה שלא היתה דרך לראות "כמה כל סניף צריך להעביר אליי
+  עכשיו" בלי לבדוק כל סניף בנפרד ורק בתאריך ה-1 לחודש (מגבלת `showSettlement` הישנה ב-
+  `/accounting`, `branch-view.tsx`). לכל סניף השכרות (כולל סניפי `isMine` בלי שותף - גם הם יכולים
+  להחזיק כסף שצריך להגיע לבעלים) מציג: כרטיס סיכום עליון עם היתרה הנוכחית (`buildBranchLedger`,
+  `apps/web/lib/branch-ledger.ts`) - חיובי (ירוק) = הסניף/השותף צריך להעביר לבעלים, שלילי (כתום) =
+  הבעלים צריך להעביר לסניף/לשותף, ואפס = מאוזן; ומתחתיו טבלה מסוגננת כמו גיליון אקסל
+  (`<table>` עם גבולות לכל תא, כותרת מוצללת, שורות לסירוגין) עם **כל ההיסטוריה** מהחודש הראשון
+  שיש בו פעילות (השכרה שהוחזרה/הוצאה/הכנסה ידנית) ועד החודש הנוכחי - חודש, נטו לחודש (מחושב
+  מ-`computeBranchFinancials(...).settlementNetToOwner`), יתרה שהועברה מהחודש הקודם, סה&quot;כ
+  לתשלום, הסכום שנרשם כהועבר בפועל (ניתן לעריכה inline בכל שורה - גם עבר, לתיקון/העברה חלקית -
+  `LedgerRowEditor` → `recordBranchTransferAction`, `ledger/actions.ts`), יתרה נותרת (מועברת
+  לשורה הבאה כ"יתרה מחודש קודם") וסטטוס (מאוזן/חוב אליי/חוב ממני). היתרה הנותרת מצטברת רציפות
+  מהחודש הראשון עד הנוכחי - כך שחוב שלא שולם ממשיך "לגלול" קדימה עד שנרשמת עבורו העברה. סימון
+  העברה ב-`/accounting` הקיים (`markTransferredAction`) עודכן לכתוב גם `transferredAmount` כדי
+  שהוא יופיע נכון בטבלה כאן.
 - **`/branches`** — ניהול סניפי השכרה + audit הרשאות.
 - **`/labels`** — הדפסת מדבקות ללקוחות/פריטים + הגדרות לוגו.
 - **API `/api/rentals/charge`** — חיוב כרטיס דרך Nedarim Plus (`DebitCard.aspx`)
@@ -535,6 +551,7 @@ app שרץ בדפדפן ניתן ל"התקנה" כאפליקציה עם אייק
 | `apps/web/lib/rental-pricing.ts` | לוגיקת תמחור השכרות |
 | `apps/web/lib/collection-charge.ts` | לוגיקת חיוב/גבייה |
 | `apps/web/lib/branch-accounting*.ts` | חישובי הנה"ח והתחשבנות סניפי השכרות |
+| `apps/web/lib/branch-ledger.ts` | בניית היסטוריית התחשבנות מלאה פר-סניף עם יתרה מצטברת (`/dashboard/rentals/ledger`, owner בלבד) |
 | `apps/web/lib/computer-room-accounting.ts` | חישובי "השקעה מול רווח" פר סניף חדר מחשבים (הקמה/הוצאות/הכנסות/רווח) |
 | `apps/web/lib/expense-shared-scope.ts` | סנטינלים `SHARED_RENTALS_BRANCH_ID`/`SHARED_COMPUTERS_BRANCH_ID` להוצאות משותפות לכל הסניפים |
 | `apps/web/lib/branch-expense-ledger.ts` | יצירה/מחיקה של רשומת `n_ah_expenses` מקושרת מהוצאה חד-פעמית (חלק הבעלים בלבד) |

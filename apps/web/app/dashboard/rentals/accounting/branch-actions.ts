@@ -23,7 +23,9 @@ export async function markTransferredAction(
     expenseNetToOwner,
     transferred: true,
     transferredAt: new Date().toISOString(),
+    transferredAmount: netToOwner,
   };
   await db.collection("n_branch_transfers").doc(id).set(data, { merge: true });
   revalidatePath("/dashboard/rentals/accounting");
+  revalidatePath("/dashboard/rentals/ledger");
 }
