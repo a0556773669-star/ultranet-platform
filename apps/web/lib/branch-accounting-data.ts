@@ -55,7 +55,11 @@ interface DatedIncomeLine {
 
 function buildIncomeLines(rentals: Rental[], routesById: Map<string, CollectionRoute>): DatedIncomeLine[] {
   return rentals
-    .filter((r) => r.status === "returned" && !!r.returnDate)
+    // Only rentals actually collected from the client count as cash the branch/partner is
+    // holding for the owner. A rental can be `status: "returned"` yet `paid: false` (client
+    // still owes - see the "לא שולם" list on /dashboard/rentals/manage); counting those here
+    // would show the owner a balance owed for money nobody has collected yet.
+    .filter((r) => r.status === "returned" && !!r.returnDate && r.paid)
     .map((r) => {
       const amount = r.finalPrice ?? r.calcPrice ?? 0;
       const route = r.collectionRouteId ? routesById.get(r.collectionRouteId) ?? null : null;
