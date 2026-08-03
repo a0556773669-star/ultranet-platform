@@ -5,6 +5,11 @@ function money(n: number) {
   return `${Math.round(n).toLocaleString("he-IL")} ₪`;
 }
 
+function formatMonthLabel(month: string): string {
+  const [y, m] = month.split("-");
+  return `${m}/${y.slice(2)}`;
+}
+
 function MiniStats({ f }: { f: BranchFinancials }) {
   return (
     <div className="mt-2 flex flex-col gap-2">
@@ -34,6 +39,7 @@ function MiniStats({ f }: { f: BranchFinancials }) {
                 <div key={m.month} className="flex flex-1 flex-col items-center justify-end" title={`${m.month}: ${Math.round(m.profitPerComputer)} ₪`}>
                   <div className={`w-full rounded-t ${m.isHealthy ? "bg-teal" : "bg-red-400"}`} style={{ height }} />
                   <span className={`mt-1 text-[8px] font-bold whitespace-nowrap ${m.isHealthy ? "text-teal-dark" : "text-red-600"}`}>{Math.round(m.profitPerComputer)} ₪</span>
+                  <span className="mt-0.5 text-[8px] font-medium whitespace-nowrap text-muted">{formatMonthLabel(m.month)}</span>
                 </div>
               );
             })}
