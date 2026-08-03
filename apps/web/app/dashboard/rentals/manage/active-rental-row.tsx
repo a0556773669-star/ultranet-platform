@@ -50,7 +50,8 @@ type Props = {
   laptopRates?: LaptopRates;
   stickRates?: StickRates;
   hasRoute: boolean;
-  nedarimCreds: { mosadId: string; apiValid: string } | null;
+  tokenRouteName: string | null;
+  chargeRoutes: { id: string; name: string; mosadId: string; apiValid: string; defaultForNewCards: boolean }[];
   canCharge: boolean;
 };
 
@@ -79,7 +80,8 @@ export function ActiveRentalRow({
   laptopRates,
   stickRates,
   hasRoute,
-  nedarimCreds,
+  tokenRouteName,
+  chargeRoutes,
   canCharge,
 }: Props) {
   const router = useRouter();
@@ -97,6 +99,10 @@ export function ActiveRentalRow({
   const [deleting, setDeleting] = useState(false);
   const [issuingReceipt, setIssuingReceipt] = useState(false);
   const [itemPending, setItemPending] = useState(false);
+  const defaultChargeRoute = chargeRoutes.find((r) => r.defaultForNewCards) ?? chargeRoutes[0];
+  const [selectedRouteId, setSelectedRouteId] = useState(defaultChargeRoute?.id ?? "");
+  const selectedRoute = chargeRoutes.find((r) => r.id === selectedRouteId) ?? defaultChargeRoute;
+  const canChargeNow = hasCardToken ? !!tokenRouteName : !!selectedRoute;
 
   const autoPrice = useMemo(() => {
     const days = calcRentalDays(startDate, returnDate);
@@ -357,7 +363,7 @@ export function ActiveRentalRow({
                         גבייה + קבלה דרך מסלול
                       </button>
                     )}
-                    {canCharge && nedarimCreds && (
+                    {canCharge && canChargeNow && (
                       <button
                         type="button"
                         onClick={() => {
@@ -375,13 +381,14 @@ export function ActiveRentalRow({
                     )}
                   </div>
                 )}
-                {showNedarim && nedarimCreds && !paid && canCharge && (
+                {showNedarim && canChargeNow && !paid && canCharge && (
                   <div className="mt-3">
                     {hasCardToken ? (
                       <TokenChargeButton
                         clientId={clientId}
                         initialAmount={finalPrice}
                         cardLast4={cardLast4}
+                        routeName={tokenRouteName!}
                         onDone={(result) => {
                           if (result.ok) {
                             handleChargeSuccess(result.receiptPdfLink, result.receiptError);
@@ -391,21 +398,46 @@ export function ActiveRentalRow({
                         }}
                       />
                     ) : (
-                      <NedarimChargeCapture
-                        mosadId={nedarimCreds.mosadId}
-                        apiValid={nedarimCreds.apiValid}
-                        clientName={clientName}
-                        clientPhone={clientPhone}
-                        clientIdNum={clientIdNum}
-                        initialAmount={finalPrice}
-                        onDone={(result) => {
-                          if (result.ok) {
-                            handleChargeSuccess();
-                          } else {
-                            setActionError(result.message ?? "הגבייה נכשלה");
-                          }
-                        }}
-                      />
+                      <>
+                        {chargeRoutes.length > 1 && (
+                          <div className="mb-2 max-w-xs">
+                            <label className="mb-1 block text-xs font-semibold text-muted">
+                              החיוב יתבצע לעסק
+                            </label>
+                            <select
+                              value={selectedRouteId}
+                              onChange={(e) => setSelectedRouteId(e.target.value)}
+                              className="w-full rounded-lg border border-card-border bg-white px-3 py-1.5 text-sm"
+                            >
+                              {chargeRoutes.map((rt) => (
+                                <option key={rt.id} value={rt.id}>
+                                  {rt.name}
+                                  {rt.defaultForNewCards ? " (ברירת מחדל)" : ""}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                        )}
+                        <p className="mb-2 text-xs font-bold text-ink">
+                          שים לב: זה גובה לעסק &quot;{selectedRoute!.name}&quot;
+                        </p>
+                        <NedarimChargeCapture
+                          key={selectedRoute!.id}
+                          mosadId={selectedRoute!.mosadId}
+                          apiValid={selectedRoute!.apiValid}
+                          clientName={clientName}
+                          clientPhone={clientPhone}
+                          clientIdNum={clientIdNum}
+                          initialAmount={finalPrice}
+                          onDone={(result) => {
+                            if (result.ok) {
+                              handleChargeSuccess();
+                            } else {
+                              setActionError(result.message ?? "הגבייה נכשלה");
+                            }
+                          }}
+                        />
+                      </>
                     )}
                   </div>
                 )}

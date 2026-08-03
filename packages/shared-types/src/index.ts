@@ -190,6 +190,12 @@ export interface RentalClient {
   cardLast4?: string; // display-only reference, never store full PAN
   cardExpiry?: string; // MM/YY, non-sensitive
   gatewayToken?: string; // set by payment gateway tokenization (Nedarim Plus), never raw card data
+  /** n_collection_routes id the saved gatewayToken was tokenized under (which business/merchant
+   *  account owns this card-on-file). A token is only valid for the merchant that created it, so
+   *  this can't be repointed without the client re-entering their card under a different route.
+   *  Unset for clients saved before per-client routing existed - they keep resolving via the
+   *  branch's route (see resolveNedarimCreds). */
+  collectionRouteId?: string | null;
   referralSource?: string; // free text: how the client found us
 }
 
@@ -335,6 +341,11 @@ export interface CollectionRoute {
     feeFixed?: number;
     notes?: string;
     status: RouteStatus;
+    /** if true, this route is pre-selected when staff save a NEW rental client's card or take a
+     *  fresh (no-token) charge - lets the owner steer newly-collected revenue to a given business
+     *  by default while existing saved cards keep charging through whichever route they were
+     *  tokenized under. At most one route should carry this flag. */
+    defaultForNewCards?: boolean;
 }
 
 /** collection: n_branch_transfers - monthly partner<->owner settlement records */

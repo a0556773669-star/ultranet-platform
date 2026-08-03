@@ -12,6 +12,8 @@ export interface QueueItem {
   branchName: string;
   mosadId: string;
   apiValid: string;
+  routeId: string;
+  routeName: string;
 }
 
 export function CompleteCardsQueue({ items }: { items: QueueItem[] }) {
@@ -66,6 +68,7 @@ export function CompleteCardsQueue({ items }: { items: QueueItem[] }) {
           {current.branchName}
           {current.phone ? ` · ${current.phone}` : ""}
         </div>
+        <div className="mt-1 text-xs font-semibold text-ink">הכרטיס ישויך לעסק: {current.routeName}</div>
       </div>
       <NedarimCardCapture
         key={current.id}
@@ -75,7 +78,7 @@ export function CompleteCardsQueue({ items }: { items: QueueItem[] }) {
         clientPhone={current.phone}
         onSaved={async (token, last4, cardExpiry) => {
           setSaving(true);
-          await saveClientCardTokenAction(current.id, token, last4, cardExpiry);
+          await saveClientCardTokenAction(current.id, token, last4, cardExpiry, current.routeId);
           advance();
         }}
       />

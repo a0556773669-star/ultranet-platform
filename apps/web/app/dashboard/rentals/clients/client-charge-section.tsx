@@ -3,22 +3,26 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { NedarimChargeCapture } from "./nedarim-charge-capture";
+import type { RouteOption } from "./client-card-section";
 
 export function ClientChargeSection({
-  mosadId,
-  apiValid,
+  routes,
   clientName,
   clientPhone,
   clientIdNum,
 }: {
-  mosadId: string;
-  apiValid: string;
+  routes: RouteOption[];
   clientName: string;
   clientPhone?: string;
   clientIdNum?: string;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
+  const defaultRoute = routes.find((r) => r.defaultForNewCards) ?? routes[0];
+  const [selectedRouteId, setSelectedRouteId] = useState(defaultRoute?.id ?? "");
+  const selectedRoute = routes.find((r) => r.id === selectedRouteId) ?? defaultRoute;
+
+  if (!selectedRoute) return null;
 
   return (
     <div className="mt-4">
@@ -37,9 +41,30 @@ export function ClientChargeSection({
       )}
       {open && (
         <>
+          {routes.length > 1 && (
+            <div className="mb-3 max-w-xs">
+              <label className="mb-1 block text-xs font-semibold text-muted">החיוב יתבצע לעסק</label>
+              <select
+                value={selectedRouteId}
+                onChange={(e) => setSelectedRouteId(e.target.value)}
+                className="w-full rounded-lg border border-card-border bg-white px-3 py-2 text-sm focus:border-teal focus:outline-none"
+              >
+                {routes.map((r) => (
+                  <option key={r.id} value={r.id}>
+                    {r.name}
+                    {r.defaultForNewCards ? " (ברירת מחדל)" : ""}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+          <p className="mb-2 text-xs font-bold text-ink">
+            שים לב: זה גובה לעסק &quot;{selectedRoute.name}&quot;
+          </p>
           <NedarimChargeCapture
-            mosadId={mosadId}
-            apiValid={apiValid}
+            key={selectedRoute.id}
+            mosadId={selectedRoute.mosadId}
+            apiValid={selectedRoute.apiValid}
             clientName={clientName}
             clientPhone={clientPhone}
             clientIdNum={clientIdNum}

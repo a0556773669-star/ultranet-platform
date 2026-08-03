@@ -1,6 +1,7 @@
 import { requireModuleAccess } from "@/lib/perms";
 import { getAdminFirestore } from "@/lib/firebase-admin";
 import type { RentalClient, Branch } from "@ultranet/shared-types";
+import { resolveNedarimCreds } from "@/lib/nedarim";
 import { createClientAction, importClientsAction } from "../actions";
 import { ClientsHeader } from "./clients-header";
 import { ClientsTable } from "./clients-table";
@@ -44,6 +45,27 @@ export default async function RentalClientsPage({
   const myScopeBranchIds = new Set(
     branches.filter((b) => b.id === myBranchId || b.parentBranchId === myBranchId).map((b) => b.id)
   );
+
+  // for the quick "חייב" button on this list, resolve the business name each client's saved
+  // token is actually chargeable through (same rule the manage page and charge API use)
+  const routeNameById: Record<string, string> = {};
+  if (canCharge) {
+    const tokenClients = clients.filter((c) => c.gatewayToken && c.cardExpiry);
+    const tokenRouteKeys = Array.from(
+      new Set(tokenClients.map((c) => `${c.branchId}::${c.collectionRouteId ?? ""}`))
+    );
+    const tokenCredsEntries = await Promise.all(
+      tokenRouteKeys.map(async (key) => {
+        const [branchId, routeId] = key.split("::");
+        return [key, await resolveNedarimCreds(branchId, routeId || undefined)] as const;
+      })
+    );
+    const tokenCredsMap = new Map(tokenCredsEntries);
+    for (const c of tokenClients) {
+      const creds = tokenCredsMap.get(`${c.branchId}::${c.collectionRouteId ?? ""}`);
+      if (creds) routeNameById[c.id] = creds.name;
+    }
+  }
 
   return (
     <div>
@@ -126,6 +148,7 @@ export default async function RentalClientsPage({
         showBranchColumn={isOwner || viewClientBranchIds.length > 0}
         branches={branches}
         canCharge={canCharge}
+        routeNameById={routeNameById}
       />
     </div>
   );

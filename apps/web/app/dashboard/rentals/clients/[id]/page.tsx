@@ -8,7 +8,7 @@ import { ClientForm } from "../client-form";
 import { DeleteClientButton } from "../delete-client-button";
 import { ClientCardSection } from "../client-card-section";
 import { ClientChargeSection } from "../client-charge-section";
-import { resolveNedarimCreds } from "@/lib/nedarim";
+import { resolveNedarimCreds, listNedarimRoutes } from "@/lib/nedarim";
 
 export default async function EditClientPage({
   params,
@@ -26,9 +26,10 @@ export default async function EditClientPage({
   const canDeleteClient = isOwner || role === "partner";
 
   const db = getAdminFirestore();
-  const [clientDoc, branchesSnap] = await Promise.all([
+  const [clientDoc, branchesSnap, routes] = await Promise.all([
     db.collection("n_rental_clients").doc(params.id).get(),
     db.collection("n_branches").where("branchType", "==", "rentals").get(),
+    listNedarimRoutes(),
   ]);
   if (!clientDoc.exists) notFound();
   const client = { id: clientDoc.id, ...(clientDoc.data() as Omit<RentalClient, "id">) } as RentalClient;
@@ -37,7 +38,11 @@ export default async function EditClientPage({
   const branches = branchesSnap.docs.map(
     (d) => ({ ...(d.data() as Omit<Branch, "id">), id: d.id }) as Branch
   );
-  const nedarimCreds = await resolveNedarimCreds(client.branchId);
+  // route the client's saved token is actually effective through - used only to show its business
+  // name in the migration nudge, never to decide which route new cards get saved under
+  const currentRouteCreds = client.cardLast4
+    ? await resolveNedarimCreds(client.branchId, client.collectionRouteId ?? undefined)
+    : null;
 
   const boundUpdate = updateClientAction.bind(null, params.id);
   const boundDelete = deleteClientAction.bind(null, params.id);
@@ -60,21 +65,21 @@ export default async function EditClientPage({
         myBranchId={myBranchId}
         initial={client}
       />
-      {nedarimCreds && (
+      {routes.length > 0 && (
         <ClientCardSection
           clientId={client.id}
-          mosadId={nedarimCreds.mosadId}
-          apiValid={nedarimCreds.apiValid}
+          routes={routes}
           clientName={client.name}
           clientPhone={client.phone}
           currentLast4={client.cardLast4}
+          currentRouteId={client.collectionRouteId}
+          currentRouteName={currentRouteCreds?.name}
           autoOpen={searchParams?.openCard === "1"}
         />
       )}
-      {nedarimCreds && canCharge && (
+      {routes.length > 0 && canCharge && (
         <ClientChargeSection
-          mosadId={nedarimCreds.mosadId}
-          apiValid={nedarimCreds.apiValid}
+          routes={routes}
           clientName={client.name}
           clientPhone={client.phone}
           clientIdNum={client.idNum}

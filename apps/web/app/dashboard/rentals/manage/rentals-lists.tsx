@@ -39,7 +39,11 @@ export type ActiveRowData = {
   laptopRates?: LaptopRates;
   stickRates?: StickRates;
   hasRoute: boolean;
-  nedarimCreds: { mosadId: string; apiValid: string } | null;
+  /** business name the client's saved gatewayToken is actually chargeable through, or null if
+   *  this client has a token but no valid route resolves for it (button hidden in that case) */
+  tokenRouteName: string | null;
+  /** all connected Nedarim Plus businesses, for the no-token (fresh card entry) charge flow */
+  chargeRoutes: { id: string; name: string; mosadId: string; apiValid: string; defaultForNewCards: boolean }[];
   canDelete: boolean;
   canCharge: boolean;
 };
@@ -147,7 +151,8 @@ export function RentalsLists({
                   laptopRates={r.laptopRates}
                   stickRates={r.stickRates}
                   hasRoute={r.hasRoute}
-                  nedarimCreds={r.nedarimCreds}
+                  tokenRouteName={r.tokenRouteName}
+                  chargeRoutes={r.chargeRoutes}
                   canDelete={r.canDelete}
                   canCharge={r.canCharge}
                 />
