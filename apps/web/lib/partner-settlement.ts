@@ -45,6 +45,9 @@ export async function computePartnerSettlement(month: string): Promise<PartnerSe
 
   const lines = new Map<string, PartnerSettlementLine>();
   for (const r of rentals) {
+    // Skip rentals that were returned but never actually paid (client still owes) - counting
+    // those would tell the owner to pay the partner a share of money nobody collected yet.
+    if (!r.paid) continue;
     if (!r.returnDate || r.returnDate.slice(0, 7) !== month) continue;
     const laptop = r.kind === "laptop" ? laptopById.get(r.itemId) : stickToLaptop.get(r.itemId);
     if (!laptop) continue;
