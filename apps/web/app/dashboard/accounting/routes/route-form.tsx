@@ -36,6 +36,11 @@ export function RouteForm({
         <p className="mt-1 text-[11px] text-muted">
           בנדרים פלוס: המספר שמזהה את המוסד שלך אצלם.
         </p>
+        <p className="mt-1 text-[11px] text-amber-700">
+          &quot;ברירת מחדל לכרטיסים/חיובים חדשים&quot; קובעת לאיזה עסק ישויכו כרטיסים חדשים
+          שיישמרו ללקוחות השכרות (ולחיובים חד-פעמיים ללא כרטיס שמור). כרטיסים שכבר נשמרו ממשיכים
+          להיגבות דרך המסלול המקורי שלהם - לא ניתן להעביר טוקן קיים בין עסקים.
+        </p>
       </div>
       <div>
         <label className={LABEL}>מזהה סניף (ריק למסלול של כל הסניפים)</label>
@@ -78,6 +83,17 @@ export function RouteForm({
           <option value="owner">בעלים</option>
           <option value="branch">סניף</option>
         </select>
+      </div>
+      <div className="flex items-end">
+        <label className="flex items-center gap-2 text-xs font-semibold text-muted">
+          <input
+            type="checkbox"
+            name="defaultForNewCards"
+            defaultChecked={initial?.defaultForNewCards ?? false}
+            className="h-4 w-4 rounded border-card-border"
+          />
+          ברירת מחדל לכרטיסים/חיובים חדשים
+        </label>
       </div>
       <div>
         <label className={LABEL}>API Key / טוקן ApiValid (לא חובה)</label>

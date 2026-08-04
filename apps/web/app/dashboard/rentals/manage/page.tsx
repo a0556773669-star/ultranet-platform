@@ -2,7 +2,7 @@ import Link from "next/link";
 import { FileText, Laptop as LaptopIcon, Wifi } from "lucide-react";
 import { requireModuleAccess } from "@/lib/perms";
 import { getAdminFirestore } from "@/lib/firebase-admin";
-import { resolveNedarimCreds } from "@/lib/nedarim";
+import { resolveNedarimCreds, listNedarimRoutes } from "@/lib/nedarim";
 import type { Rental, RentalClient, Laptop, Stick, Branch, CollectionRoute } from "@ultranet/shared-types";
 import { RentalsLists, type ActiveRowData, type HistoryRowData } from "./rentals-lists";
 
@@ -50,11 +50,28 @@ export default async function RentalsPage({ searchParams }: { searchParams?: { m
     ? branchesList
     : branchesList.filter((b) => b.id === myBranchId);
 
-  const activeBranchIds = Array.from(new Set(active.map((r) => r.branchId)));
-  const credsEntries = await Promise.all(
-    activeBranchIds.map(async (id) => [id, await resolveNedarimCreds(id)] as const)
+  const chargeRoutes = await listNedarimRoutes();
+
+  // Charging a saved token must go through the same route it was tokenized under - resolve per
+  // (branch, client route) combo actually in use, not just per branch, so each client's charge
+  // button reflects the business their card is really tied to.
+  const tokenRouteKeys = Array.from(
+    new Set(
+      active
+        .filter((r) => {
+          const c = clients.get(r.clientId);
+          return !!(c?.gatewayToken && c?.cardExpiry);
+        })
+        .map((r) => `${r.branchId}::${clients.get(r.clientId)?.collectionRouteId ?? ""}`)
+    )
   );
-  const credsMap = new Map(credsEntries);
+  const tokenCredsEntries = await Promise.all(
+    tokenRouteKeys.map(async (key) => {
+      const [branchId, routeId] = key.split("::");
+      return [key, await resolveNedarimCreds(branchId, routeId || undefined)] as const;
+    })
+  );
+  const tokenCredsMap = new Map(tokenCredsEntries);
 
   function renterName(itemId: string, kind: "laptop" | "stick") {
     const rental = active.find((r) => r.itemId === itemId && r.kind === kind);
@@ -116,7 +133,9 @@ function routesForBranch(branchId: string): { id: string; name: string }[] {
       r.kind === "stick" && item
         ? { day1: (item as Stick).day1, day2: (item as Stick).day2, day3plus: (item as Stick).day3plus }
         : undefined;
-    const creds = credsMap.get(r.branchId) ?? null;
+    const client = clients.get(r.clientId);
+    const tokenKey = `${r.branchId}::${client?.collectionRouteId ?? ""}`;
+    const tokenRouteName = info.hasCardToken ? (tokenCredsMap.get(tokenKey)?.name ?? null) : null;
     return {
       rentalId: r.id,
       startDate: r.startDate,
@@ -138,7 +157,8 @@ function routesForBranch(branchId: string): { id: string; name: string }[] {
       laptopRates,
       stickRates,
       hasRoute: !!r.collectionRouteId,
-      nedarimCreds: canCharge && creds ? { mosadId: creds.mosadId, apiValid: creds.apiValid } : null,
+      tokenRouteName: canCharge ? tokenRouteName : null,
+      chargeRoutes: canCharge ? chargeRoutes : [],
       canDelete,
       canCharge,
     };

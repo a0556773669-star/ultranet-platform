@@ -6,11 +6,13 @@ export function TokenChargeButton({
   clientId,
   initialAmount,
   cardLast4,
+  routeName,
   onDone,
 }: {
   clientId: string;
   initialAmount: number;
   cardLast4?: string;
+  routeName: string;
   onDone: (result: { ok: boolean; message?: string; receiptPdfLink?: string; receiptError?: string }) => void;
 }) {
   const [amount, setAmount] = useState(String(initialAmount));
@@ -52,8 +54,11 @@ export function TokenChargeButton({
 
   return (
     <div className="rounded-card border border-card-border bg-white p-4">
-      <p className="mb-2 text-xs text-muted" dir="ltr">
+      <p className="mb-1 text-xs text-muted" dir="ltr">
         חיוב הכרטיס השמור {cardLast4 ? `(•••• ${cardLast4})` : ""} דרך הטוקן במערכת - ללא הזנת פרטי כרטיס מחדש.
+      </p>
+      <p className="mb-2 text-xs font-bold text-ink">
+        שים לב: זה גובה לעסק &quot;{routeName}&quot;
       </p>
       <label className="mb-1 block text-xs font-bold text-muted">סכום לחיוב (₪)</label>
       <input

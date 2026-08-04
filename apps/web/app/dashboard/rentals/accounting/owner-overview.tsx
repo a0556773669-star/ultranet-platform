@@ -7,7 +7,7 @@ function money(n: number) {
 
 function formatMonthLabel(month: string): string {
   const [y, m] = month.split("-");
-  return `${m}/${y.slice(2)}`;
+  return `${m ?? ""}/${(y ?? "").slice(2)}`;
 }
 
 function MiniStats({ f }: { f: BranchFinancials }) {

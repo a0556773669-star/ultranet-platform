@@ -154,13 +154,27 @@ export async function createClientAction(formData: FormData) {
   redirect("/dashboard/rentals/clients");
 }
 
-export async function saveClientCardTokenAction(clientId: string, token: string, last4: string, cardExpiry?: string) {
+export async function saveClientCardTokenAction(
+  clientId: string,
+  token: string,
+  last4: string,
+  cardExpiry?: string,
+  collectionRouteId?: string | null
+) {
   await requireSession();
   await getAdminFirestore().collection("n_rental_clients").doc(clientId).set(
-    { gatewayToken: token, cardLast4: last4, cardExpiry: cardExpiry || "", depositType: "credit" },
+    {
+      gatewayToken: token,
+      cardLast4: last4,
+      cardExpiry: cardExpiry || "",
+      depositType: "credit",
+      collectionRouteId: collectionRouteId ?? null,
+    },
     { merge: true }
   );
   revalidatePath(`/dashboard/rentals/clients/${clientId}`);
+  revalidatePath("/dashboard/rentals/manage");
+  revalidatePath("/dashboard/rentals/clients/complete-cards");
 }
 
 export async function createNedarimTransactionAction(

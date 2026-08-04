@@ -159,7 +159,7 @@ pnpm dev        # turbo run dev — מריץ web + api
 | `n_devices` | `Device` | מכשירים/מחשבים בחדרי מחשבים |
 | `n_laptops` | `Laptop` | מחשבים ניידים להשכרה + תמחור (יום/שבוע/חודש, וריאנטים); `hasPartner`/`partnerName`/`partnerPct` - שותפות פר-מחשב (ראו סעיף 8) |
 | `n_sticks` | `Stick` | סטיקים סלולריים + תמחור מדורג (`day1`/`day2`/`day3plus`); `linkedLaptopId` מקשר לסטיק שמשוייך למחשב ניתן להשכרה - מסונכרן אוטומטית מ-`n_laptops` (ראו סעיף 8, `/laptops`) |
-| `n_rental_clients` | `RentalClient` | לקוחות השכרה; פרטי כרטיס לא-רגישים, `gatewayToken` |
+| `n_rental_clients` | `RentalClient` | לקוחות השכרה; פרטי כרטיס לא-רגישים, `gatewayToken`, `collectionRouteId` (העסק שהטוקן שויך אליו) |
 | `n_rentals` | `Rental` | השכרות; פריט, תאריכים, מחיר מחושב/סופי, סטטוס, תשלום |
 | `n_inventory` | `InventoryItem` | מלאי (כמות, מינימום) |
 | `n_tickets` | `Ticket` | קריאות שירות למכשירים |
@@ -168,7 +168,7 @@ pnpm dev        # turbo run dev — מריץ web + api
 | `n_cw_clients` | `CoworkingClient` | לקוחות משרד שיתופי + היסטוריית תשלומים |
 | `n_ah_income` | `AccountingIncome` | הכנסות בהנה"ח מרכזית (בעלים); 3 סוגים בלבד - `laptops`/`credit`/`cash`, ראו סעיף 8 |
 | `n_ah_expenses` | `AccountingExpense` | הוצאות בהנה"ח מרכזית |
-| `n_collection_routes` | `CollectionRoute` | מסלולי גבייה (ספק תשלום, קבלות, יעד הפקדה, עמלות) |
+| `n_collection_routes` | `CollectionRoute` | מסלולי גבייה (ספק תשלום, קבלות, יעד הפקדה, עמלות, `defaultForNewCards`) |
 | `n_branch_transfers` | `BranchTransfer` | התחשבנות חודשית שותף↔בעלים; `transferredAmount` (רשות) - הסכום שבפועל נרשם כהועבר לאותו חודש, באותה מוסכמת סימן כמו `netToOwner` (חיובי = לבעלים, שלילי = מהבעלים) - מאפשר לרשום העברה חלקית/מאוחרת שלא תואמת בדיוק את הסכום המחושב. רשומות ישנות בלי השדה הזה (רק `transferred: true`) מטופלות כמסולקות במלואן, ראו `lib/branch-ledger.ts` |
 | `n_approved_emails` | — | מיילים מאושרים לכניסת קוד |
 | `n_login_codes` | — | קודי כניסה חד-פעמיים עם תפוגה |
@@ -176,6 +176,20 @@ pnpm dev        # turbo run dev — מריץ web + api
 > הערה: `RentalClient` שומר `cardLast4` (תצוגה בלבד), `cardExpiry` (MM/YY,
 > לא רגיש) ו-`gatewayToken` — לעולם לא PAN מלא. שדה נוסף: `referralSource`
 > (רשות, טקסט חופשי) — מאיפה הלקוח הגיע אלינו, למעקב שיווקי.
+>
+> **`collectionRouteId`** (רשות) — ה-`n_collection_routes` שהטוקן נוצר תחתיו, כלומר
+> לאיזה עסק/מוסד נדרים פלוס הכרטיס השמור שייך. טוקן תקף רק אצל המוסד שיצר אותו ולכן
+> אי אפשר "להעביר" אותו בין עסקים — רק ליצור טוקן חדש (הזנת כרטיס מחדש) תחת מוסד אחר.
+> לקוחות שנשמרו לפני שהשדה הזה נוסף אין להם ערך (`undefined`) וממשיכים להיפתר לפי
+> מסלול הסניף כמו קודם (ראו `resolveNedarimCreds` בסעיף 9) — כך שכרטיסים ישנים ממשיכים
+> להיגבות אוטומטית דרך אותו עסק כמו תמיד. כרטיסים **חדשים** נשמרים כברירת מחדל תחת
+> המסלול המסומן `defaultForNewCards: true`, עם אפשרות לבחור מסלול אחר מתוך רשימת
+> המסלולים המחוברים בזמן שמירת הכרטיס (`client-card-section.tsx`,
+> `complete-cards-queue.tsx`). בכל מסך חיוב (`token-charge-button.tsx`,
+> `client-charge-section.tsx`, `active-rental-row.tsx`) מוצג באופן קבוע לאיזה עסק
+> החיוב מתבצע ("שים לב: זה גובה לעסק X"), ובדף עריכת לקוח עם כרטיס ישן (לא במסלול
+> ברירת המחדל) מוצגת הודעת אזהרה שמציעה להעביר את הלקוח (כלומר לבקש ממנו להזין כרטיס
+> מחדש) לעסק הנוכחי כברירת מחדל.
 
 ---
 
@@ -287,19 +301,27 @@ pnpm dev        # turbo run dev — מריץ web + api
   (סינון בזמן הקלדה על הרשימה שכבר נטענה בצד הלקוח, ללא שאילתה נוספת ל-Firestore)
   לאיתור מהיר של לקוח קיים מתוך רשימה גדולה — למשל כדי לבדוק אם לקוח כבר קיים
   לפני יצירת אחד חדש, או כדי לגשת מהר לכפתור "חייב" שלו. לכל לקוח עם טוקן כרטיס שמור
-  (`gatewayToken` + `cardExpiry`) מוצג בשורה כפתור "חייב" (מוצג רק ל-`owner`
+  (`gatewayToken` + `cardExpiry`) **שנפתר לו מסלול גבייה תקין** (לפי `collectionRouteId`
+  שלו, או מסלול הסניף ללקוחות ישנים ללא ערך) מוצג בשורה כפתור "חייב" (מוצג רק ל-`owner`
   או למי שיש לו `perms.charging`), שפותח את `TokenChargeButton` הקיים
   (`../manage/token-charge-button.tsx`) וקורא ל-`/api/rentals/charge` לחיוב
-  ישיר דרך הטוקן השמור, ללא הזנת פרטי כרטיס מחדש. בדף עריכת לקוח בודד
+  ישיר דרך הטוקן השמור, ללא הזנת פרטי כרטיס מחדש — עם תווית קבועה מעל הכפתור
+  "שים לב: זה גובה לעסק X" (שם המסלול שנפתר). בדף עריכת לקוח בודד
   (`/clients/[id]`) מוצג כפתור "מחק לקוח" (`delete-client-button.tsx`) ל-`owner`
   ול-`partner` בלבד (`deleteClientAction` ב-`../actions.ts` חוסם גם בצד השרת
-  תפקידים אחרים ומפנה ל-`?error=forbidden`).
+  תפקידים אחרים ומפנה ל-`?error=forbidden`). באותו דף, `ClientCardSection` מציגה
+  לאיזה עסק כרטיס קיים משויך, ואם הוא לא במסלול `defaultForNewCards` הנוכחי — הודעת
+  אזהרה שמסבירה שצריך להזין כרטיס מחדש כדי "להעביר" את הלקוח (טוקן קיים לא ניתן
+  להעברה בין עסקים); בעת הזנת/עדכון כרטיס יש בורר לבחירת העסק שאליו ישויך הכרטיס
+  החדש (ברירת מחדל: המסלול המסומן `defaultForNewCards`). `ClientChargeSection`
+  (חיוב מיידי ללא טוקן) כולל אותו בורר עסק ותווית "שים לב: זה גובה לעסק X".
 - **`/clients/complete-cards`** — מסך עזר להשלמת טוקניזציה בכמות: מציג בתור
   את כל הלקוחות בהיקף המשתמש שאין להם `cardLast4` שמור, עם `NedarimCardCapture`
   פתוח לכל לקוח בתורו (מתקדם אוטומטית ללקוח הבא אחרי שמירה מוצלחת, ניתן גם
-  לדלג). מטרתו לאפשר מעבר מהיר בין הרבה לקוחות בלי לנווט לדף עריכה נפרד לכל
-  אחד — הכרטיס עדיין מוקלד תמיד ישירות באייפרם המאובטח של נדרים פלוס, אף פעם
-  לא דרך שרת האפליקציה.
+  לדלג), ומציג לאיזה עסק הכרטיס ישמר. מטרתו לאפשר מעבר מהיר בין הרבה לקוחות בלי
+  לנווט לדף עריכה נפרד לכל אחד — הכרטיס עדיין מוקלד תמיד ישירות באייפרם המאובטח
+  של נדרים פלוס, אף פעם לא דרך שרת האפליקציה. כל כרטיס חדש שנשמר כאן משויך
+  למסלול המסומן `defaultForNewCards` (ולא למסלול הסניף כמו קודם).
 - **`/manage`** — בראש הדף לוח "מצב מחשבים וסטיקים": כרטיסייה לכל מחשב נייד בסניף, "פנוי"
   (טורקיז) / "מושכר" + שם השוכר (אדום) לפי השכרה `laptop` פעילה תואמת (`n_rentals` עם
   `kind`/`itemId`). מחשב "פנוי" שהסטיק המקושר אליו (`n_sticks.linkedLaptopId`) מושכר בנפרד
@@ -310,8 +332,10 @@ pnpm dev        # turbo run dev — מריץ web + api
   ניהול השכרות פעילות והיסטוריה, חובות (`unpaid-row-actions.tsx`).
   כפתור "גבייה מידית" בשורת השכרה פעילה (`active-rental-row.tsx`) גלוי רק
   ל-owner או למי שיש לו `perms.charging`; אם ללקוח יש `gatewayToken`+`cardExpiry`
-  שמורים הוא מחייב ישירות דרך הטוקן (`token-charge-button.tsx` → `/api/rentals/charge`),
-  אחרת נופל חזרה להזנת כרטיס ידנית באייפרם (`nedarim-charge-capture.tsx`).
+  שמורים (ומסלול תקין נפתר להם) הוא מחייב ישירות דרך הטוקן
+  (`token-charge-button.tsx` → `/api/rentals/charge`, עם תווית "שים לב: זה גובה
+  לעסק X"), אחרת נופל חזרה להזנת כרטיס ידנית באייפרם (`nedarim-charge-capture.tsx`)
+  עם בורר לבחירת העסק שאליו יירשם החיוב (ברירת מחדל: המסלול `defaultForNewCards`).
   לצד זה כפתור "קבלה (מזומן/העברה)" (`issueCashReceiptAction`, גם הוא מוגבל
   ל-`perms.charging`) מפיק ושולח קבלת EZcount ידנית עבור תשלום מזומן/העברה.
   חיוב אשראי מצליח (דרך `/api/rentals/charge`) מפיק קבלת EZcount אוטומטית
@@ -379,8 +403,10 @@ pnpm dev        # turbo run dev — מריץ web + api
 - **`/labels`** — הדפסת מדבקות ללקוחות/פריטים + הגדרות לוגו.
 - **API `/api/rentals/charge`** — חיוב כרטיס דרך Nedarim Plus (`DebitCard.aspx`)
   לפי `gatewayToken`/`cardExpiry` שמורים על הלקוח; מוגן בהרשאת `charging` בצד
-  שרת, ומזהה המוסד (`Mosad`) נפתר דינמית דרך `resolveNedarimCreds` לפי סניף
-  הלקוח (לא hardcoded).
+  שרת, ומזהה המוסד (`Mosad`) נפתר דינמית דרך `resolveNedarimCreds(branchId,
+  client.collectionRouteId)` — קודם לפי המסלול שנשמר על הלקוח (העסק שהטוקן שלו
+  שייך אליו בפועל), ורק אם אין ערך כזה (לקוחות ישנים) נופל חזרה לפתרון לפי סניף
+  כמו קודם. לא hardcoded.
 - **API `/api/rentals/clients/export|template`** — ייצוא/תבנית אקסל של לקוחות.
 
 תמחור השכרה: `lib/rental-pricing.ts` (יום/שבוע/חודש + וריאנט `noInternet`).
@@ -474,10 +500,15 @@ paidBy, owedBy)` (`apps/web/lib/branch-accounting.ts`), שדורש **שני** ת
 
 - **Firebase / Firestore** — מסד הנתונים. גישת אדמין דרך `lib/firebase-admin.ts`
   (web) ו-`firebase.service.ts` (api). פרויקט: `ultranet-e94aa`.
-- **Nedarim Plus** (`lib/nedarim.ts`) — סליקה ישראלית. פתרון creds לפי סניף:
-  קודם מסלול משויך לסניף (`branch.collectionRouteId`), אחרת מסלול גלובלי
-  (`branchScope === null`) כברירת מחדל של הבעלים. חיוב דרך `/api/rentals/charge`
-  ו-`lib/collection-charge.ts`. שמירת טוקן בלבד, לא כרטיס.
+- **Nedarim Plus** (`lib/nedarim.ts`) — סליקה ישראלית.
+  `resolveNedarimCreds(branchId?, routeId?)`: אם ניתן `routeId` מפורש (מסלול
+  ה-`collectionRouteId` שנשמר על לקוח השכרות מסוים) הוא המקור היחיד — נכשל
+  (`null`) ולא נופל חזרה אם המסלול לא תקין, כדי לא לחייב טעות בטעות דרך עסק
+  לא נכון. אחרת: קודם מסלול משויך לסניף (`branch.collectionRouteId`), אחרת
+  מסלול גלובלי (`branchScope === null`) כברירת מחדל של הבעלים.
+  `listNedarimRoutes()` מחזירה את כל המסלולים המחוברים (לבחירת עסק בממשק, ראו
+  `defaultForNewCards` למטה). חיוב דרך `/api/rentals/charge` ו-`lib/collection-charge.ts`.
+  שמירת טוקן בלבד, לא כרטיס.
 - **Resend** — מותקן כתלות (`apps/web/package.json`) אך **לא בשימוש כרגע בשום
   מקום בקוד** - זמין לשימוש עתידי.
 - **EmailJS** (`@emailjs/browser`) — שליחת קודי התחברות/אימות מכשיר מהלקוח
@@ -496,6 +527,13 @@ paidBy, owedBy)` (`apps/web/lib/branch-accounting.ts`), שדורש **שני** ת
   **חשוב:** מלבד `nedarim_plus` (סליקה בפועל) ו-`ezcount` (הפקת קבלות בפועל),
   שאר הספקים (גם לסליקה וגם לקבלות) עדיין placeholder בלבד - `chargeViaRoute`
   לא מבצע קריאת API אמיתית עבורם, רק רישום הנה"ח מדומה.
+  שדה `defaultForNewCards` (boolean, רשות) מסמן מסלול נדרים פלוס יחיד כברירת
+  מחדל לשיוך כרטיסים **חדשים** של לקוחות השכרות (וגם לחיובים חד-פעמיים ללא
+  טוקן) — נערך דרך תיבת סימון בטופס המסלול (`/dashboard/accounting/routes`).
+  משמש כדי לנתב הכנסות חדשות לעסק מסוים בלי לגעת בכרטיסים שכבר נשמרו: כרטיס
+  קיים תמיד ממשיך להיגבות דרך המסלול שהוא נוצר תחתיו (`RentalClient.collectionRouteId`,
+  ראו סעיף 6), בעוד שכל כרטיס/חיוב חדש נופל כברירת מחדל למסלול המסומן, עם
+  אפשרות לבחור מסלול אחר בממשק בזמן השמירה/החיוב.
 
 ### PWA — התקנה כאפליקציה (טאבלט / מולטימדיה ברכב)
 

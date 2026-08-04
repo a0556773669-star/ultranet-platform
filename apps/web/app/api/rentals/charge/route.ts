@@ -39,10 +39,14 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const creds = await resolveNedarimCreds(client.branchId);
+    // Resolve via the route this client's card was actually tokenized under (if recorded) so the
+    // charge always goes to the same merchant that issued the token; legacy clients with no
+    // recorded route (saved before per-client routing existed) fall back to the branch's route,
+    // exactly as before - they keep auto-charging to whichever business that already is.
+    const creds = await resolveNedarimCreds(client.branchId, client.collectionRouteId ?? undefined);
     if (!creds) {
       return NextResponse.json(
-        { success: false, message: "לא נמצא מסלול סליקה של נדרים פלוס לסניף זה" },
+        { success: false, message: "לא נמצא מסלול סליקה תקין של נדרים פלוס עבור לקוח זה" },
         { status: 400 }
       );
     }
@@ -134,6 +138,7 @@ export async function POST(req: NextRequest) {
         message: "חיוב בוצע בהצלחה",
         confirmation: result.Confirmation,
         nedarium_id: nedarimId,
+        routeName: creds.name,
       });
     } else {
       await db.collection("n_rental_transactions").add({

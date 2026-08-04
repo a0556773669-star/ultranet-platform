@@ -162,6 +162,7 @@ export async function createCollectionRouteAction(formData: FormData) {
     receiptsCompanyId: String(formData.get("receiptsCompanyId") ?? "").trim() || undefined,
     receiptsApiKey: String(formData.get("receiptsApiKey") ?? "").trim() || undefined,
     receiptsApiSecret: String(formData.get("receiptsApiSecret") ?? "").trim() || undefined,
+    defaultForNewCards: formData.get("defaultForNewCards") === "on",
   };
   await getAdminFirestore().collection("n_collection_routes").add(stripUndefined(data));
   revalidatePath("/dashboard/accounting/routes");
@@ -205,6 +206,7 @@ export async function updateCollectionRouteAction(id: string, formData: FormData
     receiptsCompanyId: String(formData.get("receiptsCompanyId") ?? "").trim() || undefined,
     receiptsApiKey: receiptsApiKey || existing.receiptsApiKey,
     receiptsApiSecret: receiptsApiSecret || existing.receiptsApiSecret,
+    defaultForNewCards: formData.get("defaultForNewCards") === "on",
   };
   await db.collection("n_collection_routes").doc(id).set(stripUndefined(data), { merge: false });
   revalidatePath("/dashboard/accounting/routes");

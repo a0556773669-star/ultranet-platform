@@ -14,12 +14,14 @@ export function ClientsTable({
   showBranchColumn,
   branches,
   canCharge,
+  routeNameById,
 }: {
   clients: RentalClient[];
   myScopeBranchIds: string[];
   showBranchColumn: boolean;
   branches: Branch[];
   canCharge: boolean;
+  routeNameById: Record<string, string>;
 }) {
   const [scope, setScope] = useState<Scope>("mine");
   const [search, setSearch] = useState("");
@@ -100,7 +102,8 @@ export function ClientsTable({
           </thead>
           <tbody>
             {visibleClients.map((c) => {
-              const hasToken = !!(c.gatewayToken && c.cardExpiry);
+              const routeName = routeNameById[c.id];
+              const hasToken = !!(c.gatewayToken && c.cardExpiry && routeName);
               return (
                 <Fragment key={c.id}>
                 <tr className="border-t border-card-border transition hover:bg-[#f8fafc]">
@@ -168,6 +171,7 @@ export function ClientsTable({
                         clientId={c.id}
                         initialAmount={0}
                         cardLast4={c.cardLast4}
+                        routeName={routeName!}
                         onDone={(result) => {
                           setChargeResult((prev) => ({
                             ...prev,
