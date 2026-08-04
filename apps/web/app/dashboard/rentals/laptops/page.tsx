@@ -1,10 +1,10 @@
 import Link from "next/link";
-import { Laptop as LaptopIcon, Wifi, Users } from "lucide-react";
+import { Laptop as LaptopIcon } from "lucide-react";
 import { requireModuleAccess } from "@/lib/perms";
 import { getAdminFirestore } from "@/lib/firebase-admin";
 import type { Laptop, Branch } from "@ultranet/shared-types";
 import { deleteLaptopAction, syncAllSticksAction } from "./actions";
-import { DeleteLaptopButton } from "./delete-button";
+import { LaptopsList } from "./laptops-list";
 
 export default async function LaptopsPage({
   searchParams,
@@ -23,10 +23,10 @@ export default async function LaptopsPage({
   ]);
   const branches = branchesSnap.docs.map((d) => ({ ...(d.data() as Omit<Branch, "id">), id: d.id }) as Branch);
   const allLaptops = laptopsSnap.docs.map((d) => ({ ...(d.data() as Omit<Laptop, "id">), id: d.id }) as Laptop);
-  const laptops = (isOwner ? allLaptops : allLaptops.filter((l) => l.branchId === myBranchId)).sort((a, b) =>
-    a.name.localeCompare(b.name, "he", { numeric: true })
-  );
-  const branchName = (id: string) => branches.find((b) => b.id === id)?.name ?? "-";
+  const laptops = isOwner ? allLaptops : allLaptops.filter((l) => l.branchId === myBranchId);
+  const deleteActions = Object.fromEntries(
+    laptops.map((l) => [l.id, deleteLaptopAction.bind(null, l.id)])
+  ) as Record<string, () => void>;
 
   return (
     <div>
@@ -64,54 +64,13 @@ export default async function LaptopsPage({
         </div>
       )}
 
-      <div className="flex flex-col gap-2">
-        {laptops.length === 0 && (
-          <div className="rounded-card border border-card-border bg-white p-5 text-center text-sm text-muted shadow-card">
-            אין מחשבים עדיין
-          </div>
-        )}
-        {laptops.map((l) => (
-          <div
-            key={l.id}
-            className="flex flex-wrap items-center justify-between gap-3 rounded-card border border-card-border bg-white p-4 shadow-card"
-          >
-            <Link href={`/dashboard/rentals/laptops/${l.id}`} className="flex-1 min-w-[220px]">
-              <p className="font-bold text-ink">
-                {l.name}
-              </p>
-              <p className="flex flex-wrap items-center gap-x-1 text-xs text-muted">
-                <span>
-                  ₪{l.dayPrice ?? 0}/יום · ₪{l.weekPrice ?? 0}/שבוע · ₪{l.monthPrice ?? 0}/חודש
-                </span>
-                {l.hasStick && (
-                  <span className="flex items-center gap-1">
-                    {"·"}
-                    <Wifi className="h-3 w-3" />
-                    {`סטיק${l.simNumber ? ` (${l.simNumber})` : ""}`}
-                  </span>
-                )}
-                {l.hasPartner && (
-                  <span className="flex items-center gap-1">
-                    {"·"}
-                    <Users className="h-3 w-3" />
-                    {`שותפות ${l.partnerPct ?? 15}%${l.partnerName ? ` (${l.partnerName})` : ""}`}
-                  </span>
-                )}
-                {isOwner && <span>{`· ${branchName(l.branchId)}`}</span>}
-              </p>
-            </Link>
-            <div className="flex items-center gap-2">
-              <Link
-                href={`/dashboard/rentals/laptops/${l.id}`}
-                className="rounded-lg border border-card-border bg-white px-3 py-1.5 text-xs font-bold text-ink hover:bg-[#f4f6f9]"
-              >
-                עריכה
-              </Link>
-              {role === "owner" && <DeleteLaptopButton action={deleteLaptopAction.bind(null, l.id)} />}
-            </div>
-          </div>
-        ))}
-      </div>
+      <LaptopsList
+        laptops={laptops}
+        branches={branches}
+        isOwner={isOwner}
+        canDelete={role === "owner"}
+        deleteActions={deleteActions}
+      />
     </div>
   );
 }

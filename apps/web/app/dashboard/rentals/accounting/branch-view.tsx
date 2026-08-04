@@ -7,6 +7,11 @@ function money(n: number) {
   return `${Math.round(n).toLocaleString("he-IL")} ₪`;
 }
 
+function formatMonthLabel(month: string): string {
+  const [y, m] = month.split("-");
+  return `${m}/${y.slice(2)}`;
+}
+
 function Box({ label, value, tone }: { label: string; value: number; tone?: "good" | "bad" }) {
   const color = tone === "bad" ? "text-red-600" : tone === "good" ? "text-teal-dark" : "text-ink";
   return (
@@ -92,13 +97,10 @@ export function BranchAccountingView({
               >
                 <div className={`w-full rounded-t ${m.isHealthy ? "bg-teal" : "bg-red-400"}`} style={{ height }} />
                   <span className={`mt-1 text-[9px] font-bold whitespace-nowrap ${m.isHealthy ? "text-teal-dark" : "text-red-600"}`}>{Math.round(m.profitPerComputer)}</span>
+                  <span className="mt-0.5 text-[9px] font-medium whitespace-nowrap text-muted">{formatMonthLabel(m.month)}</span>
               </div>
             );
           })}
-        </div>
-        <div className="mt-1 flex justify-between text-[10px] text-muted">
-          <span>{f.computerProfitTrend[0]?.month}</span>
-          <span>{f.computerProfitTrend[f.computerProfitTrend.length - 1]?.month}</span>
         </div>
       </div>
       )}
