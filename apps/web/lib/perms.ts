@@ -2,7 +2,7 @@ import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
 import { authOptions } from "./auth";
 
-export type PermKey = "branches" | "computers" | "rentals" | "coworking" | "accounting" | "tasks" | "charging";
+export type PermKey = "branches" | "computers" | "rentals" | "coworking" | "accounting" | "tasks" | "charging" | "shop";
 
 /**
  * Owners always pass. Partners/employees pass only if their n_users.perms[key] is true.

@@ -19,6 +19,7 @@ const PERM_LABELS: Record<string, string> = {
   coworking: "משרד שיתופי",
   accounting: "הנה\"ח",
   tasks: "משימות",
+  shop: "חנות AI",
 };
 
 export default async function UsersPage() {

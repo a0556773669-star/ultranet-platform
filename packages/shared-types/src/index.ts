@@ -46,7 +46,7 @@ export interface AppUser {
     pass: string; // legacy plaintext - replace with proper auth before any customer-facing exposure
   role: UserRole;
     branchId: string; // "all" for owner
-  perms?: Partial<Record<"branches" | "computers" | "rentals" | "coworking" | "accounting" | "tasks" | "charging", boolean>>;
+  perms?: Partial<Record<"branches" | "computers" | "rentals" | "coworking" | "accounting" | "tasks" | "charging" | "shop", boolean>>;
   viewClientBranchIds?: string[];
 }
 
@@ -366,4 +366,75 @@ export interface BranchTransfer {
    *  records that only have `transferred: true` (no amount) are treated as fully settled for
    *  netToOwner - see `lib/branch-ledger.ts`. */
   transferredAmount?: number;
+}
+
+// --- חנות AI (עוזר קניה חכם למחשבים בהתאמה אישית) ---
+
+export type ShopUseCase = "torah" | "office" | "graphics" | "video" | "gaming" | "programming" | "general";
+
+export type ShopTier = "minimal" | "recommended" | "extreme";
+
+/** collection: n_shop_catalog - מחשבים אמיתיים למכירה, ממולאים ידנית ע"י הבעלים.
+ *  כל עוד לא הוזן פריט תואם, מנוע ההמלצות (`apps/web/lib/shop-recommender.ts`) נופל חזרה
+ *  למפרט גנרי לפי תחום/רמת עומס, בלי מחיר סופי. */
+export interface ShopComputerConfig {
+  id: string;
+  name: string;
+  tier: ShopTier;
+  useCases: ShopUseCase[];
+  /** רמת העומס המינימלית (1-5) שהתצורה הזו מכסה בנוחות */
+  minLoadLevel: number;
+  cpu: string;
+  ram: string;
+  storage: string;
+  gpu?: string;
+  extras?: string;
+  /** ריק = "יימסר בהצעת מחיר" */
+  priceILS?: number;
+  notes?: string;
+  active: boolean;
+}
+
+export type ShopAddonType = "bag" | "mouse" | "keyboard" | "flashdrive" | "other";
+
+/** collection: n_shop_addons - ציוד נלווה שניתן להוסיף להצעת המחיר (תיק, עכבר, מקלדת, דיסק און קי וכד') */
+export interface ShopAddon {
+  id: string;
+  name: string;
+  type: ShopAddonType;
+  /** ריק = "יימסר בהצעת מחיר" */
+  priceILS?: number;
+  active: boolean;
+}
+
+export type ShopLeadStatus = "new" | "contacted" | "closed";
+
+/** תמצית תצורה מומלצת אחת כפי שהוצגה ללקוח בזמן השיחה - נשמרת קפואה על הליד/בהצעת המחיר
+ *  גם אם הקטלוג ישתנה אחר כך */
+export interface ShopRecommendedOption {
+  tier: ShopTier;
+  title: string;
+  specsSummary: string;
+  reason: string;
+  priceILS?: number;
+  catalogId?: string;
+}
+
+/** collection: n_shop_leads - פניות שהתקבלו מהצ'אטבוט הציבורי (`/shop`) */
+export interface ShopLead {
+  id: string;
+  createdAt: string; // ISO
+  useCase: ShopUseCase;
+  useCaseLabel: string;
+  loadLevel: number;
+  description: string;
+  answers: { question: string; answer: string }[];
+  recommendedOptions: ShopRecommendedOption[];
+  selectedTier?: ShopTier;
+  selectedAddonNames?: string[];
+  contactName?: string;
+  contactEmail: string;
+  contactPhone: string;
+  status: ShopLeadStatus;
+  notes?: string;
 }

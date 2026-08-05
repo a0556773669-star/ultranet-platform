@@ -1,4 +1,4 @@
-import { Home, Monitor, Laptop, Handshake, BarChart3, BookOpen, type LucideIcon } from "lucide-react";
+import { Home, Monitor, Laptop, Handshake, BarChart3, BookOpen, Sparkles, type LucideIcon } from "lucide-react";
 import type { PermKey } from "@/lib/perms";
 
 export type NavItem = { href: string; label: string; icon: LucideIcon; perm?: PermKey | PermKey[] };
@@ -9,6 +9,7 @@ export const NAV_ITEMS: NavItem[] = [
   { href: "/dashboard/rentals", label: "השכרות", icon: Laptop, perm: "rentals" },
   { href: "/dashboard/coworking", label: "משרד שיתופי", icon: Handshake, perm: "coworking" },
   { href: "/dashboard/accounting", label: "הנה\"ח", icon: BarChart3, perm: "accounting" },
+  { href: "/dashboard/shop", label: "חנות AI", icon: Sparkles, perm: "shop" },
   { href: "/dashboard/tutorials", label: "הדרכות", icon: BookOpen },
 ];
 
