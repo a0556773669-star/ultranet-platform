@@ -6,7 +6,7 @@ import { getAdminFirestore } from "@/lib/firebase-admin";
 import { requireOwner } from "@/lib/perms";
 import type { UserRole } from "@ultranet/shared-types";
 
-const PERM_KEYS = ["branches", "computers", "rentals", "coworking", "accounting", "tasks", "charging"] as const;
+const PERM_KEYS = ["branches", "computers", "rentals", "coworking", "accounting", "tasks", "charging", "shop"] as const;
 
 function parseUserForm(formData: FormData) {
   const name = String(formData.get("name") ?? "").trim();
