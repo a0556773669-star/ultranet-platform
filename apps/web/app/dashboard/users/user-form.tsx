@@ -22,7 +22,7 @@ const PERM_OPTIONS: { key: keyof NonNullable<AppUser["perms"]>; label: string }[
   { key: "tasks", label: "משימות" },
   { key: "charging", label: "סליקה וקבלות" },
   { key: "shop", label: "חנות AI" },
-  { key: "duxus", label: "דוכס" },
+  { key: "duxus", label: "משימות ונהלים" },
 ];
 
 export function UserForm({

@@ -9,7 +9,7 @@ export const NAV_ITEMS: NavItem[] = [
   { href: "/dashboard/rentals", label: "השכרות", icon: Laptop, perm: "rentals" },
   { href: "/dashboard/coworking", label: "משרד שיתופי", icon: Handshake, perm: "coworking" },
   { href: "/dashboard/accounting", label: "הנה\"ח", icon: BarChart3, perm: "accounting" },
-  { href: "/dashboard/duxus", label: "דוכס", icon: Target, perm: "duxus" },
+  { href: "/dashboard/duxus", label: "משימות ונהלים", icon: Target, perm: "duxus" },
   { href: "/dashboard/shop", label: "חנות AI", icon: Sparkles, perm: "shop" },
   { href: "/dashboard/tutorials", label: "הדרכות", icon: BookOpen },
 ];

@@ -453,9 +453,9 @@ export interface ShopLead {
   notes?: string;
 }
 
-// --- דוכס (נהלים + סלעים ואבני דרך) ---
+// --- משימות ונהלים (נהלים + סלעים ואבני דרך) ---
 
-/** collection: n_procedures - נהלים ברורים למודול "דוכס" (עורך עשיר, כמו הדרכות) */
+/** collection: n_procedures - נהלים ברורים למודול "משימות ונהלים" (עורך עשיר, כמו הדרכות) */
 export interface Procedure {
   id: string;
   title: string;
@@ -469,7 +469,7 @@ export interface Procedure {
 
 export type RockStatus = "active" | "done" | "dropped";
 
-/** collection: n_rocks - סלעים רבעוניים ותתי-סלעים (מודל EOS-style, מודול "דוכס").
+/** collection: n_rocks - סלעים רבעוניים ותתי-סלעים (מודל EOS-style, מודול "משימות ונהלים").
  *  `parentRockId` ריק = סלע רבעוני עצמו; מוגדר = תת-סלע תחת סלע קיים (עומק אחד בלבד). */
 export interface Rock {
   id: string;

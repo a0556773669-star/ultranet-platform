@@ -24,7 +24,7 @@ export default async function RocksMonthPage({ searchParams }: { searchParams: {
     <div>
       <h1 className="mb-4 flex items-center gap-1.5 text-[21px] font-extrabold text-ink">
         <Target className="h-5 w-5" />
-        דוכס
+        משימות ונהלים
       </h1>
       <DuxusTabs />
       <RocksTabs />
