@@ -5,7 +5,7 @@ import { authOptions } from "@/lib/auth";
 import { requireModuleAccess } from "@/lib/perms";
 import { listProcedures } from "./actions";
 import { DuxusTabs } from "./duxus-tabs";
-import { SeedButton } from "./seed-button";
+import { CleanupSeedButton } from "./cleanup-seed-button";
 
 export default async function DuxusProceduresPage() {
   await requireModuleAccess("duxus");
@@ -30,7 +30,7 @@ export default async function DuxusProceduresPage() {
 
       <DuxusTabs />
 
-      {isOwner && <SeedButton />}
+      {isOwner && <CleanupSeedButton />}
 
       {procedures.length === 0 ? (
         <div className="card text-sm text-muted">
