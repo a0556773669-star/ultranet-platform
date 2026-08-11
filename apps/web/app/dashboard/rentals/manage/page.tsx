@@ -42,7 +42,15 @@ export default async function RentalsPage({ searchParams }: { searchParams?: { m
   const myOwnBranchIds = branchesList.filter((b) => b.isMine === true).map((b) => b.id);
   const visible = rentals.filter((r) => (role === "owner" && !onlyMine) || r.branchId === myBranchId || (onlyMine && myOwnBranchIds.includes(r.branchId)));
   const active = visible.filter((r) => r.status === "active");
-  const history = visible.filter((r) => r.status !== "active").slice(0, 20);
+  // Sorted newest-first so both the dedicated "unpaid" list and the paginated history below show
+  // the most relevant entries first. Capped generously (not to 20 anymore) so pagination on the
+  // client has real pages to page through instead of always maxing out at one page of 20.
+  const historyAll = visible
+    .filter((r) => r.status !== "active")
+    .sort((a, b) => (b.returnDate ?? b.endDate ?? "").localeCompare(a.returnDate ?? a.endDate ?? ""));
+  const HISTORY_CAP = 500;
+  const history = historyAll.slice(0, HISTORY_CAP);
+  const unpaid = historyAll.filter((r) => !r.paid);
 
   const visibleBranches = onlyMine
     ? branchesList.filter((b) => b.isMine === true)
@@ -164,7 +172,7 @@ function routesForBranch(branchId: string): { id: string; name: string }[] {
     };
   });
 
-  const historyRows: HistoryRowData[] = history.map((r) => {
+  function toHistoryRow(r: Rental): HistoryRowData {
     const info = rowInfo(r);
     return {
       rentalId: r.id,
@@ -183,7 +191,10 @@ function routesForBranch(branchId: string): { id: string; name: string }[] {
       routes: routesForBranch(r.branchId),
       canDelete,
     };
-  });
+  }
+
+  const historyRows: HistoryRowData[] = history.map(toHistoryRow);
+  const unpaidRows: HistoryRowData[] = unpaid.map(toHistoryRow);
 
   return (
     <div className="flex flex-col gap-4">
@@ -263,7 +274,7 @@ function routesForBranch(branchId: string): { id: string; name: string }[] {
         })
       )}
 
-      <RentalsLists active={activeRows} history={historyRows} showBranchColumn={role === "owner"} />
+      <RentalsLists active={activeRows} unpaid={unpaidRows} history={historyRows} showBranchColumn={role === "owner"} />
     </div>
   );
 }
