@@ -13,7 +13,7 @@ export default async function DuxusProceduresPage() {
       <div className="mb-4 flex items-center justify-between">
         <h1 className="flex items-center gap-1.5 text-[21px] font-extrabold text-ink">
           <Target className="h-5 w-5" />
-          דוכס
+          משימות ונהלים
         </h1>
         <Link
           href="/dashboard/duxus/new"

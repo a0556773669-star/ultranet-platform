@@ -178,7 +178,7 @@ pnpm dev        # turbo run dev — מריץ web + api
 | `n_branch_transfers` | `BranchTransfer` | התחשבנות חודשית שותף↔בעלים; `transferredAmount` (רשות) - הסכום שבפועל נרשם כהועבר לאותו חודש, באותה מוסכמת סימן כמו `netToOwner` (חיובי = לבעלים, שלילי = מהבעלים) - מאפשר לרשום העברה חלקית/מאוחרת שלא תואמת בדיוק את הסכום המחושב. רשומות ישנות בלי השדה הזה (רק `transferred: true`) מטופלות כמסולקות במלואן, ראו `lib/branch-ledger.ts`. `linkedAhIncomeId` (רשות) - מזהה רשומת `n_ah_income` שנוצרה/מתעדכנת אוטומטית כש-`transferredAmount` חיובי, ראו `lib/branch-income-ledger.ts` בסעיף 9. `receiptIssued` (רשות) - סימון עצמאי "הוצאנו קבלה", לא קשור לסכום |
 | `n_approved_emails` | — | מיילים מאושרים לכניסת קוד |
 | `n_login_codes` | — | קודי כניסה חד-פעמיים עם תפוגה |
-| `n_procedures` | `Procedure` | נהלים ברורים במודול "דוכס" (`/dashboard/duxus`) - כותרת, תוכן HTML עשיר (עורך זהה להדרכות), קטגוריה חופשית |
+| `n_procedures` | `Procedure` | נהלים ברורים במודול "משימות ונהלים" (`/dashboard/duxus`) - כותרת, תוכן HTML עשיר (עורך זהה להדרכות), קטגוריה חופשית |
 | `n_rocks` | `Rock` | סלעים רבעוניים ותתי-סלעים במודל "סלעים ואבני דרך" (`/dashboard/duxus/rocks`) - `quarterKey` ("2026-Q3"), `parentRockId` (ריק = סלע עצמו, מוגדר = תת-סלע, עומק אחד), `status` (`active`/`done`/`dropped`), אחראי |
 | `n_milestones` | `Milestone` | אבני הדרך (המשימות בפועל) תחת סלע/תת-סלע - `quarterKey` מוכפל מהסלע-אב לשאילתת שוויון יחידה, `stage` (`backlog`/`month`/`week`) מסמן את הדלי הפעיל, `monthKey`/`weekKey` נשארים על הרשומה גם אחרי שקודמה הלאה (להיסטוריה), `carryOverCount` סופר העברות קדימה כשלא הושלמה בזמן |
 | `n_rock_reviews` | `RockReview` | סיכום/לקחים לכל פגישת רבעון/חודש/שבוע - מזהה דטרמיניסטי `${period}_${periodKey}` (upsert, רשומה אחת לתקופה) |
@@ -206,8 +206,8 @@ pnpm dev        # turbo run dev — מריץ web + api
 ## 8. מודולים ופיצ'רים
 
 הבסיס תחת `apps/web/app/dashboard/`. פריטי הניווט הראשיים
-(`lib/nav-items.ts`): בית · חדרי מחשבים · השכרות · משרד שיתופי · הנה"ח · דוכס ·
-חנות AI · הדרכות.
+(`lib/nav-items.ts`): בית · חדרי מחשבים · השכרות · משרד שיתופי · הנה"ח · משימות
+ונהלים · חנות AI · הדרכות.
 
 ### חדרי מחשבים (`/dashboard/computer-rooms`) — perm: branches/computers/tasks
 מכשירים (`n_devices`), מדפסות, קריאות שירות (`/tickets`), משימות (`/tasks`),
@@ -609,9 +609,11 @@ paidBy, owedBy)` (`apps/web/lib/branch-accounting.ts`), שדורש **שני** ת
 מוצגים מחדש בטופס העריכה - משאירים ריק כדי לא לשנות אותם.
 חישובי התחשבנות ב-`lib/branch-accounting.ts` / `branch-accounting-data.ts`.
 
-### דוכס (`/dashboard/duxus`) — perm: duxus
+### משימות ונהלים (`/dashboard/duxus`) — perm: duxus
 
-מודול ניהול/תפעול פנימי, שני תת-חלקים תחת `DuxusTabs` (`duxus-tabs.tsx`):
+מודול ניהול/תפעול פנימי (השם המוצג "משימות ונהלים"; הנתיב הטכני `/dashboard/duxus`
+ומפתח ההרשאה `duxus` נשארו כשם קוד פנימי), שני תת-חלקים תחת `DuxusTabs`
+(`duxus-tabs.tsx`):
 
 - **נהלים** (`/dashboard/duxus`, ברירת מחדל) — מאגר נהלים ברורים, אותו דגם CRUD +
   עורך עשיר כמו הדרכות (`rich-editor.tsx` עצמאי למודול, `n_procedures`): כותרת,
