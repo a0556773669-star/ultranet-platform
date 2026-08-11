@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { requireModuleAccess } from "@/lib/perms";
 import { getProcedure, deleteProcedureAction } from "../actions";
 import DeleteButton from "./delete-button";
+import PrintButton from "./print-button";
 
 export default async function ProcedureDetailPage({ params }: { params: { id: string } }) {
   await requireModuleAccess("duxus");
@@ -14,12 +15,13 @@ export default async function ProcedureDetailPage({ params }: { params: { id: st
 
   return (
     <div className="mx-auto max-w-2xl">
-      <div className="mb-4 flex items-center justify-between">
+      <div className="mb-4 flex items-center justify-between print:hidden">
         <Link href="/dashboard/duxus" className="flex items-center gap-1.5 text-sm font-semibold text-teal hover:underline">
           <ArrowRight className="h-4 w-4" />
           {"חזרה לנהלים"}
         </Link>
         <div className="flex items-center gap-2">
+          <PrintButton />
           <Link
             href={`/dashboard/duxus/${procedure.id}/edit`}
             className="rounded-lg border border-card-border px-3 py-2 text-xs font-semibold text-ink hover:bg-[#f4f6f9]"
