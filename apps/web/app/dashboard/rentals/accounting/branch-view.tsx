@@ -1,15 +1,12 @@
 import { Check } from "lucide-react";
 import type { BranchFinancials } from "@/lib/branch-accounting-data";
+import { PROFIT_PER_COMPUTER_TARGET } from "@/lib/branch-accounting";
 import type { BranchTransfer } from "@ultranet/shared-types";
 import { MarkTransferredButton } from "./mark-transferred-button";
+import { ComputerProfitTable } from "./computer-profit-table";
 
 function money(n: number) {
   return `${Math.round(n).toLocaleString("he-IL")} ₪`;
-}
-
-function formatMonthLabel(month: string): string {
-  const [y, m] = month.split("-");
-  return `${m ?? ""}/${(y ?? "").slice(2)}`;
 }
 
 function Box({ label, value, tone }: { label: string; value: number; tone?: "good" | "bad" }) {
@@ -85,23 +82,8 @@ export function BranchAccountingView({
 
       {isOwner && (
       <div>
-        <h3 className="mb-2 text-sm font-bold text-ink">רווח נטו פר מחשב (יעד: 150 ₪ לחודש)</h3>
-        <div className="flex items-end gap-1" style={{ height: 80 }}>
-          {f.computerProfitTrend.map((m) => {
-            const height = Math.max(4, Math.min(80, Math.abs(m.profitPerComputer) / 3));
-            return (
-              <div
-                key={m.month}
-                className="flex flex-1 flex-col items-center justify-end"
-                title={`${m.month}: ${Math.round(m.profitPerComputer)} ₪`}
-              >
-                <div className={`w-full rounded-t ${m.isHealthy ? "bg-teal" : "bg-red-400"}`} style={{ height }} />
-                  <span className={`mt-1 text-[9px] font-bold whitespace-nowrap ${m.isHealthy ? "text-teal-dark" : "text-red-600"}`}>{Math.round(m.profitPerComputer)}</span>
-                  <span className="mt-0.5 text-[9px] font-medium whitespace-nowrap text-muted">{formatMonthLabel(m.month)}</span>
-              </div>
-            );
-          })}
-        </div>
+        <h3 className="mb-2 text-sm font-bold text-ink">{`רווח נטו פר מחשב (יעד: ${PROFIT_PER_COMPUTER_TARGET} ₪ = 150 ₪ + מע"מ לחודש)`}</h3>
+        <ComputerProfitTable trend={f.computerProfitTrend} />
       </div>
       )}
     </div>

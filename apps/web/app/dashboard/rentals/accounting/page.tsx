@@ -14,9 +14,12 @@ const FIELD =
   "rounded-lg border border-card-border bg-[#f4f6f9] px-3 py-2 text-sm focus:border-teal focus:bg-white focus:outline-none";
 
 import { loadBranchAccountingRawData, computeBranchFinancials, currentMonth as getCurrentMonth } from "@/lib/branch-accounting-data";
+import { buildBranchLedger } from "@/lib/branch-ledger";
 import { computePartnerSettlement } from "@/lib/partner-settlement";
 import { BranchAccountingView } from "./branch-view";
 import { OwnerBranchesOverview } from "./owner-overview";
+import { UnifiedBranchesTable } from "./unified-branches-table";
+import { BalanceSummaryCard, BranchLedgerTable } from "../ledger/branch-ledger-table";
 
 export default async function RentalsAccountingPage({
   searchParams,
@@ -63,8 +66,32 @@ export default async function RentalsAccountingPage({
     const parentFinancials = parents.map((p) => computeBranchFinancials(p, raw, month));
 
     const selectedBranch = searchParams?.branchId ? rentalsBranches.find((b) => b.id === searchParams.branchId) : undefined;
+    const ledgers = [...rentalsBranches]
+      .sort((a, b) => a.name.localeCompare(b.name, "he"))
+      .map((b) => buildBranchLedger(b, raw));
+
     ownerDrillDown = (
       <div className="mb-6 space-y-4">
+        <UnifiedBranchesTable branches={rentalsBranches} raw={raw} month={month} />
+
+        {ledgers.length > 0 && (
+          <details className="rounded-card border border-card-border bg-white shadow-card">
+            <summary className="cursor-pointer p-4 text-sm font-extrabold text-ink">היסטוריה מלאה לכל הסניפים (חישוב הנה&quot;ח)</summary>
+            <div className="space-y-3 border-t border-card-border p-4">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {ledgers.map((l) => (
+                  <BalanceSummaryCard key={l.branch.id} ledger={l} />
+                ))}
+              </div>
+              <div className="flex flex-col gap-3">
+                {ledgers.map((l) => (
+                  <BranchLedgerTable key={l.branch.id} ledger={l} />
+                ))}
+              </div>
+            </div>
+          </details>
+        )}
+
         <OwnerBranchesOverview parents={parentFinancials} childrenByParent={childrenByParent} />
         {selectedBranch && (
           <BranchAccountingView

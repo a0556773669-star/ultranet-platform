@@ -149,6 +149,7 @@ export default async function RentalClientsPage({
         branches={branches}
         canCharge={canCharge}
         routeNameById={routeNameById}
+        isOwner={isOwner}
       />
     </div>
   );

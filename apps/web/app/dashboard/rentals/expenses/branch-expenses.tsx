@@ -116,128 +116,148 @@ export function BranchExpenses({
         </div>
       )}
 
-      <div className="rounded-card border border-card-border bg-white p-4 shadow-card">
-        <h3 className="mb-3 flex items-center gap-1.5 text-sm font-bold text-ink">
-          <Calendar className="h-4 w-4" />
-          הוצאות קבועות / חודשיות
-        </h3>
-        {canAdd && (
-<form action={createFixed} className="mb-4 grid grid-cols-2 gap-2 md:grid-cols-3">
-          <div>
-            <label className={LABEL}>שם ההוצאה</label>
-            <input name="name" className={FIELD} required />
-          </div>
-          <div>
-            <label className={LABEL}>סכום חודשי</label>
-            <input name="amount" type="number" step="0.01" className={FIELD} required />
-          </div>
-          <div>
-            <label className={LABEL}>תאריך התחלה</label>
-            <input name="startDate" type="date" className={FIELD} required />
-          </div>
-          <div>
-            <label className={LABEL}>קטגוריה</label>
-            <select name="category" defaultValue="" className={FIELD}>
-              <option value="">ללא קטגוריה</option>
-              {CATEGORIES.map((c) => (
-                <option key={c} value={c}>{c}</option>
-              ))}
-            </select>
-          </div>
-          {isPartner && <PayerFields ownerName={ownerName} partnerName={partnerName} />}
-          <div className="col-span-2 md:col-span-3">
-            <button type="submit" className={BTN}>+ הוסף הוצאה קבועה</button>
-          </div>
-        </form>
-)}
-
-        <div className="flex flex-col gap-2">
-          {activeFixed.length === 0 && <p className="text-sm text-muted">אין הוצאות קבועות פעילות</p>}
-          {activeFixed.map((e) => (
-            <div key={e.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-card-border bg-[#f9fafb] p-3">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <div className="rounded-card border border-card-border bg-white p-4 shadow-card">
+          <h3 className="mb-3 flex items-center gap-1.5 text-base font-black text-ink">
+            <Calendar className="h-5 w-5" />
+            הוצאות קבועות / חודשיות
+          </h3>
+          {canAdd ? (
+            <form action={createFixed} className="grid grid-cols-2 gap-2">
               <div>
-                <p className="text-sm font-bold text-ink">{e.name} — ₪{(e.amount || 0).toLocaleString()}/חודש</p>
-                <p className="text-xs text-muted">{e.category || "ללא קטגוריה"} · מתחיל {e.startDate}{isPartner ? ` · ${paymentNote(e.paidBy, e.owedBy, ownerName, partnerName)}` : ""}</p>
+                <label className={LABEL}>שם ההוצאה</label>
+                <input name="name" className={FIELD} required />
               </div>
-              <div className="flex items-center gap-2">
-                {canManage && <EditFixedExpenseModal expense={e} branchId={branchId} isPartner={isPartner} ownerName={ownerName} partnerName={partnerName} />}
-                {canManage && <EndFixedExpenseControl id={e.id} branchId={branchId} />}
-                {canManage && <DeleteFixedExpenseButton id={e.id} branchId={branchId} />}
+              <div>
+                <label className={LABEL}>סכום חודשי</label>
+                <input name="amount" type="number" step="0.01" className={FIELD} required />
               </div>
-            </div>
-          ))}
+              <div>
+                <label className={LABEL}>תאריך התחלה</label>
+                <input name="startDate" type="date" className={FIELD} required />
+              </div>
+              <div>
+                <label className={LABEL}>קטגוריה</label>
+                <select name="category" defaultValue="" className={FIELD}>
+                  <option value="">ללא קטגוריה</option>
+                  {CATEGORIES.map((c) => (
+                    <option key={c} value={c}>{c}</option>
+                  ))}
+                </select>
+              </div>
+              {isPartner && <PayerFields ownerName={ownerName} partnerName={partnerName} />}
+              <div className="col-span-2">
+                <button type="submit" className={BTN}>+ הוסף הוצאה קבועה</button>
+              </div>
+            </form>
+          ) : (
+            <p className="text-sm text-muted">אין הרשאה להוספת הוצאות</p>
+          )}
         </div>
 
-        {endedFixed.length > 0 && (
-          <details className="mt-3">
-            <summary className="cursor-pointer text-xs font-bold text-muted">הוצאות קבועות שהסתיימו ({endedFixed.length})</summary>
-            <div className="mt-2 flex flex-col gap-2">
-              {endedFixed.map((e) => (
-                <div key={e.id} className="flex items-center justify-between gap-2 rounded-lg border border-card-border bg-[#f4f6f9] p-3 opacity-70">
-                  <div>
-                    <p className="text-sm font-bold text-ink">{e.name} — ₪{(e.amount || 0).toLocaleString()}/חודש</p>
-                    <p className="text-xs text-muted">{e.startDate} – {e.endDate}{isPartner ? ` · ${paymentNote(e.paidBy, e.owedBy, ownerName, partnerName)}` : ""}</p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {canManage && <EditFixedExpenseModal expense={e} branchId={branchId} isPartner={isPartner} ownerName={ownerName} partnerName={partnerName} />}
-                    {canManage && <DeleteFixedExpenseButton id={e.id} branchId={branchId} />}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </details>
-        )}
+        <div className="rounded-card border border-card-border bg-white p-4 shadow-card">
+          <h3 className="mb-3 flex items-center gap-1.5 text-base font-black text-ink">
+            <Receipt className="h-5 w-5" />
+            הוצאות חד פעמיות
+          </h3>
+          {canAdd ? (
+            <form action={createVariable} className="grid grid-cols-2 gap-2">
+              <div>
+                <label className={LABEL}>תיאור</label>
+                <input name="desc" className={FIELD} required />
+              </div>
+              <div>
+                <label className={LABEL}>סכום</label>
+                <input name="amount" type="number" step="0.01" className={FIELD} required />
+              </div>
+              <div>
+                <label className={LABEL}>תאריך</label>
+                <input name="date" type="date" className={FIELD} required />
+              </div>
+              <div>
+                <label className={LABEL}>קטגוריה</label>
+                <select name="category" defaultValue="" className={FIELD}>
+                  <option value="">ללא קטגוריה</option>
+                  {CATEGORIES.map((c) => (
+                    <option key={c} value={c}>{c}</option>
+                  ))}
+                </select>
+              </div>
+              {isPartner && <PayerFields ownerName={ownerName} partnerName={partnerName} />}
+              <div className="col-span-2">
+                <button type="submit" className={BTN}>+ הוסף הוצאה חד פעמית</button>
+              </div>
+            </form>
+          ) : (
+            <p className="text-sm text-muted">אין הרשאה להוספת הוצאות</p>
+          )}
+        </div>
       </div>
 
-      <div className="rounded-card border border-card-border bg-white p-4 shadow-card">
-        <h3 className="mb-3 flex items-center gap-1.5 text-sm font-bold text-ink">
-          <Receipt className="h-4 w-4" />
-          הוצאות חד פעמיות
-        </h3>
-        {canAdd && (
-<form action={createVariable} className="mb-4 grid grid-cols-2 gap-2 md:grid-cols-3">
-          <div>
-            <label className={LABEL}>תיאור</label>
-            <input name="desc" className={FIELD} required />
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <div>
+          <h4 className="mb-2 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-muted">
+            <Calendar className="h-3.5 w-3.5" />
+            רשימת הוצאות קבועות
+          </h4>
+          <div className="flex flex-col gap-2">
+            {activeFixed.length === 0 && <p className="text-sm text-muted">אין הוצאות קבועות פעילות</p>}
+            {activeFixed.map((e) => (
+              <div key={e.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-card-border bg-[#f9fafb] p-3">
+                <div>
+                  <p className="text-sm font-bold text-ink">{e.name} — ₪{(e.amount || 0).toLocaleString()}/חודש</p>
+                  <p className="text-xs text-muted">{e.category || "ללא קטגוריה"} · מתחיל {e.startDate}{isPartner ? ` · ${paymentNote(e.paidBy, e.owedBy, ownerName, partnerName)}` : ""}</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  {canManage && <EditFixedExpenseModal expense={e} branchId={branchId} isPartner={isPartner} ownerName={ownerName} partnerName={partnerName} />}
+                  {canManage && <EndFixedExpenseControl id={e.id} branchId={branchId} />}
+                  {canManage && <DeleteFixedExpenseButton id={e.id} branchId={branchId} />}
+                </div>
+              </div>
+            ))}
           </div>
-          <div>
-            <label className={LABEL}>סכום</label>
-            <input name="amount" type="number" step="0.01" className={FIELD} required />
-          </div>
-          <div>
-            <label className={LABEL}>תאריך</label>
-            <input name="date" type="date" className={FIELD} required />
-          </div>
-          <div>
-            <label className={LABEL}>קטגוריה</label>
-            <select name="category" defaultValue="" className={FIELD}>
-              <option value="">ללא קטגוריה</option>
-              {CATEGORIES.map((c) => (
-                <option key={c} value={c}>{c}</option>
-              ))}
-            </select>
-          </div>
-          {isPartner && <PayerFields ownerName={ownerName} partnerName={partnerName} />}
-          <div className="col-span-2 md:col-span-3">
-            <button type="submit" className={BTN}>+ הוסף הוצאה חד פעמית</button>
-          </div>
-        </form>
-)}
 
-        <div className="flex flex-col gap-2">
-          {variableExpenses.length === 0 && <p className="text-sm text-muted">אין הוצאות חד פעמיות</p>}
-          {variableExpenses.map((e) => (
-            <div key={e.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-card-border bg-[#f9fafb] p-3">
-              <div>
-                <p className="text-sm font-bold text-ink">{e.desc} — ₪{(e.amount || 0).toLocaleString()}</p>
-                <p className="text-xs text-muted">{e.category || "ללא קטגוריה"} · {e.date}{isPartner ? ` · ${paymentNote(e.paidBy, e.owedBy, ownerName, partnerName)}` : ""}</p>
+          {endedFixed.length > 0 && (
+            <details className="mt-3">
+              <summary className="cursor-pointer text-xs font-bold text-muted">הוצאות קבועות שהסתיימו ({endedFixed.length})</summary>
+              <div className="mt-2 flex flex-col gap-2">
+                {endedFixed.map((e) => (
+                  <div key={e.id} className="flex items-center justify-between gap-2 rounded-lg border border-card-border bg-[#f4f6f9] p-3 opacity-70">
+                    <div>
+                      <p className="text-sm font-bold text-ink">{e.name} — ₪{(e.amount || 0).toLocaleString()}/חודש</p>
+                      <p className="text-xs text-muted">{e.startDate} – {e.endDate}{isPartner ? ` · ${paymentNote(e.paidBy, e.owedBy, ownerName, partnerName)}` : ""}</p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {canManage && <EditFixedExpenseModal expense={e} branchId={branchId} isPartner={isPartner} ownerName={ownerName} partnerName={partnerName} />}
+                      {canManage && <DeleteFixedExpenseButton id={e.id} branchId={branchId} />}
+                    </div>
+                  </div>
+                ))}
               </div>
-              <div className="flex items-center gap-2">
-                {canManage && <EditVariableExpenseModal expense={e} branchId={branchId} isPartner={isPartner} ownerName={ownerName} partnerName={partnerName} />}
-                {canManage && <DeleteVariableExpenseButton id={e.id} branchId={branchId} />}
+            </details>
+          )}
+        </div>
+
+        <div>
+          <h4 className="mb-2 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-muted">
+            <Receipt className="h-3.5 w-3.5" />
+            רשימת הוצאות חד פעמיות
+          </h4>
+          <div className="flex flex-col gap-2">
+            {variableExpenses.length === 0 && <p className="text-sm text-muted">אין הוצאות חד פעמיות</p>}
+            {variableExpenses.map((e) => (
+              <div key={e.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-card-border bg-[#f9fafb] p-3">
+                <div>
+                  <p className="text-sm font-bold text-ink">{e.desc} — ₪{(e.amount || 0).toLocaleString()}</p>
+                  <p className="text-xs text-muted">{e.category || "ללא קטגוריה"} · {e.date}{isPartner ? ` · ${paymentNote(e.paidBy, e.owedBy, ownerName, partnerName)}` : ""}</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  {canManage && <EditVariableExpenseModal expense={e} branchId={branchId} isPartner={isPartner} ownerName={ownerName} partnerName={partnerName} />}
+                  {canManage && <DeleteVariableExpenseButton id={e.id} branchId={branchId} />}
+                </div>
               </div>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
       </div>
 

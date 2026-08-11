@@ -123,7 +123,10 @@ export interface ComputerProfitMonth {
   isHealthy: boolean;
 }
 
-const PROFIT_PER_COMPUTER_TARGET = 150;
+/** Israel standard VAT rate, used to gross up the ₪150/computer target below. */
+export const VAT_RATE = 0.18;
+/** Target: 150 ₪ + VAT per computer per month. */
+export const PROFIT_PER_COMPUTER_TARGET = Math.round(150 * (1 + VAT_RATE));
 
 /**
  * Computer count active in a given YYYY-MM month, based on each computer's addedDate.
