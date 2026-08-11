@@ -148,14 +148,17 @@ export function buildComputerProfitTrend(
   addedDates: (string | undefined)[]
 ): ComputerProfitMonth[] {
   return monthlyNetProfits.map(({ month, netProfit }) => {
-    const computerCount = computersActiveInMonth(addedDates, month) || 1;
-    const profitPerComputer = netProfit / computerCount;
+    // Do NOT fall back to 1 when there are no registered computers yet - that fabricates a
+    // computer that doesn't exist and can show a fake "1 מחשב" / healthy status for a branch
+    // with none registered at all. With 0 computers the per-computer metric is meaningless.
+    const computerCount = computersActiveInMonth(addedDates, month);
+    const profitPerComputer = computerCount > 0 ? netProfit / computerCount : 0;
     return {
       month,
       netProfit,
       computerCount,
       profitPerComputer,
-      isHealthy: profitPerComputer >= PROFIT_PER_COMPUTER_TARGET,
+      isHealthy: computerCount > 0 && profitPerComputer >= PROFIT_PER_COMPUTER_TARGET,
     };
   });
 }

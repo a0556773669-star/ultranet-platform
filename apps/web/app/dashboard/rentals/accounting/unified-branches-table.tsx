@@ -3,6 +3,7 @@ import type { Branch } from "@ultranet/shared-types";
 import { computeBranchFinancials, type BranchAccountingRawData } from "@/lib/branch-accounting-data";
 import { buildBranchLedger } from "@/lib/branch-ledger";
 import { TransferMarkCell } from "./transfer-mark-cell";
+import { ReceiptCheckbox } from "./receipt-checkbox";
 
 function money(n: number) {
   return `${Math.round(Math.abs(n)).toLocaleString("he-IL")} ₪`;
@@ -41,7 +42,7 @@ export function UnifiedBranchesTable({
   return (
     <div className="overflow-hidden rounded-card border border-card-border bg-white shadow-card">
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[920px] border-collapse text-right text-[13px]">
+        <table className="w-full min-w-[1020px] border-collapse text-right text-[13px]">
           <thead>
             <tr className="border-b border-card-border bg-[#f4f6f9]">
               <th className={TH}>סניף</th>
@@ -52,6 +53,7 @@ export function UnifiedBranchesTable({
               <th className={TH}>יתרה מחודש קודם</th>
               <th className={TH}>להעברה</th>
               <th className={TH}>הועבר</th>
+              <th className={TH}>הוצאנו קבלה</th>
             </tr>
           </thead>
           <tbody className="tabular-nums">
@@ -85,6 +87,9 @@ export function UnifiedBranchesTable({
                       transferredAmount={transferredAmount}
                     />
                   </td>
+                  <td className={TD}>
+                    <ReceiptCheckbox branchId={branch.id} month={month} receiptIssued={monthRow?.receiptIssued ?? false} />
+                  </td>
                 </tr>
               );
             })}
@@ -93,7 +98,9 @@ export function UnifiedBranchesTable({
       </div>
       <p className="border-t border-card-border px-4 py-2.5 text-[11px] text-muted">
         + ירוק ב&quot;להעברה&quot; = הסניף/השותף חייב להעביר אליך. − אדום = אתה חייב להעביר אליו. &quot;יתרה מחודש קודם&quot; היא מה
-        שנשאר לא מועבר מחודשים קודמים. סימון התיבה ב&quot;הועבר&quot; מסמן את מלוא הסכום כמועבר; ניתן לערוך את הסכום ידנית להעברה חלקית.
+        שנשאר לא מועבר מחודשים קודמים. סימון התיבה ב&quot;הועבר&quot; מסמן את מלוא הסכום כמועבר (ניתן לערוך את הסכום ידנית
+        להעברה חלקית) - וגם יוצר אוטומטית רשומת הכנסה בהנה&quot;ח הראשית ופר-סניף, בלי צורך להקליד שוב. &quot;הוצאנו קבלה&quot;
+        הוא סימון עצמאי, לא קשור לסכום.
       </p>
     </div>
   );
