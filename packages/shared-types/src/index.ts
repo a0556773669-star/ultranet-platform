@@ -53,7 +53,7 @@ export interface AppUser {
     pass: string; // legacy plaintext - replace with proper auth before any customer-facing exposure
   role: UserRole;
     branchId: string; // "all" for owner
-  perms?: Partial<Record<"branches" | "computers" | "rentals" | "coworking" | "accounting" | "tasks" | "charging" | "shop", boolean>>;
+  perms?: Partial<Record<"branches" | "computers" | "rentals" | "coworking" | "accounting" | "tasks" | "charging" | "shop" | "duxus", boolean>>;
   viewClientBranchIds?: string[];
 }
 
@@ -451,4 +451,78 @@ export interface ShopLead {
   contactPhone: string;
   status: ShopLeadStatus;
   notes?: string;
+}
+
+// --- דוכס (נהלים + סלעים ואבני דרך) ---
+
+/** collection: n_procedures - נהלים ברורים למודול "דוכס" (עורך עשיר, כמו הדרכות) */
+export interface Procedure {
+  id: string;
+  title: string;
+  content: string; // HTML עשיר
+  category?: string;
+  order?: number;
+  createdAt: number;
+  updatedAt: number;
+  createdBy?: string;
+}
+
+export type RockStatus = "active" | "done" | "dropped";
+
+/** collection: n_rocks - סלעים רבעוניים ותתי-סלעים (מודל EOS-style, מודול "דוכס").
+ *  `parentRockId` ריק = סלע רבעוני עצמו; מוגדר = תת-סלע תחת סלע קיים (עומק אחד בלבד). */
+export interface Rock {
+  id: string;
+  title: string;
+  description?: string;
+  /** "2026-Q3" */
+  quarterKey: string;
+  parentRockId?: string | null;
+  ownerUserId?: string;
+  ownerName?: string;
+  status: RockStatus;
+  order?: number;
+  createdAt: number;
+  createdBy?: string;
+}
+
+export type MilestoneStage = "backlog" | "month" | "week";
+
+/** collection: n_milestones - אבני הדרך (המשימות בפועל) תחת סלע/תת-סלע. `quarterKey` מוכפל
+ *  מהסלע-אב כדי לאפשר שאילתת שוויון יחידה בתצוגת הרבעון בלי אינדקס מורכב. `monthKey`/`weekKey`
+ *  נשארים על הרשומה גם אחרי שהיא קודמה הלאה (לצורך היסטוריה/דפדוף אחורה), ו-`stage` מסמן את
+ *  הדלי הפעיל הנוכחי שלה. */
+export interface Milestone {
+  id: string;
+  rockId: string;
+  quarterKey: string;
+  title: string;
+  ownerUserId?: string;
+  ownerName?: string;
+  stage: MilestoneStage;
+  /** "2026-08" - מוגדר כש-stage מגיע ל-"month" ואילך */
+  monthKey?: string;
+  /** מפתח שבוע פנימי לא-ISO ("W1234"), ניתן להזזה בקלות - מוגדר כש-stage מגיע ל-"week" */
+  weekKey?: string;
+  done: boolean;
+  doneAt?: number;
+  /** כמה פעמים הועברה קדימה (לשבוע/חודש הבא) בלי להסתיים */
+  carryOverCount?: number;
+  order?: number;
+  createdAt: number;
+  createdBy?: string;
+}
+
+export type RockReviewPeriod = "quarterly" | "monthly" | "weekly";
+
+/** collection: n_rock_reviews - סיכום/לקחים לכל פגישת רבעון/חודש/שבוע. מזהה דטרמיניסטי
+ *  `${period}_${periodKey}` כך שיש רשומה אחת בלבד לכל תקופה (upsert). */
+export interface RockReview {
+  id: string;
+  period: RockReviewPeriod;
+  periodKey: string;
+  notes: string;
+  createdAt: number;
+  updatedAt: number;
+  createdBy?: string;
 }

@@ -3,7 +3,7 @@
 > מסמך חי. יש לעדכן אותו בכל שינוי פיצ'ר, מודול, מודל נתונים או אינטגרציה
 > (ראה כלל תחזוקת התיעוד ב-[`CLAUDE.md`](CLAUDE.md)).
 >
-> עודכן לאחרונה: 2026-08-05
+> עודכן לאחרונה: 2026-08-11
 
 ## תוכן עניינים
 1. [סקירה כללית](#1-סקירה-כללית)
@@ -114,7 +114,7 @@ pnpm dev        # turbo run dev — מריץ web + api
 **תפקידים (`UserRole`):** `owner` · `partner` · `employee`.
 
 **מפתחות הרשאה (`PermKey`):**
-`branches` · `computers` · `rentals` · `coworking` · `accounting` · `tasks` · `charging` · `shop`.
+`branches` · `computers` · `rentals` · `coworking` · `accounting` · `tasks` · `charging` · `shop` · `duxus`.
 
 **כללי גישה:**
 - `owner` — עובר תמיד את כל הבדיקות (branchId = `"all"`).
@@ -178,6 +178,10 @@ pnpm dev        # turbo run dev — מריץ web + api
 | `n_branch_transfers` | `BranchTransfer` | התחשבנות חודשית שותף↔בעלים; `transferredAmount` (רשות) - הסכום שבפועל נרשם כהועבר לאותו חודש, באותה מוסכמת סימן כמו `netToOwner` (חיובי = לבעלים, שלילי = מהבעלים) - מאפשר לרשום העברה חלקית/מאוחרת שלא תואמת בדיוק את הסכום המחושב. רשומות ישנות בלי השדה הזה (רק `transferred: true`) מטופלות כמסולקות במלואן, ראו `lib/branch-ledger.ts`. `linkedAhIncomeId` (רשות) - מזהה רשומת `n_ah_income` שנוצרה/מתעדכנת אוטומטית כש-`transferredAmount` חיובי, ראו `lib/branch-income-ledger.ts` בסעיף 9. `receiptIssued` (רשות) - סימון עצמאי "הוצאנו קבלה", לא קשור לסכום |
 | `n_approved_emails` | — | מיילים מאושרים לכניסת קוד |
 | `n_login_codes` | — | קודי כניסה חד-פעמיים עם תפוגה |
+| `n_procedures` | `Procedure` | נהלים ברורים במודול "דוכס" (`/dashboard/duxus`) - כותרת, תוכן HTML עשיר (עורך זהה להדרכות), קטגוריה חופשית |
+| `n_rocks` | `Rock` | סלעים רבעוניים ותתי-סלעים במודל "סלעים ואבני דרך" (`/dashboard/duxus/rocks`) - `quarterKey` ("2026-Q3"), `parentRockId` (ריק = סלע עצמו, מוגדר = תת-סלע, עומק אחד), `status` (`active`/`done`/`dropped`), אחראי |
+| `n_milestones` | `Milestone` | אבני הדרך (המשימות בפועל) תחת סלע/תת-סלע - `quarterKey` מוכפל מהסלע-אב לשאילתת שוויון יחידה, `stage` (`backlog`/`month`/`week`) מסמן את הדלי הפעיל, `monthKey`/`weekKey` נשארים על הרשומה גם אחרי שקודמה הלאה (להיסטוריה), `carryOverCount` סופר העברות קדימה כשלא הושלמה בזמן |
+| `n_rock_reviews` | `RockReview` | סיכום/לקחים לכל פגישת רבעון/חודש/שבוע - מזהה דטרמיניסטי `${period}_${periodKey}` (upsert, רשומה אחת לתקופה) |
 
 > הערה: `RentalClient` שומר `cardLast4` (תצוגה בלבד), `cardExpiry` (MM/YY,
 > לא רגיש) ו-`gatewayToken` — לעולם לא PAN מלא. שדה נוסף: `referralSource`
@@ -202,7 +206,8 @@ pnpm dev        # turbo run dev — מריץ web + api
 ## 8. מודולים ופיצ'רים
 
 הבסיס תחת `apps/web/app/dashboard/`. פריטי הניווט הראשיים
-(`lib/nav-items.ts`): בית · חדרי מחשבים · השכרות · משרד שיתופי · הנה"ח · הדרכות.
+(`lib/nav-items.ts`): בית · חדרי מחשבים · השכרות · משרד שיתופי · הנה"ח · דוכס ·
+חנות AI · הדרכות.
 
 ### חדרי מחשבים (`/dashboard/computer-rooms`) — perm: branches/computers/tasks
 מכשירים (`n_devices`), מדפסות, קריאות שירות (`/tickets`), משימות (`/tasks`),
@@ -603,6 +608,46 @@ paidBy, owedBy)` (`apps/web/lib/branch-accounting.ts`), שדורש **שני** ת
 לעריכה). שדות הסוד (apiKey/apiSecret/receiptsApiKey/receiptsApiSecret) לא
 מוצגים מחדש בטופס העריכה - משאירים ריק כדי לא לשנות אותם.
 חישובי התחשבנות ב-`lib/branch-accounting.ts` / `branch-accounting-data.ts`.
+
+### דוכס (`/dashboard/duxus`) — perm: duxus
+
+מודול ניהול/תפעול פנימי, שני תת-חלקים תחת `DuxusTabs` (`duxus-tabs.tsx`):
+
+- **נהלים** (`/dashboard/duxus`, ברירת מחדל) — מאגר נהלים ברורים, אותו דגם CRUD +
+  עורך עשיר כמו הדרכות (`rich-editor.tsx` עצמאי למודול, `n_procedures`): כותרת,
+  קטגוריה חופשית (רשות), תוכן HTML. כל מי שיש לו גישה למודול (`duxus`) יכול
+  ליצור/לערוך/למחוק - אין הגבלת owner-only כמו בהדרכות.
+- **סלעים ואבני דרך** (`/dashboard/duxus/rocks`, `RocksTabs`) — כלי תכנון מדורג
+  בסגנון EOS: **סלע** רבעוני (`Rock`, `n_rocks`) → עד רמת **תת-סלע** אחת
+  (`parentRockId`) → **אבני דרך** (`Milestone`, `n_milestones`, המשימות בפועל,
+  10+ לכל סלע/תת-סלע). לכל אבן דרך יש `stage` (`backlog`/`month`/`week`) שמסמן
+  את "הדלי" הפעיל שלה - כך אפשר לבנות רבעון שלם מראש ואז לקדם בהדרגה:
+  1. **טאב רבעון** (`/rocks`, `?q=YYYY-QN`) - עץ סלעים/תתי-סלעים/אבני דרך
+     (`quarter-client.tsx`), יצירה inline בכל רמה, סטטוס סלע לחיצה למחזור
+     `active` → `done` → `dropped`, ומחיקת סלע כוללת מחיקה מדורגת (cascade) של
+     תתי-הסלעים ואבני הדרך שבתוכו (`deleteRockAction`). בחירת אבני דרך
+     (checkbox, רק כאלה שעדיין ב-`backlog`) + כפתור "העברה לחודשי" מקדמת אותן
+     ל-`stage: "month"` עם `monthKey` של החודש הנוכחי
+     (`promoteMilestonesToMonthAction`).
+  2. **טאב חודשי** (`/rocks/month`, `?m=YYYY-MM`) - אבני הדרך שקודמו לחודש
+     שנבחר; קטע נפרד "לא הושלמו מחודשים קודמים" (אבני דרך ב-`stage: "month"`
+     עם `monthKey` שונה, לא בוצעו) עם כפתור "העבר לחודש הנוכחי"
+     (`carryOverMilestoneToMonthAction`, מגדיל `carryOverCount`). בחירה +
+     "העברה לשבועי" מקדמת ל-`stage: "week"` עם `weekKey` של השבוע הנוכחי.
+  3. **טאב שבועי** (`/rocks/week`, `?w=Wnnn` - מפתח שבוע פנימי מונוטוני, לא
+     ISO, ראו `date-utils.ts`) - סימון "בוצע" ישיר על אבן דרך (`done`+`doneAt`,
+     `toggleMilestoneDoneAction`), וקטע "לא הושלמו משבוע שעבר" עם כפתור "העבר
+     לשבוע הבא" (`carryOverMilestoneToWeekAction`, שבוע אחד קדימה בכל לחיצה -
+     בקשת אישור מפורשת בכל שבוע, לא קפיצה אוטומטית להווה).
+  4. **טאב היסטוריה** (`/rocks/history`) - כל אבני הדרך שהושלמו (ירוק, תאריך
+     סיום), כל הסלעים מקובצים לפי רבעון עם סטטוס, וכל סיכומי הפגישות.
+  5. **`ReviewPanel`** (`review-panel.tsx`, משותף לשלושת טאבי רבעון/חודש/שבוע)
+     - קטע מתקפל "פגישת X" עם מבנה מומלץ לפגישה (רשימת סעיפים סטטית, מבוססת על
+     תהליך העבודה הרבעוני/חודשי/שבועי בפועל), טקסטאזה לסיכום/לקחים, ושמירה
+     ל-`n_rock_reviews` עם מזהה דטרמיניסטי `${period}_${periodKey}` (upsert -
+     רשומה אחת בלבד לתקופה, ניתנת לעדכון חוזר).
+  אחראי (`ownerUserId`/`ownerName`) על סלע/אבן דרך נבחר מרשימת `n_users`
+  (`listAssignableUsers`, שם בלבד - לא נחשפים שדות רגישים כמו `pass`).
 
 ### הדרכות (`/dashboard/tutorials`)
 מאגר הדרכות עם עורך עשיר (`rich-editor.tsx`), קבצים מצורפים, תמונות והדפסה.
