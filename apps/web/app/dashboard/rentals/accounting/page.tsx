@@ -33,10 +33,15 @@ export default async function RentalsAccountingPage({
   const db = getAdminFirestore();
   const raw = await loadBranchAccountingRawData();
   const month = getCurrentMonth();
-  const rentalsBranches = raw.branches.filter((b) => b.branchType === "rentals");
+  // Deleted branches stay in Firestore (soft-delete, see deleteRentalBranchAction) precisely so
+  // their accounting history remains resolvable - `allRentalsBranches` includes them (for the
+  // history section + drilldown-by-id below), `rentalsBranches` excludes them (for every
+  // "active management" section: the unified table, progress tracking, add-income/expense forms).
+  const allRentalsBranches = raw.branches.filter((b) => b.branchType === "rentals");
+  const rentalsBranches = allRentalsBranches.filter((b) => !b.deleted);
 
   if (!isOwner) {
-    const myBranch = rentalsBranches.find((b) => b.id === myBranchId);
+    const myBranch = allRentalsBranches.find((b) => b.id === myBranchId);
     if (myBranch) {
       const financials = computeBranchFinancials(myBranch, raw, month);
       const transfer = raw.transfersByBranchMonth.get(`${myBranch.id}|${month}`);
@@ -53,30 +58,60 @@ export default async function RentalsAccountingPage({
   const partnerSettlement = isOwner ? await computePartnerSettlement(month) : [];
 
   let ownerDrillDown: JSX.Element | null = null;
+  let historySection: JSX.Element | null = null;
   if (isOwner) {
     const parents = rentalsBranches.filter((b) => !b.parentBranchId);
-    const childrenByParent = new Map<string, ReturnType<typeof computeBranchFinancials>[]>();
+    const childrenByParent: Record<string, ReturnType<typeof computeBranchFinancials>[]> = {};
     for (const b of rentalsBranches) {
       if (b.parentBranchId) {
-        const arr = childrenByParent.get(b.parentBranchId) ?? [];
-        arr.push(computeBranchFinancials(b, raw, month));
-        childrenByParent.set(b.parentBranchId, arr);
+        (childrenByParent[b.parentBranchId] ??= []).push(computeBranchFinancials(b, raw, month));
       }
     }
     const parentFinancials = parents.map((p) => computeBranchFinancials(p, raw, month));
 
-    const selectedBranch = searchParams?.branchId ? rentalsBranches.find((b) => b.id === searchParams.branchId) : undefined;
-    const ledgers = [...rentalsBranches]
-      .sort((a, b) => a.name.localeCompare(b.name, "he"))
-      .map((b) => buildBranchLedger(b, raw));
+    // Deleted branches can't be selected from the (active-only) progress-tracking section, but
+    // they CAN be reached via a history-section link below, so look them up across ALL branches.
+    const selectedBranch = searchParams?.branchId ? allRentalsBranches.find((b) => b.id === searchParams.branchId) : undefined;
 
     ownerDrillDown = (
       <div className="mb-6 space-y-4">
         <UnifiedBranchesTable branches={rentalsBranches} raw={raw} month={month} />
+        <OwnerBranchesOverview parents={parentFinancials} childrenByParent={childrenByParent} />
+        {selectedBranch && (
+          <BranchAccountingView
+            financials={computeBranchFinancials(selectedBranch, raw, month)}
+            transfer={raw.transfersByBranchMonth.get(`${selectedBranch.id}|${month}`)}
+            month={month}
+            showSettlement={false}
+            isOwner
+          />
+        )}
+      </div>
+    );
 
-        {ledgers.length > 0 && (
-          <details className="rounded-card border border-card-border bg-white shadow-card">
-            <summary className="cursor-pointer p-4 text-sm font-extrabold text-ink">היסטוריה מלאה לכל הסניפים (חישוב הנה&quot;ח)</summary>
+    // Includes deleted branches (allRentalsBranches) - deleting a branch must not delete access to
+    // its accounting history. When a branch is focused via ?branchId=, narrow the history down to
+    // just that branch too, so a click from progress-tracking/above gives "everything about this
+    // branch" in one place instead of the full list of every branch's history.
+    const historyBranches = selectedBranch ? [selectedBranch] : allRentalsBranches;
+    const ledgers = [...historyBranches]
+      .sort((a, b) => a.name.localeCompare(b.name, "he"))
+      .map((b) => buildBranchLedger(b, raw));
+
+    historySection =
+      ledgers.length > 0 ? (
+        <div id="branch-history" className="scroll-mt-4">
+          <details className="rounded-card border border-card-border bg-white shadow-card" open={!!selectedBranch}>
+            <summary className="flex flex-wrap items-center justify-between gap-2 cursor-pointer p-4 text-sm font-extrabold text-ink">
+              <span>
+                {selectedBranch ? `היסטוריה מלאה - ${selectedBranch.name}` : "היסטוריה מלאה לכל הסניפים (כולל סניפים שנמחקו)"}
+              </span>
+              {selectedBranch && (
+                <a href="/dashboard/rentals/accounting#branch-history" className="text-xs font-bold text-teal hover:underline">
+                  הצג היסטוריה של כל הסניפים
+                </a>
+              )}
+            </summary>
             <div className="space-y-3 border-t border-card-border p-4">
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 {ledgers.map((l) => (
@@ -90,20 +125,8 @@ export default async function RentalsAccountingPage({
               </div>
             </div>
           </details>
-        )}
-
-        <OwnerBranchesOverview parents={parentFinancials} childrenByParent={childrenByParent} />
-        {selectedBranch && (
-          <BranchAccountingView
-            financials={computeBranchFinancials(selectedBranch, raw, month)}
-            transfer={raw.transfersByBranchMonth.get(`${selectedBranch.id}|${month}`)}
-            month={month}
-            showSettlement={false}
-            isOwner
-          />
-        )}
-      </div>
-    );
+        </div>
+      ) : null;
   }
 
   const [incomeSnap, expenseSnap] = await Promise.all([
@@ -315,6 +338,8 @@ export default async function RentalsAccountingPage({
           </div>
         </div>
       </div>
+
+      {historySection}
     </div>
   );
 }

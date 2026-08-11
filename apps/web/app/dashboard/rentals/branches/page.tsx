@@ -40,6 +40,7 @@ export default async function RentalBranchesPage() {
   ]);
   const branches = branchesSnap.docs
     .map((d) => ({ ...(d.data() as Omit<Branch, "id">), id: d.id }) as Branch)
+    .filter((b) => !b.deleted)
     .sort((a, b) => a.name.localeCompare(b.name, "he"));
 
   // Live count - every computer actually registered under this branch right now (n_laptops),

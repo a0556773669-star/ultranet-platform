@@ -32,9 +32,9 @@ export default async function RentalClientsPage({
     db.collection("n_rental_clients").get(),
     db.collection("n_branches").where("branchType", "==", "rentals").get(),
   ]);
-  const branches = branchesSnap.docs.map(
-    (d) => ({ ...(d.data() as Omit<Branch, "id">), id: d.id }) as Branch
-  );
+  const branches = branchesSnap.docs
+    .map((d) => ({ ...(d.data() as Omit<Branch, "id">), id: d.id }) as Branch)
+    .filter((b) => !b.deleted);
   const allClients = clientsSnap.docs.map(
     (d) => ({ ...(d.data() as Omit<RentalClient, "id">), id: d.id }) as RentalClient
   );

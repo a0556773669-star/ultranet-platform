@@ -65,7 +65,11 @@ export function UnifiedBranchesTable({
               return (
                 <tr key={branch.id} className={idx % 2 === 1 ? "bg-[#fafbfc]" : "bg-white"}>
                   <td className={`${TD} font-bold text-ink`}>
-                    <Link href={`/dashboard/rentals/accounting?branchId=${branch.id}`} className="hover:underline">
+                    <Link
+                      href={`/dashboard/rentals/accounting?branchId=${branch.id}#branch-history`}
+                      className="hover:underline"
+                      title="מעקב היסטוריה מלאה על הסניף הזה"
+                    >
                       {isChild && <span className="ml-1 text-muted">↳</span>}
                       {branch.name}
                     </Link>

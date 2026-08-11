@@ -28,7 +28,7 @@ export function LaptopForm({ action, branches, isOwner, initial, initialStick }:
           <select name="branchId" required defaultValue={initial?.branchId ?? ""} className={FIELD}>
             <option value="">בחר סניף</option>
             {branches.map((b) => (
-              <option key={b.id} value={b.id}>{b.name}</option>
+              <option key={b.id} value={b.id}>{b.deleted ? `${b.name} (נמחק)` : b.name}</option>
             ))}
           </select>
         </div>

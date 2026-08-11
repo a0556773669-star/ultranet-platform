@@ -30,8 +30,8 @@ export default async function RentalBranchDetailPage({ params }: { params: { id:
 
   const parentOptions = branchesSnap.docs
     .map((d) => ({ ...(d.data() as Omit<Branch, "id">), id: d.id }) as Branch)
-    .filter((b) => b.id !== branch.id)
-    .map((b) => ({ id: b.id, name: b.name }));
+    .filter((b) => b.id !== branch.id && (!b.deleted || b.id === branch.parentBranchId))
+    .map((b) => ({ id: b.id, name: b.deleted ? `${b.name} (נמחק)` : b.name }));
 
   const boundUpdate = updateRentalBranchAction.bind(null, branch.id);
   const boundDelete = deleteRentalBranchAction.bind(null, branch.id);

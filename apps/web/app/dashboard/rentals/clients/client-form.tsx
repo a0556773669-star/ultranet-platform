@@ -43,7 +43,7 @@ export function ClientForm({
             <option value="">בחר סניף</option>
             {branches.map((b) => (
               <option key={b.id} value={b.id}>
-                {b.name}
+                {b.deleted ? `${b.name} (נמחק)` : b.name}
               </option>
             ))}
           </select>

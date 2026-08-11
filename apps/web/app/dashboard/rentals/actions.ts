@@ -45,7 +45,7 @@ export async function importClientsAction(formData: FormData) {
 
   const db = getAdminFirestore();
   const branchesSnap = await db.collection("n_branches").where("branchType", "==", "rentals").get();
-  const branches = branchesSnap.docs.map((d) => ({ ...(d.data() as Omit<Branch, "id">), id: d.id }));
+  const branches = branchesSnap.docs.map((d) => ({ ...(d.data() as Omit<Branch, "id">), id: d.id }) as Branch).filter((b) => !b.deleted);
   const branchIdByName = new Map(branches.map((b) => [b.name.trim(), b.id]));
 
   let created = 0;

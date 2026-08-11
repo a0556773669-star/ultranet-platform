@@ -54,12 +54,15 @@ export default async function AccountingPage() {
     (d) => ({ ...(d.data() as Omit<CollectionRoute, "id">), id: d.id }) as CollectionRoute,
   );
 
+  // Kept unfiltered (including deleted) so past entries tied to a since-deleted branch still
+  // resolve a name via branchNameOf() instead of showing blank - only the pickers below (for
+  // filing NEW entries) exclude deleted branches.
   const branches = branchesSnap.docs.map((d) => ({ ...(d.data() as Omit<Branch, "id">), id: d.id }) as Branch);
   const laptopBranches = branches
-    .filter((b) => b.branchType === "rentals")
+    .filter((b) => b.branchType === "rentals" && !b.deleted)
     .sort((a, b) => a.name.localeCompare(b.name, "he"));
   const cashRegisterBranches = branches
-    .filter((b) => b.branchType === "computers")
+    .filter((b) => b.branchType === "computers" && !b.deleted)
     .sort((a, b) => a.name.localeCompare(b.name, "he"));
   const creditDefaultDate = `${new Date().toISOString().slice(0, 7)}-10`;
 

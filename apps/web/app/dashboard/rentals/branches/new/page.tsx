@@ -24,6 +24,7 @@ export default async function NewRentalBranchPage() {
 
   const parentOptions = branchesSnap.docs
     .map((d) => ({ ...(d.data() as Omit<Branch, "id">), id: d.id }) as Branch)
+    .filter((b) => !b.deleted)
     .map((b) => ({ id: b.id, name: b.name }));
 
   return (
