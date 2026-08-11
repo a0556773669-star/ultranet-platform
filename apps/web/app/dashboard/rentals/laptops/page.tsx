@@ -21,7 +21,9 @@ export default async function LaptopsPage({
     db.collection("n_laptops").get(),
     db.collection("n_branches").where("branchType", "==", "rentals").get(),
   ]);
-  const branches = branchesSnap.docs.map((d) => ({ ...(d.data() as Omit<Branch, "id">), id: d.id }) as Branch);
+  const branches = branchesSnap.docs
+    .map((d) => ({ ...(d.data() as Omit<Branch, "id">), id: d.id }) as Branch)
+    .filter((b) => !b.deleted);
   const allLaptops = laptopsSnap.docs.map((d) => ({ ...(d.data() as Omit<Laptop, "id">), id: d.id }) as Laptop);
   const laptops = isOwner ? allLaptops : allLaptops.filter((l) => l.branchId === myBranchId);
   const deleteActions = Object.fromEntries(

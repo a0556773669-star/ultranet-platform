@@ -35,9 +35,11 @@ export default async function EditClientPage({
   const client = { id: clientDoc.id, ...(clientDoc.data() as Omit<RentalClient, "id">) } as RentalClient;
   if (!isOwner && client.branchId !== myBranchId) notFound();
 
-  const branches = branchesSnap.docs.map(
-    (d) => ({ ...(d.data() as Omit<Branch, "id">), id: d.id }) as Branch
-  );
+  // Keep the client's current branch selectable even if it was since deleted, so saving the form
+  // without touching the branch field can't silently reassign it.
+  const branches = branchesSnap.docs
+    .map((d) => ({ ...(d.data() as Omit<Branch, "id">), id: d.id }) as Branch)
+    .filter((b) => !b.deleted || b.id === client.branchId);
   // route the client's saved token is actually effective through - used only to show its business
   // name in the migration nudge, never to decide which route new cards get saved under
   const currentRouteCreds = client.cardLast4

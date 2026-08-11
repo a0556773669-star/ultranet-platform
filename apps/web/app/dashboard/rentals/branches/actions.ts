@@ -114,11 +114,18 @@ export async function updateRentalBranchAction(id: string, formData: FormData) {
   redirect("/dashboard/rentals/branches");
 }
 
+/** Soft-delete: hides the branch from every active list/picker, but keeps the Firestore doc (and
+ *  therefore its name and every linked expense/transfer/income record) so its accounting history
+ *  stays visible under /dashboard/rentals/accounting. */
 export async function deleteRentalBranchAction(id: string) {
   await requireOwner();
-  await getAdminFirestore().collection("n_branches").doc(id).delete();
+  await getAdminFirestore()
+    .collection("n_branches")
+    .doc(id)
+    .set({ deleted: true, deletedAt: new Date().toISOString() }, { merge: true });
   revalidatePath("/dashboard/branches");
   revalidatePath("/dashboard/rentals/branches");
+  revalidatePath("/dashboard/rentals/accounting");
   redirect("/dashboard/rentals/branches");
 }
 
@@ -131,8 +138,8 @@ export async function auditRentalPermissionsAction(): Promise<{ checked: number;
   let fixed = 0;
   let skipped = 0;
   for (const doc of branchesSnap.docs) {
-    const data = doc.data() as { partnerEmail?: string; partnerName?: string };
-    if (!data.partnerEmail) {
+    const data = doc.data() as { partnerEmail?: string; partnerName?: string; deleted?: boolean };
+    if (data.deleted || !data.partnerEmail) {
       skipped++;
       continue;
     }

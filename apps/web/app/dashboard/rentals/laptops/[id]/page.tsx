@@ -28,7 +28,10 @@ export default async function EditLaptopPage({
   const branchesSnap = isOwner
     ? await db.collection("n_branches").where("branchType", "==", "rentals").get()
     : null;
-  const branches = branchesSnap ? branchesSnap.docs.map((d) => ({ ...(d.data() as Omit<Branch, "id">), id: d.id }) as Branch) : [];
+  const allBranches = branchesSnap ? branchesSnap.docs.map((d) => ({ ...(d.data() as Omit<Branch, "id">), id: d.id }) as Branch) : [];
+  // Keep the laptop's current branch selectable even if it was since deleted, so saving the form
+  // without touching the branch field can't silently reassign it to whatever branch sorts first.
+  const branches = allBranches.filter((b) => !b.deleted || b.id === laptop.branchId);
 
   const linkedStickSnap = laptop.hasStick
     ? await db.collection("n_sticks").where("linkedLaptopId", "==", laptop.id).limit(1).get()

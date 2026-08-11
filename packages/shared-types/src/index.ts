@@ -37,6 +37,12 @@ export interface Branch {
   collectionRouteId?: string | null;
   allowCollection?: boolean;
   allowReceipts?: boolean;
+  /** soft-delete: "deleting" a branch sets this instead of removing the Firestore doc, so its
+   *  accounting history (expenses/transfers/income already tied to its branchId) stays intact
+   *  and resolvable by name. Every active-branch query in the app must filter this out; only the
+   *  accounting history view intentionally includes deleted branches. */
+  deleted?: boolean;
+  deletedAt?: string;
 }
 
 /** collection: n_users */

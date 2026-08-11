@@ -22,7 +22,9 @@ export default async function NewRentalPage({
     db.collection("n_collection_routes").get(),
     db.collection("n_rentals").where("status", "==", "active").get(),
   ]);
-  const allBranches = branchesSnap.docs.map((d) => ({ ...(d.data() as Omit<Branch, "id">), id: d.id }) as Branch);
+  const allBranches = branchesSnap.docs
+    .map((d) => ({ ...(d.data() as Omit<Branch, "id">), id: d.id }) as Branch)
+    .filter((b) => !b.deleted);
   const branches = role === "owner" ? (onlyMine ? allBranches.filter((b) => b.isMine === true) : allBranches) : allBranches.filter((b) => b.id === myBranchId);
   const clients = clientsSnap.docs.map(
     (d) => ({ ...(d.data() as Omit<RentalClient, "id">), id: d.id }) as RentalClient

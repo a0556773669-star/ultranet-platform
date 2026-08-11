@@ -7,7 +7,7 @@ export function DeleteRentalBranchButton() {
     <button
       type="submit"
       onClick={(e: MouseEvent<HTMLButtonElement>) => {
-        if (!confirm("למחוק את הסניף?")) {
+        if (!confirm("למחוק את הסניף? הוא יוסתר מהרשימות הפעילות, אבל ההיסטוריה הכספית שלו תישאר זמינה בהנה\"ח.")) {
           e.preventDefault();
         }
       }}
