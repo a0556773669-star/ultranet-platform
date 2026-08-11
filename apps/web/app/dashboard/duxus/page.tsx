@@ -1,11 +1,16 @@
 import Link from "next/link";
+import { getServerSession } from "next-auth";
 import { NotebookText, Target } from "lucide-react";
+import { authOptions } from "@/lib/auth";
 import { requireModuleAccess } from "@/lib/perms";
 import { listProcedures } from "./actions";
 import { DuxusTabs } from "./duxus-tabs";
+import { SeedButton } from "./seed-button";
 
 export default async function DuxusProceduresPage() {
   await requireModuleAccess("duxus");
+  const session = await getServerSession(authOptions);
+  const isOwner = session?.user?.role === "owner";
   const procedures = await listProcedures();
 
   return (
@@ -24,6 +29,8 @@ export default async function DuxusProceduresPage() {
       </div>
 
       <DuxusTabs />
+
+      {isOwner && <SeedButton />}
 
       {procedures.length === 0 ? (
         <div className="card text-sm text-muted">

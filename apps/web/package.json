@@ -7,8 +7,7 @@
             "build": "next build",
             "start": "next start",
             "lint": "next lint",
-            "typecheck": "tsc --noEmit",
-            "seed:tasks-and-procedures": "node scripts/seed-tasks-and-procedures.mjs"
+            "typecheck": "tsc --noEmit"
       },
       "dependencies": {
             "@emailjs/browser": "^4.4.1",
