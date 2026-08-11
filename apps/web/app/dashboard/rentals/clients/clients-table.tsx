@@ -15,6 +15,7 @@ export function ClientsTable({
   branches,
   canCharge,
   routeNameById,
+  isOwner,
 }: {
   clients: RentalClient[];
   myScopeBranchIds: string[];
@@ -22,6 +23,7 @@ export function ClientsTable({
   branches: Branch[];
   canCharge: boolean;
   routeNameById: Record<string, string>;
+  isOwner: boolean;
 }) {
   const [scope, setScope] = useState<Scope>("mine");
   const [search, setSearch] = useState("");
@@ -31,7 +33,7 @@ export function ClientsTable({
   const myScopeSet = useMemo(() => new Set(myScopeBranchIds), [myScopeBranchIds]);
   const branchName = (id: string) => branches.find((b) => b.id === id)?.name ?? "-";
 
-  const scopedClients = scope === "mine" ? clients.filter((c) => myScopeSet.has(c.branchId)) : clients;
+  const scopedClients = isOwner && scope === "all" ? clients : clients.filter((c) => myScopeSet.has(c.branchId));
 
   const visibleClients = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -44,28 +46,32 @@ export function ClientsTable({
   return (
     <div>
       <div className="mb-3 flex flex-wrap items-center gap-2">
-        <button
-          type="button"
-          onClick={() => setScope("mine")}
-          className={`rounded-[10px] px-3 py-1.5 text-xs font-bold transition ${
-            scope === "mine"
-              ? "bg-gradient-to-br from-teal to-teal-light text-white shadow-primary"
-              : "border border-card-border bg-white text-ink hover:bg-[#f4f6f9]"
-          }`}
-        >
-          הצג את שלי
-        </button>
-        <button
-          type="button"
-          onClick={() => setScope("all")}
-          className={`rounded-[10px] px-3 py-1.5 text-xs font-bold transition ${
-            scope === "all"
-              ? "bg-gradient-to-br from-teal to-teal-light text-white shadow-primary"
-              : "border border-card-border bg-white text-ink hover:bg-[#f4f6f9]"
-          }`}
-        >
-          הצג את של כולם
-        </button>
+        {isOwner && (
+          <>
+            <button
+              type="button"
+              onClick={() => setScope("mine")}
+              className={`rounded-[10px] px-3 py-1.5 text-xs font-bold transition ${
+                scope === "mine"
+                  ? "bg-gradient-to-br from-teal to-teal-light text-white shadow-primary"
+                  : "border border-card-border bg-white text-ink hover:bg-[#f4f6f9]"
+              }`}
+            >
+              הצג את שלי
+            </button>
+            <button
+              type="button"
+              onClick={() => setScope("all")}
+              className={`rounded-[10px] px-3 py-1.5 text-xs font-bold transition ${
+                scope === "all"
+                  ? "bg-gradient-to-br from-teal to-teal-light text-white shadow-primary"
+                  : "border border-card-border bg-white text-ink hover:bg-[#f4f6f9]"
+              }`}
+            >
+              הצג את של כולם
+            </button>
+          </>
+        )}
         <div className="relative mr-auto w-full max-w-xs">
           <Search className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
           <input

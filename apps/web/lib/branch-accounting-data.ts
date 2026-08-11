@@ -96,6 +96,12 @@ export interface BranchFinancials {
   ownerEarnedToDate: number;
   ownerBalanceToDate: number;
   computerProfitTrend: ComputerProfitMonth[];
+  /** This month's expense lines the owner paid, valued at the partner's share of them (what the partner owes back). */
+  myExpenseThisMonth: number;
+  /** This month's expense lines the partner paid, valued at the owner's share of them (what the owner owes back). */
+  hisExpenseThisMonth: number;
+  /** This month's total collected income for the branch, before any owner/partner split. */
+  grossIncomeThisMonth: number;
 }
 
 export interface BranchAccountingRawData {
@@ -254,6 +260,18 @@ export function computeBranchFinancials(branch: Branch, raw: BranchAccountingRaw
   const addedDates = laptops.map((l) => l.addedDate);
   const computerProfitTrend = buildComputerProfitTrend(monthlyNetProfits, addedDates);
 
+  // "My expenses" this month: lines the owner paid, valued at what the partner owes back for them
+  // (0 if owedBy is the owner alone). "His expenses": lines the partner paid, valued at what the
+  // owner owes back for them. Mirrors expenseNetToOwner but split by who fronted the cash, so the
+  // owner's overview table can show both sides instead of just the net.
+  const myExpenseThisMonth = thisMonthExpenses
+    .filter((e) => e.paidBy !== "partner")
+    .reduce((sum, e) => sum + partnerExpenseBurden(e.amount, e.owedBy), 0);
+  const hisExpenseThisMonth = thisMonthExpenses
+    .filter((e) => e.paidBy === "partner")
+    .reduce((sum, e) => sum + ownerExpenseBurden(e.amount, e.owedBy), 0);
+  const grossIncomeThisMonth = thisMonthIncome.reduce((sum, i) => sum + i.amount, 0);
+
   return {
     branch,
     incomeThisMonth,
@@ -270,5 +288,8 @@ export function computeBranchFinancials(branch: Branch, raw: BranchAccountingRaw
       incomeLines.reduce((sum, i) => sum + (i.amount * ownerPct) / 100, 0) -
       expenseLines.reduce((sum, e) => sum + ownerExpenseBurden(e.amount, e.owedBy), 0),
     computerProfitTrend,
+    myExpenseThisMonth,
+    hisExpenseThisMonth,
+    grossIncomeThisMonth,
   };
 }
