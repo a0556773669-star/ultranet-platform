@@ -1,13 +1,18 @@
+import { getServerSession } from "next-auth";
 import { Target } from "lucide-react";
+import { authOptions } from "@/lib/auth";
 import { requireModuleAccess } from "@/lib/perms";
 import { DuxusTabs } from "../duxus-tabs";
 import { RocksTabs } from "./rocks-tabs";
 import { getRocksForQuarter, getMilestonesForQuarter, listAssignableUsers, getReview, listReviews } from "./actions";
 import { currentQuarterKey, shiftQuarterKey, quarterLabel } from "./date-utils";
 import { QuarterClient } from "./quarter-client";
+import { WipeRocksButton } from "./wipe-button";
 
 export default async function RocksQuarterPage({ searchParams }: { searchParams: { q?: string } }) {
   await requireModuleAccess("duxus");
+  const session = await getServerSession(authOptions);
+  const isOwner = session?.user?.role === "owner";
   const quarterKey = searchParams.q || currentQuarterKey();
 
   const [rocks, milestones, users, review, reviews] = await Promise.all([
@@ -26,6 +31,7 @@ export default async function RocksQuarterPage({ searchParams }: { searchParams:
       </h1>
       <DuxusTabs />
       <RocksTabs />
+      {isOwner && <WipeRocksButton />}
       <QuarterClient
         quarterKey={quarterKey}
         quarterLabel={quarterLabel(quarterKey)}
