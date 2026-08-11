@@ -2,11 +2,14 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { Wifi, Users } from "lucide-react";
+import { Wifi, Users, Check, Minus } from "lucide-react";
 import type { Branch, Laptop } from "@ultranet/shared-types";
 import { DeleteLaptopButton } from "./delete-button";
 
 type SortKey = "name" | "branch" | "price";
+
+const TH = "px-3 py-2 text-right text-[11px] font-bold uppercase tracking-wide text-muted whitespace-nowrap";
+const TD = "px-3 py-2 whitespace-nowrap text-[13px]";
 
 export function LaptopsList({
   laptops,
@@ -106,55 +109,79 @@ export function LaptopsList({
         </div>
       )}
 
-      <div className="flex flex-col gap-2">
-        {sorted.length === 0 && (
-          <div className="rounded-card border border-card-border bg-white p-5 text-center text-sm text-muted shadow-card">
-            אין מחשבים תואמים
+      {sorted.length === 0 ? (
+        <div className="rounded-card border border-card-border bg-white p-5 text-center text-sm text-muted shadow-card">
+          אין מחשבים תואמים
+        </div>
+      ) : (
+        <div className="overflow-hidden rounded-card border border-card-border bg-white shadow-card">
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[760px] border-collapse">
+              <thead>
+                <tr className="border-b border-card-border bg-[#f4f6f9]">
+                  <th className={TH}>שם</th>
+                  {isOwner && <th className={TH}>סניף</th>}
+                  <th className={TH}>מחיר ליום</th>
+                  <th className={TH}>מחיר לשבוע</th>
+                  <th className={TH}>מחיר לחודש</th>
+                  <th className={TH}>סטיק</th>
+                  <th className={TH}>שותפות</th>
+                  <th className={TH}></th>
+                </tr>
+              </thead>
+              <tbody className="tabular-nums">
+                {sorted.map((l, idx) => {
+                  const deleteAction = deleteActions[l.id];
+                  return (
+                    <tr key={l.id} className={idx % 2 === 1 ? "bg-[#fafbfc]" : "bg-white"}>
+                      <td className={`${TD} font-bold text-ink`}>
+                        <Link href={`/dashboard/rentals/laptops/${l.id}`} className="hover:underline">
+                          {l.name}
+                        </Link>
+                      </td>
+                      {isOwner && <td className={`${TD} text-muted`}>{branchName(l.branchId)}</td>}
+                      <td className={TD}>₪{l.dayPrice ?? 0}</td>
+                      <td className={TD}>₪{l.weekPrice ?? 0}</td>
+                      <td className={TD}>₪{l.monthPrice ?? 0}</td>
+                      <td className={TD}>
+                        {l.hasStick ? (
+                          <span className="flex items-center gap-1 text-teal-dark">
+                            <Wifi className="h-3.5 w-3.5" />
+                            {l.simNumber || <Check className="h-3.5 w-3.5" />}
+                          </span>
+                        ) : (
+                          <Minus className="h-3.5 w-3.5 text-muted" />
+                        )}
+                      </td>
+                      <td className={TD}>
+                        {l.hasPartner ? (
+                          <span className="flex items-center gap-1 text-ink">
+                            <Users className="h-3.5 w-3.5" />
+                            {`${l.partnerPct ?? 15}%${l.partnerName ? ` (${l.partnerName})` : ""}`}
+                          </span>
+                        ) : (
+                          <Minus className="h-3.5 w-3.5 text-muted" />
+                        )}
+                      </td>
+                      <td className={TD}>
+                        <div className="flex items-center gap-2">
+                          <Link
+                            href={`/dashboard/rentals/laptops/${l.id}`}
+                            className="rounded-lg border border-card-border bg-white px-3 py-1.5 text-xs font-bold text-ink hover:bg-[#f4f6f9]"
+                          >
+                            עריכה
+                          </Link>
+                          {canDelete && deleteAction && <DeleteLaptopButton action={deleteAction} />}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
-        )}
-        {sorted.map((l) => {
-          const deleteAction = deleteActions[l.id];
-          return (
-          <div
-            key={l.id}
-            className="flex flex-wrap items-center justify-between gap-3 rounded-card border border-card-border bg-white p-4 shadow-card"
-          >
-            <Link href={`/dashboard/rentals/laptops/${l.id}`} className="flex-1 min-w-[220px]">
-              <p className="font-bold text-ink">{l.name}</p>
-              <p className="flex flex-wrap items-center gap-x-1 text-xs text-muted">
-                <span>
-                  ₪{l.dayPrice ?? 0}/יום · ₪{l.weekPrice ?? 0}/שבוע · ₪{l.monthPrice ?? 0}/חודש
-                </span>
-                {l.hasStick && (
-                  <span className="flex items-center gap-1">
-                    {"·"}
-                    <Wifi className="h-3 w-3" />
-                    {`סטיק${l.simNumber ? ` (${l.simNumber})` : ""}`}
-                  </span>
-                )}
-                {l.hasPartner && (
-                  <span className="flex items-center gap-1">
-                    {"·"}
-                    <Users className="h-3 w-3" />
-                    {`שותפות ${l.partnerPct ?? 15}%${l.partnerName ? ` (${l.partnerName})` : ""}`}
-                  </span>
-                )}
-                {isOwner && <span>{`· ${branchName(l.branchId)}`}</span>}
-              </p>
-            </Link>
-            <div className="flex items-center gap-2">
-              <Link
-                href={`/dashboard/rentals/laptops/${l.id}`}
-                className="rounded-lg border border-card-border bg-white px-3 py-1.5 text-xs font-bold text-ink hover:bg-[#f4f6f9]"
-              >
-                עריכה
-              </Link>
-              {canDelete && deleteAction && <DeleteLaptopButton action={deleteAction} />}
-            </div>
-          </div>
-          );
-        })}
-      </div>
+        </div>
+      )}
     </div>
   );
 }

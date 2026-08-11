@@ -54,6 +54,7 @@ async function upsertPartnerUser(email: string, name: string | undefined, branch
 function parseRentalBranchForm(formData: FormData): Omit<Branch, "id"> {
   const name = String(formData.get("name") ?? "").trim();
   const location = String(formData.get("location") ?? "").trim() || undefined;
+  const phone = String(formData.get("phone") ?? "").trim() || undefined;
   const isMine = formData.get("isMine") === "on";
   const partnerName = String(formData.get("partnerName") ?? "").trim() || undefined;
   const partnerEmail = String(formData.get("partnerEmail") ?? "").trim() || undefined;
@@ -70,6 +71,7 @@ function parseRentalBranchForm(formData: FormData): Omit<Branch, "id"> {
     name,
     branchType: "rentals",
     location,
+    phone,
     isMine,
     partnerName,
     partnerEmail,

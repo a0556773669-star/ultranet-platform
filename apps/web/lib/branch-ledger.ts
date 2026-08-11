@@ -24,6 +24,8 @@ export interface LedgerMonthRow {
   transferredAt?: string;
   /** totalDue - transferredAmount - carries forward as next month's openingBalance. */
   closingBalance: number;
+  /** true once a receipt was issued for this branch/month's transfer. */
+  receiptIssued: boolean;
 }
 
 export interface BranchLedger {
@@ -80,6 +82,7 @@ export function buildBranchLedger(branch: Branch, raw: BranchAccountingRawData):
       transferNote: transfer?.note,
       transferredAt: transfer?.transferredAt,
       closingBalance: closing,
+      receiptIssued: !!transfer?.receiptIssued,
     };
   });
 

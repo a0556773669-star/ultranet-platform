@@ -13,6 +13,7 @@ type Option = { id: string; name: string };
 type Initial = {
   name?: string;
   location?: string;
+  phone?: string;
   isMine?: boolean;
   partnerName?: string;
   partnerEmail?: string;
@@ -46,9 +47,15 @@ export function RentalBranchForm({ action, initial, routes, parentOptions }: Ren
     <form action={action} className="flex flex-col gap-4 rounded-card border border-card-border bg-white p-5 shadow-card">
       <input type="hidden" name="isMine" value={model === "classic" ? "on" : "off"} />
 
-      <div>
-        <label className={LABEL}>{"שם הסניף"}</label>
-        <input name="name" required defaultValue={initial?.name} className={FIELD} />
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div>
+          <label className={LABEL}>{"שם הסניף"}</label>
+          <input name="name" required defaultValue={initial?.name} className={FIELD} />
+        </div>
+        <div>
+          <label className={LABEL}>{"טלפון"}</label>
+          <input type="tel" name="phone" defaultValue={initial?.phone} className={FIELD} />
+        </div>
       </div>
 
       <div>

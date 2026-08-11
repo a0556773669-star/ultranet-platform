@@ -21,6 +21,7 @@ export interface Branch {
     id: string;
     name: string;
     location?: string;
+    phone?: string;
     founded?: string; // ISO date
   branchType: BranchType;
     isMine: boolean;
@@ -366,6 +367,13 @@ export interface BranchTransfer {
    *  records that only have `transferred: true` (no amount) are treated as fully settled for
    *  netToOwner - see `lib/branch-ledger.ts`. */
   transferredAmount?: number;
+  /** id of the matching n_ah_income doc (type "laptops") auto-created for this branch/month when
+   *  transferredAmount is positive (partner/branch paid the owner) - see lib/branch-income-ledger.ts.
+   *  Kept in sync (updated/deleted) whenever transferredAmount changes; undefined if the recorded
+   *  amount is 0 or negative (owner owes the branch/partner - not owner income). */
+  linkedAhIncomeId?: string;
+  /** true once a receipt was issued for this branch/month's transfer, owner-marked. */
+  receiptIssued?: boolean;
 }
 
 // --- חנות AI (עוזר קניה חכם למחשבים בהתאמה אישית) ---

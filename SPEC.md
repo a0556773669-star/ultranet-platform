@@ -152,7 +152,7 @@ pnpm dev        # turbo run dev — מריץ web + api
 
 | קולקשן | טיפוס | תיאור |
 |--------|-------|-------|
-| `n_branches` | `Branch` | סניפים; סוג (`computers`/`rentals`/`coworking`), אחוזי בעלים/שותף, סניף-אב, מסלול גבייה, דגלי גבייה/קבלות |
+| `n_branches` | `Branch` | סניפים; סוג (`computers`/`rentals`/`coworking`), אחוזי בעלים/שותף, סניף-אב, מסלול גבייה, דגלי גבייה/קבלות, `phone` (רשות - טלפון ליצירת קשר) |
 | `n_users` | `AppUser` | משתמשים; תפקיד, סניף, `perms`, `viewClientBranchIds` |
 | `n_fixed_expenses` | `FixedExpense` | הוצאות קבועות לסניף |
 | `n_var_expenses` | `VariableExpense` | הוצאות משתנות (לפי חודש) |
@@ -175,7 +175,7 @@ pnpm dev        # turbo run dev — מריץ web + api
 | `n_shop_catalog` | `ShopComputerConfig` | תצורות מחשב אמיתיות למכירה בחנות ה-AI (`/shop`) - שם, דרגה (`minimal`/`recommended`/`extreme`), תחומי שימוש (`useCases`), מפרט, מחיר; ממולא ידנית ע"י הבעלים ב-`/dashboard/shop/catalog` |
 | `n_shop_addons` | `ShopAddon` | ציוד נלווה שניתן להוסיף להצעת המחיר בחנות ה-AI (תיק/עכבר/מקלדת/דיסק און קי/אחר) |
 | `n_shop_leads` | `ShopLead` | פניות שהתקבלו מהצ'אטבוט הציבורי - תיאור, תשובות, ההמלצות שהוצגו, תצורה/ציוד נבחרים, פרטי קשר, סטטוס |
-| `n_branch_transfers` | `BranchTransfer` | התחשבנות חודשית שותף↔בעלים; `transferredAmount` (רשות) - הסכום שבפועל נרשם כהועבר לאותו חודש, באותה מוסכמת סימן כמו `netToOwner` (חיובי = לבעלים, שלילי = מהבעלים) - מאפשר לרשום העברה חלקית/מאוחרת שלא תואמת בדיוק את הסכום המחושב. רשומות ישנות בלי השדה הזה (רק `transferred: true`) מטופלות כמסולקות במלואן, ראו `lib/branch-ledger.ts` |
+| `n_branch_transfers` | `BranchTransfer` | התחשבנות חודשית שותף↔בעלים; `transferredAmount` (רשות) - הסכום שבפועל נרשם כהועבר לאותו חודש, באותה מוסכמת סימן כמו `netToOwner` (חיובי = לבעלים, שלילי = מהבעלים) - מאפשר לרשום העברה חלקית/מאוחרת שלא תואמת בדיוק את הסכום המחושב. רשומות ישנות בלי השדה הזה (רק `transferred: true`) מטופלות כמסולקות במלואן, ראו `lib/branch-ledger.ts`. `linkedAhIncomeId` (רשות) - מזהה רשומת `n_ah_income` שנוצרה/מתעדכנת אוטומטית כש-`transferredAmount` חיובי, ראו `lib/branch-income-ledger.ts` בסעיף 9. `receiptIssued` (רשות) - סימון עצמאי "הוצאנו קבלה", לא קשור לסכום |
 | `n_approved_emails` | — | מיילים מאושרים לכניסת קוד |
 | `n_login_codes` | — | קודי כניסה חד-פעמיים עם תפוגה |
 
@@ -290,7 +290,8 @@ pnpm dev        # turbo run dev — מריץ web + api
   שעדיין אין לו רשומת סטיק מקושרת, ומדליק את `hasStick` עליו אם עוד לא היה מסומן - כדי שכל
   מחשב יהיה זמין להשכרת סטיק ב-`/new` גם אם לא הוגדרו לו מחירים ידנית.
   owner יכול גם לסמן שותפות פר-מחשב (`hasPartner`/`partnerName`/`partnerPct`, ברירת מחדל 15%) -
-  ראו `computePartnerSettlement` בהמשך.
+  ראו `computePartnerSettlement` בהמשך. תצוגת "מלאי מחשבים" (`laptops-list.tsx`) היא טבלה
+  (שם/סניף/מחירים/סטיק/שותפות/פעולות), עם אותם בקרי סינון-לפי-סניף ומיון שהיו קודם.
 - **`/clients`** — לקוחות: מסך הרשימה נפתח ללא טופס הוספה גלוי — כפתור
   "הוספת לקוח" בפינה השמאלית העליונה (`clients-header.tsx`, קומפוננטת
   `use client` שמכילה גם את כותרת העמוד) פותח/סוגר את `client-form.tsx`
@@ -378,8 +379,12 @@ pnpm dev        # turbo run dev — מריץ web + api
   `buildManualIncomeLines` (`apps/web/lib/branch-accounting-data.ts`) ממזגת אותה לתוך אותן
   income lines ש-`computeBranchFinancials` בונה מהשכרות אמיתיות, כך שהיא נכנסת ל"הכנסות
   החודש"/"הכנסות עד היום" ולמאזן ההעברה החודשית ב-`/dashboard/rentals/accounting` בדיוק כמו כל
-  הכנסת השכרה אחרת. מה שכן נשאר זהה לכל הכנסת השכרה: היא **לעולם לא** נכתבת ל-`n_ah_income` -
-  מגיעה להנה"ח הראשית רק אם הבעלים מקליד אותה שם ידנית (סוג הכנסה `laptops`).
+  הכנסת השכרה אחרת. מה שכן נשאר זהה לכל הכנסת השכרה: היא **לעולם לא** נכתבת ל-`n_ah_income`
+  ישירות מ-`n_rentals`/`n_branch_income` - מגיעה להנה"ח הראשית רק אם הבעלים מקליד אותה שם
+  ידנית (סוג הכנסה `laptops`), **או** דרך המסלול השני, הרשמי, שתואר תחת `/accounting` למטה:
+  סימון "הועבר" על ההעברה החודשית עצמה (`syncBranchTransferIncome`) - זה לא סותר את הכלל, זה
+  ההבדל בין "הכנסת ניידים גולמית של הסניף" (לעולם לא אוטומטית) לבין "כסף שהבעלים בפועל אישר
+  שקיבל" (כן אוטומטית, כי זו פעולה מפורשת של הבעלים בדיוק כמו הקלדה ידנית).
 - **`/accounting`** — הנה"ח ברמת סניף השכרות. **partner/employee** (לא owner) רואים תצוגת
   סניף אישית - `BranchAccountingView` עם סימון העברות (`mark-transferred-button.tsx`,
   `n_branch_transfers`) - בדיוק כמו קודם, ללא שינוי.
@@ -441,11 +446,39 @@ pnpm dev        # turbo run dev — מריץ web + api
   ב-`BranchAccountingView` שניהם כותבים לאותה רשומת `n_branch_transfers` (כולל `transferredAmount`)
   כדי שהיא תופיע נכון גם כאן.
 
+  **הכנסה אוטומטית מהעברה שסומנה:** כל שלושת נתיבי הכתיבה ל-`n_branch_transfers`
+  (`TransferMarkCell`/`recordBranchTransferAction` ב-`ledger/actions.ts`, `MarkTransferredButton`/
+  `markTransferredAction` ב-`accounting/branch-actions.ts`, ו-`LedgerRowEditor` שמשתמש באותו
+  `recordBranchTransferAction`) קוראים ל-`syncBranchTransferIncome`
+  (`apps/web/lib/branch-income-ledger.ts`, מבנה מקביל ל-`branch-expense-ledger.ts` הקיים
+  להוצאות) - **כש-`transferredAmount` חיובי** (השותף/הסניף שילם לבעלים), נוצרת/מתעדכנת אוטומטית
+  רשומת `n_ah_income` (`type: "laptops"`, `business: "rentals"`, `branchId`, `amount`,
+  `date`/`month` = **תחילת חודש ההעברה עצמו** - לא "היום" - כדי שהעברה מאוחרת/רטרואקטיבית
+  תיספר בחודש הנכון ולא בחודש שבו סומנה) - כך שהיא מופיעה גם בהנה"ח הראשית
+  (`/dashboard/accounting`) וגם פר-סניף (`/dashboard/rentals/accounting`), בלי שהבעלים יצטרך
+  להקליד אותה שנית באופן ידני. ה-id של הרשומה נשמר בשדה `BranchTransfer.linkedAhIncomeId`
+  ומתעדכן/נמחק (`FieldValue.delete()`) יחד עם שינוי/איפוס הסכום - **לא** נוצרות רשומות כפולות.
+  סכום שלילי או אפס (הבעלים חייב לסניף/לשותף, או שום דבר לא סומן) לא יוצר הכנסה, ומוחק קישור
+  קיים אם היה. זה שינוי מכוון מההתנהגות המקורית (ראו הערה למטה על `n_ah_income` - "לעולם לא
+  נכתבת אוטומטית" - שהתייחסה **רק** להכנסת ניידים דרך מודול ההשכרות עצמו/`n_rentals`, לא
+  להעברה שהבעלים בעצמו מסמן שקיבל בפועל).
+
+  **"הוצאנו קבלה"** - תא סימון עצמאי נוסף בטבלה המאוחדת (עמודה אחרונה, `ReceiptCheckbox` →
+  `setBranchTransferReceiptAction`, `ledger/actions.ts`) - `BranchTransfer.receiptIssued`, לא
+  קשור לסכום/הכנסה, רק מסמן שהוצאה קבלה על ההעברה.
+
   **יעד רווח פר-מחשב = 150 ₪ + מע&quot;מ (`VAT_RATE = 0.18`, `PROFIT_PER_COMPUTER_TARGET = 177`,
   `apps/web/lib/branch-accounting.ts`)** - שונה מ-150 ₪ קבוע. מוצג כטבלה (`ComputerProfitTable`,
   `accounting/computer-profit-table.tsx`) - חודש, רווח פר מחשב, מס' מחשבים, וסימון ✓ ירוק כשעומד
   ביעד - הן ב-`owner-overview.tsx` (קומפקטי) והן ב-`branch-view.tsx` (drill-down לסניף בודד).
-- **`/branches`** — ניהול סניפי השכרה + audit הרשאות.
+  **חשוב:** `computersActiveInMonth` יכולה להחזיר `0` (סניף בלי אף מחשב רשום עדיין) -
+  `buildComputerProfitTrend` **לא** מחליף את זה ב-1 (זה היה באג שהראה "1 מחשב" לסניף בלי אף
+  מחשב אמיתי) - עם 0 מחשבים `profitPerComputer` הוא 0 ו-`isHealthy` תמיד `false`.
+- **`/branches`** — ניהול סניפי השכרה + audit הרשאות. טבלה (לא רשימת כרטיסים): סניף/סוג/מיקום/
+  **טלפון** (`Branch.phone`, שדה חדש - טלפון ליצירת קשר עם הסניף, נערך ב-`rental-branch-form.tsx`)/
+  שותף/**מספר מחשבים**. מספר המחשבים נספר **בזמן אמת** מ-`n_laptops` לפי `branchId`
+  (`branches/page.tsx`) - לא מהערכת `computerProfitTrend` - כדי שתמיד יתאים בדיוק למה שבאמת
+  רשום ב-`/laptops`.
 - **`/labels`** — הדפסת מדבקות ללקוחות/פריטים + הגדרות לוגו.
 - **API `/api/rentals/charge`** — חיוב כרטיס דרך Nedarim Plus (`DebitCard.aspx`)
   לפי `gatewayToken`/`cardExpiry` שמורים על הלקוח; מוגן בהרשאת `charging` בצד
@@ -684,6 +717,7 @@ app שרץ בדפדפן ניתן ל"התקנה" כאפליקציה עם אייק
 | `apps/web/lib/computer-room-accounting.ts` | חישובי "השקעה מול רווח" פר סניף חדר מחשבים (הקמה/הוצאות/הכנסות/רווח) |
 | `apps/web/lib/expense-shared-scope.ts` | סנטינלים `SHARED_RENTALS_BRANCH_ID`/`SHARED_COMPUTERS_BRANCH_ID` להוצאות משותפות לכל הסניפים |
 | `apps/web/lib/branch-expense-ledger.ts` | יצירה/מחיקה של רשומת `n_ah_expenses` מקושרת מהוצאה חד-פעמית (חלק הבעלים בלבד) |
+| `apps/web/lib/branch-income-ledger.ts` | יצירה/עדכון/מחיקה של רשומת `n_ah_income` מקושרת מהעברת סניף שסומנה כבוצעה (`BranchTransfer.linkedAhIncomeId`) |
 | `apps/web/lib/owner-expense-burden.ts` | חלק הבעלים בהוצאות קבועות/חוזרות (ניידים+חדרי מחשבים), מחושב בזמן אמת עבור הנה"ח הראשית ודף הבית |
 | `apps/web/lib/shop-recommender.ts` | מנוע ההמלצות של חנות ה-AI - זיהוי תחום שימוש מטקסט חופשי, שאלות המשך, ניקוד רמת עומס, מפרט גנרי פר-תחום, התאמה לקטלוג האמיתי (`n_shop_catalog`) |
 | `apps/web/lib/shop-quote.ts` | בניית מסמך ה-HTML העצמאי של הצעת המחיר שהלקוח מוריד בסוף השיחה ב-`/shop` |
