@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { Plus, Trash2, ChevronDown, ChevronUp } from "lucide-react";
 import type { Rock, RockStatus, Milestone, RockReview } from "@ultranet/shared-types";
@@ -49,6 +49,10 @@ function toggleInSet(set: Set<string>, id: string): Set<string> {
   return next;
 }
 
+function isTempId(id: string): boolean {
+  return id.startsWith("temp-");
+}
+
 export function QuarterClient({
   quarterKey,
   quarterLabel,
@@ -78,10 +82,20 @@ export function QuarterClient({
   const [openMilestoneForm, setOpenMilestoneForm] = useState<Set<string>>(new Set());
   const [collapsedRocks, setCollapsedRocks] = useState<Set<string>>(new Set());
 
-  const topRocks = useMemo(() => rocks.filter((r) => !r.parentRockId).sort((a, b) => (a.order ?? 0) - (b.order ?? 0)), [rocks]);
+  // מצב מקומי + עדכון אופטימי: הפריט מופיע מיד עם הלחיצה, ומוחלף בנתון האמיתי
+  // כשה-props מתעדכנים אחרי revalidatePath (בלי לחכות לסיבוב שרת מלא כדי לראות אותו).
+  const [localRocks, setLocalRocks] = useState(rocks);
+  const [localMilestones, setLocalMilestones] = useState(milestones);
+  useEffect(() => setLocalRocks(rocks), [rocks]);
+  useEffect(() => setLocalMilestones(milestones), [milestones]);
+
+  const topRocks = useMemo(
+    () => localRocks.filter((r) => !r.parentRockId).sort((a, b) => (a.order ?? 0) - (b.order ?? 0)),
+    [localRocks]
+  );
   const subRocksByParent = useMemo(() => {
     const map = new Map<string, Rock[]>();
-    rocks
+    localRocks
       .filter((r) => r.parentRockId)
       .forEach((r) => {
         const key = r.parentRockId as string;
@@ -90,16 +104,23 @@ export function QuarterClient({
         map.set(key, list);
       });
     return map;
-  }, [rocks]);
+  }, [localRocks]);
   const milestonesByRock = useMemo(() => {
     const map = new Map<string, Milestone[]>();
-    milestones.forEach((m) => {
+    localMilestones.forEach((m) => {
       const list = map.get(m.rockId) ?? [];
       list.push(m);
       map.set(m.rockId, list);
     });
     return map;
-  }, [milestones]);
+  }, [localMilestones]);
+
+  // כל אבני הדרך של סלע, כולל אלה שבתתי-הסלעים שלו - לצביעת "סלע הושלם" גם כשהמשימות בפועל יושבות על תתי-הסלעים.
+  function collectDescendantMilestones(rockId: string): Milestone[] {
+    const own = milestonesByRock.get(rockId) ?? [];
+    const subs = subRocksByParent.get(rockId) ?? [];
+    return [...own, ...subs.flatMap((sr) => collectDescendantMilestones(sr.id))];
+  }
 
   function toggleSelected(id: string) {
     setSelected((prev) => toggleInSet(prev, id));
@@ -121,6 +142,7 @@ export function QuarterClient({
   }
 
   function handleDeleteMilestone(id: string) {
+    setLocalMilestones((prev) => prev.filter((m) => m.id !== id));
     startTransition(async () => {
       const result = await deleteMilestoneAction(id);
       if (!result.ok) showError(result.message);
@@ -130,8 +152,10 @@ export function QuarterClient({
   function handlePromote() {
     if (!selected.size) return;
     const monthKey = currentMonthKey();
+    const ids = Array.from(selected);
+    setLocalMilestones((prev) => prev.map((m) => (ids.includes(m.id) ? { ...m, stage: "month", monthKey } : m)));
     startTransition(async () => {
-      const result = await promoteMilestonesToMonthAction(Array.from(selected), monthKey);
+      const result = await promoteMilestonesToMonthAction(ids, monthKey);
       if (!result.ok) {
         showError(result.message);
         return;
@@ -141,10 +165,61 @@ export function QuarterClient({
     });
   }
 
+  function addRockOptimistic(rock: {
+    title: string;
+    description: string;
+    parentRockId: string | null;
+    ownerUserId: string;
+    ownerName: string;
+  }) {
+    const tempId = `temp-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    setLocalRocks((prev) => [
+      ...prev,
+      {
+        id: tempId,
+        title: rock.title,
+        description: rock.description,
+        quarterKey,
+        parentRockId: rock.parentRockId,
+        ownerUserId: rock.ownerUserId,
+        ownerName: rock.ownerName,
+        status: "active",
+        order: Date.now(),
+        createdAt: Date.now(),
+      },
+    ]);
+    return tempId;
+  }
+
+  function addMilestoneOptimistic(m: { rockId: string; title: string; ownerUserId: string; ownerName: string }) {
+    const tempId = `temp-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    setLocalMilestones((prev) => [
+      ...prev,
+      {
+        id: tempId,
+        rockId: m.rockId,
+        quarterKey,
+        title: m.title,
+        ownerUserId: m.ownerUserId,
+        ownerName: m.ownerName,
+        stage: "backlog",
+        done: false,
+        carryOverCount: 0,
+        order: Date.now(),
+        createdAt: Date.now(),
+      },
+    ]);
+    return tempId;
+  }
+
   function renderMilestone(m: Milestone) {
     const selectable = m.stage === "backlog" && !m.done;
+    const pending = isTempId(m.id);
     return (
-      <div key={m.id} className="flex items-center justify-between gap-2 rounded-lg border border-card-border bg-white px-3 py-2 text-sm">
+      <div
+        key={m.id}
+        className={`flex items-center justify-between gap-2 rounded-lg border border-card-border bg-white px-3 py-2 text-sm ${pending ? "opacity-60" : ""}`}
+      >
         <label className="flex flex-1 items-center gap-2">
           {selectable ? (
             <input type="checkbox" checked={selected.has(m.id)} onChange={() => toggleSelected(m.id)} className="h-4 w-4 accent-teal" />
@@ -173,9 +248,17 @@ export function QuarterClient({
     const rockMilestones = milestonesByRock.get(rock.id) ?? [];
     const collapsed = collapsedRocks.has(rock.id);
     const doneCount = rockMilestones.filter((m) => m.done).length;
+    const allDescendantMilestones = collectDescendantMilestones(rock.id);
+    const allDone = allDescendantMilestones.length > 0 && allDescendantMilestones.every((m) => m.done);
+    const pending = isTempId(rock.id);
+
+    const cardClass =
+      level === 0
+        ? `card ${allDone ? "!border-emerald-300 !bg-emerald-50" : ""}`
+        : `rounded-[11px] border p-3 ${allDone ? "border-emerald-300 bg-emerald-50" : "border-card-border bg-[#f9fafb]"}`;
 
     return (
-      <div key={rock.id} className={level === 0 ? "card" : "rounded-[11px] border border-card-border bg-[#f9fafb] p-3"}>
+      <div key={rock.id} className={`${cardClass} ${pending ? "opacity-60" : ""}`}>
         <div className="flex items-start justify-between gap-2">
           <button
             type="button"
@@ -189,6 +272,11 @@ export function QuarterClient({
             )}
             <span>
               <span className="font-bold text-ink">{rock.title}</span>
+              {allDone && (
+                <span className="mr-2 rounded-full border border-emerald-300 bg-white px-2 py-0.5 text-[11px] font-bold text-emerald-700">
+                  ✓ הושלם במלואו
+                </span>
+              )}
               {rock.description ? <span className="mr-2 text-xs text-muted">{rock.description}</span> : null}
             </span>
           </button>
@@ -242,13 +330,11 @@ export function QuarterClient({
               <AddMilestoneForm
                 users={users}
                 onSubmit={(title, ownerUserId, ownerName) => {
+                  addMilestoneOptimistic({ rockId: rock.id, title, ownerUserId, ownerName });
+                  setOpenMilestoneForm((prev) => toggleInSet(prev, rock.id));
                   startTransition(async () => {
                     const result = await createMilestoneAction({ rockId: rock.id, quarterKey, title, ownerUserId, ownerName });
-                    if (!result.ok) {
-                      showError(result.message);
-                      return;
-                    }
-                    setOpenMilestoneForm((prev) => toggleInSet(prev, rock.id));
+                    if (!result.ok) showError(result.message);
                   });
                 }}
                 onCancel={() => setOpenMilestoneForm((prev) => toggleInSet(prev, rock.id))}
@@ -260,13 +346,11 @@ export function QuarterClient({
                 users={users}
                 placeholder="שם תת-הסלע"
                 onSubmit={(title, description, ownerUserId, ownerName) => {
+                  addRockOptimistic({ title, description, parentRockId: rock.id, ownerUserId, ownerName });
+                  setOpenSubForm((prev) => toggleInSet(prev, rock.id));
                   startTransition(async () => {
                     const result = await createRockAction({ title, description, quarterKey, parentRockId: rock.id, ownerUserId, ownerName });
-                    if (!result.ok) {
-                      showError(result.message);
-                      return;
-                    }
-                    setOpenSubForm((prev) => toggleInSet(prev, rock.id));
+                    if (!result.ok) showError(result.message);
                   });
                 }}
                 onCancel={() => setOpenSubForm((prev) => toggleInSet(prev, rock.id))}
@@ -322,13 +406,11 @@ export function QuarterClient({
             users={users}
             placeholder="שם הסלע"
             onSubmit={(title, description, ownerUserId, ownerName) => {
+              addRockOptimistic({ title, description, parentRockId: null, ownerUserId, ownerName });
+              setOpenNewRock(false);
               startTransition(async () => {
                 const result = await createRockAction({ title, description, quarterKey, ownerUserId, ownerName });
-                if (!result.ok) {
-                  showError(result.message);
-                  return;
-                }
-                setOpenNewRock(false);
+                if (!result.ok) showError(result.message);
               });
             }}
             onCancel={() => setOpenNewRock(false)}

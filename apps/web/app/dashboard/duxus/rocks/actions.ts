@@ -181,14 +181,14 @@ export async function createRockAction(input: {
       createdAt: Date.now(),
       createdBy,
     });
-  revalidatePath(ROCKS_PATH);
+  revalidatePath(ROCKS_PATH, "layout");
   return { ok: true };
 }
 
 export async function updateRockStatusAction(id: string, status: RockStatus): Promise<ActionResult> {
   await requireModuleAccess("duxus");
   await getAdminFirestore().collection(ROCKS).doc(id).set({ status }, { merge: true });
-  revalidatePath(ROCKS_PATH);
+  revalidatePath(ROCKS_PATH, "layout");
   return { ok: true };
 }
 
@@ -207,7 +207,7 @@ async function cascadeDeleteRock(db: Firestore, rockId: string): Promise<void> {
 export async function deleteRockAction(id: string): Promise<ActionResult> {
   await requireModuleAccess("duxus");
   await cascadeDeleteRock(getAdminFirestore(), id);
-  revalidatePath(ROCKS_PATH);
+  revalidatePath(ROCKS_PATH, "layout");
   return { ok: true };
 }
 
@@ -239,14 +239,14 @@ export async function createMilestoneAction(input: {
       createdAt: Date.now(),
       createdBy,
     });
-  revalidatePath(ROCKS_PATH);
+  revalidatePath(ROCKS_PATH, "layout");
   return { ok: true };
 }
 
 export async function deleteMilestoneAction(id: string): Promise<ActionResult> {
   await requireModuleAccess("duxus");
   await getAdminFirestore().collection(MILESTONES).doc(id).delete();
-  revalidatePath(ROCKS_PATH);
+  revalidatePath(ROCKS_PATH, "layout");
   return { ok: true };
 }
 
@@ -259,7 +259,7 @@ export async function promoteMilestonesToMonthAction(ids: string[], monthKey: st
     batch.set(db.collection(MILESTONES).doc(id), { stage: "month", monthKey }, { merge: true });
   });
   await batch.commit();
-  revalidatePath(ROCKS_PATH);
+  revalidatePath(ROCKS_PATH, "layout");
   return { ok: true };
 }
 
@@ -272,7 +272,7 @@ export async function promoteMilestonesToWeekAction(ids: string[], weekKey: stri
     batch.set(db.collection(MILESTONES).doc(id), { stage: "week", weekKey }, { merge: true });
   });
   await batch.commit();
-  revalidatePath(ROCKS_PATH);
+  revalidatePath(ROCKS_PATH, "layout");
   return { ok: true };
 }
 
@@ -283,7 +283,7 @@ export async function carryOverMilestoneToMonthAction(id: string, monthKey: stri
   const snap = await ref.get();
   const current = (snap.data() as Partial<Milestone> | undefined)?.carryOverCount ?? 0;
   await ref.set({ stage: "month", monthKey, carryOverCount: current + 1 }, { merge: true });
-  revalidatePath(ROCKS_PATH);
+  revalidatePath(ROCKS_PATH, "layout");
   return { ok: true };
 }
 
@@ -293,7 +293,7 @@ export async function carryOverMilestoneToWeekAction(id: string, weekKey: string
   const snap = await ref.get();
   const current = (snap.data() as Partial<Milestone> | undefined)?.carryOverCount ?? 0;
   await ref.set({ stage: "week", weekKey, carryOverCount: current + 1 }, { merge: true });
-  revalidatePath(ROCKS_PATH);
+  revalidatePath(ROCKS_PATH, "layout");
   return { ok: true };
 }
 
@@ -304,7 +304,7 @@ export async function toggleMilestoneDoneAction(id: string): Promise<ActionResul
   if (!snap.exists) return { ok: false, message: "אבן הדרך לא נמצאה" };
   const done = Boolean((snap.data() as Partial<Milestone>).done);
   await ref.set({ done: !done, doneAt: !done ? Date.now() : null }, { merge: true });
-  revalidatePath(ROCKS_PATH);
+  revalidatePath(ROCKS_PATH, "layout");
   return { ok: true };
 }
 
@@ -327,6 +327,6 @@ export async function saveReviewAction(period: RockReviewPeriod, periodKey: stri
     },
     { merge: true }
   );
-  revalidatePath(ROCKS_PATH);
+  revalidatePath(ROCKS_PATH, "layout");
   return { ok: true };
 }

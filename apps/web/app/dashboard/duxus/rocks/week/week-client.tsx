@@ -1,9 +1,9 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import type { Milestone, Rock, RockReview } from "@ultranet/shared-types";
-import { carryOverMilestoneToWeekAction, toggleMilestoneDoneAction } from "../actions";
+import { carryOverMilestoneToWeekAction, promoteMilestonesToWeekAction, toggleMilestoneDoneAction } from "../actions";
 import { shiftWeekKey, weekLabel as weekLabelOf } from "../date-utils";
 import { buildRocksById, rockBreadcrumb } from "../rock-lookup";
 import { useToast } from "@/lib/toast";
@@ -16,6 +16,13 @@ const WEEKLY_AGENDA = [
   "קביעת אבני דרך לשבוע הבא עם הטלת אחריות ברורה",
 ];
 
+function toggleInSet(set: Set<string>, id: string): Set<string> {
+  const next = new Set(set);
+  if (next.has(id)) next.delete(id);
+  else next.add(id);
+  return next;
+}
+
 export function WeekClient({
   weekKey,
   weekLabel,
@@ -23,6 +30,7 @@ export function WeekClient({
   nextHref,
   milestones,
   overdue,
+  monthPool,
   rocks,
   initialReviewNotes,
   previousReviews,
@@ -33,6 +41,7 @@ export function WeekClient({
   nextHref: string;
   milestones: Milestone[];
   overdue: Milestone[];
+  monthPool: Milestone[];
   rocks: Rock[];
   initialReviewNotes: string;
   previousReviews: RockReview[];
@@ -40,8 +49,33 @@ export function WeekClient({
   const { showSuccess, showError, toastNode } = useToast();
   const [isPending, startTransition] = useTransition();
   const [localMilestones, setLocalMilestones] = useState(milestones);
+  const [localMonthPool, setLocalMonthPool] = useState(monthPool);
+  const [selectedFromMonth, setSelectedFromMonth] = useState<Set<string>>(new Set());
+  useEffect(() => setLocalMilestones(milestones), [milestones]);
+  useEffect(() => setLocalMonthPool(monthPool), [monthPool]);
 
   const rocksById = useMemo(() => buildRocksById(rocks), [rocks]);
+
+  function toggleSelectedFromMonth(id: string) {
+    setSelectedFromMonth((prev) => toggleInSet(prev, id));
+  }
+
+  function handlePullFromMonth() {
+    if (!selectedFromMonth.size) return;
+    const ids = Array.from(selectedFromMonth);
+    const pulled = localMonthPool.filter((m) => ids.includes(m.id));
+    setLocalMonthPool((prev) => prev.filter((m) => !ids.includes(m.id)));
+    setLocalMilestones((prev) => [...prev, ...pulled.map((m) => ({ ...m, stage: "week" as const, weekKey }))]);
+    startTransition(async () => {
+      const result = await promoteMilestonesToWeekAction(ids, weekKey);
+      if (!result.ok) {
+        showError(result.message);
+        return;
+      }
+      showSuccess(`נוספו ${ids.length} אבני דרך לשבוע`);
+      setSelectedFromMonth(new Set());
+    });
+  }
 
   function handleToggleDone(id: string) {
     setLocalMilestones((prev) => prev.map((m) => (m.id === id ? { ...m, done: !m.done } : m)));
@@ -118,6 +152,43 @@ export function WeekClient({
         </div>
       )}
 
+      <div className="card mb-4">
+        <h3 className="mb-2 text-sm font-bold text-ink">בחירה מתוך החודש</h3>
+        {localMonthPool.length === 0 ? (
+          <div className="text-sm text-muted">אין עוד אבני דרך פנויות בחודש (או שכולן כבר קודמו).</div>
+        ) : (
+          <div className="flex flex-col gap-2">
+            {localMonthPool.map((m) => (
+              <label key={m.id} className="flex items-center gap-2 rounded-lg border border-card-border bg-white px-3 py-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={selectedFromMonth.has(m.id)}
+                  onChange={() => toggleSelectedFromMonth(m.id)}
+                  className="h-4 w-4 accent-teal"
+                />
+                <div className="flex-1">
+                  <div className="text-ink">{m.title}</div>
+                  <div className="text-[11px] text-muted">
+                    {rockBreadcrumb(m.rockId, rocksById)}
+                    {m.ownerName ? ` · ${m.ownerName}` : ""}
+                  </div>
+                </div>
+              </label>
+            ))}
+          </div>
+        )}
+        {selectedFromMonth.size > 0 && (
+          <button
+            type="button"
+            onClick={handlePullFromMonth}
+            disabled={isPending}
+            className="mt-3 rounded-[10px] bg-gradient-to-br from-teal to-teal-light px-4 py-2 text-xs font-bold text-white shadow-primary transition hover:opacity-90 disabled:opacity-60"
+          >
+            הוספת {selectedFromMonth.size} אבני דרך לשבוע הנוכחי
+          </button>
+        )}
+      </div>
+
       <div className="card">
         <div className="mb-2 flex items-center justify-between">
           <h3 className="text-sm font-bold text-ink">אבני דרך לשבוע הנוכחי</h3>
@@ -128,7 +199,7 @@ export function WeekClient({
           )}
         </div>
         {localMilestones.length === 0 ? (
-          <div className="text-sm text-muted">עדיין לא נבחרו אבני דרך לשבוע הזה - חוזרים לטאב &quot;חודשי&quot; ומעבירים משם.</div>
+          <div className="text-sm text-muted">עדיין לא נבחרו אבני דרך לשבוע הזה - בחרו מהרשימה למעלה.</div>
         ) : (
           <div className="flex flex-col gap-2">
             {localMilestones.map((m) => (
