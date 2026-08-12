@@ -1,10 +1,10 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { ChevronDown, ChevronUp } from "lucide-react";
 import type { Milestone, Rock, RockReview } from "@ultranet/shared-types";
-import { carryOverMilestoneToMonthAction, promoteMilestonesToWeekAction } from "../actions";
+import { carryOverMilestoneToMonthAction, promoteMilestonesToMonthAction, promoteMilestonesToWeekAction } from "../actions";
 import { currentWeekKey, weekLabel } from "../date-utils";
 import { buildRocksById, rockBreadcrumb } from "../rock-lookup";
 import { useToast } from "@/lib/toast";
@@ -34,6 +34,7 @@ export function MonthClient({
   nextHref,
   milestones,
   overdue,
+  quarterBacklog,
   rocks,
   initialReviewNotes,
   previousReviews,
@@ -44,6 +45,7 @@ export function MonthClient({
   nextHref: string;
   milestones: Milestone[];
   overdue: Milestone[];
+  quarterBacklog: Milestone[];
   rocks: Rock[];
   initialReviewNotes: string;
   previousReviews: RockReview[];
@@ -51,14 +53,41 @@ export function MonthClient({
   const { showSuccess, showError, toastNode } = useToast();
   const [isPending, startTransition] = useTransition();
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [selectedFromQuarter, setSelectedFromQuarter] = useState<Set<string>>(new Set());
   const [showPromoted, setShowPromoted] = useState(false);
 
+  const [localMilestones, setLocalMilestones] = useState(milestones);
+  const [localQuarterBacklog, setLocalQuarterBacklog] = useState(quarterBacklog);
+  useEffect(() => setLocalMilestones(milestones), [milestones]);
+  useEffect(() => setLocalQuarterBacklog(quarterBacklog), [quarterBacklog]);
+
   const rocksById = useMemo(() => buildRocksById(rocks), [rocks]);
-  const pending = useMemo(() => milestones.filter((m) => m.stage === "month" && !m.done), [milestones]);
-  const alreadyPromoted = useMemo(() => milestones.filter((m) => m.stage === "week" || m.done), [milestones]);
+  const pending = useMemo(() => localMilestones.filter((m) => m.stage === "month" && !m.done), [localMilestones]);
+  const alreadyPromoted = useMemo(() => localMilestones.filter((m) => m.stage === "week" || m.done), [localMilestones]);
 
   function toggleSelected(id: string) {
     setSelected((prev) => toggleInSet(prev, id));
+  }
+
+  function toggleSelectedFromQuarter(id: string) {
+    setSelectedFromQuarter((prev) => toggleInSet(prev, id));
+  }
+
+  function handlePullFromQuarter() {
+    if (!selectedFromQuarter.size) return;
+    const ids = Array.from(selectedFromQuarter);
+    const pulled = localQuarterBacklog.filter((m) => ids.includes(m.id));
+    setLocalQuarterBacklog((prev) => prev.filter((m) => !ids.includes(m.id)));
+    setLocalMilestones((prev) => [...prev, ...pulled.map((m) => ({ ...m, stage: "month" as const, monthKey }))]);
+    startTransition(async () => {
+      const result = await promoteMilestonesToMonthAction(ids, monthKey);
+      if (!result.ok) {
+        showError(result.message);
+        return;
+      }
+      showSuccess(`נוספו ${ids.length} אבני דרך לחודש`);
+      setSelectedFromQuarter(new Set());
+    });
   }
 
   function handlePromote() {
@@ -132,11 +161,46 @@ export function MonthClient({
       )}
 
       <div className="card mb-4">
+        <h3 className="mb-2 text-sm font-bold text-ink">בחירה מתוך הרבעון</h3>
+        {localQuarterBacklog.length === 0 ? (
+          <div className="text-sm text-muted">אין עוד אבני דרך פנויות ברבעון (או שכולן כבר קודמו).</div>
+        ) : (
+          <div className="flex flex-col gap-2">
+            {localQuarterBacklog.map((m) => (
+              <label key={m.id} className="flex items-center gap-2 rounded-lg border border-card-border bg-white px-3 py-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={selectedFromQuarter.has(m.id)}
+                  onChange={() => toggleSelectedFromQuarter(m.id)}
+                  className="h-4 w-4 accent-teal"
+                />
+                <div className="flex-1">
+                  <div className="text-ink">{m.title}</div>
+                  <div className="text-[11px] text-muted">
+                    {rockBreadcrumb(m.rockId, rocksById)}
+                    {m.ownerName ? ` · ${m.ownerName}` : ""}
+                  </div>
+                </div>
+              </label>
+            ))}
+          </div>
+        )}
+        {selectedFromQuarter.size > 0 && (
+          <button
+            type="button"
+            onClick={handlePullFromQuarter}
+            disabled={isPending}
+            className="mt-3 rounded-[10px] bg-gradient-to-br from-teal to-teal-light px-4 py-2 text-xs font-bold text-white shadow-primary transition hover:opacity-90 disabled:opacity-60"
+          >
+            הוספת {selectedFromQuarter.size} אבני דרך לחודש הנוכחי
+          </button>
+        )}
+      </div>
+
+      <div className="card mb-4">
         <h3 className="mb-2 text-sm font-bold text-ink">אבני דרך לחודש הנוכחי</h3>
         {pending.length === 0 ? (
-          <div className="text-sm text-muted">
-            עדיין לא נבחרו אבני דרך לחודש הזה - חוזרים לטאב &quot;רבעון&quot; ומעבירים משם.
-          </div>
+          <div className="text-sm text-muted">עדיין לא נבחרו אבני דרך לחודש הזה - בחרו מהרשימה למעלה.</div>
         ) : (
           <div className="flex flex-col gap-2">
             {pending.map((m) => (
