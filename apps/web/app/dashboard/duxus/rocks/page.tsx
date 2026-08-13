@@ -2,7 +2,7 @@ import { Target } from "lucide-react";
 import { requireModuleAccess } from "@/lib/perms";
 import { DuxusTabs } from "../duxus-tabs";
 import { RocksTabs } from "./rocks-tabs";
-import { getRocksForQuarter, getMilestonesForQuarter, listAssignableUsers, getReview, listReviews } from "./actions";
+import { getRocksForQuarter, getMilestonesForQuarter, getReview, listReviews } from "./actions";
 import { currentQuarterKey, shiftQuarterKey, quarterLabel } from "./date-utils";
 import { QuarterClient } from "./quarter-client";
 
@@ -10,10 +10,9 @@ export default async function RocksQuarterPage({ searchParams }: { searchParams:
   await requireModuleAccess("duxus");
   const quarterKey = searchParams.q || currentQuarterKey();
 
-  const [rocks, milestones, users, review, reviews] = await Promise.all([
+  const [rocks, milestones, review, reviews] = await Promise.all([
     getRocksForQuarter(quarterKey),
     getMilestonesForQuarter(quarterKey),
-    listAssignableUsers(),
     getReview("quarterly", quarterKey),
     listReviews("quarterly"),
   ]);
@@ -33,7 +32,6 @@ export default async function RocksQuarterPage({ searchParams }: { searchParams:
         nextHref={`/dashboard/duxus/rocks?q=${shiftQuarterKey(quarterKey, 1)}`}
         rocks={rocks}
         milestones={milestones}
-        users={users}
         initialReviewNotes={review?.notes ?? ""}
         previousReviews={reviews.filter((r) => r.periodKey !== quarterKey)}
       />
