@@ -2,7 +2,7 @@ import { Target } from "lucide-react";
 import { requireModuleAccess } from "@/lib/perms";
 import { DuxusTabs } from "../../duxus-tabs";
 import { RocksTabs } from "../rocks-tabs";
-import { getMilestonesByMonthKey, getMilestonesByStage, getMilestonesForQuarter, getAllRocks, getReview, listReviews } from "../actions";
+import { getMilestonesForQuarter, getMilestonesByStage, getAllRocks, getReview, listReviews } from "../actions";
 import { currentMonthKey, shiftMonthKey, monthLabel, monthQuarterKey } from "../date-utils";
 import { MonthClient } from "./month-client";
 
@@ -11,17 +11,15 @@ export default async function RocksMonthPage({ searchParams }: { searchParams: {
   const monthKey = searchParams.m || currentMonthKey();
   const quarterKey = monthQuarterKey(monthKey);
 
-  const [monthMilestones, allMonthStage, quarterMilestones, rocks, review, reviews] = await Promise.all([
-    getMilestonesByMonthKey(monthKey),
-    getMilestonesByStage("month"),
+  const [quarterMilestones, allMonthStage, rocks, review, reviews] = await Promise.all([
     getMilestonesForQuarter(quarterKey),
+    getMilestonesByStage("month"),
     getAllRocks(),
     getReview("monthly", monthKey),
     listReviews("monthly"),
   ]);
 
   const overdue = allMonthStage.filter((m) => m.monthKey && m.monthKey !== monthKey && !m.done);
-  const quarterBacklog = quarterMilestones.filter((m) => m.stage === "backlog");
 
   return (
     <div>
@@ -33,12 +31,12 @@ export default async function RocksMonthPage({ searchParams }: { searchParams: {
       <RocksTabs />
       <MonthClient
         monthKey={monthKey}
+        quarterKey={quarterKey}
         monthLabel={monthLabel(monthKey)}
         prevHref={`/dashboard/duxus/rocks/month?m=${shiftMonthKey(monthKey, -1)}`}
         nextHref={`/dashboard/duxus/rocks/month?m=${shiftMonthKey(monthKey, 1)}`}
-        milestones={monthMilestones}
+        quarterMilestones={quarterMilestones}
         overdue={overdue}
-        quarterBacklog={quarterBacklog}
         rocks={rocks}
         initialReviewNotes={review?.notes ?? ""}
         previousReviews={reviews.filter((r) => r.periodKey !== monthKey)}

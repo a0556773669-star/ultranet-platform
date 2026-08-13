@@ -68,17 +68,6 @@ function toReview(id: string, data: Partial<RockReview> | undefined): RockReview
   };
 }
 
-export type AssignableUser = { id: string; name: string };
-
-export async function listAssignableUsers(): Promise<AssignableUser[]> {
-  await requireModuleAccess("duxus");
-  const snap = await getAdminFirestore().collection("n_users").get();
-  return snap.docs
-    .map((d) => ({ id: d.id, name: String((d.data() as { name?: string }).name ?? "") }))
-    .filter((u) => u.name)
-    .sort((a, b) => a.name.localeCompare(b.name, "he"));
-}
-
 // --- קריאה ---
 
 export async function getRocksForQuarter(quarterKey: string): Promise<Rock[]> {
@@ -213,32 +202,42 @@ export async function deleteRockAction(id: string): Promise<ActionResult> {
 
 // --- כתיבה: אבני דרך ---
 
+/**
+ * יוצרת אבן דרך. ברירת המחדל היא stage="backlog" (כמו ביצירה מטאב רבעון); אם
+ * מעבירים stage="month"/"week" (יצירה ישירה מטאב חודשי/שבועי) יש לצרף גם את
+ * monthKey/weekKey המתאימים כדי שהיא תופיע מיד בדלי הנכון.
+ */
 export async function createMilestoneAction(input: {
   rockId: string;
   quarterKey: string;
   title: string;
   ownerUserId?: string;
   ownerName?: string;
+  stage?: MilestoneStage;
+  monthKey?: string;
+  weekKey?: string;
 }): Promise<ActionResult> {
   await requireModuleAccess("duxus");
   const title = input.title.trim();
   if (!title) return { ok: false, message: "יש להזין כותרת לאבן דרך" };
   const createdBy = await currentUserLabel();
-  await getAdminFirestore()
-    .collection(MILESTONES)
-    .add({
-      rockId: input.rockId,
-      quarterKey: input.quarterKey,
-      title,
-      ownerUserId: input.ownerUserId ?? "",
-      ownerName: input.ownerName ?? "",
-      stage: "backlog" satisfies MilestoneStage,
-      done: false,
-      carryOverCount: 0,
-      order: Date.now(),
-      createdAt: Date.now(),
-      createdBy,
-    });
+  const stage: MilestoneStage = input.stage ?? "backlog";
+  const data: Record<string, unknown> = {
+    rockId: input.rockId,
+    quarterKey: input.quarterKey,
+    title,
+    ownerUserId: input.ownerUserId ?? "",
+    ownerName: input.ownerName ?? "",
+    stage,
+    done: false,
+    carryOverCount: 0,
+    order: Date.now(),
+    createdAt: Date.now(),
+    createdBy,
+  };
+  if (stage === "month" || stage === "week") data.monthKey = input.monthKey;
+  if (stage === "week") data.weekKey = input.weekKey;
+  await getAdminFirestore().collection(MILESTONES).add(data);
   revalidatePath(ROCKS_PATH, "layout");
   return { ok: true };
 }

@@ -2,13 +2,20 @@
 
 import { useEffect, useMemo, useState, useTransition } from "react";
 import Link from "next/link";
-import { ChevronDown, ChevronUp } from "lucide-react";
+import { Plus } from "lucide-react";
 import type { Milestone, Rock, RockReview } from "@ultranet/shared-types";
-import { carryOverMilestoneToMonthAction, promoteMilestonesToMonthAction, promoteMilestonesToWeekAction } from "../actions";
+import {
+  carryOverMilestoneToMonthAction,
+  createMilestoneAction,
+  promoteMilestonesToMonthAction,
+  promoteMilestonesToWeekAction,
+} from "../actions";
 import { currentWeekKey, weekLabel } from "../date-utils";
 import { buildRocksById, rockBreadcrumb } from "../rock-lookup";
 import { useToast } from "@/lib/toast";
 import { ReviewPanel } from "../review-panel";
+import { RockMilestoneTree, groupRocksByParent, groupMilestonesByRock, toggleInSet } from "../rock-tree";
+import { AddMilestoneForm } from "../add-forms";
 
 const MONTHLY_AGENDA = [
   "מה נשמע?",
@@ -20,65 +27,55 @@ const MONTHLY_AGENDA = [
   "בחירת אבני דרך מתוכן לשבוע הקרוב",
 ];
 
-function toggleInSet(set: Set<string>, id: string): Set<string> {
-  const next = new Set(set);
-  if (next.has(id)) next.delete(id);
-  else next.add(id);
-  return next;
-}
-
 export function MonthClient({
   monthKey,
+  quarterKey,
   monthLabel,
   prevHref,
   nextHref,
-  milestones,
+  quarterMilestones,
   overdue,
-  quarterBacklog,
   rocks,
   initialReviewNotes,
   previousReviews,
 }: {
   monthKey: string;
+  quarterKey: string;
   monthLabel: string;
   prevHref: string;
   nextHref: string;
-  milestones: Milestone[];
+  quarterMilestones: Milestone[];
   overdue: Milestone[];
-  quarterBacklog: Milestone[];
   rocks: Rock[];
   initialReviewNotes: string;
   previousReviews: RockReview[];
 }) {
   const { showSuccess, showError, toastNode } = useToast();
   const [isPending, startTransition] = useTransition();
-  const [selected, setSelected] = useState<Set<string>>(new Set());
   const [selectedFromQuarter, setSelectedFromQuarter] = useState<Set<string>>(new Set());
-  const [showPromoted, setShowPromoted] = useState(false);
+  const [selectedForWeek, setSelectedForWeek] = useState<Set<string>>(new Set());
+  const [openMilestoneForm, setOpenMilestoneForm] = useState<Set<string>>(new Set());
 
-  const [localMilestones, setLocalMilestones] = useState(milestones);
-  const [localQuarterBacklog, setLocalQuarterBacklog] = useState(quarterBacklog);
-  useEffect(() => setLocalMilestones(milestones), [milestones]);
-  useEffect(() => setLocalQuarterBacklog(quarterBacklog), [quarterBacklog]);
+  const [localMilestones, setLocalMilestones] = useState(quarterMilestones);
+  useEffect(() => setLocalMilestones(quarterMilestones), [quarterMilestones]);
 
   const rocksById = useMemo(() => buildRocksById(rocks), [rocks]);
-  const pending = useMemo(() => localMilestones.filter((m) => m.stage === "month" && !m.done), [localMilestones]);
-  const alreadyPromoted = useMemo(() => localMilestones.filter((m) => m.stage === "week" || m.done), [localMilestones]);
+  const quarterRocks = useMemo(() => rocks.filter((r) => r.quarterKey === quarterKey), [rocks, quarterKey]);
+  const { topRocks, subRocksByParent } = useMemo(() => groupRocksByParent(quarterRocks), [quarterRocks]);
+  const milestonesByRock = useMemo(() => groupMilestonesByRock(localMilestones), [localMilestones]);
 
-  function toggleSelected(id: string) {
-    setSelected((prev) => toggleInSet(prev, id));
+  function toggleFromQuarter(id: string) {
+    setSelectedFromQuarter((prev) => toggleInSet(prev, id));
   }
 
-  function toggleSelectedFromQuarter(id: string) {
-    setSelectedFromQuarter((prev) => toggleInSet(prev, id));
+  function toggleForWeek(id: string) {
+    setSelectedForWeek((prev) => toggleInSet(prev, id));
   }
 
   function handlePullFromQuarter() {
     if (!selectedFromQuarter.size) return;
     const ids = Array.from(selectedFromQuarter);
-    const pulled = localQuarterBacklog.filter((m) => ids.includes(m.id));
-    setLocalQuarterBacklog((prev) => prev.filter((m) => !ids.includes(m.id)));
-    setLocalMilestones((prev) => [...prev, ...pulled.map((m) => ({ ...m, stage: "month" as const, monthKey }))]);
+    setLocalMilestones((prev) => prev.map((m) => (ids.includes(m.id) ? { ...m, stage: "month" as const, monthKey } : m)));
     startTransition(async () => {
       const result = await promoteMilestonesToMonthAction(ids, monthKey);
       if (!result.ok) {
@@ -90,17 +87,19 @@ export function MonthClient({
     });
   }
 
-  function handlePromote() {
-    if (!selected.size) return;
+  function handlePromoteToWeek() {
+    if (!selectedForWeek.size) return;
     const weekKey = currentWeekKey();
+    const ids = Array.from(selectedForWeek);
+    setLocalMilestones((prev) => prev.map((m) => (ids.includes(m.id) ? { ...m, stage: "week" as const, weekKey } : m)));
     startTransition(async () => {
-      const result = await promoteMilestonesToWeekAction(Array.from(selected), weekKey);
+      const result = await promoteMilestonesToWeekAction(ids, weekKey);
       if (!result.ok) {
         showError(result.message);
         return;
       }
       showSuccess(`הועבר ל${weekLabel(weekKey)}`);
-      setSelected(new Set());
+      setSelectedForWeek(new Set());
     });
   }
 
@@ -109,6 +108,99 @@ export function MonthClient({
       const result = await carryOverMilestoneToMonthAction(id, monthKey);
       if (!result.ok) showError(result.message);
     });
+  }
+
+  function renderMilestone(m: Milestone) {
+    if (m.stage === "backlog") {
+      return (
+        <label key={m.id} className="flex items-center gap-2 rounded-lg border border-card-border bg-white px-3 py-2 text-sm">
+          <input
+            type="checkbox"
+            checked={selectedFromQuarter.has(m.id)}
+            onChange={() => toggleFromQuarter(m.id)}
+            className="h-4 w-4 accent-teal"
+          />
+          <span className="flex-1 text-ink">{m.title}</span>
+          {m.ownerName ? <span className="text-[11px] text-muted">{m.ownerName}</span> : null}
+          <span className="rounded-full border border-card-border bg-[#f4f6f9] px-2 py-0.5 text-[11px] font-bold text-muted">ברבעון</span>
+        </label>
+      );
+    }
+    if (m.stage === "month" && m.monthKey === monthKey && !m.done) {
+      return (
+        <label key={m.id} className="flex items-center gap-2 rounded-lg border border-card-border bg-white px-3 py-2 text-sm">
+          <input type="checkbox" checked={selectedForWeek.has(m.id)} onChange={() => toggleForWeek(m.id)} className="h-4 w-4 accent-teal" />
+          <span className="flex-1 text-ink">{m.title}</span>
+          {m.ownerName ? <span className="text-[11px] text-muted">{m.ownerName}</span> : null}
+          <span className="rounded-full border border-teal bg-teal-bg px-2 py-0.5 text-[11px] font-bold text-teal-dark">בחודש הנוכחי</span>
+        </label>
+      );
+    }
+    return (
+      <div key={m.id} className="flex items-center justify-between gap-2 rounded-lg border border-card-border bg-white px-3 py-2 text-sm">
+        <span className={m.done ? "text-muted line-through" : "text-ink"}>{m.title}</span>
+        {m.ownerName ? <span className="text-[11px] text-muted">{m.ownerName}</span> : null}
+        {m.done ? (
+          <span className="rounded-full border border-emerald-300 bg-emerald-50 px-2 py-0.5 text-[11px] font-bold text-emerald-700">בוצע</span>
+        ) : m.stage === "week" ? (
+          <span className="rounded-full border border-purple bg-[#f4ecf8] px-2 py-0.5 text-[11px] font-bold text-purple">בשבועי</span>
+        ) : (
+          <span className="rounded-full border border-card-border bg-[#f4f6f9] px-2 py-0.5 text-[11px] font-bold text-muted">{m.monthKey}</span>
+        )}
+      </div>
+    );
+  }
+
+  function renderRockFooter(rock: Rock) {
+    return (
+      <>
+        <button
+          type="button"
+          onClick={() => setOpenMilestoneForm((prev) => toggleInSet(prev, rock.id))}
+          className="flex w-fit items-center gap-1 pt-1 text-xs font-semibold text-teal hover:underline"
+        >
+          <Plus className="h-3.5 w-3.5" />
+          אבן דרך לחודש הזה
+        </button>
+        {openMilestoneForm.has(rock.id) && (
+          <AddMilestoneForm
+            onSubmit={(title, ownerName) => {
+              const tempId = `temp-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+              setLocalMilestones((prev) => [
+                ...prev,
+                {
+                  id: tempId,
+                  rockId: rock.id,
+                  quarterKey,
+                  title,
+                  ownerUserId: "",
+                  ownerName,
+                  stage: "month",
+                  monthKey,
+                  done: false,
+                  carryOverCount: 0,
+                  order: Date.now(),
+                  createdAt: Date.now(),
+                },
+              ]);
+              setOpenMilestoneForm((prev) => toggleInSet(prev, rock.id));
+              startTransition(async () => {
+                const result = await createMilestoneAction({
+                  rockId: rock.id,
+                  quarterKey,
+                  title,
+                  ownerName,
+                  stage: "month",
+                  monthKey,
+                });
+                if (!result.ok) showError(result.message);
+              });
+            }}
+            onCancel={() => setOpenMilestoneForm((prev) => toggleInSet(prev, rock.id))}
+          />
+        )}
+      </>
+    );
   }
 
   return (
@@ -160,101 +252,43 @@ export function MonthClient({
         </div>
       )}
 
-      <div className="card mb-4">
-        <h3 className="mb-2 text-sm font-bold text-ink">בחירה מתוך הרבעון</h3>
-        {localQuarterBacklog.length === 0 ? (
-          <div className="text-sm text-muted">אין עוד אבני דרך פנויות ברבעון (או שכולן כבר קודמו).</div>
-        ) : (
-          <div className="flex flex-col gap-2">
-            {localQuarterBacklog.map((m) => (
-              <label key={m.id} className="flex items-center gap-2 rounded-lg border border-card-border bg-white px-3 py-2 text-sm">
-                <input
-                  type="checkbox"
-                  checked={selectedFromQuarter.has(m.id)}
-                  onChange={() => toggleSelectedFromQuarter(m.id)}
-                  className="h-4 w-4 accent-teal"
-                />
-                <div className="flex-1">
-                  <div className="text-ink">{m.title}</div>
-                  <div className="text-[11px] text-muted">
-                    {rockBreadcrumb(m.rockId, rocksById)}
-                    {m.ownerName ? ` · ${m.ownerName}` : ""}
-                  </div>
-                </div>
-              </label>
-            ))}
-          </div>
-        )}
-        {selectedFromQuarter.size > 0 && (
-          <button
-            type="button"
-            onClick={handlePullFromQuarter}
-            disabled={isPending}
-            className="mt-3 rounded-[10px] bg-gradient-to-br from-teal to-teal-light px-4 py-2 text-xs font-bold text-white shadow-primary transition hover:opacity-90 disabled:opacity-60"
-          >
-            הוספת {selectedFromQuarter.size} אבני דרך לחודש הנוכחי
-          </button>
-        )}
-      </div>
+      <RockMilestoneTree
+        topRocks={topRocks}
+        subRocksByParent={subRocksByParent}
+        milestonesByRock={milestonesByRock}
+        renderMilestone={renderMilestone}
+        renderRockFooter={renderRockFooter}
+        emptyMessage={'עדיין אין סלעים לרבעון הזה - חוזרים לטאב "רבעון" ומתחילים שם.'}
+      />
 
-      <div className="card mb-4">
-        <h3 className="mb-2 text-sm font-bold text-ink">אבני דרך לחודש הנוכחי</h3>
-        {pending.length === 0 ? (
-          <div className="text-sm text-muted">עדיין לא נבחרו אבני דרך לחודש הזה - בחרו מהרשימה למעלה.</div>
-        ) : (
-          <div className="flex flex-col gap-2">
-            {pending.map((m) => (
-              <label key={m.id} className="flex items-center gap-2 rounded-lg border border-card-border bg-white px-3 py-2 text-sm">
-                <input type="checkbox" checked={selected.has(m.id)} onChange={() => toggleSelected(m.id)} className="h-4 w-4 accent-teal" />
-                <div className="flex-1">
-                  <div className="text-ink">{m.title}</div>
-                  <div className="text-[11px] text-muted">
-                    {rockBreadcrumb(m.rockId, rocksById)}
-                    {m.ownerName ? ` · ${m.ownerName}` : ""}
-                  </div>
-                </div>
-              </label>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {alreadyPromoted.length > 0 && (
-        <div className="card mb-4">
-          <button type="button" onClick={() => setShowPromoted((v) => !v)} className="flex w-full items-center justify-between text-right">
-            <span className="text-sm font-bold text-ink">כבר בטיפול השבועי / הושלמו ({alreadyPromoted.length})</span>
-            {showPromoted ? <ChevronUp className="h-4 w-4 text-muted" /> : <ChevronDown className="h-4 w-4 text-muted" />}
-          </button>
-          {showPromoted && (
-            <div className="mt-2 flex flex-col gap-2">
-              {alreadyPromoted.map((m) => (
-                <div key={m.id} className="flex items-center justify-between gap-2 rounded-lg border border-card-border bg-white px-3 py-2 text-sm">
-                  <span className={m.done ? "text-muted line-through" : "text-ink"}>{m.title}</span>
-                  {m.done ? (
-                    <span className="rounded-full border border-emerald-300 bg-emerald-50 px-2 py-0.5 text-[11px] font-bold text-emerald-700">
-                      בוצע
-                    </span>
-                  ) : (
-                    <span className="rounded-full border border-purple bg-[#f4ecf8] px-2 py-0.5 text-[11px] font-bold text-purple">בשבועי</span>
-                  )}
-                </div>
-              ))}
+      {(selectedFromQuarter.size > 0 || selectedForWeek.size > 0) && (
+        <div className="sticky bottom-4 mt-4 flex flex-col gap-2">
+          {selectedFromQuarter.size > 0 && (
+            <div className="flex items-center justify-between rounded-[11px] border border-teal bg-white px-4 py-3 shadow-lg">
+              <span className="text-sm font-bold text-ink">{selectedFromQuarter.size} נבחרו מהרבעון</span>
+              <button
+                type="button"
+                onClick={handlePullFromQuarter}
+                disabled={isPending}
+                className="rounded-[10px] bg-gradient-to-br from-teal to-teal-light px-4 py-2 text-xs font-bold text-white shadow-primary transition hover:opacity-90 disabled:opacity-60"
+              >
+                הוספה לחודש הנוכחי
+              </button>
             </div>
           )}
-        </div>
-      )}
-
-      {selected.size > 0 && (
-        <div className="sticky bottom-4 mt-4 flex items-center justify-between rounded-[11px] border border-teal bg-white px-4 py-3 shadow-lg">
-          <span className="text-sm font-bold text-ink">{selected.size} אבני דרך נבחרו</span>
-          <button
-            type="button"
-            onClick={handlePromote}
-            disabled={isPending}
-            className="rounded-[10px] bg-gradient-to-br from-teal to-teal-light px-4 py-2 text-xs font-bold text-white shadow-primary transition hover:opacity-90 disabled:opacity-60"
-          >
-            העברה ל{weekLabel(currentWeekKey())}
-          </button>
+          {selectedForWeek.size > 0 && (
+            <div className="flex items-center justify-between rounded-[11px] border border-teal bg-white px-4 py-3 shadow-lg">
+              <span className="text-sm font-bold text-ink">{selectedForWeek.size} אבני דרך נבחרו</span>
+              <button
+                type="button"
+                onClick={handlePromoteToWeek}
+                disabled={isPending}
+                className="rounded-[10px] bg-gradient-to-br from-teal to-teal-light px-4 py-2 text-xs font-bold text-white shadow-primary transition hover:opacity-90 disabled:opacity-60"
+              >
+                העברה ל{weekLabel(currentWeekKey())}
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>
