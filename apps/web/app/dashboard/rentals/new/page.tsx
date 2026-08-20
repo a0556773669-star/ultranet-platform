@@ -1,6 +1,7 @@
 import { requireModuleAccess } from "@/lib/perms";
 import { getAdminFirestore } from "@/lib/firebase-admin";
 import type { Branch, RentalClient, Laptop, Stick, CollectionRoute, Rental } from "@ultranet/shared-types";
+import { effectiveLaptopRates, effectiveStickRates } from "@/lib/rental-pricing";
 import { NewRentalForm } from "./new-rental-form";
 
 export default async function NewRentalPage({
@@ -29,8 +30,14 @@ export default async function NewRentalPage({
   const clients = clientsSnap.docs.map(
     (d) => ({ ...(d.data() as Omit<RentalClient, "id">), id: d.id }) as RentalClient
   );
-  const laptops = laptopsSnap.docs.map((d) => ({ ...(d.data() as Omit<Laptop, "id">), id: d.id }) as Laptop);
-  const sticks = sticksSnap.docs.map((d) => ({ ...(d.data() as Omit<Stick, "id">), id: d.id }) as Stick);
+  // כל מחשב/סטיק מוצג עם המחירון בפועל: מה שהוזן עליו, וכל השאר יורש ממחירון הסניף (/pricing).
+  const pricingByBranch = new Map(allBranches.map((b) => [b.id, b.rentalPricing]));
+  const laptops = laptopsSnap.docs
+    .map((d) => ({ ...(d.data() as Omit<Laptop, "id">), id: d.id }) as Laptop)
+    .map((l) => ({ ...l, ...effectiveLaptopRates(l, pricingByBranch.get(l.branchId)) }));
+  const sticks = sticksSnap.docs
+    .map((d) => ({ ...(d.data() as Omit<Stick, "id">), id: d.id }) as Stick)
+    .map((s) => ({ ...s, ...effectiveStickRates(s, pricingByBranch.get(s.branchId)) }));
   const routes = routesSnap.docs.map(
     (d) => ({ ...(d.data() as Omit<CollectionRoute, "id">), id: d.id }) as CollectionRoute
   );

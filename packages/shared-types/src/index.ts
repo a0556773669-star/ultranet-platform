@@ -17,6 +17,31 @@ export type DepositsTo = "owner" | "branch";
 export type RouteStatus = "not_connected" | "connected" | "paused";
 
 /** collection: n_branches */
+/**
+ * מחירון ברירת המחדל של סניף השכרות (`n_branches.rentalPricing`).
+ * מוגדר פעם אחת לסניף, וכל מחשב/סטיק בסניף יורש ממנו כל מחיר שלא הוזן לו ידנית.
+ * 0 = לא הוגדר.
+ */
+export interface BranchRentalPricing {
+  laptop: {
+    dayPrice: number;
+    weekPrice: number;
+    monthPrice: number;
+    /** מחירי "בלי סטיק"; 0 = כמו המחיר עם סטיק */
+    noInternetDayPrice: number;
+    noInternetWeekPrice: number;
+    noInternetMonthPrice: number;
+  };
+  stick: {
+    day1: number;
+    /** 0 = כמו המחיר היומי השוטף (day3plus) */
+    day2: number;
+    day3plus: number;
+    weekPrice: number;
+    monthPrice: number;
+  };
+}
+
 export interface Branch {
     id: string;
     name: string;
@@ -37,6 +62,8 @@ export interface Branch {
   collectionRouteId?: string | null;
   allowCollection?: boolean;
   allowReceipts?: boolean;
+  /** rentals branches only: default price list every laptop/stick in the branch inherits */
+  rentalPricing?: BranchRentalPricing;
   /** soft-delete: "deleting" a branch sets this instead of removing the Firestore doc, so its
    *  accounting history (expenses/transfers/income already tied to its branchId) stays intact
    *  and resolvable by name. Every active-branch query in the app must filter this out; only the
@@ -157,6 +184,8 @@ export interface Laptop {
     monthPrice: number;
   hasStick?: boolean;
   simNumber?: string;
+  /** legacy: true אם הוגדרו למחשב מחירי "בלי סטיק". נגזר אוטומטית בשמירה; התמחור עצמו
+   *  מסתמך על ערכי `noInternet*` ולא על הדגל הזה. */
   altPricing?: boolean;
   noInternetDayPrice?: number;
   noInternetWeekPrice?: number;

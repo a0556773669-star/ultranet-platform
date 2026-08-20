@@ -17,6 +17,8 @@
  * (13/08 ו-14/08 נספרים; 15/08 שבת נבלעת ביום שישי).
  */
 
+import type { BranchRentalPricing } from "@ultranet/shared-types";
+
 const DAY_MS = 86_400_000;
 const MAX_DAYS = 3650;
 /** שבוע = 7 ימים קלנדריים = 6 ימי חיוב (שבת נבלעת ביום שישי). */
@@ -341,26 +343,78 @@ export function calcStickQuote(
   });
 }
 
+/** שדות המחירון של מחשב נייד (כולם רשות - מה שחסר יורש ממחירון הסניף). */
+export type LaptopRateFields = {
+  dayPrice?: number;
+  weekPrice?: number;
+  monthPrice?: number;
+  noInternetDayPrice?: number;
+  noInternetWeekPrice?: number;
+  noInternetMonthPrice?: number;
+};
+
+export type EffectiveLaptopRates = Required<LaptopRateFields>;
+
+/**
+ * המחירון בפועל של מחשב: כל שדה שלא הוזן על המחשב עצמו יורש ממחירון הסניף
+ * (`n_branches.rentalPricing`), שמוגדר פעם אחת לכל סניף.
+ */
+export function effectiveLaptopRates(
+  laptop: LaptopRateFields | undefined,
+  branchPricing: BranchRentalPricing | undefined | null
+): EffectiveLaptopRates {
+  const d = branchPricing?.laptop;
+  return {
+    dayPrice: rate(laptop?.dayPrice) || rate(d?.dayPrice),
+    weekPrice: rate(laptop?.weekPrice) || rate(d?.weekPrice),
+    monthPrice: rate(laptop?.monthPrice) || rate(d?.monthPrice),
+    noInternetDayPrice: rate(laptop?.noInternetDayPrice) || rate(d?.noInternetDayPrice),
+    noInternetWeekPrice: rate(laptop?.noInternetWeekPrice) || rate(d?.noInternetWeekPrice),
+    noInternetMonthPrice: rate(laptop?.noInternetMonthPrice) || rate(d?.noInternetMonthPrice),
+  };
+}
+
+/**
+ * המחירון בפועל של סטיק: כל שדה שלא הוזן על הסטיק עצמו יורש ממחירון הסניף.
+ */
+export function effectiveStickRates(
+  stick: Partial<StickPriceRates> | undefined,
+  branchPricing: BranchRentalPricing | undefined | null
+): StickPriceRates {
+  const d = branchPricing?.stick;
+  return {
+    day1: rate(stick?.day1) || rate(d?.day1),
+    day2: rate(stick?.day2) || rate(d?.day2),
+    day3plus: rate(stick?.day3plus) || rate(d?.day3plus),
+    weekPrice: rate(stick?.weekPrice) || rate(d?.weekPrice),
+    monthPrice: rate(stick?.monthPrice) || rate(d?.monthPrice),
+  };
+}
+
 /**
  * מחירון המחשב לפי הווריאנט שנבחר בהשכרה: "עם סטיק" (ברירת מחדל) או "בלי סטיק".
- * שדה "בלי סטיק" שהושאר ריק נופל חזרה למחיר הרגיל של אותה מדרגה.
+ * מחיר "בלי סטיק" שלא הוגדר (לא על המחשב ולא על הסניף) נופל חזרה למחיר "עם סטיק".
  */
 export function laptopRatesFor(
-  laptop: {
-    dayPrice: number;
-    weekPrice?: number;
-    monthPrice?: number;
-    altPricing?: boolean;
-    noInternetDayPrice?: number;
-    noInternetWeekPrice?: number;
-    noInternetMonthPrice?: number;
-  },
+  rates: LaptopRateFields,
   variant: "normal" | "noInternet" | undefined
 ): { dayPrice: number; weekPrice: number; monthPrice: number } {
-  const useAlt = variant === "noInternet" && !!laptop.altPricing;
+  const dayPrice = rate(rates.dayPrice);
+  const weekPrice = rate(rates.weekPrice);
+  const monthPrice = rate(rates.monthPrice);
+  if (variant !== "noInternet") return { dayPrice, weekPrice, monthPrice };
   return {
-    dayPrice: (useAlt ? rate(laptop.noInternetDayPrice) : 0) || rate(laptop.dayPrice),
-    weekPrice: (useAlt ? rate(laptop.noInternetWeekPrice) : 0) || rate(laptop.weekPrice),
-    monthPrice: (useAlt ? rate(laptop.noInternetMonthPrice) : 0) || rate(laptop.monthPrice),
+    dayPrice: rate(rates.noInternetDayPrice) || dayPrice,
+    weekPrice: rate(rates.noInternetWeekPrice) || weekPrice,
+    monthPrice: rate(rates.noInternetMonthPrice) || monthPrice,
   };
+}
+
+/** האם למחשב/סניף הוגדר מחירון נפרד ל"בלי סטיק". */
+export function hasWithoutStickPricing(rates: LaptopRateFields): boolean {
+  return (
+    rate(rates.noInternetDayPrice) > 0 ||
+    rate(rates.noInternetWeekPrice) > 0 ||
+    rate(rates.noInternetMonthPrice) > 0
+  );
 }

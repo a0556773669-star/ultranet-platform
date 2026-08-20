@@ -23,14 +23,14 @@ import { NedarimChargeCapture } from "../clients/nedarim-charge-capture";
 import { TokenChargeButton } from "./token-charge-button";
 import type { ItemOption } from "./rentals-lists";
 
+/** המחירון בפועל של המחשב אחרי ירושה ממחירון הסניף (effectiveLaptopRates). */
 type LaptopRates = {
   dayPrice: number;
   weekPrice: number;
   monthPrice: number;
-  altPricing?: boolean;
-  noInternetDayPrice?: number;
-  noInternetWeekPrice?: number;
-  noInternetMonthPrice?: number;
+  noInternetDayPrice: number;
+  noInternetWeekPrice: number;
+  noInternetMonthPrice: number;
 };
 type StickRates = {
   day1: number;

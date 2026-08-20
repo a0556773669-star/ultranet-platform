@@ -4,6 +4,7 @@ import { requireModuleAccess } from "@/lib/perms";
 import { getAdminFirestore } from "@/lib/firebase-admin";
 import { resolveNedarimCreds, listNedarimRoutes } from "@/lib/nedarim";
 import type { Rental, RentalClient, Laptop, Stick, Branch, CollectionRoute } from "@ultranet/shared-types";
+import { effectiveLaptopRates, effectiveStickRates } from "@/lib/rental-pricing";
 import { RentalsLists, type ActiveRowData, type HistoryRowData } from "./rentals-lists";
 
 async function loadData() {
@@ -125,28 +126,12 @@ function routesForBranch(branchId: string): { id: string; name: string }[] {
   const activeRows: ActiveRowData[] = active.map((r) => {
     const info = rowInfo(r);
     const item = r.kind === "stick" ? sticks.get(r.itemId) : laptops.get(r.itemId);
+    // המחירון בפועל = מה שהוזן על הפריט, וכל מה שחסר יורש ממחירון הסניף (מוגדר פעם אחת ב-/pricing).
+    const branchPricing = branches.get(r.branchId)?.rentalPricing;
     const laptopRates =
-      r.kind === "laptop" && item
-        ? {
-            dayPrice: (item as Laptop).dayPrice,
-            weekPrice: (item as Laptop).weekPrice,
-            monthPrice: (item as Laptop).monthPrice,
-            altPricing: (item as Laptop).altPricing,
-            noInternetDayPrice: (item as Laptop).noInternetDayPrice,
-            noInternetWeekPrice: (item as Laptop).noInternetWeekPrice,
-            noInternetMonthPrice: (item as Laptop).noInternetMonthPrice,
-          }
-        : undefined;
+      r.kind === "laptop" && item ? effectiveLaptopRates(item as Laptop, branchPricing) : undefined;
     const stickRates =
-      r.kind === "stick" && item
-        ? {
-            day1: (item as Stick).day1,
-            day2: (item as Stick).day2,
-            day3plus: (item as Stick).day3plus,
-            weekPrice: (item as Stick).weekPrice,
-            monthPrice: (item as Stick).monthPrice,
-          }
-        : undefined;
+      r.kind === "stick" && item ? effectiveStickRates(item as Stick, branchPricing) : undefined;
     const client = clients.get(r.clientId);
     const tokenKey = `${r.branchId}::${client?.collectionRouteId ?? ""}`;
     const tokenRouteName = info.hasCardToken ? (tokenCredsMap.get(tokenKey)?.name ?? null) : null;

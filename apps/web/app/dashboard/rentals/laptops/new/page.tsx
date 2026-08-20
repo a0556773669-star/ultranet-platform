@@ -13,12 +13,13 @@ export default async function NewLaptopPage({
   const session = await requireModuleAccess("rentals");
   const isOwner = session.user?.role === "owner";
   const db = getAdminFirestore();
-  const branchesSnap = isOwner
-    ? await db.collection("n_branches").where("branchType", "==", "rentals").get()
-    : null;
-  const branches = branchesSnap
-    ? branchesSnap.docs.map((d) => ({ ...(d.data() as Omit<Branch, "id">), id: d.id }) as Branch).filter((b) => !b.deleted)
-    : [];
+  const branchesSnap = await db.collection("n_branches").where("branchType", "==", "rentals").get();
+  const allBranches = branchesSnap.docs
+    .map((d) => ({ ...(d.data() as Omit<Branch, "id">), id: d.id }) as Branch)
+    .filter((b) => !b.deleted);
+  const branches = isOwner ? allBranches : [];
+  // מחירון ברירת המחדל של כל סניף, כדי להציג בטופס מה יתומחר אם משאירים שדה ריק.
+  const branchPricing = Object.fromEntries(allBranches.map((b) => [b.id, b.rentalPricing]));
 
   return (
     <div className="max-w-xl">
@@ -36,7 +37,13 @@ export default async function NewLaptopPage({
           לחשבון שלך לא משוייך סניף. פנה לבעלים כדי שישייך לך סניף בעמוד המשתמשים.
         </div>
       )}
-      <LaptopForm action={createLaptopAction} branches={branches} isOwner={isOwner} />
+      <LaptopForm
+        action={createLaptopAction}
+        branches={branches}
+        isOwner={isOwner}
+        branchPricing={branchPricing}
+        fixedBranchId={session.user?.branchId ?? undefined}
+      />
     </div>
   );
 }

@@ -5,14 +5,14 @@ import { AlertTriangle, ChevronLeft, ChevronRight, Search } from "lucide-react";
 import { ActiveRentalRow } from "./active-rental-row";
 import { HistoryRentalRow } from "./history-rental-row";
 
+/** המחירון בפועל של המחשב אחרי ירושה ממחירון הסניף (effectiveLaptopRates). */
 type LaptopRates = {
   dayPrice: number;
   weekPrice: number;
   monthPrice: number;
-  altPricing?: boolean;
-  noInternetDayPrice?: number;
-  noInternetWeekPrice?: number;
-  noInternetMonthPrice?: number;
+  noInternetDayPrice: number;
+  noInternetWeekPrice: number;
+  noInternetMonthPrice: number;
 };
 type StickRates = {
   day1: number;

@@ -152,7 +152,7 @@ pnpm dev        # turbo run dev — מריץ web + api
 
 | קולקשן | טיפוס | תיאור |
 |--------|-------|-------|
-| `n_branches` | `Branch` | סניפים; סוג (`computers`/`rentals`/`coworking`), אחוזי בעלים/שותף, סניף-אב, מסלול גבייה, דגלי גבייה/קבלות, `phone` (רשות - טלפון ליצירת קשר), `deleted`/`deletedAt` (רשות - soft-delete, ראו סעיף 10 `/branches`) |
+| `n_branches` | `Branch` | סניפים; סוג (`computers`/`rentals`/`coworking`), אחוזי בעלים/שותף, סניף-אב, מסלול גבייה, דגלי גבייה/קבלות, `phone` (רשות - טלפון ליצירת קשר), `rentalPricing` (רשות - מחירון ברירת המחדל של סניף השכרות, ראו `/pricing`), `deleted`/`deletedAt` (רשות - soft-delete, ראו סעיף 10 `/branches`) |
 | `n_users` | `AppUser` | משתמשים; תפקיד, סניף, `perms`, `viewClientBranchIds` |
 | `n_fixed_expenses` | `FixedExpense` | הוצאות קבועות לסניף |
 | `n_var_expenses` | `VariableExpense` | הוצאות משתנות (לפי חודש) |
@@ -281,7 +281,9 @@ pnpm dev        # turbo run dev — מריץ web + api
   שדות חסרים (לקוח/פריט/תאריך) מוצגים כהודעת שגיאה inline מיידית בלי לאבד את שאר הטופס, במקום
   redirect מלא ל-`?error=missing` שהיה מרוקן את כל מה שכבר מולא - זה מה שגרם לתחושת "עובד רק
   בפעם השנייה" גם אחרי שהלקוח כבר נבחר בפועל.
-- **`/laptops`** — ניהול מחשבים ניידים + תמחור (CRUD). מחירון המחשב הוא טבלה של שתי עמודות:
+- **`/laptops`** — ניהול מחשבים ניידים + תמחור (CRUD). **המחירים בטופס המחשב הם חריגה
+  אופציונלית ממחירון הסניף** (`/pricing`): שדה שנשאר ריק יורש את מחיר הסניף, וה-placeholder
+  מציג מה ייגזר ("ברירת מחדל: 50"). מחירון המחשב הוא טבלה של שתי עמודות:
   **עם סטיק (אינטרנט)** = `dayPrice`/`weekPrice`/`monthPrice`, ו**בלי סטיק** =
   `noInternetDayPrice`/`noInternetWeekPrice`/`noInternetMonthPrice`. עמודת "בלי סטיק" היא רשות
   ושדה ריק בה נופל חזרה למחיר "עם סטיק" של אותה מדרגה (`laptopRatesFor`); `altPricing` כבר לא
@@ -532,6 +534,8 @@ pnpm dev        # turbo run dev — מריץ web + api
   לסניף אחר רק כי הסניף המקורי לא הופיע ברשימה. **הערה:** סניפים שנמחקו *לפני* השינוי הזה
   (בזמן שהמחיקה עוד היתה `.delete()` אמיתי) לא ניתנים לשחזור - השדה `Branch.phone`/`deleted`
   חל רק על מחיקות מכאן ואילך.
+- **`/pricing`** — מחירון הסניף (טאב "מחירון"): הגדרה חד-פעמית של מחירי היום/שבוע/חודש
+  (עם סטיק / בלי סטיק) ומחירי הסטיק בלבד, פר-סניף. ראו "מחירון הסניף" בהמשך הסעיף.
 - **`/labels`** — הדפסת מדבקות ללקוחות/פריטים + הגדרות לוגו.
 - **API `/api/rentals/charge`** — חיוב כרטיס דרך Nedarim Plus (`DebitCard.aspx`)
   לפי `gatewayToken`/`cardExpiry` שמורים על הלקוח; מוגן בהרשאת `charging` בצד
@@ -540,6 +544,15 @@ pnpm dev        # turbo run dev — מריץ web + api
   שייך אליו בפועל), ורק אם אין ערך כזה (לקוחות ישנים) נופל חזרה לפתרון לפי סניף
   כמו קודם. לא hardcoded.
 - **API `/api/rentals/clients/export|template`** — ייצוא/תבנית אקסל של לקוחות.
+
+**מחירון הסניף (`/dashboard/rentals/pricing`)** — כל סניף השכרות מגדיר **פעם אחת** את המחירון
+שלו, ונשמר ב-`n_branches.rentalPricing` (`BranchRentalPricing`: `laptop` = יום/שבוע/חודש ×
+עם-סטיק/בלי-סטיק, `stick` = יום ראשון/יום שני/כל יום נוסף + שבוע/חודש). הבעלים עורך כל סניף
+דרך בורר סניפים; מנהל סניף רואה ועורך רק את הסניף שלו (`saveBranchPricingAction`, בדיקת
+`role === "owner" || session.user.branchId === branchId`). העמוד כולל תצוגת "בדיקה חיה" שמריצה
+את המנוע על השכרת דוגמה בזמן ההקלדה. **כל מחיר על מחשב/סטיק בודד הוא חריגה אופציונלית** - שדה
+ריק (0) יורש את מחיר הסניף דרך `effectiveLaptopRates()` / `effectiveStickRates()`, שמופעלות
+בכל מקום שמציג או מחשב מחיר (סגירת השכרה, השכרה חדשה, `createRentalAction`, מלאי המחשבים).
 
 תמחור השכרה: `lib/rental-pricing.ts` — **מנוע אחד לכל המערכת ולכל הסניפים**, גם למחשבים
 ניידים וגם לסטיקים. הפונקציה המרכזית היא `calcQuote(startDate, endDate, rates)`, ומעליה

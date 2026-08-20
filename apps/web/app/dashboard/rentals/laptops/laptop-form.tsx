@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
-import type { Branch, Laptop, Stick } from "@ultranet/shared-types";
+import Link from "next/link";
+import type { Branch, BranchRentalPricing, Laptop, Stick } from "@ultranet/shared-types";
 
 const FIELD = "w-full rounded-lg border border-card-border bg-[#f4f6f9] px-3 py-2 text-sm focus:border-teal focus:bg-white focus:outline-none";
 const LABEL = "mb-1 block text-xs font-semibold text-muted";
@@ -13,18 +14,41 @@ type Props = {
   initial?: Laptop;
   /** current pricing of the stick already linked to this laptop, if any (see syncLinkedStick) */
   initialStick?: Pick<Stick, "day1" | "day2" | "day3plus" | "weekPrice" | "monthPrice">;
+  /** מחירון ברירת המחדל של כל סניף, להצגה כ-placeholder בשדות שנשארים ריקים */
+  branchPricing?: Record<string, BranchRentalPricing | undefined>;
+  /** הסניף של המחשב כשהמשתמש אינו owner (אין לו בורר סניף בטופס) */
+  fixedBranchId?: string;
 };
 
-export function LaptopForm({ action, branches, isOwner, initial, initialStick }: Props) {
+export function LaptopForm({
+  action,
+  branches,
+  isOwner,
+  initial,
+  initialStick,
+  branchPricing,
+  fixedBranchId,
+}: Props) {
   const [hasStick, setHasStick] = useState(!!initial?.hasStick);
   const [hasPartner, setHasPartner] = useState(!!initial?.hasPartner);
+  const [branchId, setBranchId] = useState(initial?.branchId ?? fixedBranchId ?? branches[0]?.id ?? "");
+  const defaults = branchPricing?.[branchId];
+
+  /** "ברירת מחדל: 50 ₪" מתוך מחירון הסניף, או טקסט ניטרלי אם לא הוגדר שם כלום. */
+  const ph = (n: number | undefined) => (n && n > 0 ? `ברירת מחדל: ${n}` : "לא הוגדר בסניף");
 
   return (
     <form action={action} className="flex flex-col gap-4 rounded-card border border-card-border bg-white p-5 shadow-card">
       {isOwner ? (
         <div>
           <label className={LABEL}>סניף</label>
-          <select name="branchId" required defaultValue={initial?.branchId ?? ""} className={FIELD}>
+          <select
+            name="branchId"
+            required
+            value={branchId}
+            onChange={(e) => setBranchId(e.target.value)}
+            className={FIELD}
+          >
             <option value="">בחר סניף</option>
             {branches.map((b) => (
               <option key={b.id} value={b.id}>{b.deleted ? `${b.name} (נמחק)` : b.name}</option>
@@ -39,53 +63,79 @@ export function LaptopForm({ action, branches, isOwner, initial, initialStick }:
       </div>
 
       <div className="rounded-lg border border-card-border bg-[#f9fafb] p-3">
-        <p className="mb-2 text-xs font-bold text-ink">מחירון השכרת המחשב (₪, מספרים שלמים)</p>
+        <p className="mb-1 text-xs font-bold text-ink">מחיר מיוחד למחשב הזה (₪) — רשות</p>
+        <p className="mb-2 text-[11px] text-muted">
+          כל שדה שנשאר ריק מתומחר לפי{" "}
+          <Link href="/dashboard/rentals/pricing" className="font-bold text-teal-dark hover:underline">
+            מחירון הסניף
+          </Link>
+          . למלא כאן רק אם למחשב הזה יש מחיר שונה משאר המחשבים בסניף.
+        </p>
         <div className="grid grid-cols-[auto_1fr_1fr] items-center gap-x-3 gap-y-2">
           <span />
           <span className="text-center text-xs font-bold text-teal-dark">עם סטיק (אינטרנט)</span>
           <span className="text-center text-xs font-bold text-muted">בלי סטיק</span>
 
           <span className="text-xs font-semibold text-muted">ליום</span>
-          <input name="dayPrice" type="number" min={0} step={1} defaultValue={initial?.dayPrice ?? 0} className={FIELD} />
+          <input
+            name="dayPrice"
+            type="number"
+            min={0}
+            step={1}
+            defaultValue={initial?.dayPrice || ""}
+            placeholder={ph(defaults?.laptop?.dayPrice)}
+            className={FIELD}
+          />
           <input
             name="noInternetDayPrice"
             type="number"
             min={0}
             step={1}
             defaultValue={initial?.noInternetDayPrice || ""}
-            placeholder="כמו עם סטיק"
+            placeholder={ph(defaults?.laptop?.noInternetDayPrice)}
             className={FIELD}
           />
 
           <span className="text-xs font-semibold text-muted">לשבוע</span>
-          <input name="weekPrice" type="number" min={0} step={1} defaultValue={initial?.weekPrice ?? 0} className={FIELD} />
+          <input
+            name="weekPrice"
+            type="number"
+            min={0}
+            step={1}
+            defaultValue={initial?.weekPrice || ""}
+            placeholder={ph(defaults?.laptop?.weekPrice)}
+            className={FIELD}
+          />
           <input
             name="noInternetWeekPrice"
             type="number"
             min={0}
             step={1}
             defaultValue={initial?.noInternetWeekPrice || ""}
-            placeholder="כמו עם סטיק"
+            placeholder={ph(defaults?.laptop?.noInternetWeekPrice)}
             className={FIELD}
           />
 
           <span className="text-xs font-semibold text-muted">לחודש</span>
-          <input name="monthPrice" type="number" min={0} step={1} defaultValue={initial?.monthPrice ?? 0} className={FIELD} />
+          <input
+            name="monthPrice"
+            type="number"
+            min={0}
+            step={1}
+            defaultValue={initial?.monthPrice || ""}
+            placeholder={ph(defaults?.laptop?.monthPrice)}
+            className={FIELD}
+          />
           <input
             name="noInternetMonthPrice"
             type="number"
             min={0}
             step={1}
             defaultValue={initial?.noInternetMonthPrice || ""}
-            placeholder="כמו עם סטיק"
+            placeholder={ph(defaults?.laptop?.noInternetMonthPrice)}
             className={FIELD}
           />
         </div>
-        <p className="mt-2 text-[11px] text-muted">
-          לדוגמה: ליום עם סטיק 50 ₪, בלי סטיק 40 ₪. עמודת &quot;בלי סטיק&quot; היא רשות — שדה שנשאר ריק
-          מחייב באותו מחיר כמו &quot;עם סטיק&quot;. שבוע = 6 ימי חיוב, חודש = חודש קלנדרי; שישי ושבת
-          נספרים כיום חיוב אחד.
-        </p>
       </div>
 
       <div className="rounded-lg border border-card-border bg-[#f9fafb] p-3">
@@ -105,11 +155,19 @@ export function LaptopForm({ action, branches, isOwner, initial, initialStick }:
               <input name="simNumber" dir="ltr" defaultValue={initial?.simNumber} className={FIELD} />
             </div>
             <div>
-              <p className="mb-1 text-xs font-bold text-ink">מחיר השכרת הסטיק בלבד (₪)</p>
+              <p className="mb-1 text-xs font-bold text-ink">מחיר מיוחד לסטיק הזה (₪) — רשות</p>
               <div className="grid grid-cols-3 gap-3">
                 <div>
                   <label className={LABEL}>יום ראשון</label>
-                  <input name="stickDay1" type="number" min={0} step={1} defaultValue={initialStick?.day1 ?? 0} className={FIELD} />
+                  <input
+                    name="stickDay1"
+                    type="number"
+                    min={0}
+                    step={1}
+                    defaultValue={initialStick?.day1 || ""}
+                    placeholder={ph(defaults?.stick?.day1)}
+                    className={FIELD}
+                  />
                 </div>
                 <div>
                   <label className={LABEL}>יום שני</label>
@@ -119,45 +177,51 @@ export function LaptopForm({ action, branches, isOwner, initial, initialStick }:
                     min={0}
                     step={1}
                     defaultValue={initialStick?.day2 || ""}
-                    placeholder="כמו יום שוטף"
+                    placeholder={ph(defaults?.stick?.day2)}
                     className={FIELD}
                   />
                 </div>
                 <div>
-                  <label className={LABEL}>מהיום השני/שלישי ואילך (ליום)</label>
-                  <input name="stickDay3plus" type="number" min={0} step={1} defaultValue={initialStick?.day3plus ?? 0} className={FIELD} />
+                  <label className={LABEL}>לכל יום נוסף</label>
+                  <input
+                    name="stickDay3plus"
+                    type="number"
+                    min={0}
+                    step={1}
+                    defaultValue={initialStick?.day3plus || ""}
+                    placeholder={ph(defaults?.stick?.day3plus)}
+                    className={FIELD}
+                  />
                 </div>
               </div>
               <div className="mt-3 grid grid-cols-2 gap-3">
                 <div>
-                  <label className={LABEL}>מחיר לשבוע (רשות)</label>
+                  <label className={LABEL}>מחיר לשבוע</label>
                   <input
                     name="stickWeekPrice"
                     type="number"
                     min={0}
                     step={1}
                     defaultValue={initialStick?.weekPrice || ""}
-                    placeholder="אין מדרגת שבוע"
+                    placeholder={ph(defaults?.stick?.weekPrice)}
                     className={FIELD}
                   />
                 </div>
                 <div>
-                  <label className={LABEL}>מחיר לחודש (רשות)</label>
+                  <label className={LABEL}>מחיר לחודש</label>
                   <input
                     name="stickMonthPrice"
                     type="number"
                     min={0}
                     step={1}
                     defaultValue={initialStick?.monthPrice || ""}
-                    placeholder="אין מדרגת חודש"
+                    placeholder={ph(defaults?.stick?.monthPrice)}
                     className={FIELD}
                   />
                 </div>
               </div>
               <p className="mt-1 text-[11px] text-muted">
-                לדוגמה: יום ראשון 20 ₪, מהיום השני ואילך 10 ₪ (משאירים את &quot;יום שני&quot; ריק). אם
-                מוזנים גם מחיר שבוע/חודש — המערכת תמיד תגבה את החישוב הזול ביותר ללקוח. המחירים האלה
-                חלים כשמשכירים את הסטיק לבדו.
+                גם כאן — שדה ריק מתומחר לפי מחירון הסניף. המחירים חלים כשמשכירים את הסטיק לבדו.
               </p>
             </div>
           </div>

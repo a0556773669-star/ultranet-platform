@@ -5,7 +5,7 @@ import type { ChangeEvent, FormEvent } from "react";
 import type { Branch, RentalClient, Laptop, Stick, CollectionRoute } from "@ultranet/shared-types";
 import { createRentalAction } from "../actions";
 import { CustomerCombobox } from "../customer-combobox";
-import { laptopRatesFor } from "@/lib/rental-pricing";
+import { hasWithoutStickPricing, laptopRatesFor } from "@/lib/rental-pricing";
 
 type Props = {
   branches: Branch[];
@@ -228,7 +228,7 @@ export function NewRentalForm({
         </div>
       )}
 
-      {kind === "laptop" && (selectedLaptop?.hasStick || selectedLaptop?.altPricing) && (
+      {kind === "laptop" && selectedLaptop && (selectedLaptop.hasStick || hasWithoutStickPricing(selectedLaptop)) && (
         <div>
           <label className={LABEL}>סטיק (אינטרנט)</label>
           <div className="flex gap-4 text-sm">

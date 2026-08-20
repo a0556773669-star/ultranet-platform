@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { Wifi, Users, Check, Minus } from "lucide-react";
 import type { Branch, Laptop } from "@ultranet/shared-types";
+import { effectiveLaptopRates } from "@/lib/rental-pricing";
 import { DeleteLaptopButton } from "./delete-button";
 
 type SortKey = "name" | "branch" | "price";
@@ -11,14 +12,19 @@ type SortKey = "name" | "branch" | "price";
 const TH = "px-3 py-2 text-right text-[11px] font-bold uppercase tracking-wide text-muted whitespace-nowrap";
 const TD = "px-3 py-2 whitespace-nowrap text-[13px]";
 
-/** מחיר "עם סטיק", ומתחתיו מחיר "בלי סטיק" אם הוגדר נפרד. */
-function priceCell(withStick: number | undefined, withoutStick: number | undefined) {
+/**
+ * מחיר "עם סטיק" בפועל (אחרי ירושה ממחירון הסניף), ומתחתיו מחיר "בלי סטיק" אם הוגדר.
+ * `own` הוא המחיר שהוזן על המחשב עצמו - אם אין, מסומן שהמחיר מגיע ממחירון הסניף.
+ */
+function priceCell(effective: number, own: number | undefined, withoutStick: number) {
+  const inherited = !(own && own > 0);
   return (
     <>
-      <div>₪{Math.round(withStick ?? 0)}</div>
-      {withoutStick && withoutStick > 0 ? (
-        <div className="text-[11px] text-muted">בלי סטיק: ₪{Math.round(withoutStick)}</div>
-      ) : null}
+      <div className={inherited ? "text-muted" : ""}>
+        {effective > 0 ? `₪${effective}` : "—"}
+        {inherited && effective > 0 ? <span className="mr-1 text-[10px]">(סניף)</span> : null}
+      </div>
+      {withoutStick > 0 ? <div className="text-[11px] text-muted">בלי סטיק: ₪{withoutStick}</div> : null}
     </>
   );
 }
@@ -41,6 +47,7 @@ export function LaptopsList({
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
 
   const branchName = (id: string) => branches.find((b) => b.id === id)?.name ?? "-";
+  const branchPricingOf = (id: string) => branches.find((b) => b.id === id)?.rentalPricing;
 
   const toggleBranch = (id: string) => {
     setSelectedBranchIds((prev) => (prev.includes(id) ? prev.filter((b) => b !== id) : [...prev, id]));
@@ -61,7 +68,10 @@ export function LaptopsList({
         return dir * nameOf(a.branchId).localeCompare(nameOf(b.branchId), "he", { numeric: true });
       }
       if (sortKey === "price") {
-        return dir * ((a.dayPrice ?? 0) - (b.dayPrice ?? 0));
+        // ממיינים לפי המחיר בפועל, כולל מחשבים שיורשים את המחיר ממחירון הסניף.
+        const pricingById = new Map(branches.map((br) => [br.id, br.rentalPricing]));
+        const dayOf = (l: Laptop) => effectiveLaptopRates(l, pricingById.get(l.branchId)).dayPrice;
+        return dir * (dayOf(a) - dayOf(b));
       }
       return dir * a.name.localeCompare(b.name, "he", { numeric: true });
     });
@@ -144,6 +154,7 @@ export function LaptopsList({
               <tbody className="tabular-nums">
                 {sorted.map((l, idx) => {
                   const deleteAction = deleteActions[l.id];
+                  const eff = effectiveLaptopRates(l, branchPricingOf(l.branchId));
                   return (
                     <tr key={l.id} className={idx % 2 === 1 ? "bg-[#fafbfc]" : "bg-white"}>
                       <td className={`${TD} font-bold text-ink`}>
@@ -152,9 +163,9 @@ export function LaptopsList({
                         </Link>
                       </td>
                       {isOwner && <td className={`${TD} text-muted`}>{branchName(l.branchId)}</td>}
-                      <td className={TD}>{priceCell(l.dayPrice, l.altPricing ? l.noInternetDayPrice : 0)}</td>
-                      <td className={TD}>{priceCell(l.weekPrice, l.altPricing ? l.noInternetWeekPrice : 0)}</td>
-                      <td className={TD}>{priceCell(l.monthPrice, l.altPricing ? l.noInternetMonthPrice : 0)}</td>
+                      <td className={TD}>{priceCell(eff.dayPrice, l.dayPrice, eff.noInternetDayPrice)}</td>
+                      <td className={TD}>{priceCell(eff.weekPrice, l.weekPrice, eff.noInternetWeekPrice)}</td>
+                      <td className={TD}>{priceCell(eff.monthPrice, l.monthPrice, eff.noInternetMonthPrice)}</td>
                       <td className={TD}>
                         {l.hasStick ? (
                           <span className="flex items-center gap-1 text-teal-dark">
