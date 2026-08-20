@@ -9,7 +9,7 @@ import { FieldValue } from "firebase-admin/firestore";
 import { resolveEzcountCreds, createEzcountReceipt } from "@/lib/ezcount";
 import type { RentalClient, Laptop, Stick, Rental, Branch } from "@ultranet/shared-types";
 import { parseClientsWorkbook } from "@/lib/client-excel";
-import { roundPrice } from "@/lib/rental-pricing";
+import { laptopRatesFor, roundPrice } from "@/lib/rental-pricing";
 
 async function requireSession() {
   const session = await getServerSession(authOptions);
@@ -458,21 +458,20 @@ export async function createRentalAction(formData: FormData) {
     }
   }
 
+  // מחיר פתיחה = יום אחד לפי אותו מנוע תמחור של סגירת ההשכרה (מחירון "עם/בלי סטיק"
+  // למחשב, מדרגת היום הראשון לסטיק). המחיר הסופי מחושב מחדש לפי התאריכים בסגירה.
   let calcPrice = 0;
   if (kind === "laptop") {
     const laptopDoc = await getAdminFirestore().collection("n_laptops").doc(itemId).get();
     const laptop = laptopDoc.data() as Omit<Laptop, "id"> | undefined;
     if (laptop) {
-      calcPrice =
-        pricingVariant === "noInternet" && laptop.altPricing
-          ? (laptop.noInternetDayPrice ?? laptop.dayPrice)
-          : laptop.dayPrice;
+      calcPrice = laptopRatesFor(laptop, pricingVariant).dayPrice;
     }
   } else {
     const stickDoc = await getAdminFirestore().collection("n_sticks").doc(itemId).get();
     const stick = stickDoc.data() as Omit<Stick, "id"> | undefined;
     if (stick) {
-      calcPrice = stick.day1;
+      calcPrice = stick.day1 || stick.day3plus || stick.day2;
     }
   }
 

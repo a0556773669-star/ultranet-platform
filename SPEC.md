@@ -161,7 +161,7 @@ pnpm dev        # turbo run dev — מריץ web + api
 | `n_sub_locations` | `SubLocation` | תתי-מיקומים בסניף |
 | `n_devices` | `Device` | מכשירים/מחשבים בחדרי מחשבים |
 | `n_laptops` | `Laptop` | מחשבים ניידים להשכרה + תמחור (יום/שבוע/חודש, וריאנטים); `hasPartner`/`partnerName`/`partnerPct` - שותפות פר-מחשב (ראו סעיף 8) |
-| `n_sticks` | `Stick` | סטיקים סלולריים + תמחור מדורג (`day1`/`day2`/`day3plus`); `linkedLaptopId` מקשר לסטיק שמשוייך למחשב ניתן להשכרה - מסונכרן אוטומטית מ-`n_laptops` (ראו סעיף 8, `/laptops`) |
+| `n_sticks` | `Stick` | סטיקים סלולריים + תמחור מדורג (`day1`/`day2`/`day3plus`) ומדרגות `weekPrice`/`monthPrice` (רשות) להשכרת סטיק בלבד; `linkedLaptopId` מקשר לסטיק שמשוייך למחשב ניתן להשכרה - מסונכרן אוטומטית מ-`n_laptops` (ראו סעיף 8, `/laptops`) |
 | `n_rental_clients` | `RentalClient` | לקוחות השכרה; פרטי כרטיס לא-רגישים, `gatewayToken`, `collectionRouteId` (העסק שהטוקן שויך אליו) |
 | `n_rentals` | `Rental` | השכרות; פריט, תאריכים, מחיר מחושב/סופי, סטטוס, תשלום |
 | `n_inventory` | `InventoryItem` | מלאי (כמות, מינימום) |
@@ -281,9 +281,18 @@ pnpm dev        # turbo run dev — מריץ web + api
   שדות חסרים (לקוח/פריט/תאריך) מוצגים כהודעת שגיאה inline מיידית בלי לאבד את שאר הטופס, במקום
   redirect מלא ל-`?error=missing` שהיה מרוקן את כל מה שכבר מולא - זה מה שגרם לתחושת "עובד רק
   בפעם השנייה" גם אחרי שהלקוח כבר נבחר בפועל.
-- **`/laptops`** — ניהול מחשבים ניידים + תמחור (CRUD). כשמסמנים "יש סטיק משוייך למחשב זה"
-  (`hasStick`), טופס המחשב (`laptop-form.tsx`) חושף גם שדות תמחור סטיק מדורג (יום ראשון/יום
-  שני/מיום שלישי ואילך - `stickDay1`/`stickDay2`/`stickDay3plus`); בשמירה (`createLaptopAction`/
+- **`/laptops`** — ניהול מחשבים ניידים + תמחור (CRUD). מחירון המחשב הוא טבלה של שתי עמודות:
+  **עם סטיק (אינטרנט)** = `dayPrice`/`weekPrice`/`monthPrice`, ו**בלי סטיק** =
+  `noInternetDayPrice`/`noInternetWeekPrice`/`noInternetMonthPrice`. עמודת "בלי סטיק" היא רשות
+  ושדה ריק בה נופל חזרה למחיר "עם סטיק" של אותה מדרגה (`laptopRatesFor`); `altPricing` כבר לא
+  תיבת סימון אלא נגזר בשרת - true אם מולא בעמודה הזו מחיר כלשהו. בהשכרה חדשה בוחרים "עם סטיק"/
+  "בלי סטיק" (`pricingVariant`), ו"בלי סטיק" גם משאיר את הסטיק פנוי להשכרה נפרדת.
+  כשמסמנים "יש סטיק משוייך למחשב זה"
+  (`hasStick`), טופס המחשב (`laptop-form.tsx`) חושף גם שדות תמחור סטיק: יום ראשון/יום
+  שני/מהיום השלישי ואילך (`stickDay1`/`stickDay2`/`stickDay3plus`) **ובנוסף מחיר שבוע/חודש
+  לסטיק** (`stickWeekPrice`/`stickMonthPrice` → `weekPrice`/`monthPrice` ב-`n_sticks`).
+  "יום שני" ריק = כמו המחיר היומי השוטף, כך שתמחור "יום ראשון 20, מהיום השני 10" מוזן בשני
+  שדות בלבד. בשמירה (`createLaptopAction`/
   `updateLaptopAction`, `../actions.ts`) הפעולה מסנכרנת אוטומטית רשומת `n_sticks` תואמת
   (`syncLinkedStick`) - יוצרת אותה בפעם הראשונה או מעדכנת רשומה קיימת לפי `linkedLaptopId`, בשם
   נגזר ממספר המחשב (למשל מחשב "מחשב 20" → סטיק "סטיק 20"). זה מה שבפועל הופך את "השכרת סטיק"
@@ -532,7 +541,12 @@ pnpm dev        # turbo run dev — מריץ web + api
   כמו קודם. לא hardcoded.
 - **API `/api/rentals/clients/export|template`** — ייצוא/תבנית אקסל של לקוחות.
 
-תמחור השכרה: `lib/rental-pricing.ts` (יום/שבוע/חודש + וריאנט `noInternet`).
+תמחור השכרה: `lib/rental-pricing.ts` — **מנוע אחד לכל המערכת ולכל הסניפים**, גם למחשבים
+ניידים וגם לסטיקים. הפונקציה המרכזית היא `calcQuote(startDate, endDate, rates)`, ומעליה
+`calcRentalQuote` (מחשב, לפי `laptopRatesFor` שבוחר מחירון "עם סטיק"/"בלי סטיק") ו-
+`calcStickQuote` (סטיק: `day1`/`day2`/`day3plus` + `weekPrice`/`monthPrice`). מדרגות היום
+הראשון/השני חלות רק בתחילת ההשכרה — ימים שנשארים אחרי חודש/שבוע מחויבים במחיר היומי השוטף,
+ותמיד נבחר השילוב הזול ביותר ללקוח.
 המודל: (1) סופרים **חודשים קלנדריים שלמים** מתאריך ההתחלה — 12/07 → 12/08 = חודש
 אחד (עם הצמדה לסוף חודש: 31/01 + חודש = 28/02); (2) יתרת הימים נספרת כ**ימי חיוב**
 כששישי ושבת יחד = יום אחד (שבת לא נספרת בנפרד, ולכן שבוע = 6 ימי חיוב); (3) יתרת

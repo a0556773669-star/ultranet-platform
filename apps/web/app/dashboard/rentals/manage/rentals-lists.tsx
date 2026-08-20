@@ -14,7 +14,13 @@ type LaptopRates = {
   noInternetWeekPrice?: number;
   noInternetMonthPrice?: number;
 };
-type StickRates = { day1: number; day2: number; day3plus: number };
+type StickRates = {
+  day1: number;
+  day2: number;
+  day3plus: number;
+  weekPrice?: number;
+  monthPrice?: number;
+};
 
 export type ItemOption = { id: string; name: string };
 

@@ -5,6 +5,7 @@ import type { ChangeEvent, FormEvent } from "react";
 import type { Branch, RentalClient, Laptop, Stick, CollectionRoute } from "@ultranet/shared-types";
 import { createRentalAction } from "../actions";
 import { CustomerCombobox } from "../customer-combobox";
+import { laptopRatesFor } from "@/lib/rental-pricing";
 
 type Props = {
   branches: Branch[];
@@ -62,15 +63,24 @@ export function NewRentalForm({
     (kind === "laptop" && itemId ? rentedLaptopSet.has(itemId) : false) ||
     (kind === "stick" && itemId ? rentedStickSet.has(itemId) : false);
 
-  const dayPriceRef = useMemo(() => {
+  /** שורות המחירון של הפריט שנבחר, להצגה לפני פתיחת ההשכרה. */
+  const priceRows = useMemo<{ label: string; value: number }[] | null>(() => {
     if (kind === "laptop" && selectedLaptop) {
-      if (pricingVariant === "noInternet" && selectedLaptop.altPricing) {
-        return selectedLaptop.noInternetDayPrice ?? selectedLaptop.dayPrice;
-      }
-      return selectedLaptop.dayPrice;
+      const r = laptopRatesFor(selectedLaptop, pricingVariant);
+      return [
+        { label: "ליום", value: r.dayPrice },
+        { label: "לשבוע", value: r.weekPrice },
+        { label: "לחודש", value: r.monthPrice },
+      ].filter((row) => row.value > 0);
     }
     if (kind === "stick" && selectedStick) {
-      return selectedStick.day1;
+      const ongoing = selectedStick.day3plus || selectedStick.day2 || selectedStick.day1;
+      return [
+        { label: "יום ראשון", value: selectedStick.day1 },
+        { label: "לכל יום נוסף", value: ongoing },
+        { label: "לשבוע", value: selectedStick.weekPrice ?? 0 },
+        { label: "לחודש", value: selectedStick.monthPrice ?? 0 },
+      ].filter((row) => row.value > 0);
     }
     return null;
   }, [kind, selectedLaptop, selectedStick, pricingVariant]);
@@ -218,9 +228,9 @@ export function NewRentalForm({
         </div>
       )}
 
-      {kind === "laptop" && selectedLaptop?.altPricing && (
+      {kind === "laptop" && (selectedLaptop?.hasStick || selectedLaptop?.altPricing) && (
         <div>
-          <label className={LABEL}>אינטרנט</label>
+          <label className={LABEL}>סטיק (אינטרנט)</label>
           <div className="flex gap-4 text-sm">
             <label className="flex items-center gap-1.5">
               <input
@@ -230,7 +240,7 @@ export function NewRentalForm({
                 checked={pricingVariant === "normal"}
                 onChange={() => setPricingVariant("normal")}
               />
-              עם אינטרנט
+              עם סטיק
             </label>
             <label className="flex items-center gap-1.5">
               <input
@@ -240,9 +250,13 @@ export function NewRentalForm({
                 checked={pricingVariant === "noInternet"}
                 onChange={() => setPricingVariant("noInternet")}
               />
-              בלי אינטרנט
+              בלי סטיק
             </label>
           </div>
+          <p className="mt-1 text-[11px] text-muted">
+            &quot;בלי סטיק&quot; מתמחר לפי עמודת &quot;בלי סטיק&quot; של המחשב, ומשאיר את הסטיק פנוי
+            להשכרה נפרדת.
+          </p>
         </div>
       )}
 
@@ -257,10 +271,21 @@ export function NewRentalForm({
         />
       </div>
 
-      {dayPriceRef !== null && (
+      {priceRows && priceRows.length > 0 && (
         <div className="rounded-xl border border-teal bg-gradient-to-br from-teal-bg to-emerald-50 px-4 py-3 text-sm">
-          <span className="text-muted">מחיר ליום: </span>
-          <span className="text-lg font-black text-teal-dark">{dayPriceRef.toLocaleString()} ₪</span>
+          <div className="mb-1 text-xs font-bold text-muted">מחירון הפריט</div>
+          <div className="flex flex-wrap gap-x-5 gap-y-1">
+            {priceRows.map((row) => (
+              <span key={row.label}>
+                <span className="text-muted">{row.label}: </span>
+                <span className="text-base font-black text-teal-dark">{row.value.toLocaleString()} ₪</span>
+              </span>
+            ))}
+          </div>
+          <p className="mt-1 text-[11px] text-muted">
+            המחיר הסופי יחושב בסגירת ההשכרה לפי התאריכים בפועל (חודש קלנדרי, שישי+שבת = יום אחד),
+            ותמיד ייבחר החישוב הזול ביותר ללקוח.
+          </p>
         </div>
       )}
 

@@ -1,17 +1,20 @@
 /**
- * תמחור השכרות - חישוב מדויק, תמיד בשקלים שלמים (ללא אגורות).
+ * תמחור השכרות - מנוע אחד לכל המערכת (מחשבים ניידים וסטיקים, בכל הסניפים).
+ * כל התוצאות בשקלים שלמים, ללא אגורות.
  *
  * המודל:
- * 1. סופרים **חודשים קלנדריים שלמים** מתאריך ההתחלה: 12/07 -> 12/08 = חודש אחד.
- * 2. את יתרת הימים סופרים כ"ימי חיוב": **שישי ושבת נחשבים יחד כיום אחד**
- *    (שבת לא נספרת בנפרד).
- * 3. יתרת הימים מתומחרת בשילוב הזול ביותר של שבועות/ימים - אך לעולם לא יותר
- *    ממחיר חודש שלם.
+ * 1. סופרים **חודשים קלנדריים שלמים** מתאריך ההתחלה: 12/07 -> 12/08 = חודש אחד
+ *    (עם הצמדה לסוף חודש: 31/01 + חודש = 28/02).
+ * 2. את יתרת הימים סופרים כ**ימי חיוב**: שישי ושבת יחד = יום אחד (שבת לא נספרת
+ *    בנפרד), ולכן שבוע = 6 ימי חיוב.
+ * 3. יתרת הימים מתומחרת בשילוב הזול ביותר של שבועות/ימים, ולעולם לא יותר ממחיר
+ *    חודש שלם.
  *
- * דוגמה: 12/07 עד 15/08, מחיר חודש 550 ומחיר יום 50 => חודש + 3 ימים = 700 ש"ח
- * (אם באותם ימים נופלת שבת - היא נבלעת ביום שישי ולא מחויבת בנפרד).
+ * מדרגות היום הראשון/השני (בעיקר לסטיקים: יום ראשון 20, מהיום השני 10) חלות רק
+ * בתחילת ההשכרה - ימים שנשארו אחרי חודש/שבוע מחויבים במחיר היומי השוטף.
  *
- * אין כאן שום חישוב יחסי (פרו-רטה) שיוצר שברים - כל תוצאה מעוגלת לשקל שלם.
+ * דוגמה: 12/07 -> 15/08, חודש=550 ויום=50 => חודש × 550 + 2 ימים × 50 = 650 ש"ח
+ * (13/08 ו-14/08 נספרים; 15/08 שבת נבלעת ביום שישי).
  */
 
 const DAY_MS = 86_400_000;
@@ -24,27 +27,47 @@ export type PriceLine = {
   qty: number;
   rate: number;
   amount: number;
+  /** תווית ידנית לשורה, למשל "יום ראשון" במקום "יום" */
+  label?: string;
 };
 
 export type RentalQuote = {
   /** סה"כ ימים קלנדריים בהשכרה (מינימום 1) */
   totalDays: number;
+  /** ימי חיוב (שישי+שבת = יום אחד) */
+  billableDays: number;
   months: number;
   weeks: number;
   days: number;
   lines: PriceLine[];
   /** סה"כ לתשלום - תמיד מספר שלם */
   total: number;
-  /** תיאור קריא בעברית, למשל: "חודש × 550 ₪ + 3 ימים × 50 ₪" */
+  /** פירוט החישוב, למשל: "חודש × 550 ₪ + 2 ימים × 50 ₪" */
   breakdown: string;
   /** משך ההשכרה בלשון בני אדם, למשל: "חודש ו-3 ימים" */
   periodLabel: string;
+};
+
+/**
+ * מחירון פריט להשכרה. `dayPrice` הוא המחיר היומי השוטף; `firstDayPrice`/
+ * `secondDayPrice` הן מדרגות אופציונליות ליומיים הראשונים (סטיקים).
+ */
+export type RentalRates = {
+  dayPrice: number;
+  firstDayPrice?: number;
+  secondDayPrice?: number;
+  weekPrice?: number;
+  monthPrice?: number;
 };
 
 /** מעגל לשקל שלם - אין אגורות/חצאים במערכת. */
 export function roundPrice(n: number): number {
   if (!Number.isFinite(n)) return 0;
   return Math.round(n);
+}
+
+function rate(value: number | undefined): number {
+  return value && value > 0 ? roundPrice(value) : 0;
 }
 
 function parseDate(value: string): Date | null {
@@ -124,35 +147,81 @@ export function calcRentalDays(startDate: string, endDate: string): number {
   return calcRentalPeriod(startDate, endDate).billableDays;
 }
 
-function rate(value: number | undefined): number {
-  return value && value > 0 ? roundPrice(value) : 0;
+type Rates = { day: number; first: number; second: number; week: number; month: number };
+
+function normalizeRates(r: RentalRates): Rates {
+  const day = rate(r.dayPrice);
+  return {
+    day,
+    // שדה ריק/0 => נופל חזרה למחיר היומי השוטף
+    first: rate(r.firstDayPrice) || day,
+    second: rate(r.secondDayPrice) || day,
+    week: rate(r.weekPrice),
+    month: rate(r.monthPrice),
+  };
+}
+
+function sumLines(lines: PriceLine[]): number {
+  return lines.reduce((sum, l) => sum + l.amount, 0);
 }
 
 /**
- * התמחור הזול ביותר ליתרת ימים (פחות מחודש): שילוב שבועות/ימים,
- * ואם בכל זאת יצא יקר יותר מחודש שלם - גובים חודש.
+ * שורות חיוב עבור n ימי חיוב. `fromStart` מפעיל את מדרגות היום הראשון/השני;
+ * ימים שמגיעים אחרי חודש/שבוע מחויבים תמיד במחיר היומי השוטף.
  */
-function priceRemainder(
-  billableDays: number,
-  dayPrice: number,
-  weekPrice: number,
-  monthPrice: number
-): { months: number; weeks: number; days: number; total: number } {
-  if (billableDays <= 0) return { months: 0, weeks: 0, days: 0, total: 0 };
-
-  let best = { months: 0, weeks: 0, days: billableDays, total: billableDays * dayPrice };
-  if (weekPrice > 0) {
-    const maxWeeks = Math.ceil(billableDays / BILLABLE_DAYS_PER_WEEK);
-    for (let w = 1; w <= maxWeeks; w++) {
-      const leftover = Math.max(0, billableDays - w * BILLABLE_DAYS_PER_WEEK);
-      const total = w * weekPrice + leftover * dayPrice;
-      if (total < best.total) best = { months: 0, weeks: w, days: leftover, total };
+function dayLines(n: number, r: Rates, fromStart: boolean): PriceLine[] {
+  if (n <= 0) return [];
+  if (!fromStart || (r.first === r.day && r.second === r.day)) {
+    return [{ unit: "day", qty: n, rate: r.day, amount: n * r.day }];
+  }
+  const lines: PriceLine[] = [
+    { unit: "day", qty: 1, rate: r.first, amount: r.first, label: "יום ראשון" },
+  ];
+  if (n >= 2) {
+    if (r.second === r.day) {
+      lines.push({ unit: "day", qty: n - 1, rate: r.day, amount: (n - 1) * r.day });
+    } else {
+      lines.push({ unit: "day", qty: 1, rate: r.second, amount: r.second, label: "יום שני" });
+      if (n > 2) lines.push({ unit: "day", qty: n - 2, rate: r.day, amount: (n - 2) * r.day });
     }
   }
-  if (monthPrice > 0 && monthPrice < best.total) {
-    best = { months: 1, weeks: 0, days: 0, total: monthPrice };
+  return lines;
+}
+
+/**
+ * התמחור הזול ביותר ל-n ימי חיוב שקטנים מחודש: ימים בודדים, שילוב שבועות+ימים,
+ * ואם בכל זאת יוצא יקר יותר מחודש שלם - גובים חודש.
+ */
+function cheapestFor(
+  n: number,
+  r: Rates,
+  fromStart: boolean
+): { extraMonths: number; lines: PriceLine[]; total: number } {
+  if (n <= 0) return { extraMonths: 0, lines: [], total: 0 };
+
+  let bestLines = dayLines(n, r, fromStart);
+  let bestTotal = sumLines(bestLines);
+
+  if (r.week > 0) {
+    const maxWeeks = Math.ceil(n / BILLABLE_DAYS_PER_WEEK);
+    for (let w = 1; w <= maxWeeks; w++) {
+      const leftover = Math.max(0, n - w * BILLABLE_DAYS_PER_WEEK);
+      const lines: PriceLine[] = [
+        { unit: "week", qty: w, rate: r.week, amount: w * r.week },
+        ...dayLines(leftover, r, false),
+      ];
+      const total = sumLines(lines);
+      if (total < bestTotal) {
+        bestTotal = total;
+        bestLines = lines;
+      }
+    }
   }
-  return best;
+
+  if (r.month > 0 && r.month < bestTotal) {
+    return { extraMonths: 1, lines: [], total: r.month };
+  }
+  return { extraMonths: 0, lines: bestLines, total: bestTotal };
 }
 
 const UNIT_LABEL: Record<PriceLine["unit"], [string, string]> = {
@@ -166,7 +235,7 @@ export function formatBreakdown(lines: PriceLine[]): string {
   return lines
     .map((l) => {
       const [single, plural] = UNIT_LABEL[l.unit];
-      const label = l.qty === 1 ? single : `${l.qty} ${plural}`;
+      const label = l.label ?? (l.qty === 1 ? single : `${l.qty} ${plural}`);
       return `${label} × ${roundPrice(l.rate).toLocaleString()} ₪`;
     })
     .join(" + ");
@@ -184,27 +253,52 @@ export function formatPeriodLabel(months: number, extraDays: number): string {
   return parts.join(" ו-");
 }
 
-function buildQuote(
-  totalDays: number,
-  periodLabel: string,
-  months: number,
-  weeks: number,
-  days: number,
-  dayPrice: number,
-  weekPrice: number,
-  monthPrice: number
-): RentalQuote {
-  const lines: PriceLine[] = [];
-  if (months > 0) lines.push({ unit: "month", qty: months, rate: monthPrice, amount: months * monthPrice });
-  if (weeks > 0) lines.push({ unit: "week", qty: weeks, rate: weekPrice, amount: weeks * weekPrice });
-  if (days > 0) lines.push({ unit: "day", qty: days, rate: dayPrice, amount: days * dayPrice });
-  const total = roundPrice(lines.reduce((sum, l) => sum + l.amount, 0));
-  return { totalDays, periodLabel, months, weeks, days, lines, total, breakdown: formatBreakdown(lines) };
-}
+const EMPTY_QUOTE: RentalQuote = {
+  totalDays: 0,
+  billableDays: 0,
+  months: 0,
+  weeks: 0,
+  days: 0,
+  lines: [],
+  total: 0,
+  breakdown: "",
+  periodLabel: "",
+};
 
 /**
- * חישוב מחיר השכרת מחשב לפי טווח התאריכים ומחירון היום/שבוע/חודש של הפריט.
+ * החישוב המרכזי: מחיר השכרה לפי טווח תאריכים ומחירון הפריט.
+ * משמש גם למחשבים ניידים וגם לסטיקים, בכל הסניפים.
  */
+export function calcQuote(startDate: string, endDate: string, rates: RentalRates): RentalQuote {
+  const r = normalizeRates(rates);
+  const period = calcRentalPeriod(startDate, endDate);
+  if (period.totalDays <= 0) return EMPTY_QUOTE;
+
+  // חודשים קלנדריים שלמים נספרים רק אם הוגדר מחיר חודשי לפריט.
+  const wholeMonths = r.month > 0 ? period.months : 0;
+  // כשההשכרה קצרה מחודש - כל התקופה היא "יתרת הימים" (עם רצפה של יום חיוב אחד).
+  const remainderDays = wholeMonths > 0 ? period.billableExtraDays : period.billableDays;
+  const remainder = cheapestFor(remainderDays, r, wholeMonths === 0);
+
+  const months = wholeMonths + remainder.extraMonths;
+  const lines: PriceLine[] = [];
+  if (months > 0) lines.push({ unit: "month", qty: months, rate: r.month, amount: months * r.month });
+  lines.push(...remainder.lines);
+
+  return {
+    totalDays: period.totalDays,
+    billableDays: period.billableDays,
+    months,
+    weeks: lines.filter((l) => l.unit === "week").reduce((s, l) => s + l.qty, 0),
+    days: lines.filter((l) => l.unit === "day").reduce((s, l) => s + l.qty, 0),
+    lines,
+    total: roundPrice(sumLines(lines)),
+    breakdown: formatBreakdown(lines),
+    periodLabel: formatPeriodLabel(period.months, period.extraDays),
+  };
+}
+
+/** מחיר השכרת מחשב נייד לפי מחירון יום/שבוע/חודש. */
 export function calcRentalQuote(params: {
   startDate: string;
   endDate: string;
@@ -212,70 +306,61 @@ export function calcRentalQuote(params: {
   weekPrice?: number;
   monthPrice?: number;
 }): RentalQuote {
-  const dayPrice = rate(params.dayPrice);
-  const weekPrice = rate(params.weekPrice);
-  const monthPrice = rate(params.monthPrice);
-  const period = calcRentalPeriod(params.startDate, params.endDate);
-  if (period.totalDays <= 0) {
-    return { totalDays: 0, months: 0, weeks: 0, days: 0, lines: [], total: 0, breakdown: "", periodLabel: "" };
-  }
-  const periodLabel = formatPeriodLabel(period.months, period.extraDays);
+  return calcQuote(params.startDate, params.endDate, {
+    dayPrice: params.dayPrice,
+    weekPrice: params.weekPrice,
+    monthPrice: params.monthPrice,
+  });
+}
 
-  // אין מחיר חודשי מוגדר -> מתמחרים את כל התקופה בשבועות/ימים.
-  if (monthPrice <= 0) {
-    const r = priceRemainder(period.billableDays, dayPrice, weekPrice, 0);
-    return buildQuote(period.totalDays, periodLabel, 0, r.weeks, r.days, dayPrice, weekPrice, monthPrice);
-  }
+export type StickPriceRates = {
+  day1: number;
+  day2: number;
+  day3plus: number;
+  weekPrice?: number;
+  monthPrice?: number;
+};
 
-  // כשההשכרה קצרה מחודש, יתרת הימים היא כל התקופה (עם רצפה של יום חיוב אחד).
-  const remainderDays = period.months > 0 ? period.billableExtraDays : period.billableDays;
-  const r = priceRemainder(remainderDays, dayPrice, weekPrice, monthPrice);
-  return buildQuote(
-    period.totalDays,
-    periodLabel,
-    period.months + r.months,
-    r.weeks,
-    r.days,
-    dayPrice,
-    weekPrice,
-    monthPrice
-  );
+/**
+ * מחיר השכרת סטיק: יום ראשון, יום שני, וכל יום נוסף במחיר השוטף -
+ * ובנוסף מדרגות שבוע/חודש אם הוגדרו לסטיק.
+ */
+export function calcStickQuote(
+  startDate: string,
+  endDate: string,
+  rates: StickPriceRates
+): RentalQuote {
+  // day3plus הוא המחיר היומי השוטף; אם לא הוזן, נופלים חזרה ליום השני ואז לראשון.
+  const ongoing = rate(rates.day3plus) || rate(rates.day2) || rate(rates.day1);
+  return calcQuote(startDate, endDate, {
+    dayPrice: ongoing,
+    firstDayPrice: rates.day1,
+    secondDayPrice: rates.day2,
+    weekPrice: rates.weekPrice,
+    monthPrice: rates.monthPrice,
+  });
 }
 
 /**
- * תמחור מדורג לסטיק: יום ראשון, יום שני, וכל יום נוסף מהשלישי ואילך.
+ * מחירון המחשב לפי הווריאנט שנבחר בהשכרה: "עם סטיק" (ברירת מחדל) או "בלי סטיק".
+ * שדה "בלי סטיק" שהושאר ריק נופל חזרה למחיר הרגיל של אותה מדרגה.
  */
-export function calcStickQuote(days: number, day1: number, day2: number, day3plus: number): RentalQuote {
-  const n = Math.max(1, Math.min(Math.round(days), MAX_DAYS));
-  const d1 = roundPrice(day1 || 0);
-  const d2 = roundPrice(day2 || 0);
-  const d3 = roundPrice(day3plus || 0);
-  const lines: PriceLine[] = [{ unit: "day", qty: 1, rate: d1, amount: d1 }];
-  if (n >= 2) lines.push({ unit: "day", qty: 1, rate: d2, amount: d2 });
-  if (n > 2) lines.push({ unit: "day", qty: n - 2, rate: d3, amount: (n - 2) * d3 });
-  const total = roundPrice(lines.reduce((sum, l) => sum + l.amount, 0));
-  const breakdown = lines
-    .map((l, i) =>
-      i === 0
-        ? `יום ראשון ${l.rate.toLocaleString()} ₪`
-        : i === 1
-          ? `יום שני ${l.rate.toLocaleString()} ₪`
-          : `${l.qty} ימים × ${l.rate.toLocaleString()} ₪`
-    )
-    .join(" + ");
+export function laptopRatesFor(
+  laptop: {
+    dayPrice: number;
+    weekPrice?: number;
+    monthPrice?: number;
+    altPricing?: boolean;
+    noInternetDayPrice?: number;
+    noInternetWeekPrice?: number;
+    noInternetMonthPrice?: number;
+  },
+  variant: "normal" | "noInternet" | undefined
+): { dayPrice: number; weekPrice: number; monthPrice: number } {
+  const useAlt = variant === "noInternet" && !!laptop.altPricing;
   return {
-    totalDays: n,
-    periodLabel: formatPeriodLabel(0, n),
-    months: 0,
-    weeks: 0,
-    days: n,
-    lines,
-    total,
-    breakdown,
+    dayPrice: (useAlt ? rate(laptop.noInternetDayPrice) : 0) || rate(laptop.dayPrice),
+    weekPrice: (useAlt ? rate(laptop.noInternetWeekPrice) : 0) || rate(laptop.weekPrice),
+    monthPrice: (useAlt ? rate(laptop.noInternetMonthPrice) : 0) || rate(laptop.monthPrice),
   };
-}
-
-export function calcStickPrice(days: number, day1: number, day2: number, day3plus: number): number {
-  if (days <= 0) return 0;
-  return calcStickQuote(days, day1, day2, day3plus).total;
 }

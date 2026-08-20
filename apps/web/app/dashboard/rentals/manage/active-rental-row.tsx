@@ -4,7 +4,13 @@ import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Check } from "lucide-react";
-import { calcRentalDays, calcRentalQuote, calcStickQuote, roundPrice, type RentalQuote } from "@/lib/rental-pricing";
+import {
+  calcQuote,
+  calcStickQuote,
+  laptopRatesFor,
+  roundPrice,
+  type RentalQuote,
+} from "@/lib/rental-pricing";
 import {
   markRentalPaidAction,
   closeRentalAction,
@@ -26,7 +32,13 @@ type LaptopRates = {
   noInternetWeekPrice?: number;
   noInternetMonthPrice?: number;
 };
-type StickRates = { day1: number; day2: number; day3plus: number };
+type StickRates = {
+  day1: number;
+  day2: number;
+  day3plus: number;
+  weekPrice?: number;
+  monthPrice?: number;
+};
 
 type Props = {
   rentalId: string;
@@ -106,21 +118,14 @@ export function ActiveRentalRow({
 
   const quote: RentalQuote = useMemo(() => {
     if (kind === "laptop" && laptopRates) {
-      const useNoInternet = pricingVariant === "noInternet" && laptopRates.altPricing;
-      return calcRentalQuote({
-        startDate,
-        endDate: returnDate,
-        dayPrice: useNoInternet ? (laptopRates.noInternetDayPrice ?? laptopRates.dayPrice) : laptopRates.dayPrice,
-        weekPrice: useNoInternet ? laptopRates.noInternetWeekPrice : laptopRates.weekPrice,
-        monthPrice: useNoInternet ? laptopRates.noInternetMonthPrice : laptopRates.monthPrice,
-      });
+      return calcQuote(startDate, returnDate, laptopRatesFor(laptopRates, pricingVariant));
     }
     if (kind === "stick" && stickRates) {
-      const days = calcRentalDays(startDate, returnDate);
-      return calcStickQuote(days, stickRates.day1, stickRates.day2, stickRates.day3plus);
+      return calcStickQuote(startDate, returnDate, stickRates);
     }
     return {
-      totalDays: calcRentalDays(startDate, returnDate),
+      totalDays: 0,
+      billableDays: 0,
       periodLabel: "",
       months: 0,
       weeks: 0,
@@ -323,7 +328,15 @@ export function ActiveRentalRow({
                   {quote.periodLabel && (
                     <span>
                       משך ההשכרה: <strong className="text-ink">{quote.periodLabel}</strong> ({quote.totalDays} ימים
-                      קלנדריים)
+                      קלנדריים, {quote.billableDays} ימי חיוב)
+                    </span>
+                  )}
+                  {kind === "laptop" && (
+                    <span>
+                      מחירון:{" "}
+                      <strong className="text-ink">
+                        {pricingVariant === "noInternet" ? "מחשב בלי סטיק" : "מחשב עם סטיק"}
+                      </strong>
                     </span>
                   )}
                   {quote.breakdown && (

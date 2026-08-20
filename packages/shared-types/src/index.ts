@@ -177,9 +177,16 @@ export interface Stick {
     branchId: string;
     name: string;
     sim?: string;
+    /** מחיר היום הראשון */
     day1: number;
+    /** מחיר היום השני; 0/ריק = כמו המחיר מהיום השלישי ואילך */
     day2: number;
+    /** מחיר לכל יום מהיום השלישי ואילך (המחיר היומי השוטף) */
     day3plus: number;
+    /** מחיר לשבוע (רשות; 0/ריק = אין מדרגת שבוע לסטיק הזה) */
+    weekPrice?: number;
+    /** מחיר לחודש (רשות; 0/ריק = אין מדרגת חודש לסטיק הזה) */
+    monthPrice?: number;
     linkedLaptopId?: string | null;
 }
 

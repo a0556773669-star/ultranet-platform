@@ -11,6 +11,18 @@ type SortKey = "name" | "branch" | "price";
 const TH = "px-3 py-2 text-right text-[11px] font-bold uppercase tracking-wide text-muted whitespace-nowrap";
 const TD = "px-3 py-2 whitespace-nowrap text-[13px]";
 
+/** מחיר "עם סטיק", ומתחתיו מחיר "בלי סטיק" אם הוגדר נפרד. */
+function priceCell(withStick: number | undefined, withoutStick: number | undefined) {
+  return (
+    <>
+      <div>₪{Math.round(withStick ?? 0)}</div>
+      {withoutStick && withoutStick > 0 ? (
+        <div className="text-[11px] text-muted">בלי סטיק: ₪{Math.round(withoutStick)}</div>
+      ) : null}
+    </>
+  );
+}
+
 export function LaptopsList({
   laptops,
   branches,
@@ -140,9 +152,9 @@ export function LaptopsList({
                         </Link>
                       </td>
                       {isOwner && <td className={`${TD} text-muted`}>{branchName(l.branchId)}</td>}
-                      <td className={TD}>₪{l.dayPrice ?? 0}</td>
-                      <td className={TD}>₪{l.weekPrice ?? 0}</td>
-                      <td className={TD}>₪{l.monthPrice ?? 0}</td>
+                      <td className={TD}>{priceCell(l.dayPrice, l.altPricing ? l.noInternetDayPrice : 0)}</td>
+                      <td className={TD}>{priceCell(l.weekPrice, l.altPricing ? l.noInternetWeekPrice : 0)}</td>
+                      <td className={TD}>{priceCell(l.monthPrice, l.altPricing ? l.noInternetMonthPrice : 0)}</td>
                       <td className={TD}>
                         {l.hasStick ? (
                           <span className="flex items-center gap-1 text-teal-dark">

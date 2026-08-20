@@ -1,4 +1,5 @@
 import { getAdminFirestore } from "./firebase-admin";
+import { roundPrice } from "./rental-pricing";
 import type { Laptop, Stick, Rental } from "@ultranet/shared-types";
 
 export interface PartnerSettlementLine {
@@ -62,11 +63,12 @@ export async function computePartnerSettlement(month: string): Promise<PartnerSe
     }
     if (!line.computerNames.includes(laptop.name)) line.computerNames.push(laptop.name);
     line.rentalCount += 1;
-    line.totalRevenue += r.finalPrice ?? r.calcPrice ?? 0;
+    line.totalRevenue += roundPrice(r.finalPrice ?? r.calcPrice ?? 0);
   }
 
   for (const line of lines.values()) {
-    line.amountOwed = Math.round(((line.totalRevenue * line.pct) / 100) * 100) / 100;
+    // שקלים שלמים בלבד - אין אגורות בשום סכום במודול ההשכרות.
+    line.amountOwed = roundPrice((line.totalRevenue * line.pct) / 100);
   }
 
   return [...lines.values()].sort((a, b) => b.amountOwed - a.amountOwed);

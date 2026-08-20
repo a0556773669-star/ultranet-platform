@@ -139,7 +139,13 @@ function routesForBranch(branchId: string): { id: string; name: string }[] {
         : undefined;
     const stickRates =
       r.kind === "stick" && item
-        ? { day1: (item as Stick).day1, day2: (item as Stick).day2, day3plus: (item as Stick).day3plus }
+        ? {
+            day1: (item as Stick).day1,
+            day2: (item as Stick).day2,
+            day3plus: (item as Stick).day3plus,
+            weekPrice: (item as Stick).weekPrice,
+            monthPrice: (item as Stick).monthPrice,
+          }
         : undefined;
     const client = clients.get(r.clientId);
     const tokenKey = `${r.branchId}::${client?.collectionRouteId ?? ""}`;

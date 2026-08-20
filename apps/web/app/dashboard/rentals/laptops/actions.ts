@@ -6,6 +6,7 @@ import { authOptions } from "@/lib/auth";
 import { getAdminFirestore } from "@/lib/firebase-admin";
 import type { Firestore } from "firebase-admin/firestore";
 import type { Laptop } from "@ultranet/shared-types";
+import { roundPrice } from "@/lib/rental-pricing";
 
 async function requireSession() {
   const session = await getServerSession(authOptions);
@@ -31,7 +32,18 @@ function stickNameForLaptop(laptopName: string): string {
   return match ? `סטיק ${match[0]}` : `סטיק - ${laptopName}`;
 }
 
-type StickPricing = { day1: number; day2: number; day3plus: number };
+type StickPricing = {
+  day1: number;
+  day2: number;
+  day3plus: number;
+  weekPrice: number;
+  monthPrice: number;
+};
+
+/** כל מחיר במערכת נשמר כשקל שלם - אין אגורות בהשכרות. */
+function priceField(formData: FormData, key: string): number {
+  return roundPrice(Number(formData.get(key)) || 0);
+}
 
 /**
  * Keeps n_sticks in sync with a laptop's "יש סטיק משוייך" flag: creates the linked stick the
@@ -55,6 +67,8 @@ async function syncLinkedStick(
     day1: pricing.day1,
     day2: pricing.day2,
     day3plus: pricing.day3plus,
+    weekPrice: pricing.weekPrice,
+    monthPrice: pricing.monthPrice,
   });
   if (existing.empty) {
     await db.collection("n_sticks").add(data);
@@ -65,15 +79,17 @@ async function syncLinkedStick(
 
 function parseLaptopForm(formData: FormData, branchId: string): Omit<Laptop, "id"> {
   const name = String(formData.get("name") ?? "").trim();
-  const dayPrice = Number(formData.get("dayPrice")) || 0;
-  const weekPrice = Number(formData.get("weekPrice")) || 0;
-  const monthPrice = Number(formData.get("monthPrice")) || 0;
+  const dayPrice = priceField(formData, "dayPrice");
+  const weekPrice = priceField(formData, "weekPrice");
+  const monthPrice = priceField(formData, "monthPrice");
   const hasStick = formData.get("hasStick") === "on";
   const simNumber = hasStick ? String(formData.get("simNumber") ?? "").trim() || undefined : undefined;
-  const altPricing = formData.get("altPricing") === "on";
-  const noInternetDayPrice = altPricing ? Number(formData.get("noInternetDayPrice")) || 0 : undefined;
-  const noInternetWeekPrice = altPricing ? Number(formData.get("noInternetWeekPrice")) || 0 : undefined;
-  const noInternetMonthPrice = altPricing ? Number(formData.get("noInternetMonthPrice")) || 0 : undefined;
+  // "בלי סטיק" הוא עכשיו חלק קבוע מהמחירון: מספיק למלא מחיר אחד בעמודה הזו כדי
+  // שההשכרה בלי סטיק תתומחר לפיו. שדה ריק נופל חזרה למחיר "עם סטיק" (laptopRatesFor).
+  const noInternetDayPrice = priceField(formData, "noInternetDayPrice");
+  const noInternetWeekPrice = priceField(formData, "noInternetWeekPrice");
+  const noInternetMonthPrice = priceField(formData, "noInternetMonthPrice");
+  const altPricing = noInternetDayPrice > 0 || noInternetWeekPrice > 0 || noInternetMonthPrice > 0;
   const hasPartner = formData.get("hasPartner") === "on";
   const partnerName = hasPartner ? String(formData.get("partnerName") ?? "").trim() || undefined : undefined;
   const partnerPct = hasPartner ? Number(formData.get("partnerPct")) || 15 : undefined;
@@ -97,9 +113,11 @@ function parseLaptopForm(formData: FormData, branchId: string): Omit<Laptop, "id
 
 function parseStickPricing(formData: FormData): StickPricing {
   return {
-    day1: Number(formData.get("stickDay1")) || 0,
-    day2: Number(formData.get("stickDay2")) || 0,
-    day3plus: Number(formData.get("stickDay3plus")) || 0,
+    day1: priceField(formData, "stickDay1"),
+    day2: priceField(formData, "stickDay2"),
+    day3plus: priceField(formData, "stickDay3plus"),
+    weekPrice: priceField(formData, "stickWeekPrice"),
+    monthPrice: priceField(formData, "stickMonthPrice"),
   };
 }
 
@@ -179,6 +197,8 @@ export async function syncAllSticksAction() {
         day1: 0,
         day2: 0,
         day3plus: 0,
+        weekPrice: 0,
+        monthPrice: 0,
       })
     );
     if (!laptop.hasStick) {
