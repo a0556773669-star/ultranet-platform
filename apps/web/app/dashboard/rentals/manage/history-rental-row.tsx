@@ -15,7 +15,7 @@ export function HistoryRentalRow({ r }: { r: HistoryRowData }) {
   const [error, setError] = useState<string | null>(null);
   const [startDate, setStartDate] = useState(r.startDate);
   const [returnDate, setReturnDate] = useState(r.returnDate ?? "");
-  const [finalPrice, setFinalPrice] = useState(String(r.price));
+  const [finalPrice, setFinalPrice] = useState(String(Math.round(r.price || 0)));
   const [notes, setNotes] = useState(r.notes ?? "");
   const [itemId, setItemId] = useState(r.itemId);
   const [unpaidPending, setUnpaidPending] = useState(false);
@@ -69,7 +69,7 @@ export function HistoryRentalRow({ r }: { r: HistoryRowData }) {
         <td className="px-[11px] py-2 text-muted">{r.branchName}</td>
         <td className="px-[11px] py-2 text-muted">{r.startDate}</td>
         <td className="px-[11px] py-2 text-muted">{r.returnDate}</td>
-        <td className="px-[11px] py-2 font-semibold text-ink">{r.price} ₪</td>
+        <td className="px-[11px] py-2 font-semibold text-ink">{Math.round(r.price || 0).toLocaleString()} ₪</td>
         <td className="px-[11px] py-2">
           {r.paid ? (
             <div className="flex flex-wrap items-center gap-1.5">

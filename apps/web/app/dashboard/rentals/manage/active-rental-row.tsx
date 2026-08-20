@@ -4,7 +4,7 @@ import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Check } from "lucide-react";
-import { calcRentalDays, calcRentalPrice, calcStickPrice } from "@/lib/rental-pricing";
+import { calcRentalDays, calcRentalQuote, calcStickQuote, roundPrice, type RentalQuote } from "@/lib/rental-pricing";
 import {
   markRentalPaidAction,
   closeRentalAction,
@@ -104,22 +104,35 @@ export function ActiveRentalRow({
   const selectedRoute = chargeRoutes.find((r) => r.id === selectedRouteId) ?? defaultChargeRoute;
   const canChargeNow = hasCardToken ? !!tokenRouteName : !!selectedRoute;
 
-  const autoPrice = useMemo(() => {
-    const days = calcRentalDays(startDate, returnDate);
+  const quote: RentalQuote = useMemo(() => {
     if (kind === "laptop" && laptopRates) {
       const useNoInternet = pricingVariant === "noInternet" && laptopRates.altPricing;
-      const day = useNoInternet ? (laptopRates.noInternetDayPrice ?? laptopRates.dayPrice) : laptopRates.dayPrice;
-      const week = useNoInternet ? laptopRates.noInternetWeekPrice : laptopRates.weekPrice;
-      const month = useNoInternet ? laptopRates.noInternetMonthPrice : laptopRates.monthPrice;
-      return calcRentalPrice(days, day, week, month);
+      return calcRentalQuote({
+        startDate,
+        endDate: returnDate,
+        dayPrice: useNoInternet ? (laptopRates.noInternetDayPrice ?? laptopRates.dayPrice) : laptopRates.dayPrice,
+        weekPrice: useNoInternet ? laptopRates.noInternetWeekPrice : laptopRates.weekPrice,
+        monthPrice: useNoInternet ? laptopRates.noInternetMonthPrice : laptopRates.monthPrice,
+      });
     }
     if (kind === "stick" && stickRates) {
-      return calcStickPrice(days, stickRates.day1, stickRates.day2, stickRates.day3plus);
+      const days = calcRentalDays(startDate, returnDate);
+      return calcStickQuote(days, stickRates.day1, stickRates.day2, stickRates.day3plus);
     }
-    return calcPrice;
+    return {
+      totalDays: calcRentalDays(startDate, returnDate),
+      periodLabel: "",
+      months: 0,
+      weeks: 0,
+      days: 0,
+      lines: [],
+      total: roundPrice(calcPrice),
+      breakdown: "",
+    };
   }, [startDate, returnDate, kind, pricingVariant, laptopRates, stickRates, calcPrice]);
 
-  const finalPrice = override ? Number(manualPrice) || 0 : autoPrice;
+  const autoPrice = quote.total;
+  const finalPrice = override ? roundPrice(Number(manualPrice) || 0) : autoPrice;
 
   function handleMarkPaid(method: "cash" | "route" | "nedarim", receiptPdfLink?: string) {
     setActionError(null);
@@ -139,7 +152,7 @@ export function ActiveRentalRow({
     return {
       returnDate,
       finalPrice,
-      priceOverrideReason: override ? overrideReason.trim() : undefined,
+      priceOverrideReason: override && finalPrice !== autoPrice ? overrideReason.trim() : undefined,
       notes: notes.trim() || undefined,
     };
   }
@@ -165,7 +178,7 @@ export function ActiveRentalRow({
   }
 
   function handleClose() {
-    if (override && !overrideReason.trim()) {
+    if (override && finalPrice !== autoPrice && !overrideReason.trim()) {
       setActionError("יש לפרט את הסיבה לשינוי המחיר הידני");
       return;
     }
@@ -246,7 +259,7 @@ export function ActiveRentalRow({
         <td className="px-[11px] py-2 text-muted">{itemName}</td>
         {showBranch && <td className="px-[11px] py-2 text-muted">{branchName}</td>}
         <td className="px-[11px] py-2 text-muted">{startDate}</td>
-        <td className="px-[11px] py-2 font-semibold text-ink">{calcPrice} ₪</td>
+        <td className="px-[11px] py-2 font-semibold text-ink">{finalPrice.toLocaleString()} ₪</td>
         <td className="px-[11px] py-2">
           <span className="text-xs font-bold text-teal-dark">{expanded ? "סגירה ▲" : "החזרה ▼"}</span>
         </td>
@@ -270,6 +283,12 @@ export function ActiveRentalRow({
               </div>
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
                 <div>
+                  <label className="mb-1 block text-xs font-semibold text-muted">תאריך התחלה</label>
+                  <div className="rounded-lg border border-card-border bg-[#f4f6f9] px-3 py-1.5 text-sm text-muted">
+                    {startDate}
+                  </div>
+                </div>
+                <div>
                   <label className="mb-1 block text-xs font-semibold text-muted">תאריך החזרה</label>
                   <input
                     type="date"
@@ -279,39 +298,69 @@ export function ActiveRentalRow({
                   />
                 </div>
                 <div>
-                  <label className="mb-1 block text-xs font-semibold text-muted">מחיר מחושב</label>
-                  <div className="rounded-lg border border-teal bg-teal-bg px-3 py-1.5 text-sm font-bold text-teal-dark">
-                    {autoPrice.toLocaleString()} ₪
-                  </div>
-                </div>
-                <div className="flex items-end">
-                  <label className="flex items-center gap-1.5 text-xs font-semibold text-muted">
-                    <input type="checkbox" checked={override} onChange={(e) => setOverride(e.target.checked)} />
-                    מחיר ידני אחר
+                  <label className="mb-1 block text-xs font-semibold text-muted">
+                    {override ? "מחיר לתשלום (ידני, ₪)" : "מחיר לתשלום"}
                   </label>
+                  {override ? (
+                    <input
+                      type="number"
+                      step={1}
+                      min={0}
+                      value={manualPrice}
+                      onChange={(e) => setManualPrice(e.target.value)}
+                      className="w-full rounded-lg border border-amber-400 bg-amber-50 px-3 py-1.5 text-sm font-bold"
+                    />
+                  ) : (
+                    <div className="rounded-lg border border-teal bg-teal-bg px-3 py-1.5 text-sm font-bold text-teal-dark">
+                      {autoPrice.toLocaleString()} ₪
+                    </div>
+                  )}
                 </div>
               </div>
 
+              <div className="rounded-lg border border-card-border bg-white px-3 py-2 text-xs text-muted">
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                  {quote.periodLabel && (
+                    <span>
+                      משך ההשכרה: <strong className="text-ink">{quote.periodLabel}</strong> ({quote.totalDays} ימים
+                      קלנדריים)
+                    </span>
+                  )}
+                  {quote.breakdown && (
+                    <span>
+                      חישוב: <strong className="text-ink">{quote.breakdown}</strong> ={" "}
+                      <strong className="text-ink">{autoPrice.toLocaleString()} ₪</strong>
+                    </span>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (override) {
+                        setOverride(false);
+                        setOverrideReason("");
+                      } else {
+                        setManualPrice(String(autoPrice));
+                        setOverride(true);
+                      }
+                    }}
+                    className="rounded-[8px] border border-card-border px-2 py-1 text-[11px] font-bold text-ink transition hover:bg-[#f4f6f9]"
+                  >
+                    {override ? "חזרה לחישוב האוטומטי" : "תיקון המחיר ידנית"}
+                  </button>
+                </div>
+                <div className="mt-1 text-[11px]">שישי ושבת נספרים כיום חיוב אחד. המחיר תמיד בשקלים שלמים.</div>
+              </div>
+
               {override && (
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="mb-1 block text-xs font-semibold text-muted">מחיר ידני (₪)</label>
-                    <input
-                      type="number"
-                      value={manualPrice}
-                      onChange={(e) => setManualPrice(e.target.value)}
-                      className="w-full rounded-lg border border-card-border bg-white px-3 py-1.5 text-sm"
-                    />
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-xs font-semibold text-muted">סיבה לשינוי המחיר</label>
-                    <input
-                      type="text"
-                      value={overrideReason}
-                      onChange={(e) => setOverrideReason(e.target.value)}
-                      className="w-full rounded-lg border border-card-border bg-white px-3 py-1.5 text-sm"
-                    />
-                  </div>
+                <div>
+                  <label className="mb-1 block text-xs font-semibold text-muted">סיבה לשינוי המחיר</label>
+                  <input
+                    type="text"
+                    value={overrideReason}
+                    onChange={(e) => setOverrideReason(e.target.value)}
+                    placeholder="למשל: הנחה ללקוח קבוע / תקלה במחשב"
+                    className="w-full rounded-lg border border-card-border bg-white px-3 py-1.5 text-sm"
+                  />
                 </div>
               )}
 
@@ -367,7 +416,7 @@ export function ActiveRentalRow({
                       <button
                         type="button"
                         onClick={() => {
-                          if (override && !overrideReason.trim()) {
+                          if (override && finalPrice !== autoPrice && !overrideReason.trim()) {
                             setActionError("יש לפרט את הסיבה לשינוי המחיר הידני לפני גבייה");
                             return;
                           }

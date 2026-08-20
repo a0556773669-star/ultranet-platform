@@ -9,7 +9,7 @@ import { FieldValue } from "firebase-admin/firestore";
 import { resolveEzcountCreds, createEzcountReceipt } from "@/lib/ezcount";
 import type { RentalClient, Laptop, Stick, Rental, Branch } from "@ultranet/shared-types";
 import { parseClientsWorkbook } from "@/lib/client-excel";
-import { calcRentalPrice, calcRentalDays } from "@/lib/rental-pricing";
+import { roundPrice } from "@/lib/rental-pricing";
 
 async function requireSession() {
   const session = await getServerSession(authOptions);
@@ -320,7 +320,7 @@ export async function issueCashReceiptAction(rentalId: string) {
     return { ok: false as const, message: "לא הוגדר ספק קבלות (EZcount) לסניף זה" };
   }
 
-  const amount = rental.finalPrice ?? rental.calcPrice;
+  const amount = roundPrice(rental.finalPrice ?? rental.calcPrice);
   const result = await createEzcountReceipt({
     creds,
     amount,
@@ -350,7 +350,8 @@ export async function closeRentalAction(
       stripUndefined({
         status: "returned",
         returnDate: data.returnDate,
-        finalPrice: data.finalPrice,
+        // המחיר נשמר תמיד כשקל שלם - אין אגורות/שברים בהשכרות.
+        finalPrice: roundPrice(data.finalPrice),
         priceOverrideReason: data.priceOverrideReason,
         notes: data.notes,
       }),
@@ -388,7 +389,7 @@ export async function updateRentalHistoryAction(
       stripUndefined({
         startDate: data.startDate,
         returnDate: data.returnDate,
-        finalPrice: data.finalPrice,
+        finalPrice: roundPrice(data.finalPrice),
         notes: data.notes,
       }),
       { merge: true }
@@ -482,7 +483,7 @@ export async function createRentalAction(formData: FormData) {
     kind,
     pricingVariant: kind === "laptop" ? pricingVariant : undefined,
     startDate,
-    calcPrice,
+    calcPrice: roundPrice(calcPrice),
     notes,
     collectionRouteId,
     status: "active",
