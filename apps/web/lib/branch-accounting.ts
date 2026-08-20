@@ -21,6 +21,19 @@ export function expenseNetToOwner(amount: number, paidBy?: string, owedBy?: stri
 }
 
 /**
+ * Same question as expenseNetToOwner(), but for a split that `owedBy` can't express - the owner's
+ * share is handed in directly instead of being derived from owner/partner/50-50 (used by the
+ * shared advertising areas, where the owner's cut is any percentage). Whoever fronted the cash
+ * is owed back the other side's share:
+ *   paid by the owner   -> the partner owes their own share  (total - ownerShare)
+ *   paid by the partner -> the owner owes their share        (-ownerShare)
+ * Feeding it ownerExpenseBurden(amount, owedBy) reproduces expenseNetToOwner() exactly.
+ */
+export function expenseNetToOwnerFromShares(total: number, ownerShare: number, paidBy?: string): number {
+  return paidBy === "partner" ? -ownerShare : total - ownerShare;
+}
+
+/**
  * The owner's true economic share of an expense's cost, regardless of who fronted the cash.
  * Used for real profit calculations (not cash-settlement direction).
  */

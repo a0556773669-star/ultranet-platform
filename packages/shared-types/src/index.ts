@@ -298,6 +298,74 @@ export interface Printer {
     paperStatus?: string;
 }
 
+/** How a cost-rate line's quantity is derived for a branch, before any manual override. */
+export type CostQtySource = "laptops" | "sticks" | "sims" | "one" | "manual";
+
+/**
+ * collection: n_cost_rates - the price list ("תעריפון") behind the per-branch operating-cost
+ * breakdown in /dashboard/accounting/overview. One doc per cost category (computer, bag, stick,
+ * SIM filtering, advertising, printing...). `owedBy` is the DEFAULT split for the category and
+ * can be overridden per branch via n_branch_cost_settings.
+ */
+export interface CostRate {
+  id: string;
+  key: string;
+  label: string;
+  unitCost: number;
+  /** "once" = a one-time purchase per unit (equipment), "monthly" = a recurring monthly charge */
+  kind: "once" | "monthly";
+  owedBy: "owner" | "partner" | "shared";
+  qtySource: CostQtySource;
+  order?: number;
+}
+
+/**
+ * collection: n_branch_cost_settings - per-branch override of one cost rate.
+ * Deterministic doc id `${branchId}__${rateKey}` so a save is always an upsert.
+ * Every field is optional: what's absent falls back to the rate's own value.
+ */
+export interface BranchCostSetting {
+  id: string;
+  branchId: string;
+  rateKey: string;
+  qty?: number;
+  unitCost?: number;
+  owedBy?: "owner" | "partner" | "shared";
+  paidBy?: "owner" | "partner";
+  /** false = don't count this category for this branch at all */
+  enabled?: boolean;
+}
+
+/**
+ * collection: n_ad_areas - one advertising campaign shared by every branch in the same city/area
+ * (e.g. "קרית ספר"). The owner carries `ownerPct`% of `monthlyCost`; whatever is left is split
+ * evenly between the `branchCount` branches of the area, so each branch pays
+ * `monthlyCost * (100 - ownerPct) / 100 / branchCount`.
+ *
+ * Replaces the flat per-branch "פרסום" line of the price list (n_cost_rates) for the branches
+ * listed in `branchIds` - see apps/web/lib/ad-areas.ts.
+ */
+export interface AdArea {
+  id: string;
+  /** the city / area the campaign runs in */
+  name: string;
+  /** the campaign's full cost per month, before any split */
+  monthlyCost: number;
+  /** the owner's share of the campaign, in percent (50 = half) */
+  ownerPct: number;
+  /** how many branches share the rest; falls back to branchIds.length when unset */
+  branchCount?: number;
+  /** the branches the per-branch share is actually charged to */
+  branchIds: string[];
+  /** YYYY-MM, inclusive; before it the campaign isn't charged */
+  startMonth?: string;
+  /** YYYY-MM, inclusive; after it the campaign isn't charged */
+  endMonth?: string;
+  /** who fronts the cash for the campaign (affects settlement only, not the split) */
+  paidBy?: "owner" | "partner";
+  note?: string;
+}
+
 /** collection: n_cw_stations */
 export interface CoworkingStation {
     id: string;
@@ -345,11 +413,14 @@ export interface AccountingIncome {
     amount: number;
     desc: string;
     business: "computers" | "rentals" | "coworking" | "other" | "general";
-    type: "fixed" | "variable" | "cash" | "laptops" | "credit";
+    /** "other" = a free-category manual entry added from /dashboard/accounting/overview */
+    type: "fixed" | "variable" | "cash" | "laptops" | "credit" | "other";
     date: string;
     month: string;
     /** set for type "laptops" (rentals branch) and type "cash" (computers branch / till) */
     branchId?: string;
+    /** free-text category picked from ACCOUNTING_INCOME_CATEGORIES (apps/web/lib/accounting-categories.ts) */
+    category?: string;
 }
 
 /** collection: n_ah_expenses */
@@ -360,6 +431,8 @@ export interface AccountingExpense {
     business: "computers" | "rentals" | "coworking" | "general";
     date: string;
     month: string;
+    /** free-text category picked from ACCOUNTING_EXPENSE_CATEGORIES (apps/web/lib/accounting-categories.ts) */
+    category?: string;
 }
 
 /** collection: n_collection_routes */

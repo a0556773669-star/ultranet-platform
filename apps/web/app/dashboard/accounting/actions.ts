@@ -84,6 +84,7 @@ export async function createIncomeAction(formData: FormData) {
   });
   await db.collection("n_ah_income").add(data);
   revalidatePath("/dashboard/accounting");
+  revalidatePath("/dashboard/accounting/overview");
   revalidatePath("/dashboard/rentals/accounting");
 }
 
@@ -94,15 +95,20 @@ export async function createExpenseAction(formData: FormData) {
   if (!date || !amount) {
     throw new Error("תאריך וסכום הם שדות חובה");
   }
+  const category = String(formData.get("category") ?? "").trim();
   const data: Omit<AccountingExpense, "id"> = {
     date,
     amount,
     desc: String(formData.get("desc") ?? "").trim(),
     business: String(formData.get("business") ?? "general") as AccountingExpense["business"],
     month: date.slice(0, 7),
+    // only written when the form actually offered a category, so the edit modal (which has no
+    // category field) leaves an existing value untouched under { merge: true }
+    ...(category ? { category } : {}),
   };
   await getAdminFirestore().collection("n_ah_expenses").add(data);
   revalidatePath("/dashboard/accounting");
+  revalidatePath("/dashboard/accounting/overview");
   revalidatePath("/dashboard/rentals/accounting");
 }
 
@@ -110,6 +116,7 @@ export async function deleteIncomeAction(id: string) {
   await requireOwner();
   await getAdminFirestore().collection("n_ah_income").doc(id).delete();
   revalidatePath("/dashboard/accounting");
+  revalidatePath("/dashboard/accounting/overview");
   revalidatePath("/dashboard/rentals/accounting");
 }
 
@@ -117,6 +124,7 @@ export async function deleteExpenseAction(id: string) {
   await requireOwner();
   await getAdminFirestore().collection("n_ah_expenses").doc(id).delete();
   revalidatePath("/dashboard/accounting");
+  revalidatePath("/dashboard/accounting/overview");
   revalidatePath("/dashboard/rentals/accounting");
 }
 
@@ -127,15 +135,20 @@ export async function updateExpenseAction(id: string, formData: FormData) {
   if (!date || !amount) {
     throw new Error("תאריך וסכום הם שדות חובה");
   }
+  const category = String(formData.get("category") ?? "").trim();
   const data: Omit<AccountingExpense, "id"> = {
     date,
     amount,
     desc: String(formData.get("desc") ?? "").trim(),
     business: String(formData.get("business") ?? "general") as AccountingExpense["business"],
     month: date.slice(0, 7),
+    // only written when the form actually offered a category, so the edit modal (which has no
+    // category field) leaves an existing value untouched under { merge: true }
+    ...(category ? { category } : {}),
   };
   await getAdminFirestore().collection("n_ah_expenses").doc(id).set(data, { merge: true });
   revalidatePath("/dashboard/accounting");
+  revalidatePath("/dashboard/accounting/overview");
   revalidatePath("/dashboard/rentals/accounting");
 }
 
