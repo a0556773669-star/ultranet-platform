@@ -43,7 +43,13 @@ import {
   incomeShareToOwner,
   type RentalIncomeLine,
 } from "./branch-accounting";
-import { loadCostRates, branchCostSettingId, expenseCoversRate } from "./cost-rates";
+import {
+  loadCostRates,
+  branchCostSettingId,
+  expenseCoversRate,
+  COMPUTER_RATE_KEY,
+  GRAPHICS_RATE_KEY,
+} from "./cost-rates";
 import { ADS_RATE_KEY, adAreaForBranch, adAreaNote, splitAdArea } from "./ad-areas";
 import { loadAdAreas } from "./ad-areas-data";
 
@@ -174,6 +180,9 @@ export interface OverviewData {
   branchMonths: Map<string, BranchMonth>;
   /** branchId -> cumulative one-time equipment lines (investment to date) */
   investmentByBranch: Map<string, CostLine[]>;
+  /** branchId -> rateKey -> the quantity the system derives on its own, before any manual
+   *  override; the per-branch settings form shows it as the placeholder */
+  autoQtyByBranch: Map<string, Map<string, number>>;
   rows: OverviewMonthRow[];
 }
 
@@ -392,8 +401,19 @@ function resolveQty(
   const laptops = raw.laptopsByBranch.get(b.id) ?? [];
   const sticks = raw.sticksByBranch.get(b.id) ?? [];
   switch (rate.qtySource) {
-    case "laptops":
+    case "laptops": {
+      // Graphics machines are counted by hand for this branch, and they sit inside the same
+      // n_laptops list - so the plain-computer line has to leave them out or the fleet gets
+      // charged twice. Bags stay on the full count: a graphics machine gets a bag too.
+      const graphics = raw.settings.get(branchCostSettingId(b.id, GRAPHICS_RATE_KEY))?.qty ?? 0;
+      if (rate.key === COMPUTER_RATE_KEY && graphics > 0) {
+        return {
+          qty: Math.max(0, laptops.length - graphics),
+          note: `לפי מספר המחשבים בסניף (${laptops.length}) פחות ${graphics} מחשבי גרפיקה`,
+        };
+      }
       return { qty: laptops.length, note: "לפי מספר המחשבים הרשומים בסניף" };
+    }
     case "sticks":
       return { qty: sticks.length, note: "לפי מספר הסטיקים הרשומים בסניף" };
     case "sims": {
@@ -622,7 +642,14 @@ export async function loadAccountingOverview(endMonth: string, monthCount = 12):
   }
 
   const investmentByBranch = new Map<string, CostLine[]>();
-  for (const b of branches) investmentByBranch.set(b.id, computeInvestment(b, raw));
+  const autoQtyByBranch = new Map<string, Map<string, number>>();
+  for (const b of branches) {
+    investmentByBranch.set(b.id, computeInvestment(b, raw));
+    const perRate = new Map<string, number>();
+    // deliberately passing no setting: this is the derived value the override would replace
+    for (const rate of raw.rates) perRate.set(rate.key, resolveQty(rate, b, raw, undefined).qty);
+    autoQtyByBranch.set(b.id, perRate);
+  }
 
   const rows: OverviewMonthRow[] = months.map((m) => {
     const my = myByMonth.get(m)!;
@@ -661,6 +688,7 @@ export async function loadAccountingOverview(endMonth: string, monthCount = 12):
     myByMonth,
     branchMonths,
     investmentByBranch,
+    autoQtyByBranch,
     rows,
   };
 }

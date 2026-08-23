@@ -19,14 +19,21 @@ function revalidate() {
   revalidatePath("/dashboard/accounting/overview");
 }
 
-/** Writes the default price list once, so the overview stops running on in-memory defaults. */
+/**
+ * Writes the default price list, so the overview stops running on in-memory defaults.
+ * Only creates categories that don't exist yet - a rate the owner already edited is never
+ * overwritten, so this is also how a newly added default category (e.g. מחשב גרפיקה) reaches
+ * a price list that was saved before it existed.
+ */
 export async function seedDefaultRatesAction() {
   await requireOwner();
   const db = getAdminFirestore();
-  const existing = await db.collection(COST_RATES_COLLECTION).limit(1).get();
-  if (!existing.empty) return;
+  const existing = await db.collection(COST_RATES_COLLECTION).get();
+  const have = new Set(existing.docs.map((d) => d.id));
+  const missing = DEFAULT_COST_RATES.filter((r) => !have.has(r.key));
+  if (missing.length === 0) return;
   const batch = db.batch();
-  for (const rate of DEFAULT_COST_RATES) {
+  for (const rate of missing) {
     batch.set(db.collection(COST_RATES_COLLECTION).doc(rate.key), rate);
   }
   await batch.commit();

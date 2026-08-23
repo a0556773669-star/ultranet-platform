@@ -1,6 +1,6 @@
 import { Tag } from "lucide-react";
 import { requireOwner } from "@/lib/perms";
-import { loadCostRates } from "@/lib/cost-rates";
+import { loadCostRates, DEFAULT_COST_RATES } from "@/lib/cost-rates";
 import { AccountingTabs } from "../accounting-tabs";
 import { saveRateAction, seedDefaultRatesAction } from "./actions";
 
@@ -19,6 +19,8 @@ const QTY_SOURCE_LABELS: Record<string, string> = {
 export default async function CostRatesPage() {
   await requireOwner();
   const { rates, usingDefaults } = await loadCostRates();
+  const have = new Set(rates.map((r) => r.key));
+  const missing = usingDefaults ? [] : DEFAULT_COST_RATES.filter((r) => !have.has(r.key));
 
   return (
     <div>
@@ -53,6 +55,24 @@ export default async function CostRatesPage() {
         </form>
       )}
 
+      {missing.length > 0 && (
+        <form
+          action={seedDefaultRatesAction}
+          className="mb-3 flex flex-wrap items-center justify-between gap-3 rounded-card border border-[#f0dcb8] bg-[#fdf3e3] px-4 py-3"
+        >
+          <p className="text-[12.5px] font-bold text-[#7a4a12]">
+            נוספו קטגוריות חדשות שעדיין לא קיימות בתעריפון שלך: {missing.map((r) => r.label).join(" · ")}. הוספה
+            לא תשנה אף קטגוריה קיימת.
+          </p>
+          <button
+            type="submit"
+            className="rounded-[10px] bg-gradient-to-br from-teal to-teal-light px-4 py-2 text-[13px] font-bold text-white shadow-primary transition hover:opacity-90"
+          >
+            הוספת הקטגוריות החסרות
+          </button>
+        </form>
+      )}
+
       <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
         {rates.map((rate) => {
           const save = saveRateAction.bind(null, rate.id);
@@ -64,9 +84,15 @@ export default async function CostRatesPage() {
             >
               <div className="mb-2.5 flex items-center justify-between gap-2">
                 <h2 className="text-[15px] font-extrabold text-ink">{rate.label}</h2>
-                <span className="rounded-full bg-[#f4f6f9] px-2 py-0.5 text-[10.5px] font-extrabold text-muted">
-                  {rate.key}
-                </span>
+                {rate.unitCost === 0 ? (
+                  <span className="rounded-full bg-[#fdf3e3] px-2 py-0.5 text-[10.5px] font-extrabold text-[#7a4a12]">
+                    לא הוגדרה עלות — לא נספר
+                  </span>
+                ) : (
+                  <span className="rounded-full bg-[#f4f6f9] px-2 py-0.5 text-[10.5px] font-extrabold text-muted">
+                    {rate.key}
+                  </span>
+                )}
               </div>
               <div className="grid grid-cols-2 gap-2.5">
                 <div className="col-span-2">

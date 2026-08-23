@@ -18,13 +18,20 @@ export function branchCostSettingId(branchId: string, rateKey: string): string {
   return `${branchId}__${rateKey}`;
 }
 
+/** the plain-computer rate; its quantity is the branch's laptops MINUS the graphics ones */
+export const COMPUTER_RATE_KEY = "computer";
+/** graphics computers are counted per branch by hand (n_branch_cost_settings.qty) - nothing in
+ *  n_laptops marks a computer as a graphics machine, so there's nothing to derive it from */
+export const GRAPHICS_RATE_KEY = "computer_graphics";
+
 export const DEFAULT_COST_RATES: Omit<CostRate, "id">[] = [
-  { key: "computer", label: "מחשב", unitCost: 1200, kind: "once", owedBy: "owner", qtySource: "laptops", order: 1 },
-  { key: "bag", label: "תיק למחשב", unitCost: 50, kind: "once", owedBy: "owner", qtySource: "laptops", order: 2 },
-  { key: "stick", label: "סטיק", unitCost: 120, kind: "once", owedBy: "owner", qtySource: "sticks", order: 3 },
-  { key: "sim", label: "סינון וגלישה", unitCost: 70, kind: "monthly", owedBy: "shared", qtySource: "sims", order: 4 },
-  { key: "ads", label: "פרסום", unitCost: 600, kind: "monthly", owedBy: "shared", qtySource: "one", order: 5 },
-  { key: "print", label: "הדפסות (החתמה על תקנון)", unitCost: 20, kind: "monthly", owedBy: "owner", qtySource: "one", order: 6 },
+  { key: COMPUTER_RATE_KEY, label: "מחשב רגיל", unitCost: 1200, kind: "once", owedBy: "owner", qtySource: "laptops", order: 1 },
+  { key: GRAPHICS_RATE_KEY, label: "מחשב גרפיקה", unitCost: 0, kind: "once", owedBy: "owner", qtySource: "manual", order: 2 },
+  { key: "bag", label: "תיק למחשב", unitCost: 50, kind: "once", owedBy: "owner", qtySource: "laptops", order: 3 },
+  { key: "stick", label: "סטיק", unitCost: 120, kind: "once", owedBy: "owner", qtySource: "sticks", order: 4 },
+  { key: "sim", label: "סינון וגלישה", unitCost: 70, kind: "monthly", owedBy: "shared", qtySource: "sims", order: 5 },
+  { key: "ads", label: "פרסום", unitCost: 600, kind: "monthly", owedBy: "shared", qtySource: "one", order: 6 },
+  { key: "print", label: "הדפסות (החתמה על תקנון)", unitCost: 20, kind: "monthly", owedBy: "owner", qtySource: "one", order: 7 },
 ];
 
 /**
@@ -34,6 +41,7 @@ export const DEFAULT_COST_RATES: Omit<CostRate, "id">[] = [
  * Falls back to the rate's own label for custom rates with no entry here.
  */
 const MATCH_TOKENS: Record<string, string[]> = {
+  [GRAPHICS_RATE_KEY]: ["גרפיקה", "גרפי"],
   computer: ["מחשב", "לפטופ", "נייד"],
   bag: ["תיק"],
   stick: ["סטיק", "סטיקים"],

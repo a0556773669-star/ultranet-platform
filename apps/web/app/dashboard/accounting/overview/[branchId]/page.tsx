@@ -13,7 +13,9 @@ import {
   branchPartnerLabel,
   type BranchMonth,
 } from "@/lib/accounting-overview";
+import { loadCostRates } from "@/lib/cost-rates";
 import { AccountingTabs } from "../../accounting-tabs";
+import { BranchCostSettings } from "../branch-cost-settings";
 import {
   BranchMiniCards,
   CostTable,
@@ -181,9 +183,10 @@ export default async function BranchAccountingOverviewPage({
   const cum = searchParams?.mode === "cum";
   const modeSuffix = cum ? "&mode=cum" : "";
 
-  const [data, ownerName] = await Promise.all([
+  const [data, ownerName, rateData] = await Promise.all([
     loadAccountingOverview(month),
     getOwnerName(isOwner ? session.user?.name : null),
+    loadCostRates(),
   ]);
 
   const branch = data.branches.find((b) => b.id === params.branchId);
@@ -364,6 +367,15 @@ export default async function BranchAccountingOverviewPage({
                 ))}
               </ul>
             </section>
+          )}
+
+          {!restricted && (
+            <BranchCostSettings
+              branch={branch}
+              rates={rateData.rates}
+              settings={rateData.settingsByBranchRate}
+              autoQty={data.autoQtyByBranch.get(branch.id) ?? new Map()}
+            />
           )}
 
           {!restricted && (
