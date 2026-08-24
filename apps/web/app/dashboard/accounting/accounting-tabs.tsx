@@ -6,6 +6,7 @@ const TABS = [
   { href: "/dashboard/accounting/routes", label: "מסלולי גביה" },
   { href: "/dashboard/accounting/rates", label: "תעריפון" },
   { href: "/dashboard/accounting/ads", label: "פרסום משותף" },
+  { href: "/dashboard/accounting/import", label: "ייבוא מאקסל" },
 ];
 
 /** Owner-only navigation between the accounting screens. `active` is the href of the current tab. */
