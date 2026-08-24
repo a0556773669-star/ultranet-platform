@@ -4,8 +4,8 @@
  */
 import Link from "next/link";
 import type { Branch } from "@ultranet/shared-types";
-import type { BranchMonth, CostLine, OverviewMonthRow } from "@/lib/accounting-overview";
-import { branchHasPartner, branchOwnerPct, branchPartnerLabel } from "@/lib/accounting-overview";
+import type { BranchActivity, BranchMonth, CostLine, OverviewMonthRow } from "@/lib/accounting-overview";
+import { branchHasPartner, branchOwnerPct, branchPartnerLabel, monthLabelLong } from "@/lib/accounting-overview";
 
 const nf = new Intl.NumberFormat("he-IL", { maximumFractionDigits: 0 });
 export const money = (n: number) => `${nf.format(Math.round(n))} ₪`;
@@ -30,6 +30,40 @@ const SEP = "border-r border-card-border";
 
 export function signClass(n: number) {
   return n >= 0 ? "text-emerald-600 font-extrabold" : "text-red-600 font-extrabold";
+}
+
+/** One row of the branch lists: the branch, its month figures, and whether it opened at all. */
+export interface BranchEntry {
+  branch: Branch;
+  stats: BranchMonth;
+  activity: BranchActivity;
+}
+
+/** "לא התחיל השכרות" / "טרם נפתח" - shown wherever a branch is listed, so an empty branch is
+ *  never mistaken for a branch that simply had a bad month. */
+export function StatusBadge({ activity }: { activity: BranchActivity }) {
+  if (!activity.statusLabel) return null;
+  return (
+    <span className="rounded-full bg-[#fdf3e3] px-2 py-0.5 text-[10.5px] font-extrabold text-[#7a4a12]">
+      {activity.statusLabel}
+    </span>
+  );
+}
+
+/** Short answer to "the transfer to the owner - based on what?" for a single branch-month. */
+export function transferBasis(s: BranchMonth, activity: BranchActivity): string {
+  if (s.status === "not_started") return "הסניף עדיין לא נפתח — אין חישוב";
+  if (s.status === "before_open") {
+    return `לפני תאריך הפתיחה${activity.openedMonth ? ` (${monthLabelLong(activity.openedMonth)})` : ""}`;
+  }
+  const parts: string[] = [`חלקי בהכנסות ${money(s.transferIncomePart)}`];
+  if (Math.abs(s.expenseNet) >= 1) {
+    const drivers = s.transferDrivers.length ? ` (${s.transferDrivers.join(", ")})` : "";
+    parts.push(
+      `${s.expenseNet >= 0 ? "קיזוז הוצאות" : "החזר הוצאות ששילם"} ${money(Math.abs(s.expenseNet))}${drivers}`,
+    );
+  }
+  return parts.join(" + ");
 }
 
 /* ------------------------------------------------------------------ */
@@ -459,10 +493,11 @@ export function BranchesTable({
   hrefFor,
 }: {
   month: string;
-  entries: { branch: Branch; stats: BranchMonth }[];
+  entries: BranchEntry[];
   hrefFor: (branchId: string) => string;
 }) {
   const sorted = [...entries].sort((a, b) => b.stats.profit - a.stats.profit);
+  const notStarted = sorted.filter((e) => e.stats.status !== "active");
   const maxProfit = Math.max(...sorted.map((e) => Math.abs(e.stats.profit)), 1);
   const T = sorted.reduce(
     (a, e) => ({
@@ -482,6 +517,14 @@ export function BranchesTable({
           <h2 className="text-[15px] font-extrabold text-ink">סניפים — {mLabel(month)}</h2>
           <p className="mt-0.5 text-[12.5px] text-muted">
             כל הסניפים כולל חדרי מחשבים, מדורגים לפי רווח. לחיצה על &quot;פירוט&quot; פותחת את הסניף.
+            {notStarted.length > 0 && (
+              <>
+                {" "}
+                <b className="text-[#7a4a12]">
+                  {notStarted.length} סניפים עדיין לא בחישוב החודש — אין להם תאריך פתיחה או שהם טרם התחילו.
+                </b>
+              </>
+            )}
           </p>
         </div>
       </div>
@@ -528,12 +571,16 @@ export function BranchesTable({
                     <b className="text-ink">
                       {b.location ? `${b.location} — ` : ""}
                       {b.name}
-                    </b>
+                    </b>{" "}
+                    <StatusBadge activity={e.activity} />
                     <br />
                     <span className="text-[10.5px] text-muted">
                       {branchHasPartner(b)
                         ? `${branchPartnerLabel(b)} ${100 - branchOwnerPct(b)}%`
                         : "100% שלי"}
+                      {e.activity.openedMonth
+                        ? ` · נפתח ${monthLabelLong(e.activity.openedMonth)}`
+                        : " · לא הוגדר תאריך פתיחה"}
                     </span>
                   </td>
                   <td className={TD}>
@@ -560,8 +607,8 @@ export function BranchesTable({
                     <span className="text-[10.5px] text-muted">{Math.round(s.margin * 100)}% שולי רווח</span>
                   </td>
                   <td className={`${TD} ${NUM} ${MINE}`}>{money(s.ownerProfit)}</td>
-                  <td className={`${TD} ${NUM}`}>
-                    {branchHasPartner(b) ? (
+                  <td className={`${TD} ${NUM}`} title={branchHasPartner(b) ? transferBasis(s, e.activity) : undefined}>
+                    {branchHasPartner(b) && s.status === "active" ? (
                       <b className="text-teal-dark">{money(s.transferToOwner)}</b>
                     ) : (
                       <span className="text-muted">—</span>
@@ -608,7 +655,7 @@ export function BranchMiniCards({
   activeId,
 }: {
   month: string;
-  entries: { branch: Branch; stats: BranchMonth }[];
+  entries: BranchEntry[];
   hrefFor: (branchId: string) => string;
   activeId?: string;
 }) {
@@ -629,7 +676,7 @@ export function BranchMiniCards({
           <div key={g.label} className="flex flex-col gap-2.5">
             <p className="px-1 pt-1 text-[10.5px] font-extrabold tracking-wider text-muted">{g.label}</p>
             {g.items.length === 0 && <p className="px-1 text-xs text-muted">אין סניפים</p>}
-            {g.items.map(({ branch: b, stats: s }) => (
+            {g.items.map(({ branch: b, stats: s, activity }) => (
               <Link
                 key={b.id}
                 href={hrefFor(b.id)}
@@ -647,8 +694,12 @@ export function BranchMiniCards({
                       {branchHasPartner(b)
                         ? `שותף: ${branchPartnerLabel(b)} (${100 - branchOwnerPct(b)}%)`
                         : "100% שלי"}
+                      {activity.openedMonth
+                        ? ` · נפתח ${monthLabelLong(activity.openedMonth)}`
+                        : " · אין תאריך פתיחה"}
                     </div>
                   </div>
+                  <StatusBadge activity={activity} />
                 </div>
                 <div className="mt-2 grid grid-cols-3 gap-1.5 border-t border-dashed border-card-border pt-2">
                   <div className="flex flex-col">
@@ -666,24 +717,33 @@ export function BranchMiniCards({
                 </div>
                 <div
                   className={`mt-2 flex items-center justify-between gap-2 rounded-lg px-2 py-1.5 ${
-                    branchHasPartner(b) ? "bg-teal-bg" : "bg-[#f4f6f9]"
+                    branchHasPartner(b) && s.status === "active" ? "bg-teal-bg" : "bg-[#f4f6f9]"
                   }`}
                 >
                   <span
                     className={`text-[10.5px] font-extrabold ${
-                      branchHasPartner(b) ? "text-teal-dark" : "text-muted"
+                      branchHasPartner(b) && s.status === "active" ? "text-teal-dark" : "text-muted"
                     }`}
                   >
-                    {branchHasPartner(b) ? `להעביר אליי ב-1/${nextMonthNum(month)}` : "אין העברה — הסניף כולו שלי"}
+                    {!branchHasPartner(b)
+                      ? "אין העברה — הסניף כולו שלי"
+                      : s.status === "active"
+                        ? `להעביר אליי ב-1/${nextMonthNum(month)}`
+                        : activity.statusLabel ?? "טרם נפתח"}
                   </span>
                   <span
                     className={`text-sm font-black tabular-nums ${
-                      branchHasPartner(b) ? "text-teal-dark" : "text-muted"
+                      branchHasPartner(b) && s.status === "active" ? "text-teal-dark" : "text-muted"
                     }`}
                   >
-                    {branchHasPartner(b) ? money(s.transferToOwner) : "—"}
+                    {branchHasPartner(b) && s.status === "active" ? money(s.transferToOwner) : "—"}
                   </span>
                 </div>
+                {branchHasPartner(b) && s.status === "active" && (
+                  <p className="mt-1 px-0.5 text-[10px] leading-snug text-muted">
+                    על סמך: {transferBasis(s, activity)}
+                  </p>
+                )}
               </Link>
             ))}
           </div>

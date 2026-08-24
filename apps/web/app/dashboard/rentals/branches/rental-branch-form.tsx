@@ -14,6 +14,7 @@ type Initial = {
   name?: string;
   location?: string;
   phone?: string;
+  openedAt?: string;
   isMine?: boolean;
   partnerName?: string;
   partnerEmail?: string;
@@ -56,6 +57,16 @@ export function RentalBranchForm({ action, initial, routes, parentOptions }: Ren
           <label className={LABEL}>{"טלפון"}</label>
           <input type="tel" name="phone" defaultValue={initial?.phone} className={FIELD} />
         </div>
+      </div>
+
+      <div>
+        <label className={LABEL}>{"תאריך פתיחת הסניף"}</label>
+        <input type="date" name="openedAt" defaultValue={initial?.openedAt?.slice(0, 10)} className={FIELD} />
+        <p className="mt-1 text-[11.5px] text-muted">
+          {
+            "מהתאריך הזה מתחיל חישוב ההכנסות וההוצאות של הסניף. חודשים שלפניו לא מחושבים כלל, ואין עליהם העברה לבעלים. כל עוד לא הוזן תאריך ואין בסניף נתונים — הסניף מסומן \"לא התחיל השכרות\" ולא נזקפת לו שום עלות מהתעריפון."
+          }
+        </p>
       </div>
 
       <div>

@@ -7,10 +7,12 @@ import {
   loadAccountingOverview,
   currentMonth,
   branchMonthOf,
+  branchActivityOf,
   branchSeries,
   branchHasPartner,
   branchOwnerPct,
   branchPartnerLabel,
+  monthLabelLong,
   type BranchMonth,
 } from "@/lib/accounting-overview";
 import { loadCostRates } from "@/lib/cost-rates";
@@ -23,6 +25,7 @@ import {
   KpiRow,
   ModeTabs,
   MonthPills,
+  transferBasis,
   mLabel,
   money,
   nextMonthNum,
@@ -194,7 +197,8 @@ export default async function BranchAccountingOverviewPage({
 
   const idx = data.months.indexOf(month);
   const stats = branchMonthOf(data, branch.id, month);
-  if (!stats) notFound();
+  const activity = branchActivityOf(data, branch.id);
+  if (!stats || !activity) notFound();
   const prev = idx > 0 ? branchMonthOf(data, branch.id, data.months[idx - 1]!) : undefined;
   const series = branchSeries(data, branch.id).slice(0, idx + 1);
 
@@ -210,8 +214,12 @@ export default async function BranchAccountingOverviewPage({
 
   const entries = data.branches.flatMap((b) => {
     const s = branchMonthOf(data, b.id, month);
-    return s ? [{ branch: b, stats: s }] : [];
+    const a = branchActivityOf(data, b.id);
+    return s && a ? [{ branch: b, stats: s, activity: a }] : [];
   });
+
+  const branchEditHref =
+    branch.branchType === "rentals" ? `/dashboard/rentals/branches/${branch.id}` : `/dashboard/branches/${branch.id}`;
 
   const selfHref = (m: string, mode?: string) =>
     `/dashboard/accounting/overview/${branch.id}?month=${m}${mode === "cum" ? "&mode=cum" : ""}`;
@@ -229,6 +237,9 @@ export default async function BranchAccountingOverviewPage({
             {hasPartner
               ? ` · שותף: ${partnerName} · חלוקה ${branchOwnerPct(branch)}/${100 - branchOwnerPct(branch)}`
               : " · בבעלות מלאה"}
+            {activity.openedDate
+              ? ` · תאריך פתיחה: ${activity.openedDate.slice(0, 10)}`
+              : " · לא הוגדר תאריך פתיחה"}
           </p>
         </div>
         {isOwner ? (
@@ -251,6 +262,49 @@ export default async function BranchAccountingOverviewPage({
             מוצג הסניף שלך בלבד. אין גישה לסניפים אחרים, לספר ההנה&quot;ח האישי של {ownerName}, לסיכומי העסק,
             לתעריפון או למסלולי הגבייה.
           </span>
+        </div>
+      )}
+
+      {stats.status !== "active" && (
+        <div className="mb-3 rounded-card border border-[#f0dcb8] bg-[#fdf3e3] px-4 py-3 text-[12.5px] font-bold leading-relaxed text-[#7a4a12]">
+          {stats.status === "before_open" ? (
+            <>
+              הסניף נפתח ב-{monthLabelLong(activity.openedMonth ?? activity.startMonth ?? month)} — לחודש{" "}
+              {mLabel(month)} אין חישוב הכנסות והוצאות, ואין העברה לבעלים.
+            </>
+          ) : (
+            <>
+              {branch.branchType === "rentals" ? "הסניף עדיין לא התחיל השכרות" : "הסניף עדיין לא התחיל לפעול"} — לא
+              הוגדר לו תאריך פתיחה ואין בו אף לקוח, השכרה, הכנסה או הוצאה. לכן אין לו הוצאות תעריפון (פרסום, סינון
+              וגלישה וכו&apos;) ואין מה להעביר לבעלים. ברגע שיוזנו לקוחות והשכרות — או שיוגדר תאריך פתיחה — החישוב
+              יתחיל אוטומטית מאותו חודש.
+            </>
+          )}
+          {!restricted && (
+            <>
+              {" "}
+              <Link href={branchEditHref} className="underline">
+                לקביעת תאריך פתיחה בכרטיס הסניף
+              </Link>
+            </>
+          )}
+        </div>
+      )}
+
+      {stats.status === "active" && activity.missingOpenedAt && !restricted && (
+        <div className="mb-3 rounded-card border border-card-border bg-[#f4f6f9] px-4 py-2.5 text-[12.5px] font-bold text-muted">
+          לא הוגדר תאריך פתיחה לסניף. כרגע החישוב מתחיל מ-
+          {monthLabelLong(activity.startMonth ?? month)} — החודש הראשון שיש בו נתון.{" "}
+          <Link href={branchEditHref} className="text-teal-dark underline">
+            לקביעת תאריך פתיחה מדויק
+          </Link>
+        </div>
+      )}
+
+      {activity.noIncomeYet && stats.status === "active" && (
+        <div className="mb-3 rounded-card border border-[#f0dcb8] bg-[#fdf3e3] px-4 py-2.5 text-[12.5px] font-bold text-[#7a4a12]">
+          {branch.branchType === "rentals" ? "לא התחיל השכרות" : "עדיין אין הכנסות"} — הסניף פתוח, אך טרם נרשמו בו
+          השכרות או הכנסות. ההוצאות למטה כן נספרות מתאריך הפתיחה; ההכנסות יופיעו ברגע שיוזנו לקוחות והשכרות.
         </div>
       )}
 
@@ -290,7 +344,12 @@ export default async function BranchAccountingOverviewPage({
         ]}
       />
 
-      {hasPartner ? (
+      {hasPartner && stats.status !== "active" ? (
+        <section className={`${CARD} px-4 py-3.5`}>
+          <h3 className="text-[13px] font-extrabold text-ink">אין העברה בגין {mLabel(month)}</h3>
+          <p className="mt-0.5 text-[12.5px] text-muted">{transferBasis(stats, activity)}.</p>
+        </section>
+      ) : hasPartner ? (
         <section className="flex flex-wrap items-center justify-between gap-3.5 rounded-card border border-[#bfe0d8] bg-gradient-to-b from-white to-[#f6fbfa] px-4 py-3.5 shadow-card">
           <div>
             <h3 className="text-[13px] font-extrabold text-teal-dark">
@@ -299,7 +358,7 @@ export default async function BranchAccountingOverviewPage({
             <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-[11.5px] font-bold text-muted">
               <span>
                 {restricted ? `חלקו של ${ownerName}` : "חלקי"} בהכנסות ({branchOwnerPct(branch)}%):{" "}
-                <b className="tabular-nums text-ink">{money(stats.ownerIncome)}</b>
+                <b className="tabular-nums text-ink">{money(stats.transferIncomePart)}</b>
               </span>
               <span>+</span>
               <span>
@@ -313,6 +372,7 @@ export default async function BranchAccountingOverviewPage({
             <p className="mt-1.5 text-[12.5px] text-muted">
               {partnerName} מחזיק את מזומן ההשכרות. הקיזוז מקטין או מגדיל את ההעברה לפי מי שילם בפועל על ההוצאות.
             </p>
+            <p className="mt-1 text-[11.5px] font-bold text-muted">על סמך: {transferBasis(stats, activity)}</p>
           </div>
           <div className="text-left">
             <div className="text-[26px] font-black tabular-nums text-teal-dark">{money(stats.transferToOwner)}</div>

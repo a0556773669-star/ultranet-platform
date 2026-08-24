@@ -48,6 +48,11 @@ export interface Branch {
     location?: string;
     phone?: string;
     founded?: string; // ISO date
+  /** תאריך פתיחת הסניף (ISO date). כל חישוב הכנסות/הוצאות של הסניף מתחיל מהחודש הזה בלבד -
+   *  חודשים שלפניו מוצגים ריקים ולא נסגר עליהם קיזוז מול השותף. כשלא הוגדר, המערכת נופלת
+   *  ל-`founded`, ואם גם הוא ריק - לחודש הראשון שיש בו נתון אמיתי בסניף. סניף שאין בו לא תאריך
+   *  ולא נתונים נחשב "טרם נפתח" ולא נוצרת לו שום שורת עלות מהתעריפון. */
+  openedAt?: string;
   branchType: BranchType;
     isMine: boolean;
     partnerName?: string;
