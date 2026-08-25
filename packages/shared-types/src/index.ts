@@ -576,6 +576,29 @@ export interface Procedure {
   createdBy?: string;
 }
 
+export type QuarterStatus = "active" | "archived";
+
+/** collection: n_quarters - רבעון עבודה במודל EOS. מזהה המסמך **הוא** ה-`quarterKey`
+ *  שמופיע על `Rock`/`Milestone`, כך שנתונים ותיקים עם מפתח לועזי ("2026-Q3") ממשיכים
+ *  לעבוד בלי מיגרציה - מסמך רבעון נוצר עבורם בשליפה ראשונה (`ensureQuarter`). רבעון חדש
+ *  שנפתח מהמסך מקבל מפתח משלו ותווית חופשית (למשל "ראש חודש אלול - ראש חודש כסלו").
+ *  רבעון ב-`status: "archived"` הוא לקריאה בלבד - כל פעולת כתיבה עליו נחסמת בשרת. */
+export interface Quarter {
+  id: string;
+  /** תווית חופשית להצגה, למשל "ראש חודש אלול - ראש חודש כסלו" */
+  label: string;
+  status: QuarterStatus;
+  /** "YYYY-MM-DD" (רשות) - לתצוגה בלבד, לא משמש לחישובים */
+  startDate?: string;
+  endDate?: string;
+  /** מיון ציר הזמן; ככל שגדול יותר - חדש יותר */
+  order: number;
+  /** הרבעון שממנו גולגל רבעון זה ב-"פתיחת רבעון חדש" */
+  rolledFromKey?: string | null;
+  createdAt: number;
+  createdBy?: string;
+}
+
 export type RockStatus = "active" | "done" | "dropped";
 
 /** collection: n_rocks - סלעים רבעוניים ותתי-סלעים (מודל EOS-style, מודול "משימות ונהלים").
@@ -591,11 +614,17 @@ export interface Rock {
   ownerName?: string;
   status: RockStatus;
   order?: number;
+  /** מזהה הסלע/תת-הסלע המקורי שממנו שוכפל בגלגול רבעון (שמירת ההקשר ההיסטורי) */
+  rolledFromId?: string | null;
   createdAt: number;
   createdBy?: string;
 }
 
 export type MilestoneStage = "backlog" | "month" | "week";
+
+/** מקור אבן הדרך/המשימה: `rock` = נגזרה מסלע (ברירת מחדל, כולל כל הדאטה הישן שאין בו את
+ *  השדה), `adhoc` = משימה שבועית/שוטפת שלא קשורה לאף סלע. */
+export type MilestoneSource = "rock" | "adhoc";
 
 /** collection: n_milestones - אבני הדרך (המשימות בפועל) תחת סלע/תת-סלע. `quarterKey` מוכפל
  *  מהסלע-אב כדי לאפשר שאילתת שוויון יחידה בתצוגת הרבעון בלי אינדקס מורכב. `monthKey`/`weekKey`
@@ -603,6 +632,7 @@ export type MilestoneStage = "backlog" | "month" | "week";
  *  הדלי הפעיל הנוכחי שלה. */
 export interface Milestone {
   id: string;
+  /** ריק (`""`) כשמדובר במשימה שוטפת (`source: "adhoc"`) שלא תלויה בסלע */
   rockId: string;
   quarterKey: string;
   title: string;
@@ -617,6 +647,10 @@ export interface Milestone {
   doneAt?: number;
   /** כמה פעמים הועברה קדימה (לשבוע/חודש הבא) בלי להסתיים */
   carryOverCount?: number;
+  /** ברירת מחדל `"rock"` כשהשדה חסר (כל הדאטה שנוצר לפני מודל המשימות השוטפות) */
+  source?: MilestoneSource;
+  /** מזהה אבן הדרך המקורית שממנה שוכפלה בגלגול רבעון */
+  rolledFromId?: string | null;
   order?: number;
   createdAt: number;
   createdBy?: string;

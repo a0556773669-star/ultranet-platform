@@ -2,16 +2,28 @@ import { Target } from "lucide-react";
 import { requireModuleAccess } from "@/lib/perms";
 import { DuxusTabs } from "../../duxus-tabs";
 import { RocksTabs } from "../rocks-tabs";
-import { getMilestonesForQuarter, getMilestonesByStage, getAllRocks, getReview, listReviews } from "../actions";
+import {
+  getMilestonesForQuarter,
+  getMilestonesByStage,
+  getAllRocks,
+  getReview,
+  listReviews,
+  getQuarter,
+  defaultQuarterKey,
+} from "../actions";
 import { currentMonthKey, shiftMonthKey, monthLabel, monthQuarterKey } from "../date-utils";
 import { MonthClient } from "./month-client";
 
-export default async function RocksMonthPage({ searchParams }: { searchParams: { m?: string } }) {
+export default async function RocksMonthPage({ searchParams }: { searchParams: { m?: string; q?: string } }) {
   await requireModuleAccess("duxus");
   const monthKey = searchParams.m || currentMonthKey();
-  const quarterKey = monthQuarterKey(monthKey);
+  // רבעונים בעלי שם ("ראש חודש אלול...") לא נגזרים מהתאריך, ולכן ברירת המחדל היא
+  // הרבעון הפעיל; אפשר לנעול רבעון אחר דרך `?q=`. הנפילה לרבעון הלועזי נשמרת לדאטה ישן.
+  const quarterKey = searchParams.q || (await defaultQuarterKey(monthQuarterKey(monthKey)));
+  const quarterParam = `&q=${encodeURIComponent(quarterKey)}`;
 
-  const [quarterMilestones, allMonthStage, rocks, review, reviews] = await Promise.all([
+  const [quarter, quarterMilestones, allMonthStage, rocks, review, reviews] = await Promise.all([
+    getQuarter(quarterKey),
     getMilestonesForQuarter(quarterKey),
     getMilestonesByStage("month"),
     getAllRocks(),
@@ -32,14 +44,16 @@ export default async function RocksMonthPage({ searchParams }: { searchParams: {
       <MonthClient
         monthKey={monthKey}
         quarterKey={quarterKey}
+        quarterTitle={quarter.label}
         monthLabel={monthLabel(monthKey)}
-        prevHref={`/dashboard/duxus/rocks/month?m=${shiftMonthKey(monthKey, -1)}`}
-        nextHref={`/dashboard/duxus/rocks/month?m=${shiftMonthKey(monthKey, 1)}`}
+        prevHref={`/dashboard/duxus/rocks/month?m=${shiftMonthKey(monthKey, -1)}${quarterParam}`}
+        nextHref={`/dashboard/duxus/rocks/month?m=${shiftMonthKey(monthKey, 1)}${quarterParam}`}
         quarterMilestones={quarterMilestones}
         overdue={overdue}
         rocks={rocks}
         initialReviewNotes={review?.notes ?? ""}
         previousReviews={reviews.filter((r) => r.periodKey !== monthKey)}
+        readOnly={quarter.status === "archived"}
       />
     </div>
   );

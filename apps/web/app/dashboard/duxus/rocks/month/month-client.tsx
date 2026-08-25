@@ -14,8 +14,9 @@ import { currentWeekKey, weekLabel } from "../date-utils";
 import { buildRocksById, rockBreadcrumb } from "../rock-lookup";
 import { useToast } from "@/lib/toast";
 import { ReviewPanel } from "../review-panel";
-import { RockMilestoneTree, groupRocksByParent, groupMilestonesByRock, toggleInSet } from "../rock-tree";
+import { RockMilestoneTree, groupRocksByParent, groupMilestonesByRock, splitRockAndAdhoc, toggleInSet } from "../rock-tree";
 import { AddMilestoneForm } from "../add-forms";
+import { AdhocPanel } from "../adhoc-panel";
 
 const MONTHLY_AGENDA = [
   "מה נשמע?",
@@ -30,6 +31,7 @@ const MONTHLY_AGENDA = [
 export function MonthClient({
   monthKey,
   quarterKey,
+  quarterTitle,
   monthLabel,
   prevHref,
   nextHref,
@@ -38,9 +40,12 @@ export function MonthClient({
   rocks,
   initialReviewNotes,
   previousReviews,
+  readOnly = false,
 }: {
   monthKey: string;
   quarterKey: string;
+  /** שם הרבעון שממנו נשלפים הסלעים - מוצג כדי שברור על איזה רבעון עובדים */
+  quarterTitle: string;
   monthLabel: string;
   prevHref: string;
   nextHref: string;
@@ -49,6 +54,8 @@ export function MonthClient({
   rocks: Rock[];
   initialReviewNotes: string;
   previousReviews: RockReview[];
+  /** הרבעון שאליו שייך החודש נמצא בארכיון - תצוגה בלבד */
+  readOnly?: boolean;
 }) {
   const { showSuccess, showError, toastNode } = useToast();
   const [isPending, startTransition] = useTransition();
@@ -63,6 +70,11 @@ export function MonthClient({
   const quarterRocks = useMemo(() => rocks.filter((r) => r.quarterKey === quarterKey), [rocks, quarterKey]);
   const { topRocks, subRocksByParent } = useMemo(() => groupRocksByParent(quarterRocks), [quarterRocks]);
   const milestonesByRock = useMemo(() => groupMilestonesByRock(localMilestones), [localMilestones]);
+  // משימות שוטפות של החודש הנוכחי - לא שייכות לאף סלע ולכן מוצגות בקטע נפרד.
+  const monthAdhocTasks = useMemo(
+    () => splitRockAndAdhoc(localMilestones).adhocTasks.filter((m) => m.stage === "month" && m.monthKey === monthKey),
+    [localMilestones, monthKey]
+  );
 
   function toggleFromQuarter(id: string) {
     setSelectedFromQuarter((prev) => toggleInSet(prev, id));
@@ -111,7 +123,7 @@ export function MonthClient({
   }
 
   function renderMilestone(m: Milestone) {
-    if (m.stage === "backlog") {
+    if (m.stage === "backlog" && !readOnly) {
       return (
         <label key={m.id} className="flex items-center gap-2 rounded-lg border border-card-border bg-white px-3 py-2 text-sm">
           <input
@@ -126,7 +138,7 @@ export function MonthClient({
         </label>
       );
     }
-    if (m.stage === "month" && m.monthKey === monthKey && !m.done) {
+    if (m.stage === "month" && m.monthKey === monthKey && !m.done && !readOnly) {
       return (
         <label key={m.id} className="flex items-center gap-2 rounded-lg border border-card-border bg-white px-3 py-2 text-sm">
           <input type="checkbox" checked={selectedForWeek.has(m.id)} onChange={() => toggleForWeek(m.id)} className="h-4 w-4 accent-teal" />
@@ -152,6 +164,7 @@ export function MonthClient({
   }
 
   function renderRockFooter(rock: Rock) {
+    if (readOnly) return null;
     return (
       <>
         <button
@@ -210,7 +223,10 @@ export function MonthClient({
         <Link href={prevHref} className="btn-outline text-xs">
           ‹ הקודם
         </Link>
-        <h2 className="text-lg font-bold text-ink">{monthLabel}</h2>
+        <div className="text-center">
+          <h2 className="text-lg font-bold text-ink">{monthLabel}</h2>
+          <div className="text-[11px] text-muted">{quarterTitle}</div>
+        </div>
         <Link href={nextHref} className="btn-outline text-xs">
           הבא ›
         </Link>
@@ -223,9 +239,21 @@ export function MonthClient({
         agenda={MONTHLY_AGENDA}
         initialNotes={initialReviewNotes}
         previousReviews={previousReviews}
+        readOnly={readOnly}
       />
 
-      {overdue.length > 0 && (
+      <AdhocPanel
+        tasks={monthAdhocTasks}
+        quarterKey={quarterKey}
+        monthKey={monthKey}
+        stage="month"
+        readOnly={readOnly}
+        title="משימות שוטפות של החודש"
+        addLabel="הוסף משימה שוטפת"
+        emptyMessage="אין משימות שוטפות לחודש הזה."
+      />
+
+      {overdue.length > 0 && !readOnly && (
         <div className="card mb-4 border-r-4 border-r-amber-400">
           <h3 className="mb-2 text-sm font-bold text-ink">לא הושלמו מחודשים קודמים</h3>
           <div className="flex flex-col gap-2">

@@ -2,17 +2,28 @@ import { Target } from "lucide-react";
 import { requireModuleAccess } from "@/lib/perms";
 import { DuxusTabs } from "../../duxus-tabs";
 import { RocksTabs } from "../rocks-tabs";
-import { getMilestonesForQuarter, getMilestonesByStage, getAllRocks, getReview, listReviews } from "../actions";
+import {
+  getMilestonesForQuarter,
+  getMilestonesByStage,
+  getAllRocks,
+  getReview,
+  listReviews,
+  getQuarter,
+  defaultQuarterKey,
+} from "../actions";
 import { currentWeekKey, shiftWeekKey, weekLabel, weekMonthKey, monthQuarterKey } from "../date-utils";
 import { WeekClient } from "./week-client";
 
-export default async function RocksWeekPage({ searchParams }: { searchParams: { w?: string } }) {
+export default async function RocksWeekPage({ searchParams }: { searchParams: { w?: string; q?: string } }) {
   await requireModuleAccess("duxus");
   const weekKey = searchParams.w || currentWeekKey();
   const monthKey = weekMonthKey(weekKey);
-  const quarterKey = monthQuarterKey(monthKey);
+  // כמו בטאב החודשי: הרבעון הפעיל הוא ברירת המחדל, ואפשר לנעול רבעון אחר דרך `?q=`.
+  const quarterKey = searchParams.q || (await defaultQuarterKey(monthQuarterKey(monthKey)));
+  const quarterParam = `&q=${encodeURIComponent(quarterKey)}`;
 
-  const [quarterMilestones, allWeekStage, rocks, review, reviews] = await Promise.all([
+  const [quarter, quarterMilestones, allWeekStage, rocks, review, reviews] = await Promise.all([
+    getQuarter(quarterKey),
     getMilestonesForQuarter(quarterKey),
     getMilestonesByStage("week"),
     getAllRocks(),
@@ -34,14 +45,16 @@ export default async function RocksWeekPage({ searchParams }: { searchParams: { 
         weekKey={weekKey}
         monthKey={monthKey}
         quarterKey={quarterKey}
+        quarterTitle={quarter.label}
         weekLabel={weekLabel(weekKey)}
-        prevHref={`/dashboard/duxus/rocks/week?w=${shiftWeekKey(weekKey, -1)}`}
-        nextHref={`/dashboard/duxus/rocks/week?w=${shiftWeekKey(weekKey, 1)}`}
+        prevHref={`/dashboard/duxus/rocks/week?w=${shiftWeekKey(weekKey, -1)}${quarterParam}`}
+        nextHref={`/dashboard/duxus/rocks/week?w=${shiftWeekKey(weekKey, 1)}${quarterParam}`}
         quarterMilestones={quarterMilestones}
         overdue={overdue}
         rocks={rocks}
         initialReviewNotes={review?.notes ?? ""}
         previousReviews={reviews.filter((r) => r.periodKey !== weekKey)}
+        readOnly={quarter.status === "archived"}
       />
     </div>
   );
