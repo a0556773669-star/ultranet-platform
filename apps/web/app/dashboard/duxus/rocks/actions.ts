@@ -17,7 +17,13 @@ import type {
   RockReview,
   RockReviewPeriod,
 } from "@ultranet/shared-types";
-import { quarterLabel as gregorianQuarterLabel, quarterOrderValue } from "./date-utils";
+import {
+  quarterLabel as gregorianQuarterLabel,
+  quarterOrderValue,
+  nextMonthKeyAfter,
+  nextWeekKeyAfter,
+  currentMonthKey,
+} from "./date-utils";
 
 const QUARTERS = "n_quarters";
 const ROCKS = "n_rocks";
@@ -43,6 +49,8 @@ function toQuarter(id: string, data: Partial<Quarter> | undefined): Quarter {
     startDate: data?.startDate ?? "",
     endDate: data?.endDate ?? "",
     order: data?.order ?? quarterOrderValue(id),
+    activeMonthKey: data?.activeMonthKey ?? "",
+    activeWeekKey: data?.activeWeekKey ?? "",
     rolledFromKey: data?.rolledFromKey ?? null,
     createdAt: data?.createdAt ?? 0,
     createdBy: data?.createdBy ?? "",
@@ -318,6 +326,46 @@ export async function setQuarterStatusAction(quarterKey: string, status: Quarter
   await db.collection(QUARTERS).doc(quarterKey).set({ status }, { merge: true });
   revalidatePath(ROCKS_PATH, "layout");
   return { ok: true };
+}
+
+export type PeriodResult = { ok: true; periodKey: string } | { ok: false; message: string };
+
+/**
+ * פותחת את החודש הבא ברבעון. החודש הקודם לא נמחק ולא ננעל - הוא פשוט יורד מקומת
+ * החודש ל"חודשים קודמים", ואבני הדרך שלו ממשיכות להופיע ברמת החודש/רבעון כל עוד
+ * הרבעון פעיל.
+ *
+ * `fromKey` הוא החודש הפתוח כפי שהלקוח רואה אותו - כולל הגזירה מהדאטה לרבעונים
+ * ישנים שאין להם עדיין `activeMonthKey` שמור.
+ */
+export async function openNextMonthAction(quarterKey: string, fromKey = ""): Promise<PeriodResult> {
+  await requireModuleAccess("duxus");
+  const db = getAdminFirestore();
+  const blocked = await quarterWriteBlock(db, quarterKey);
+  if (blocked) return { ok: false, message: blocked };
+  await ensureQuarterDoc(db, quarterKey);
+  const activeMonthKey = nextMonthKeyAfter(fromKey);
+  await db.collection(QUARTERS).doc(quarterKey).set({ activeMonthKey }, { merge: true });
+  revalidatePath(ROCKS_PATH, "layout");
+  return { ok: true, periodKey: activeMonthKey };
+}
+
+/**
+ * פותחת את השבוע הבא ברבעון, ושולחת את השבוע הקודם ל"שבועות קודמים". אם עוד לא
+ * נפתח חודש ברבעון - נפתח גם חודש, כי שבוע תמיד יושב בתוך חודש.
+ */
+export async function openNextWeekAction(quarterKey: string, fromKey = "", monthKey = ""): Promise<PeriodResult> {
+  await requireModuleAccess("duxus");
+  const db = getAdminFirestore();
+  const blocked = await quarterWriteBlock(db, quarterKey);
+  if (blocked) return { ok: false, message: blocked };
+  await ensureQuarterDoc(db, quarterKey);
+  const activeWeekKey = nextWeekKeyAfter(fromKey);
+  const update: Record<string, unknown> = { activeWeekKey };
+  if (!monthKey) update.activeMonthKey = currentMonthKey();
+  await db.collection(QUARTERS).doc(quarterKey).set(update, { merge: true });
+  revalidatePath(ROCKS_PATH, "layout");
+  return { ok: true, periodKey: activeWeekKey };
 }
 
 // --- כתיבה: סלעים ---

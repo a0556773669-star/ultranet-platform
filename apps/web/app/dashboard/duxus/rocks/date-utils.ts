@@ -119,3 +119,36 @@ export function weekMonthKey(key: string): string {
   const mid = new Date(WEEK_EPOCH_MS + idx * 7 * DAY_MS + 3 * DAY_MS);
   return currentMonthKey(mid);
 }
+
+/** אינדקס השבוע מתוך מפתח "Wnnn"; NaN-safe כדי שמפתח פגום לא יפיל מיון. */
+export function weekKeyIndex(key: string): number {
+  const n = Number(key.slice(1));
+  return Number.isFinite(n) ? n : -1;
+}
+
+/** המפתח המאוחר ביותר מתוך רשימה - משמש לגזירת החודש/שבוע ה"פתוח" בדאטה שקדם לשדות האלה. */
+export function latestMonthKey(keys: string[]): string {
+  return keys.filter(Boolean).sort((a, b) => a.localeCompare(b)).pop() ?? "";
+}
+
+export function latestWeekKey(keys: string[]): string {
+  return keys.filter(Boolean).sort((a, b) => weekKeyIndex(a) - weekKeyIndex(b)).pop() ?? "";
+}
+
+/**
+ * החודש הבא שייפתח: אם עוד לא נפתח חודש - החודש הלועזי הנוכחי; אם הלוח כבר עבר
+ * את החודש הפתוח - קופצים להווה; אחרת מתקדמים חודש אחד קדימה (כדי שאפשר לפתוח
+ * חודש חדש גם באמצע חודש קלנדרי).
+ */
+export function nextMonthKeyAfter(current: string, today: Date = new Date()): string {
+  const calendar = currentMonthKey(today);
+  if (!current) return calendar;
+  return calendar.localeCompare(current) > 0 ? calendar : shiftMonthKey(current, 1);
+}
+
+/** אותו כלל בדיוק ברמת השבוע (השוואה מספרית, לא לקסיקוגרפית - "W9" מול "W10"). */
+export function nextWeekKeyAfter(current: string, today: Date = new Date()): string {
+  const calendar = currentWeekKey(today);
+  if (!current) return calendar;
+  return weekKeyIndex(calendar) > weekKeyIndex(current) ? calendar : shiftWeekKey(current, 1);
+}
