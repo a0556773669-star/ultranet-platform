@@ -113,9 +113,9 @@ export default async function RentalBranchesPage() {
                         <Link href={`/dashboard/rentals/branches/${b.id}`} className="hover:underline">
                           {b.name}
                         </Link>
-                        {(rentalCountByBranch.get(b.id) ?? 0) === 0 && (
+                        {(b.notStarted || (rentalCountByBranch.get(b.id) ?? 0) === 0) && (
                           <span className="mr-1.5 rounded-full bg-[#fdf3e3] px-2 py-0.5 text-[10.5px] font-extrabold text-[#7a4a12]">
-                            לא התחיל השכרות
+                            {b.notStarted ? "עדיין לא התחיל לפעול" : "לא התחיל השכרות"}
                           </span>
                         )}
                       </td>

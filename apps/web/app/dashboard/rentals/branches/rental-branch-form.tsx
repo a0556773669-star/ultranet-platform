@@ -15,6 +15,7 @@ type Initial = {
   location?: string;
   phone?: string;
   openedAt?: string;
+  notStarted?: boolean;
   isMine?: boolean;
   partnerName?: string;
   partnerEmail?: string;
@@ -64,7 +65,21 @@ export function RentalBranchForm({ action, initial, routes, parentOptions }: Ren
         <input type="date" name="openedAt" defaultValue={initial?.openedAt?.slice(0, 10)} className={FIELD} />
         <p className="mt-1 text-[11.5px] text-muted">
           {
-            "מהתאריך הזה מתחיל חישוב ההכנסות וההוצאות של הסניף. חודשים שלפניו לא מחושבים כלל, ואין עליהם העברה לבעלים. כל עוד לא הוזן תאריך ואין בסניף נתונים — הסניף מסומן \"לא התחיל השכרות\" ולא נזקפת לו שום עלות מהתעריפון."
+            "מהתאריך הזה מתחיל חישוב ההכנסות וההוצאות של הסניף. חודשים שלפניו לא מחושבים כלל, ואין עליהם העברה לבעלים."
+          }
+        </p>
+        <label className="mt-2 flex items-center gap-2 rounded-lg border border-card-border bg-[#f4f6f9] px-3 py-2 text-sm font-semibold text-ink">
+          <input
+            type="checkbox"
+            name="notStarted"
+            defaultChecked={initial?.notStarted ?? false}
+            className="h-4 w-4 accent-teal"
+          />
+          {"הסניף עדיין לא התחיל לפעול"}
+        </label>
+        <p className="mt-1 text-[11.5px] text-muted">
+          {
+            "כשמסומן — הסניף לא נכנס לשום חישוב: אין לו הוצאות תעריפון, אין הכנסות ואין העברה לבעלים, גם אם כבר הוזנו אליו נתונים. מוצג בכל המסכים כ\"לא התחיל השכרות\"."
           }
         </p>
       </div>

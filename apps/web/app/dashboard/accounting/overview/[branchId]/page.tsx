@@ -218,8 +218,9 @@ export default async function BranchAccountingOverviewPage({
     return s && a ? [{ branch: b, stats: s, activity: a }] : [];
   });
 
-  const branchEditHref =
-    branch.branchType === "rentals" ? `/dashboard/rentals/branches/${branch.id}` : `/dashboard/branches/${branch.id}`;
+  // The branch-status screen is the canonical place for the opening date / "not started" mark -
+  // it shows every branch side by side, which is how these actually get filled in.
+  const branchStatusHref = `/dashboard/accounting/branches?month=${month}`;
 
   const selfHref = (m: string, mode?: string) =>
     `/dashboard/accounting/overview/${branch.id}?month=${m}${mode === "cum" ? "&mode=cum" : ""}`;
@@ -272,6 +273,12 @@ export default async function BranchAccountingOverviewPage({
               הסניף נפתח ב-{monthLabelLong(activity.openedMonth ?? activity.startMonth ?? month)} — לחודש{" "}
               {mLabel(month)} אין חישוב הכנסות והוצאות, ואין העברה לבעלים.
             </>
+          ) : activity.manuallyNotStarted ? (
+            <>
+              הסניף מסומן <b>&quot;עדיין לא התחיל לפעול&quot;</b> — לכן הוא לא נכנס לשום חישוב: אין לו הוצאות תעריפון
+              (פרסום, סינון וגלישה וכו&apos;), אין לו הכנסות ואין מה להעביר לבעלים, גם אם כבר הוזנו אליו נתונים. כדי
+              להפעיל אותו — יש להוריד את הסימון ולקבוע תאריך פתיחה.
+            </>
           ) : (
             <>
               {branch.branchType === "rentals" ? "הסניף עדיין לא התחיל השכרות" : "הסניף עדיין לא התחיל לפעול"} — לא
@@ -283,8 +290,8 @@ export default async function BranchAccountingOverviewPage({
           {!restricted && (
             <>
               {" "}
-              <Link href={branchEditHref} className="underline">
-                לקביעת תאריך פתיחה בכרטיס הסניף
+              <Link href={branchStatusHref} className="underline">
+                לקביעת תאריך פתיחה וסטטוס הסניפים
               </Link>
             </>
           )}
@@ -295,7 +302,7 @@ export default async function BranchAccountingOverviewPage({
         <div className="mb-3 rounded-card border border-card-border bg-[#f4f6f9] px-4 py-2.5 text-[12.5px] font-bold text-muted">
           לא הוגדר תאריך פתיחה לסניף. כרגע החישוב מתחיל מ-
           {monthLabelLong(activity.startMonth ?? month)} — החודש הראשון שיש בו נתון.{" "}
-          <Link href={branchEditHref} className="text-teal-dark underline">
+          <Link href={branchStatusHref} className="text-teal-dark underline">
             לקביעת תאריך פתיחה מדויק
           </Link>
         </div>
