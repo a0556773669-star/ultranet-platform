@@ -1,9 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState, useTransition } from "react";
-import Link from "next/link";
 import { Plus, Trash2 } from "lucide-react";
-import type { Rock, RockStatus, Milestone, RockReview } from "@ultranet/shared-types";
+import type { Quarter, Rock, RockStatus, Milestone, RockReview } from "@ultranet/shared-types";
 import {
   createRockAction,
   createMilestoneAction,
@@ -15,7 +14,9 @@ import {
 import { currentMonthKey, monthLabel } from "./date-utils";
 import { useToast } from "@/lib/toast";
 import { ReviewPanel } from "./review-panel";
-import { RockMilestoneTree, groupRocksByParent, groupMilestonesByRock, toggleInSet } from "./rock-tree";
+import { QuarterBar } from "./quarter-bar";
+import { AdhocPanel } from "./adhoc-panel";
+import { RockMilestoneTree, groupRocksByParent, groupMilestonesByRock, splitRockAndAdhoc, toggleInSet } from "./rock-tree";
 import { AddRockForm, AddMilestoneForm } from "./add-forms";
 
 const QUARTERLY_AGENDA = [
@@ -24,7 +25,7 @@ const QUARTERLY_AGENDA = [
   "האם הגענו ליעדים?",
   "אם לא הגענו - למה לא, ומה הלקחים?",
   "מה שלא הצלחנו להשלים - להעביר לרבעון הבא?",
-  "בחירת עד 3 סלעים לרבעון הבא",
+  "בחירת הסלעים לרבעון הבא",
   "פירוק כל סלע לכמה שיותר אבני דרך עם הטלת אחריות ברורה",
   "בחירת אבני דרך לחודש הראשון",
   "בחירת אבני דרך לשבוע הראשון",
@@ -48,24 +49,24 @@ function isTempId(id: string): boolean {
 }
 
 export function QuarterClient({
-  quarterKey,
-  quarterLabel,
-  prevHref,
-  nextHref,
+  quarter,
+  quarters,
   rocks,
   milestones,
   initialReviewNotes,
   previousReviews,
 }: {
-  quarterKey: string;
-  quarterLabel: string;
-  prevHref: string;
-  nextHref: string;
+  quarter: Quarter;
+  quarters: Quarter[];
   rocks: Rock[];
   milestones: Milestone[];
   initialReviewNotes: string;
   previousReviews: RockReview[];
 }) {
+  const quarterKey = quarter.id;
+  // רבעון בארכיון = היסטוריה בלבד. גם השרת חוסם כתיבה, וכאן פשוט לא מציגים כפתורים.
+  const readOnly = quarter.status === "archived";
+
   const { showSuccess, showError, toastNode } = useToast();
   const [isPending, startTransition] = useTransition();
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -81,6 +82,7 @@ export function QuarterClient({
   useEffect(() => setLocalMilestones(milestones), [milestones]);
 
   const { topRocks, subRocksByParent } = useMemo(() => groupRocksByParent(localRocks), [localRocks]);
+  const { adhocTasks } = useMemo(() => splitRockAndAdhoc(localMilestones), [localMilestones]);
   const milestonesByRock = useMemo(() => groupMilestonesByRock(localMilestones), [localMilestones]);
 
   function toggleSelected(id: string) {
@@ -159,6 +161,7 @@ export function QuarterClient({
         stage: "backlog",
         done: false,
         carryOverCount: 0,
+        source: "rock",
         order: Date.now(),
         createdAt: Date.now(),
       },
@@ -166,7 +169,7 @@ export function QuarterClient({
   }
 
   function renderMilestone(m: Milestone) {
-    const selectable = m.stage === "backlog" && !m.done;
+    const selectable = !readOnly && m.stage === "backlog" && !m.done;
     const pending = isTempId(m.id);
     return (
       <div
@@ -181,6 +184,11 @@ export function QuarterClient({
           )}
           <span className={m.done ? "text-muted line-through" : "text-ink"}>{m.title}</span>
         </label>
+        {m.carryOverCount ? (
+          <span className="shrink-0 rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-[11px] font-bold text-amber-700">
+            גולגל {m.carryOverCount}
+          </span>
+        ) : null}
         {m.ownerName ? <span className="text-[11px] text-muted">{m.ownerName}</span> : null}
         {m.done ? (
           <span className="rounded-full border border-emerald-300 bg-emerald-50 px-2 py-0.5 text-[11px] font-bold text-emerald-700">בוצע</span>
@@ -189,14 +197,23 @@ export function QuarterClient({
         ) : m.stage === "month" ? (
           <span className="rounded-full border border-teal bg-teal-bg px-2 py-0.5 text-[11px] font-bold text-teal-dark">בחודשי</span>
         ) : null}
-        <button type="button" onClick={() => handleDeleteMilestone(m.id)} className="text-muted hover:text-red-600">
-          <Trash2 className="h-3.5 w-3.5" />
-        </button>
+        {!readOnly && (
+          <button type="button" onClick={() => handleDeleteMilestone(m.id)} className="text-muted hover:text-red-600">
+            <Trash2 className="h-3.5 w-3.5" />
+          </button>
+        )}
       </div>
     );
   }
 
   function renderRockExtra(rock: Rock) {
+    if (readOnly) {
+      return (
+        <span className={`rounded-full border px-2 py-0.5 text-[11px] font-bold ${STATUS_CLASS[rock.status]}`}>
+          {STATUS_LABEL[rock.status]}
+        </span>
+      );
+    }
     return (
       <>
         <button
@@ -215,6 +232,7 @@ export function QuarterClient({
   }
 
   function renderRockFooter(rock: Rock, level: 0 | 1) {
+    if (readOnly) return null;
     return (
       <>
         <div className="flex flex-wrap gap-3 pt-1">
@@ -273,15 +291,8 @@ export function QuarterClient({
   return (
     <div>
       {toastNode}
-      <div className="mb-4 flex items-center justify-between">
-        <Link href={prevHref} className="btn-outline text-xs">
-          ‹ הקודם
-        </Link>
-        <h2 className="text-lg font-bold text-ink">{quarterLabel}</h2>
-        <Link href={nextHref} className="btn-outline text-xs">
-          הבא ›
-        </Link>
-      </div>
+
+      <QuarterBar quarter={quarter} quarters={quarters} />
 
       <ReviewPanel
         period="quarterly"
@@ -290,21 +301,24 @@ export function QuarterClient({
         agenda={QUARTERLY_AGENDA}
         initialNotes={initialReviewNotes}
         previousReviews={previousReviews}
+        readOnly={readOnly}
       />
 
       <div className="mb-3 flex items-center justify-between">
         <h3 className="text-sm font-bold text-ink">סלעים לרבעון</h3>
-        <button
-          type="button"
-          onClick={() => setOpenNewRock((v) => !v)}
-          className="flex items-center gap-1 text-xs font-semibold text-teal hover:underline"
-        >
-          <Plus className="h-3.5 w-3.5" />
-          סלע חדש
-        </button>
+        {!readOnly && (
+          <button
+            type="button"
+            onClick={() => setOpenNewRock((v) => !v)}
+            className="flex items-center gap-1 text-xs font-semibold text-teal hover:underline"
+          >
+            <Plus className="h-3.5 w-3.5" />
+            סלע חדש
+          </button>
+        )}
       </div>
 
-      {openNewRock && (
+      {openNewRock && !readOnly && (
         <div className="mb-3">
           <AddRockForm
             placeholder="שם הסלע"
@@ -328,8 +342,21 @@ export function QuarterClient({
         renderMilestone={renderMilestone}
         renderRockExtra={renderRockExtra}
         renderRockFooter={renderRockFooter}
-        emptyMessage="עדיין אין סלעים לרבעון הזה. מומלץ להתחיל עם עד 3 סלעים מרכזיים."
+        emptyMessage={
+          readOnly ? "לא נרשמו סלעים ברבעון הזה." : "עדיין אין סלעים לרבעון הזה. מתחילים מסלע אחד ומפרקים אותו לתתי-סלעים ואבני דרך."
+        }
       />
+
+      <div className="mt-4">
+        <AdhocPanel
+          tasks={adhocTasks}
+          quarterKey={quarterKey}
+          stage="backlog"
+          readOnly={readOnly}
+          addLabel="הוסף משימה שוטפת"
+          emptyMessage="אין משימות שוטפות ברבעון הזה. משימות כאלה נוספות בדרך כלל מהפגישה השבועית."
+        />
+      </div>
 
       {selected.size > 0 && (
         <div className="sticky bottom-4 mt-4 flex items-center justify-between rounded-[11px] border border-teal bg-white px-4 py-3 shadow-lg">

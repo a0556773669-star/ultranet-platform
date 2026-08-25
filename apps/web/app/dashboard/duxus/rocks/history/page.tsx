@@ -2,8 +2,7 @@ import { Target } from "lucide-react";
 import { requireModuleAccess } from "@/lib/perms";
 import { DuxusTabs } from "../../duxus-tabs";
 import { RocksTabs } from "../rocks-tabs";
-import { getDoneMilestones, getAllRocks, listReviews } from "../actions";
-import { quarterLabel } from "../date-utils";
+import { getDoneMilestones, getAllRocks, listReviews, listQuarters } from "../actions";
 import { buildRocksById, rockBreadcrumb } from "../rock-lookup";
 import type { RockStatus } from "@ultranet/shared-types";
 
@@ -24,15 +23,19 @@ function formatDate(ts?: number): string {
 export default async function RocksHistoryPage() {
   await requireModuleAccess("duxus");
 
-  const [doneMilestones, rocks, quarterlyReviews, monthlyReviews, weeklyReviews] = await Promise.all([
+  const [doneMilestones, rocks, quarters, quarterlyReviews, monthlyReviews, weeklyReviews] = await Promise.all([
     getDoneMilestones(),
     getAllRocks(),
+    listQuarters(),
     listReviews("quarterly"),
     listReviews("monthly"),
     listReviews("weekly"),
   ]);
 
   const rocksById = buildRocksById(rocks);
+  const quartersByKey = new Map(quarters.map((q) => [q.id, q]));
+  // סדר ההצגה נקבע לפי ציר הזמן של הרבעונים עצמם, לא לפי מיון אלפביתי של המפתח.
+  const quarterOrder = new Map(quarters.map((q, i) => [q.id, i]));
   const rocksByQuarter = new Map<string, typeof rocks>();
   rocks
     .filter((r) => !r.parentRockId)
@@ -41,7 +44,9 @@ export default async function RocksHistoryPage() {
       list.push(r);
       rocksByQuarter.set(r.quarterKey, list);
     });
-  const quarters = Array.from(rocksByQuarter.keys()).sort().reverse();
+  const quarterKeys = Array.from(rocksByQuarter.keys()).sort(
+    (a, b) => (quarterOrder.get(a) ?? Number.MAX_SAFE_INTEGER) - (quarterOrder.get(b) ?? Number.MAX_SAFE_INTEGER)
+  );
 
   return (
     <div>
@@ -81,13 +86,18 @@ export default async function RocksHistoryPage() {
 
       <div className="card mb-4">
         <h2 className="mb-3 text-sm font-bold text-ink">סלעים לפי רבעון</h2>
-        {quarters.length === 0 ? (
+        {quarterKeys.length === 0 ? (
           <div className="text-sm text-muted">עדיין אין סלעים.</div>
         ) : (
           <div className="flex flex-col gap-4">
-            {quarters.map((q) => (
+            {quarterKeys.map((q) => (
               <div key={q}>
-                <div className="mb-2 text-xs font-bold text-muted">{quarterLabel(q)}</div>
+                <div className="mb-2 flex items-center gap-2 text-xs font-bold text-muted">
+                  {quartersByKey.get(q)?.label ?? q}
+                  {quartersByKey.get(q)?.status === "archived" ? (
+                    <span className="rounded-full border border-card-border bg-[#f4f6f9] px-2 py-0.5 font-bold text-muted">ארכיון</span>
+                  ) : null}
+                </div>
                 <div className="flex flex-col gap-2">
                   {(rocksByQuarter.get(q) ?? []).map((r) => (
                     <div key={r.id} className="flex items-center justify-between gap-2 rounded-lg border border-card-border bg-white px-3 py-2 text-sm">

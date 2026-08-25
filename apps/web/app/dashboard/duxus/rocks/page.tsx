@@ -2,15 +2,26 @@ import { Target } from "lucide-react";
 import { requireModuleAccess } from "@/lib/perms";
 import { DuxusTabs } from "../duxus-tabs";
 import { RocksTabs } from "./rocks-tabs";
-import { getRocksForQuarter, getMilestonesForQuarter, getReview, listReviews } from "./actions";
-import { currentQuarterKey, shiftQuarterKey, quarterLabel } from "./date-utils";
+import {
+  getRocksForQuarter,
+  getMilestonesForQuarter,
+  getReview,
+  listReviews,
+  listQuarters,
+  getQuarter,
+} from "./actions";
+import { currentQuarterKey } from "./date-utils";
 import { QuarterClient } from "./quarter-client";
 
 export default async function RocksQuarterPage({ searchParams }: { searchParams: { q?: string } }) {
   await requireModuleAccess("duxus");
-  const quarterKey = searchParams.q || currentQuarterKey();
+  // בלי `?q=` נכנסים לרבעון הפעיל האחרון; אם עוד לא נפתח אף רבעון - לרבעון הלועזי הנוכחי.
+  // רשימת הרבעונים נשלפת פעם אחת ומשמשת גם לבחירת ברירת המחדל וגם לבורר הרבעונים.
+  const quarters = await listQuarters();
+  const quarterKey = searchParams.q || quarters.find((q) => q.status === "active")?.id || quarters[0]?.id || currentQuarterKey();
 
-  const [rocks, milestones, review, reviews] = await Promise.all([
+  const [quarter, rocks, milestones, review, reviews] = await Promise.all([
+    getQuarter(quarterKey),
     getRocksForQuarter(quarterKey),
     getMilestonesForQuarter(quarterKey),
     getReview("quarterly", quarterKey),
@@ -26,10 +37,8 @@ export default async function RocksQuarterPage({ searchParams }: { searchParams:
       <DuxusTabs />
       <RocksTabs />
       <QuarterClient
-        quarterKey={quarterKey}
-        quarterLabel={quarterLabel(quarterKey)}
-        prevHref={`/dashboard/duxus/rocks?q=${shiftQuarterKey(quarterKey, -1)}`}
-        nextHref={`/dashboard/duxus/rocks?q=${shiftQuarterKey(quarterKey, 1)}`}
+        quarter={quarter}
+        quarters={quarters}
         rocks={rocks}
         milestones={milestones}
         initialReviewNotes={review?.notes ?? ""}

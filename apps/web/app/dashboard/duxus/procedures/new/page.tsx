@@ -1,6 +1,6 @@
 import { requireModuleAccess } from "@/lib/perms";
-import { createProcedureAction } from "../actions";
-import { RichEditor } from "../rich-editor";
+import { createProcedureAction } from "../../actions";
+import { RichEditor } from "../../rich-editor";
 
 export default async function NewProcedurePage() {
   await requireModuleAccess("duxus");

@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { requireModuleAccess } from "@/lib/perms";
-import { getProcedure, updateProcedureAction } from "../../actions";
-import { RichEditor } from "../../rich-editor";
+import { getProcedure, updateProcedureAction } from "../../../actions";
+import { RichEditor } from "../../../rich-editor";
 
 export default async function EditProcedurePage({ params }: { params: { id: string } }) {
   await requireModuleAccess("duxus");

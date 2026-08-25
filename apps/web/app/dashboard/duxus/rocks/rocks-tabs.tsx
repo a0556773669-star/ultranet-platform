@@ -19,7 +19,11 @@ export function RocksTabs() {
   return (
     <nav className="mb-4 flex flex-wrap items-center gap-1 border-b border-card-border pb-3">
       {TABS.map((tab) => {
-        const active = tab.href === "/dashboard/duxus/rocks" ? pathname === "/dashboard/duxus/rocks" : pathname?.startsWith(tab.href);
+        // אשף "פתיחת רבעון חדש" הוא חלק מטאב הרבעון, ולכן משאיר אותו מסומן.
+        const active =
+          tab.href === "/dashboard/duxus/rocks"
+            ? pathname === "/dashboard/duxus/rocks" || pathname === "/dashboard/duxus/rocks/rollover"
+            : pathname?.startsWith(tab.href);
         return (
           <Link key={tab.href} href={tab.href} className={active ? "pill-active" : "pill-inactive"}>
             <tab.icon className="ml-1 h-4 w-4" />

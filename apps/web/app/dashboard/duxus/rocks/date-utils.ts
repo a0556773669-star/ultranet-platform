@@ -36,9 +36,31 @@ export function shiftQuarterKey(key: string, delta: number): string {
   return `${ny}-Q${nq + 1}`;
 }
 
+/** מפתח רבעון לועזי ישן ("2026-Q3") - להבדיל ממפתח של רבעון בעל שם ("q1abc..."). */
+export function isGregorianQuarterKey(key: string): boolean {
+  return /^\d{4}-Q[1-4]$/.test(key);
+}
+
+/**
+ * תווית ברירת מחדל לרבעון. רבעון שנפתח מהמסך שומר תווית חופשית משלו ב-`n_quarters`
+ * (למשל "ראש חודש אלול - ראש חודש כסלו"); כאן מטופל רק המפתח הלועזי הישן, ומפתח
+ * שאינו מזוהה מוחזר כמות שהוא במקום להציג "רבעון undefined".
+ */
 export function quarterLabel(key: string): string {
+  if (!isGregorianQuarterKey(key)) return key;
   const [y, q] = key.split("-Q");
   return `רבעון ${q} · ${y}`;
+}
+
+/**
+ * ערך מיון על ציר הזמן, בקנה מידה של חותמת זמן - כדי שרבעונים לועזיים ישנים
+ * (שממופים לתחילת הרבעון) ורבעונים בעלי שם (שנשמרים עם `Date.now()`) יסתדרו יחד
+ * ברשימה אחת ממוינת.
+ */
+export function quarterOrderValue(key: string): number {
+  if (!isGregorianQuarterKey(key)) return 0;
+  const [yStr, qStr] = key.split("-Q");
+  return Date.UTC(Number(yStr), (Number(qStr) - 1) * 3, 1);
 }
 
 export function currentMonthKey(d: Date = new Date()): string {

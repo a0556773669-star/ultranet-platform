@@ -13,6 +13,7 @@ export function ReviewPanel({
   agenda,
   initialNotes,
   previousReviews,
+  readOnly = false,
 }: {
   period: RockReviewPeriod;
   periodKey: string;
@@ -20,6 +21,8 @@ export function ReviewPanel({
   agenda: string[];
   initialNotes: string;
   previousReviews: RockReview[];
+  /** רבעון בארכיון - הסיכום מוצג אך לא ניתן לעריכה */
+  readOnly?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [notes, setNotes] = useState(initialNotes);
@@ -66,9 +69,11 @@ export function ReviewPanel({
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
             rows={4}
-            placeholder="מה עלה בפגישה? לקחים, החלטות, מה מעבירים הלאה..."
-            className="w-full rounded-lg border border-card-border bg-[#f4f6f9] px-3 py-2 text-sm focus:border-teal focus:bg-white focus:outline-none"
+            readOnly={readOnly}
+            placeholder={readOnly ? "לא נכתב סיכום לתקופה הזו." : "מה עלה בפגישה? לקחים, החלטות, מה מעבירים הלאה..."}
+            className="w-full rounded-lg border border-card-border bg-[#f4f6f9] px-3 py-2 text-sm focus:border-teal focus:bg-white focus:outline-none read-only:text-muted"
           />
+          {!readOnly && (
           <button
             type="button"
             onClick={handleSave}
@@ -78,6 +83,7 @@ export function ReviewPanel({
             <Save className="h-3.5 w-3.5" />
             {isPending ? "שומר..." : "שמירת סיכום"}
           </button>
+          )}
 
           {previousReviews.length > 0 && (
             <div>

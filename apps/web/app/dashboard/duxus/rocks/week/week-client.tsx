@@ -9,8 +9,9 @@ import { shiftWeekKey, weekLabel as weekLabelOf } from "../date-utils";
 import { buildRocksById, rockBreadcrumb } from "../rock-lookup";
 import { useToast } from "@/lib/toast";
 import { ReviewPanel } from "../review-panel";
-import { RockMilestoneTree, groupRocksByParent, groupMilestonesByRock, toggleInSet } from "../rock-tree";
+import { RockMilestoneTree, groupRocksByParent, groupMilestonesByRock, splitRockAndAdhoc, toggleInSet } from "../rock-tree";
 import { AddMilestoneForm } from "../add-forms";
+import { AdhocPanel } from "../adhoc-panel";
 
 const WEEKLY_AGENDA = [
   "מה נשמע?",
@@ -23,6 +24,7 @@ export function WeekClient({
   weekKey,
   monthKey,
   quarterKey,
+  quarterTitle,
   weekLabel,
   prevHref,
   nextHref,
@@ -31,10 +33,13 @@ export function WeekClient({
   rocks,
   initialReviewNotes,
   previousReviews,
+  readOnly = false,
 }: {
   weekKey: string;
   monthKey: string;
   quarterKey: string;
+  /** שם הרבעון שממנו נשלפים הסלעים - מוצג כדי שברור על איזה רבעון עובדים */
+  quarterTitle: string;
   weekLabel: string;
   prevHref: string;
   nextHref: string;
@@ -43,6 +48,8 @@ export function WeekClient({
   rocks: Rock[];
   initialReviewNotes: string;
   previousReviews: RockReview[];
+  /** הרבעון שאליו שייך השבוע נמצא בארכיון - תצוגה בלבד */
+  readOnly?: boolean;
 }) {
   const { showSuccess, showError, toastNode } = useToast();
   const [isPending, startTransition] = useTransition();
@@ -56,6 +63,11 @@ export function WeekClient({
   const quarterRocks = useMemo(() => rocks.filter((r) => r.quarterKey === quarterKey), [rocks, quarterKey]);
   const { topRocks, subRocksByParent } = useMemo(() => groupRocksByParent(quarterRocks), [quarterRocks]);
   const milestonesByRock = useMemo(() => groupMilestonesByRock(localMilestones), [localMilestones]);
+  // משימות שוטפות של השבוע הנוכחי - לא שייכות לאף סלע ולכן מוצגות בקטע נפרד.
+  const weekAdhocTasks = useMemo(
+    () => splitRockAndAdhoc(localMilestones).adhocTasks.filter((m) => m.stage === "week" && m.weekKey === weekKey),
+    [localMilestones, weekKey]
+  );
 
   function toggleFromMonth(id: string) {
     setSelectedFromMonth((prev) => toggleInSet(prev, id));
@@ -100,7 +112,7 @@ export function WeekClient({
   }
 
   function renderMilestone(m: Milestone) {
-    if (m.stage === "month" && m.monthKey === monthKey && !m.done) {
+    if (m.stage === "month" && m.monthKey === monthKey && !m.done && !readOnly) {
       return (
         <label key={m.id} className="flex items-center gap-2 rounded-lg border border-card-border bg-white px-3 py-2 text-sm">
           <input
@@ -123,7 +135,13 @@ export function WeekClient({
             m.done ? "border-emerald-200 bg-emerald-50" : "border-card-border bg-white"
           }`}
         >
-          <input type="checkbox" checked={m.done} onChange={() => handleToggleDone(m.id)} className="h-4 w-4 accent-emerald-600" />
+          <input
+            type="checkbox"
+            checked={m.done}
+            disabled={readOnly}
+            onChange={() => handleToggleDone(m.id)}
+            className="h-4 w-4 accent-emerald-600"
+          />
           <span className={`flex-1 ${m.done ? "text-emerald-800 line-through" : "text-ink"}`}>{m.title}</span>
           {m.ownerName ? <span className="text-[11px] text-muted">{m.ownerName}</span> : null}
         </label>
@@ -147,6 +165,7 @@ export function WeekClient({
   }
 
   function renderRockFooter(rock: Rock) {
+    if (readOnly) return null;
     return (
       <>
         <button
@@ -207,7 +226,10 @@ export function WeekClient({
         <Link href={prevHref} className="btn-outline text-xs">
           ‹ הקודם
         </Link>
-        <h2 className="text-lg font-bold text-ink">{weekLabel}</h2>
+        <div className="text-center">
+          <h2 className="text-lg font-bold text-ink">{weekLabel}</h2>
+          <div className="text-[11px] text-muted">{quarterTitle}</div>
+        </div>
         <Link href={nextHref} className="btn-outline text-xs">
           הבא ›
         </Link>
@@ -220,9 +242,22 @@ export function WeekClient({
         agenda={WEEKLY_AGENDA}
         initialNotes={initialReviewNotes}
         previousReviews={previousReviews}
+        readOnly={readOnly}
       />
 
-      {overdue.length > 0 && (
+      <AdhocPanel
+        tasks={weekAdhocTasks}
+        quarterKey={quarterKey}
+        monthKey={monthKey}
+        weekKey={weekKey}
+        stage="week"
+        readOnly={readOnly}
+        title="משימות שבועיות ושוטפות"
+        addLabel="הוסף משימה שבועית/שוטפת"
+        emptyMessage="אין משימות שוטפות לשבוע הזה. אלה משימות שלא נגזרות מסלע - מה שעלה בפגישה או פשוט צריך להיעשות."
+      />
+
+      {overdue.length > 0 && !readOnly && (
         <div className="card mb-4 border-r-4 border-r-amber-400">
           <h3 className="mb-2 text-sm font-bold text-ink">לא הושלמו משבוע שעבר</h3>
           <div className="flex flex-col gap-2">
