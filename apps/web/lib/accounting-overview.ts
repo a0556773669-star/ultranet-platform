@@ -152,6 +152,9 @@ export interface SuppressedLine {
  */
 export type BranchMonthStatus = "active" | "before_open" | "not_started";
 
+/** Where a branch's start month came from - shown on the branch-status screen. */
+export type BranchStartSource = "manual_not_started" | "opened_at" | "first_data" | "none";
+
 /** When a branch's book opens, and whether it has any income life in it yet. */
 export interface BranchActivity {
   /** the opening date the owner set on the branch (n_branches.openedAt / legacy founded) */
@@ -161,6 +164,9 @@ export interface BranchActivity {
   firstDataMonth: string | null;
   /** the month every calculation starts from; null = the branch never started */
   startMonth: string | null;
+  startSource: BranchStartSource;
+  /** the owner marked this branch "not started yet" by hand - overrides any data in it */
+  manuallyNotStarted: boolean;
   /** true when the owner set no opening date - the screens ask for one */
   missingOpenedAt: boolean;
   /** true when not one rental and not one income row was ever entered for this branch */
@@ -405,11 +411,23 @@ function computeBranchActivity(b: Branch, raw: RawData): BranchActivity {
   const firstDataMonth = valid[0] ?? null;
 
   const noIncomeYet = rentals.length === 0 && incomeRows.length === 0;
-  const startMonth = openedMonth ?? firstDataMonth;
+
+  // The manual "hasn't started operating yet" mark wins over everything, including data that was
+  // already entered into the branch - that's the whole point of it: a branch that exists on paper
+  // but isn't working yet must not be charged for anything, whatever happens to sit in it.
+  const manuallyNotStarted = b.notStarted === true;
+  const startMonth = manuallyNotStarted ? null : openedMonth ?? firstDataMonth;
+  const startSource: BranchStartSource = manuallyNotStarted
+    ? "manual_not_started"
+    : openedMonth
+      ? "opened_at"
+      : firstDataMonth
+        ? "first_data"
+        : "none";
 
   let statusLabel: string | null = null;
   if (!startMonth) {
-    statusLabel = b.branchType === "rentals" ? "לא התחיל השכרות" : "טרם נפתח";
+    statusLabel = b.branchType === "rentals" ? "לא התחיל השכרות" : "עדיין לא התחיל לפעול";
   } else if (noIncomeYet) {
     statusLabel = b.branchType === "rentals" ? "לא התחיל השכרות" : "עדיין אין הכנסות";
   }
@@ -419,6 +437,8 @@ function computeBranchActivity(b: Branch, raw: RawData): BranchActivity {
     openedMonth,
     firstDataMonth,
     startMonth,
+    startSource,
+    manuallyNotStarted,
     missingOpenedAt: !openedMonth,
     noIncomeYet,
     statusLabel,

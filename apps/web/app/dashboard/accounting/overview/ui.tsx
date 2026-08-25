@@ -52,7 +52,11 @@ export function StatusBadge({ activity }: { activity: BranchActivity }) {
 
 /** Short answer to "the transfer to the owner - based on what?" for a single branch-month. */
 export function transferBasis(s: BranchMonth, activity: BranchActivity): string {
-  if (s.status === "not_started") return "הסניף עדיין לא נפתח — אין חישוב";
+  if (s.status === "not_started") {
+    return activity.manuallyNotStarted
+      ? 'הסניף מסומן "עדיין לא התחיל לפעול" — אין חישוב'
+      : "הסניף עדיין לא נפתח — אין חישוב";
+  }
   if (s.status === "before_open") {
     return `לפני תאריך הפתיחה${activity.openedMonth ? ` (${monthLabelLong(activity.openedMonth)})` : ""}`;
   }
@@ -522,7 +526,10 @@ export function BranchesTable({
                 {" "}
                 <b className="text-[#7a4a12]">
                   {notStarted.length} סניפים עדיין לא בחישוב החודש — אין להם תאריך פתיחה או שהם טרם התחילו.
-                </b>
+                </b>{" "}
+                <Link href={`/dashboard/accounting/branches?month=${month}`} className="font-bold text-teal-dark underline">
+                  לעדכון סטטוס הסניפים
+                </Link>
               </>
             )}
           </p>

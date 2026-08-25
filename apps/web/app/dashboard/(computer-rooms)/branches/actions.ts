@@ -33,6 +33,8 @@ function parseBranchForm(formData: FormData): Omit<Branch, "id"> {
   // Kept as "" and not undefined when empty, so clearing the field in the form really clears it
   // (stripUndefined would otherwise drop it from the merge).
   const openedAt = String(formData.get("openedAt") ?? "").trim();
+  // Always written explicitly (including false), so unchecking the box reactivates the branch.
+  const notStarted = formData.get("notStarted") === "on";
   const isMine = formData.get("isMine") === "on";
   const partnerName = String(formData.get("partnerName") ?? "").trim() || undefined;
   const partnerEmail = String(formData.get("partnerEmail") ?? "").trim() || undefined;
@@ -48,6 +50,7 @@ function parseBranchForm(formData: FormData): Omit<Branch, "id"> {
     branchType,
     location,
     openedAt,
+    notStarted,
     isMine,
     partnerName,
     partnerEmail,
