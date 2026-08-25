@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { BarChart3 } from "lucide-react";
 import { requireModuleAccess } from "@/lib/perms";
 import { getOwnerName } from "@/lib/owner-name";
-import { loadAccountingOverview, currentMonth, branchMonthOf } from "@/lib/accounting-overview";
+import { loadAccountingOverview, currentMonth, branchMonthOf, branchActivityOf } from "@/lib/accounting-overview";
 import { AccountingTabs } from "../accounting-tabs";
 import { MyLedgerCard, RulesCard } from "./panels";
 import {
@@ -56,7 +56,8 @@ export default async function AccountingOverviewPage({
   const runningBalance = data.rows.slice(0, idx + 1).reduce((sum, r) => sum + r.mine.profit, 0);
   const entries = data.branches.flatMap((branch) => {
     const stats = branchMonthOf(data, branch.id, month);
-    return stats ? [{ branch, stats }] : [];
+    const activity = branchActivityOf(data, branch.id);
+    return stats && activity ? [{ branch, stats, activity }] : [];
   });
 
   const branchHref = (branchId: string) => `/dashboard/accounting/overview/${branchId}?month=${month}${modeSuffix}`;

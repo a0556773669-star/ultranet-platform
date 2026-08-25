@@ -143,9 +143,36 @@ export interface SuppressedLine {
   reason: string;
 }
 
+/**
+ * Whether a branch is even open in a given month:
+ *  - "active"       - the branch is running, everything is calculated as usual
+ *  - "before_open"  - the month is earlier than the branch's opening date: nothing is calculated
+ *  - "not_started"  - the branch has no opening date and not a single data row yet, so there is
+ *                     nothing to calculate from and no cost may be charged to it
+ */
+export type BranchMonthStatus = "active" | "before_open" | "not_started";
+
+/** When a branch's book opens, and whether it has any income life in it yet. */
+export interface BranchActivity {
+  /** the opening date the owner set on the branch (n_branches.openedAt / legacy founded) */
+  openedDate: string | null;
+  openedMonth: string | null;
+  /** the first month with any real data, used only when no opening date was set */
+  firstDataMonth: string | null;
+  /** the month every calculation starts from; null = the branch never started */
+  startMonth: string | null;
+  /** true when the owner set no opening date - the screens ask for one */
+  missingOpenedAt: boolean;
+  /** true when not one rental and not one income row was ever entered for this branch */
+  noIncomeYet: boolean;
+  /** ready-made Hebrew badge for the screens, null when the branch is running normally */
+  statusLabel: string | null;
+}
+
 export interface BranchMonth {
   branchId: string;
   month: string;
+  status: BranchMonthStatus;
   income: number;
   expense: number;
   profit: number;
@@ -157,6 +184,11 @@ export interface BranchMonth {
   expenseNet: number;
   /** what the partner transfers to the owner on the 1st (0 when there's no partner) */
   transferToOwner: number;
+  /** the income half of `transferToOwner` - the owner's share of what the branch collected */
+  transferIncomePart: number;
+  /** labels of the expense lines that actually move money between owner and partner, so a screen
+   *  can answer "the 300 ₪ - based on what?" without opening the full cost table */
+  transferDrivers: string[];
   lines: CostLine[];
   suppressed: SuppressedLine[];
 }
@@ -178,6 +210,8 @@ export interface OverviewData {
   adAreas: AdArea[];
   myByMonth: Map<string, MyMonth>;
   branchMonths: Map<string, BranchMonth>;
+  /** branchId -> when its book opens and whether it has started taking money in */
+  activityByBranch: Map<string, BranchActivity>;
   /** branchId -> cumulative one-time equipment lines (investment to date) */
   investmentByBranch: Map<string, CostLine[]>;
   /** branchId -> rateKey -> the quantity the system derives on its own, before any manual
@@ -341,18 +375,81 @@ function buildMyLedger(
  * Book 2 - a branch's own operating book
  * ------------------------------------------------------------------ */
 
-/** First month the branch has any life in it - so a monthly rate isn't billed before it opened. */
-function branchStartMonth(b: Branch, raw: RawData): string | null {
-  if (b.founded) return b.founded.slice(0, 7);
+/**
+ * When this branch's book opens.
+ *
+ * The opening date the owner set wins over everything: months before it are not calculated at all,
+ * so a branch that opened in June is never billed for May. With no date set we fall back to the
+ * first month that has a real data row in it.
+ *
+ * A branch with neither - no opening date and no data whatsoever - is NOT treated as "open since
+ * forever". It gets no monthly price-list line and no partner transfer, because there is nothing
+ * to base them on; the screens show it as "לא התחיל השכרות" until customers and rentals are
+ * entered, and from that moment the calculation starts on its own.
+ */
+function computeBranchActivity(b: Branch, raw: RawData): BranchActivity {
+  const openedDate = b.openedAt?.trim() || b.founded?.trim() || null;
+  const openedMonth = openedDate && /^\d{4}-\d{2}/.test(openedDate) ? openedDate.slice(0, 7) : null;
+
+  const rentals = raw.rentalsByBranch.get(b.id) ?? [];
+  const incomeRows = raw.branchIncomeByBranch.get(b.id) ?? [];
+
   const candidates: string[] = [];
-  for (const r of raw.rentalsByBranch.get(b.id) ?? []) {
+  for (const r of rentals) {
     if (r.returnDate) candidates.push(r.returnDate.slice(0, 7));
   }
-  for (const i of raw.branchIncomeByBranch.get(b.id) ?? []) candidates.push(monthOf(i));
+  for (const i of incomeRows) candidates.push(monthOf(i));
   for (const e of raw.fixedByBranch.get(b.id) ?? []) if (e.startDate) candidates.push(e.startDate.slice(0, 7));
   for (const e of raw.variableByBranch.get(b.id) ?? []) candidates.push(monthOf(e));
   const valid = candidates.filter((m) => /^\d{4}-\d{2}$/.test(m)).sort();
-  return valid[0] ?? null;
+  const firstDataMonth = valid[0] ?? null;
+
+  const noIncomeYet = rentals.length === 0 && incomeRows.length === 0;
+  const startMonth = openedMonth ?? firstDataMonth;
+
+  let statusLabel: string | null = null;
+  if (!startMonth) {
+    statusLabel = b.branchType === "rentals" ? "לא התחיל השכרות" : "טרם נפתח";
+  } else if (noIncomeYet) {
+    statusLabel = b.branchType === "rentals" ? "לא התחיל השכרות" : "עדיין אין הכנסות";
+  }
+
+  return {
+    openedDate,
+    openedMonth,
+    firstDataMonth,
+    startMonth,
+    missingOpenedAt: !openedMonth,
+    noIncomeYet,
+    statusLabel,
+  };
+}
+
+function monthStatus(activity: BranchActivity, month: string): BranchMonthStatus {
+  if (!activity.startMonth) return "not_started";
+  return activity.startMonth <= month ? "active" : "before_open";
+}
+
+/** An untouched month: the branch isn't open yet, so nothing is income, expense or owed. */
+function emptyBranchMonth(branchId: string, month: string, status: BranchMonthStatus): BranchMonth {
+  return {
+    branchId,
+    month,
+    status,
+    income: 0,
+    expense: 0,
+    profit: 0,
+    margin: 0,
+    ownerIncome: 0,
+    ownerExpense: 0,
+    ownerProfit: 0,
+    expenseNet: 0,
+    transferToOwner: 0,
+    transferIncomePart: 0,
+    transferDrivers: [],
+    lines: [],
+    suppressed: [],
+  };
 }
 
 function branchIncomeLines(b: Branch, raw: RawData, month: string): RentalIncomeLine[] {
@@ -459,7 +556,12 @@ function resolveRateLine(
   });
 }
 
-function computeBranchMonth(b: Branch, raw: RawData, month: string): BranchMonth {
+function computeBranchMonth(b: Branch, raw: RawData, activity: BranchActivity, month: string): BranchMonth {
+  const status = monthStatus(activity, month);
+  // Before the branch opened - or before it has any life at all - there is no book for this month:
+  // no income, no price-list cost, and nothing for the partner to transfer.
+  if (status !== "active") return emptyBranchMonth(b.id, month, status);
+
   const hasPartner = branchHasPartner(b);
   const ownerPct = branchOwnerPct(b);
   const lines: CostLine[] = [];
@@ -507,8 +609,6 @@ function computeBranchMonth(b: Branch, raw: RawData, month: string): BranchMonth
   }
 
   const texts = manualExpenseTexts(b, raw, month);
-  const start = branchStartMonth(b, raw);
-  const branchOpen = !start || start <= month;
 
   // --- shared advertising campaign: one campaign for a whole city, split between its branches.
   // It takes the place of the flat per-branch "פרסום" rate, unless the branch already has a
@@ -516,7 +616,7 @@ function computeBranchMonth(b: Branch, raw: RawData, month: string): BranchMonth
   const adsRate = raw.rates.find((r) => r.key === ADS_RATE_KEY);
   const area = adAreaForBranch(raw.adAreas, b.id, month);
   const manualAds = adsRate ? texts.some((t) => expenseCoversRate(t, adsRate)) : false;
-  const adsFromArea = Boolean(area) && !manualAds && branchOpen;
+  const adsFromArea = Boolean(area) && !manualAds;
   if (area && adsFromArea) {
     const split = splitAdArea(area);
     if (split.perBranchLineTotal > 0) {
@@ -559,7 +659,6 @@ function computeBranchMonth(b: Branch, raw: RawData, month: string): BranchMonth
       continue;
     }
     if (rate.kind === "monthly") {
-      if (!branchOpen) continue;
       const setting = raw.settings.get(branchCostSettingId(b.id, rate.key));
       const { qty, note } = resolveQty(rate, b, raw, setting);
       const line = resolveRateLine(rate, b, raw, qty, note, "monthly", rate.label);
@@ -589,10 +688,15 @@ function computeBranchMonth(b: Branch, raw: RawData, month: string): BranchMonth
   const ownerExpense = lines.reduce((s, l) => s + l.ownerShare, 0);
   const expenseNet = lines.reduce((s, l) => s + l.netToOwner, 0);
   const ownerIncome = (income * ownerPct) / 100;
+  const transferIncomePart = hasPartner ? incomeShareToOwner(incomeLines, ownerPct) : 0;
+  const transferDrivers = hasPartner
+    ? lines.filter((l) => Math.abs(l.netToOwner) >= 1).map((l) => l.label)
+    : [];
 
   return {
     branchId: b.id,
     month,
+    status,
     income,
     expense,
     profit: income - expense,
@@ -601,7 +705,9 @@ function computeBranchMonth(b: Branch, raw: RawData, month: string): BranchMonth
     ownerExpense,
     ownerProfit: ownerIncome - ownerExpense,
     expenseNet,
-    transferToOwner: hasPartner ? incomeShareToOwner(incomeLines, ownerPct) + expenseNet : 0,
+    transferToOwner: hasPartner ? transferIncomePart + expenseNet : 0,
+    transferIncomePart,
+    transferDrivers,
     lines,
     suppressed,
   };
@@ -634,10 +740,13 @@ export async function loadAccountingOverview(endMonth: string, monthCount = 12):
 
   const myByMonth = buildMyLedger(months, raw.ahIncome, raw.ahExpenses);
 
+  const activityByBranch = new Map<string, BranchActivity>();
   const branchMonths = new Map<string, BranchMonth>();
   for (const b of branches) {
+    const activity = computeBranchActivity(b, raw);
+    activityByBranch.set(b.id, activity);
     for (const m of months) {
-      branchMonths.set(key(b.id, m), computeBranchMonth(b, raw, m));
+      branchMonths.set(key(b.id, m), computeBranchMonth(b, raw, activity, m));
     }
   }
 
@@ -687,6 +796,7 @@ export async function loadAccountingOverview(endMonth: string, monthCount = 12):
     adAreas: raw.adAreas,
     myByMonth,
     branchMonths,
+    activityByBranch,
     investmentByBranch,
     autoQtyByBranch,
     rows,
@@ -695,6 +805,15 @@ export async function loadAccountingOverview(endMonth: string, monthCount = 12):
 
 export function branchMonthOf(data: OverviewData, branchId: string, month: string): BranchMonth | undefined {
   return data.branchMonths.get(key(branchId, month));
+}
+
+export function branchActivityOf(data: OverviewData, branchId: string): BranchActivity | undefined {
+  return data.activityByBranch.get(branchId);
+}
+
+/** Hebrew month label for a start/opening month, e.g. "06/2026". */
+export function monthLabelLong(month: string): string {
+  return `${month.slice(5)}/${month.slice(0, 4)}`;
 }
 
 /** Every month a branch has a row for, oldest first (used by the per-branch report). */

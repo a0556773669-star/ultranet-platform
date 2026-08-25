@@ -34,9 +34,10 @@ export default async function RentalBranchesPage() {
   if (session.user?.role !== "owner") redirect("/dashboard/rentals");
 
   const db = getAdminFirestore();
-  const [branchesSnap, laptopsSnap] = await Promise.all([
+  const [branchesSnap, laptopsSnap, rentalsSnap] = await Promise.all([
     db.collection("n_branches").where("branchType", "==", "rentals").get(),
     db.collection("n_laptops").get(),
+    db.collection("n_rentals").get(),
   ]);
   const branches = branchesSnap.docs
     .map((d) => ({ ...(d.data() as Omit<Branch, "id">), id: d.id }) as Branch)
@@ -49,6 +50,15 @@ export default async function RentalBranchesPage() {
   for (const d of laptopsSnap.docs) {
     const l = d.data() as Omit<Laptop, "id">;
     laptopCountByBranch.set(l.branchId, (laptopCountByBranch.get(l.branchId) ?? 0) + 1);
+  }
+
+  // A branch with no rental at all hasn't started - the accounting screens skip it entirely, so
+  // it has to be visible as such here too, where the opening date is set.
+  const rentalCountByBranch = new Map<string, number>();
+  for (const d of rentalsSnap.docs) {
+    const r = d.data() as { branchId?: string };
+    if (!r.branchId) continue;
+    rentalCountByBranch.set(r.branchId, (rentalCountByBranch.get(r.branchId) ?? 0) + 1);
   }
 
   return (
@@ -88,6 +98,7 @@ export default async function RentalBranchesPage() {
                   <th className={TH}>מיקום</th>
                   <th className={TH}>טלפון</th>
                   <th className={TH}>שותף</th>
+                  <th className={TH}>תאריך פתיחה</th>
                   <th className={TH}>מספר מחשבים</th>
                   <th className={TH}></th>
                 </tr>
@@ -102,6 +113,11 @@ export default async function RentalBranchesPage() {
                         <Link href={`/dashboard/rentals/branches/${b.id}`} className="hover:underline">
                           {b.name}
                         </Link>
+                        {(rentalCountByBranch.get(b.id) ?? 0) === 0 && (
+                          <span className="mr-1.5 rounded-full bg-[#fdf3e3] px-2 py-0.5 text-[10.5px] font-extrabold text-[#7a4a12]">
+                            לא התחיל השכרות
+                          </span>
+                        )}
                       </td>
                       <td className={TD}>
                         <span className="flex items-center gap-1.5 rounded-full bg-[#e8f4fd] px-2.5 py-1 text-[11px] font-bold text-[#2980b9] w-fit">
@@ -113,6 +129,13 @@ export default async function RentalBranchesPage() {
                       <td className={`${TD} text-muted`}>{b.phone || "-"}</td>
                       <td className={`${TD} text-muted`}>
                         {modelOf(b) !== "classic" ? `${b.partnerName ?? "ללא שם"} · ${b.myPct}% / ${b.partnerPct}%` : "-"}
+                      </td>
+                      <td className={TD}>
+                        {b.openedAt || b.founded ? (
+                          <span className="font-bold text-ink">{(b.openedAt || b.founded)!.slice(0, 10)}</span>
+                        ) : (
+                          <span className="text-[#a15c1b]">לא הוגדר</span>
+                        )}
                       </td>
                       <td className={TD}>
                         <span className="flex items-center gap-1.5 font-bold text-ink">

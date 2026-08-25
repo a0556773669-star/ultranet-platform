@@ -55,6 +55,10 @@ function parseRentalBranchForm(formData: FormData): Omit<Branch, "id"> {
   const name = String(formData.get("name") ?? "").trim();
   const location = String(formData.get("location") ?? "").trim() || undefined;
   const phone = String(formData.get("phone") ?? "").trim() || undefined;
+  // The branch's opening date: every income/expense calculation for this branch starts here.
+  // Deliberately kept as "" and not undefined when the field is left empty - stripUndefined would
+  // drop it from the merge, and clearing the date in the form has to actually clear it.
+  const openedAt = String(formData.get("openedAt") ?? "").trim();
   const isMine = formData.get("isMine") === "on";
   const partnerName = String(formData.get("partnerName") ?? "").trim() || undefined;
   const partnerEmail = String(formData.get("partnerEmail") ?? "").trim() || undefined;
@@ -72,6 +76,7 @@ function parseRentalBranchForm(formData: FormData): Omit<Branch, "id"> {
     branchType: "rentals",
     location,
     phone,
+    openedAt,
     isMine,
     partnerName,
     partnerEmail,
