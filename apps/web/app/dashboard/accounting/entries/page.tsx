@@ -66,6 +66,9 @@ export default async function AccountingPage() {
   const cashRegisterBranches = branches
     .filter((b) => b.branchType === "computers" && !b.deleted)
     .sort((a, b) => a.name.localeCompare(b.name, "he"));
+  const coworkingBranches = branches
+    .filter((b) => b.branchType === "coworking" && !b.deleted)
+    .sort((a, b) => a.name.localeCompare(b.name, "he"));
   const creditDefaultDate = `${new Date().toISOString().slice(0, 7)}-10`;
 
   const fixedExpenseBurden = await loadOwnerFixedExpenseBurden();
@@ -186,12 +189,34 @@ export default async function AccountingPage() {
           </select>
           <input name="desc" placeholder="תיאור" className={FIELD} />
           <input type="number" name="amount" min={0} placeholder="סכום" required className={FIELD} />
-          <select name="business" className={FIELD}>
-            <option value="general">כללי</option>
-            <option value="computers">מחשבים</option>
-            <option value="rentals">השכרות</option>
-            <option value="coworking">משרד שיתופי</option>
+          <select name="branchId" defaultValue="" className={FIELD}>
+            <option value="">כללי — לא משויך לסניף</option>
+            {cashRegisterBranches.length > 0 && (
+              <optgroup label="חדרי מחשבים">
+                {cashRegisterBranches.map((b) => (
+                  <option key={b.id} value={b.id}>{b.name}</option>
+                ))}
+              </optgroup>
+            )}
+            {laptopBranches.length > 0 && (
+              <optgroup label="ניידים / השכרות">
+                {laptopBranches.map((b) => (
+                  <option key={b.id} value={b.id}>{b.name}</option>
+                ))}
+              </optgroup>
+            )}
+            {coworkingBranches.length > 0 && (
+              <optgroup label="משרד שיתופי">
+                {coworkingBranches.map((b) => (
+                  <option key={b.id} value={b.id}>{b.name}</option>
+                ))}
+              </optgroup>
+            )}
           </select>
+          <p className="text-[11px] text-muted">
+            בחירת סניף רושמת את ההוצאה בספר של אותו סניף. &quot;כללי&quot; רושם אותה בהנה&quot;ח האישית
+            שלך (&quot;שלי&quot;) בלבד.
+          </p>
           <button type="submit" className="self-start rounded-[10px] bg-gradient-to-br from-teal to-teal-light px-5 py-2 text-sm font-bold text-white shadow-primary transition hover:opacity-90">
             הוספה
           </button>

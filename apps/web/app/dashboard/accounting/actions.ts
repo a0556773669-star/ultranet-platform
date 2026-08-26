@@ -96,6 +96,34 @@ export async function createExpenseAction(formData: FormData) {
     throw new Error("תאריך וסכום הם שדות חובה");
   }
   const category = String(formData.get("category") ?? "").trim();
+  const branchId = String(formData.get("branchId") ?? "").trim();
+
+  // A branch was picked -> the expense belongs to that branch's own book (n_var_expenses),
+  // not to the owner's personal ledger. The two books are deliberately never summed together,
+  // so writing it to both would be double counting. See lib/accounting-overview.ts.
+  if (branchId) {
+    const db = getAdminFirestore();
+    const branchDoc = await db.collection("n_branches").doc(branchId).get();
+    if (!branchDoc.exists) {
+      throw new Error("הסניף שנבחר לא נמצא");
+    }
+    await db.collection("n_var_expenses").add({
+      branchId,
+      amount,
+      desc: String(formData.get("desc") ?? "").trim() || category || "הוצאה",
+      date,
+      month: date.slice(0, 7),
+      paidBy: "owner",
+      ...(category ? { category } : {}),
+    });
+    revalidatePath("/dashboard/accounting");
+    revalidatePath("/dashboard/accounting/overview");
+    revalidatePath("/dashboard/accounting/entries");
+    revalidatePath("/dashboard/expenses");
+    revalidatePath("/dashboard/rentals/expenses");
+    return;
+  }
+
   const data: Omit<AccountingExpense, "id"> = {
     date,
     amount,
