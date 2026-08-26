@@ -1,16 +1,22 @@
 import Link from "next/link";
-import { BarChart3, Download, Upload, Laptop, CreditCard, Banknote } from "lucide-react";
+import { BarChart3, Download, Laptop, CreditCard, Banknote } from "lucide-react";
 import { requireModuleAccess } from "@/lib/perms";
 import { getAdminFirestore } from "@/lib/firebase-admin";
-import type { AccountingIncome, AccountingExpense, CollectionRoute, Branch } from "@ultranet/shared-types";
-import { createIncomeAction, deleteIncomeAction, deleteExpenseAction } from "../actions";
+import type {
+  AccountingIncome,
+  AccountingExpense,
+  CollectionRoute,
+  Branch,
+  VariableExpense,
+} from "@ultranet/shared-types";
+import { createIncomeAction, deleteIncomeAction } from "../actions";
 import CollectModal from "../collect-modal";
 import { DeleteEntryButton } from "../delete-entry-button";
-import { EditExpenseModal } from "../edit-expense-modal";
 import { loadOwnerFixedExpenseBurden } from "@/lib/owner-expense-burden";
 import { loadComputerRoomSetupCostTotal } from "@/lib/computer-room-accounting";
 import { AccountingTabs } from "../accounting-tabs";
 import { AddExpenseForm } from "./add-expense-form";
+import { ExpenseList, type ExpenseRow } from "./expense-list";
 
 const BUSINESS_LABELS: Record<string, string> = {
   computers: "מחשבים",
@@ -39,11 +45,12 @@ export default async function AccountingPage() {
   await requireModuleAccess("accounting");
 
   const db = getAdminFirestore();
-  const [incomeSnap, expenseSnap, routesSnap, branchesSnap] = await Promise.all([
+  const [incomeSnap, expenseSnap, routesSnap, branchesSnap, branchExpenseSnap] = await Promise.all([
     db.collection("n_ah_income").get(),
     db.collection("n_ah_expenses").get(),
     db.collection("n_collection_routes").get(),
     db.collection("n_branches").get(),
+    db.collection("n_var_expenses").get(),
   ]);
   const income = incomeSnap.docs
     .map((d) => ({ ...(d.data() as Omit<AccountingIncome, "id">), id: d.id }) as AccountingIncome)
@@ -55,6 +62,33 @@ export default async function AccountingPage() {
   const routes = routesSnap.docs.map(
     (d) => ({ ...(d.data() as Omit<CollectionRoute, "id">), id: d.id }) as CollectionRoute,
   );
+
+  // One list from BOTH books: personal-ledger rows and branch rows. An expense saved to a branch
+  // used to disappear from this screen entirely, which looked exactly like a failed save.
+  const branchNameById = new Map(
+    branchesSnap.docs.map((d) => [d.id, (d.data() as { name?: string }).name ?? d.id]),
+  );
+  const expenseRows: ExpenseRow[] = [
+    ...expenses.map((e) => ({
+      id: e.id,
+      source: "ledger" as const,
+      desc: e.desc || BUSINESS_LABELS[e.business] || "הוצאה",
+      date: e.date ?? "",
+      amount: e.amount ?? 0,
+      category: e.category,
+    })),
+    ...branchExpenseSnap.docs
+      .map((d) => ({ ...(d.data() as Omit<VariableExpense, "id">), id: d.id }) as VariableExpense)
+      .map((e) => ({
+        id: e.id,
+        source: "branch" as const,
+        desc: e.desc || e.category || "הוצאה",
+        date: e.date ?? "",
+        amount: e.amount ?? 0,
+        category: e.category,
+        branchName: branchNameById.get(e.branchId) ?? "סניף לא ידוע",
+      })),
+  ].sort((a, b) => b.date.localeCompare(a.date));
 
   // Kept unfiltered (including deleted) so past entries tied to a since-deleted branch still
   // resolve a name via branchNameOf() instead of showing blank - only the pickers below (for
@@ -216,28 +250,7 @@ export default async function AccountingPage() {
           })}
           </div>
         </div>
-        <div>
-          <div className="mb-2 flex items-center justify-between text-xs font-bold uppercase tracking-wide text-muted">
-            <span className="flex items-center gap-1.5"><Upload className="h-4 w-4" />הוצאות אחרונות</span>
-            <span className="rounded-full bg-[#f4f6f9] px-2.5 py-0.5 text-ink normal-case">{expenses.length}</span>
-          </div>
-          <div className="rounded-card border border-card-border bg-white px-4 shadow-card">
-            {expenses.slice(0, 15).map((e) => {
-            const bound = deleteExpenseAction.bind(null, e.id);
-            return (
-              <div key={e.id} className="flex items-center gap-2.5 border-b border-card-border py-2.5 text-[13px] last:border-b-0">
-                <div className="flex-1">
-                  <div className="font-bold text-ink">{e.desc || BUSINESS_LABELS[e.business]}</div>
-                  <div className="mt-0.5 text-[11px] text-muted">{e.date}</div>
-                </div>
-                <div className="min-w-[75px] text-left font-extrabold text-red-600">{e.amount.toLocaleString()} ₪</div>
-                <EditExpenseModal expense={e} />
-                <DeleteEntryButton confirmText={"למחק את ההוצאה?"} action={bound} successText="ההוצאה נמחקה בהצלחה" />
-              </div>
-            );
-          })}
-          </div>
-        </div>
+        <ExpenseList rows={expenseRows} />
       </div>
     </div>
   );

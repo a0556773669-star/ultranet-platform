@@ -3,6 +3,7 @@
 import { useMemo, useState, useTransition } from "react";
 import type { Branch } from "@ultranet/shared-types";
 import { attributeExpensesAction, type AttributeResult } from "./actions";
+import { deleteExpenseRowAction } from "../expense-actions";
 
 export interface PendingExpense {
   id: string;
@@ -55,6 +56,26 @@ export function AttributeClient({
   });
   const [result, setResult] = useState<AttributeResult | null>(null);
   const [pending, startTransition] = useTransition();
+  /** rows removed from the screen after a confirmed delete, so the list reflects reality at once */
+  const [removed, setRemoved] = useState<Set<string>>(new Set());
+  const [busyId, setBusyId] = useState<string | null>(null);
+
+  function removeRow(e: PendingExpense) {
+    const label = `${e.desc || "הוצאה"} — ${money(e.amount)}`;
+    if (!window.confirm(`למחוק לגמרי את "${label}"?\nהשורה תימחק מהמערכת ולא ניתן לשחזר אותה.`)) return;
+    setBusyId(e.id);
+    setResult(null);
+    startTransition(async () => {
+      const res = await deleteExpenseRowAction("ledger", e.id);
+      setBusyId(null);
+      if (res.ok) {
+        setRemoved((prev) => new Set(prev).add(e.id));
+        setResult({ moved: 0, created: 0, notes: [`נמחק: ${label}`] });
+      } else {
+        setResult({ moved: 0, created: 0, notes: [], error: res.message });
+      }
+    });
+  }
 
   const resolve = (value: string): string[] => {
     if (value === ALL_ROOMS) return rooms.map((b) => b.id);
@@ -62,7 +83,8 @@ export function AttributeClient({
     return value ? [value] : [];
   };
 
-  const decided = expenses.filter((e) => resolve(choice[e.id] ?? "").length > 0);
+  const live = expenses.filter((e) => !removed.has(e.id));
+  const decided = live.filter((e) => resolve(choice[e.id] ?? "").length > 0);
   const total = decided.reduce((s, e) => s + e.amount, 0);
   const newRows = decided.reduce((s, e) => s + resolve(choice[e.id] ?? "").length, 0);
 
@@ -74,7 +96,7 @@ export function AttributeClient({
     });
   }
 
-  if (expenses.length === 0) {
+  if (live.length === 0) {
     return (
       <section className="rounded-card border border-card-border bg-white px-4 py-6 text-center text-sm text-muted shadow-card">
         אין הוצאות שממתינות לשיוך — כל ההוצאות כבר משויכות לסניף או מסומנות ככלליות.
@@ -115,7 +137,7 @@ export function AttributeClient({
       <section className="rounded-card border border-card-border bg-white shadow-card">
         <div className="flex flex-wrap items-center justify-between gap-2.5 border-b border-card-border px-4 py-3">
           <div>
-            <h2 className="text-[15px] font-extrabold text-ink">הוצאות שממתינות לשיוך ({expenses.length})</h2>
+            <h2 className="text-[15px] font-extrabold text-ink">הוצאות שממתינות לשיוך ({live.length})</h2>
             <p className="mt-0.5 text-[12.5px] text-muted">
               הסניף נוחש מתוך הטקסט ומסומן &quot;זוהה אוטומטית&quot;. אפשר לשנות כל שורה.
             </p>
@@ -131,10 +153,11 @@ export function AttributeClient({
                 <th className={`${TH} text-left`}>סכום</th>
                 <th className={`${TH} min-w-[190px]`}>לשייך לסניף</th>
                 <th className={TH}>תוצאה</th>
+                <th className={TH} />
               </tr>
             </thead>
             <tbody>
-              {expenses.map((e, i) => {
+              {live.map((e, i) => {
                 const value = choice[e.id] ?? "";
                 const targets = resolve(value);
                 const auto = suggest(`${e.desc} ${e.category ?? ""}`);
@@ -203,6 +226,16 @@ export function AttributeClient({
                         </span>
                       )}
                     </td>
+                    <td className={TD}>
+                      <button
+                        type="button"
+                        onClick={() => removeRow(e)}
+                        disabled={busyId === e.id}
+                        className="whitespace-nowrap rounded-lg border border-red-200 bg-white px-2.5 py-1 text-[11.5px] font-bold text-red-600 transition hover:bg-red-50 disabled:opacity-50"
+                      >
+                        {busyId === e.id ? "מוחק..." : "מחיקה"}
+                      </button>
+                    </td>
                   </tr>
                 );
               })}
@@ -215,7 +248,7 @@ export function AttributeClient({
             <div className="flex flex-col">
               <span className="text-[10.5px] font-extrabold text-muted">הוצאות שיישויכו</span>
               <span className="text-[17px] font-black tabular-nums">
-                {decided.length} / {expenses.length}
+                {decided.length} / {live.length}
               </span>
             </div>
             <div className="flex flex-col">
