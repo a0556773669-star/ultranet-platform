@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { BarChart3 } from "lucide-react";
 import { requireModuleAccess } from "@/lib/perms";
 import { getOwnerName } from "@/lib/owner-name";
+import { getAdminFirestore } from "@/lib/firebase-admin";
 import { loadAccountingOverview, currentMonth, branchMonthOf, branchActivityOf } from "@/lib/accounting-overview";
 import { AccountingTabs } from "../accounting-tabs";
 import { MyLedgerCard, RulesCard } from "./panels";
@@ -19,6 +20,54 @@ import {
 } from "./ui";
 
 const MONTH_RE = /^\d{4}-\d{2}$/;
+
+/**
+ * All-time totals of the owner's own ledger, with no month window at all.
+ * The monthly report deliberately shows a 12-month window, which silently hides everything
+ * older than that - and most of this business's spending (branch setup) predates it. This strip
+ * is the "מתחילת הדרך" answer that used to be the whole of the old accounting screen.
+ */
+async function AllTimeStrip() {
+  const db = getAdminFirestore();
+  const [incomeSnap, expenseSnap] = await Promise.all([
+    db.collection("n_ah_income").get(),
+    db.collection("n_ah_expenses").get(),
+  ]);
+  const income = incomeSnap.docs.reduce((s, d) => s + ((d.data() as { amount?: number }).amount ?? 0), 0);
+  const expense = expenseSnap.docs.reduce((s, d) => s + ((d.data() as { amount?: number }).amount ?? 0), 0);
+  const balance = income - expense;
+  const nf = new Intl.NumberFormat("he-IL", { maximumFractionDigits: 0 });
+  const fmt = (n: number) => `${nf.format(Math.round(n))} ₪`;
+
+  const cells = [
+    { label: 'סה"כ הכנסות מתחילת הדרך', value: fmt(income), color: "#059669", rail: "#059669" },
+    { label: 'סה"כ הוצאות מתחילת הדרך', value: fmt(expense), color: "#dc2626", rail: "#dc2626" },
+    { label: "מאזן מתחילת הדרך", value: fmt(balance), color: balance >= 0 ? "#0f6e56" : "#dc2626", rail: "#1a8a76" },
+  ];
+
+  return (
+    <section className="mb-3">
+      <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-3">
+        {cells.map((c) => (
+          <article
+            key={c.label}
+            className="relative overflow-hidden rounded-card border border-card-border bg-white py-2.5 pl-3.5 pr-3 shadow-card"
+          >
+            <span className="absolute right-0 top-0 h-full w-[3px]" style={{ background: c.rail }} />
+            <p className="text-[11px] font-extrabold text-muted">{c.label}</p>
+            <p className="mt-px text-[21px] font-black leading-tight tabular-nums" style={{ color: c.color }}>
+              {c.value}
+            </p>
+          </article>
+        ))}
+      </div>
+      <p className="mt-1.5 px-1 text-[11.5px] text-muted">
+        כל ההכנסות וההוצאות שהוזנו להנה&quot;ח האישית, מהיום הראשון ובלי הגבלת חודשים — בניגוד לדוח
+        למטה, שמציג חלון של 12 חודשים.
+      </p>
+    </section>
+  );
+}
 
 export default async function AccountingOverviewPage({
   searchParams,
@@ -129,6 +178,8 @@ export default async function AccountingOverviewPage({
           },
         ]}
       />
+
+      <AllTimeStrip />
 
       <MyLedgerCard my={my} runningBalance={runningBalance} defaultDate={`${month}-01`} />
 

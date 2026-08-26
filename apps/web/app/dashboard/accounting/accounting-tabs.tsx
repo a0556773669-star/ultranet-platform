@@ -7,6 +7,7 @@ const TABS = [
   { href: "/dashboard/accounting/routes", label: "מסלולי גביה" },
   { href: "/dashboard/accounting/rates", label: "תעריפון" },
   { href: "/dashboard/accounting/ads", label: "פרסום משותף" },
+  { href: "/dashboard/accounting/attribute", label: "שיוך לסניפים" },
   { href: "/dashboard/accounting/import", label: "ייבוא מאקסל" },
 ];
 
