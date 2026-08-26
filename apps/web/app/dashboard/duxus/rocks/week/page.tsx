@@ -1,48 +1,6 @@
-import { Target } from "lucide-react";
-import { requireModuleAccess } from "@/lib/perms";
-import { DuxusTabs } from "../../duxus-tabs";
-import { RocksTabs } from "../rocks-tabs";
-import { getMilestonesForQuarter, getMilestonesByStage, getAllRocks, getReview, listReviews } from "../actions";
-import { currentWeekKey, shiftWeekKey, weekLabel, weekMonthKey, monthQuarterKey } from "../date-utils";
-import { WeekClient } from "./week-client";
+import { redirect } from "next/navigation";
 
-export default async function RocksWeekPage({ searchParams }: { searchParams: { w?: string } }) {
-  await requireModuleAccess("duxus");
-  const weekKey = searchParams.w || currentWeekKey();
-  const monthKey = weekMonthKey(weekKey);
-  const quarterKey = monthQuarterKey(monthKey);
-
-  const [quarterMilestones, allWeekStage, rocks, review, reviews] = await Promise.all([
-    getMilestonesForQuarter(quarterKey),
-    getMilestonesByStage("week"),
-    getAllRocks(),
-    getReview("weekly", weekKey),
-    listReviews("weekly"),
-  ]);
-
-  const overdue = allWeekStage.filter((m) => m.weekKey && m.weekKey !== weekKey && !m.done);
-
-  return (
-    <div>
-      <h1 className="mb-4 flex items-center gap-1.5 text-[21px] font-extrabold text-ink">
-        <Target className="h-5 w-5" />
-        משימות ונהלים
-      </h1>
-      <DuxusTabs />
-      <RocksTabs />
-      <WeekClient
-        weekKey={weekKey}
-        monthKey={monthKey}
-        quarterKey={quarterKey}
-        weekLabel={weekLabel(weekKey)}
-        prevHref={`/dashboard/duxus/rocks/week?w=${shiftWeekKey(weekKey, -1)}`}
-        nextHref={`/dashboard/duxus/rocks/week?w=${shiftWeekKey(weekKey, 1)}`}
-        quarterMilestones={quarterMilestones}
-        overdue={overdue}
-        rocks={rocks}
-        initialReviewNotes={review?.notes ?? ""}
-        previousReviews={reviews.filter((r) => r.periodKey !== weekKey)}
-      />
-    </div>
-  );
+/** הטאב השבועי התמזג ללוח העבודה (קומת השבוע). נשאר כהפניה לקישורים ישנים. */
+export default function RocksWeekRedirect() {
+  redirect("/dashboard/duxus/rocks");
 }

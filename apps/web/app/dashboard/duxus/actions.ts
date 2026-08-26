@@ -42,7 +42,7 @@ export async function createProcedureAction(formData: FormData) {
   const content = String(formData.get("content") ?? "").trim();
   const category = String(formData.get("category") ?? "").trim();
   if (!title) {
-    redirect("/dashboard/duxus/new");
+    redirect("/dashboard/duxus/procedures/new");
   }
   const now = Date.now();
   const ref = getAdminFirestore().collection(COLLECTION).doc();
@@ -54,8 +54,8 @@ export async function createProcedureAction(formData: FormData) {
     updatedAt: now,
     createdBy: session.user?.name ?? session.user?.email ?? "",
   });
-  revalidatePath("/dashboard/duxus");
-  redirect("/dashboard/duxus");
+  revalidatePath("/dashboard/duxus/procedures");
+  redirect("/dashboard/duxus/procedures");
 }
 
 export async function updateProcedureAction(id: string, formData: FormData) {
@@ -75,14 +75,14 @@ export async function updateProcedureAction(id: string, formData: FormData) {
     },
     { merge: true }
   );
-  revalidatePath("/dashboard/duxus");
-  revalidatePath(`/dashboard/duxus/${id}`);
-  redirect(`/dashboard/duxus/${id}`);
+  revalidatePath("/dashboard/duxus/procedures");
+  revalidatePath(`/dashboard/duxus/procedures/${id}`);
+  redirect(`/dashboard/duxus/procedures/${id}`);
 }
 
 export async function deleteProcedureAction(id: string) {
   await requireModuleAccess("duxus");
   await getAdminFirestore().collection(COLLECTION).doc(id).delete();
-  revalidatePath("/dashboard/duxus");
-  redirect("/dashboard/duxus");
+  revalidatePath("/dashboard/duxus/procedures");
+  redirect("/dashboard/duxus/procedures");
 }
