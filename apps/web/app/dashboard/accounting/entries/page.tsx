@@ -3,14 +3,14 @@ import { BarChart3, Download, Upload, Laptop, CreditCard, Banknote } from "lucid
 import { requireModuleAccess } from "@/lib/perms";
 import { getAdminFirestore } from "@/lib/firebase-admin";
 import type { AccountingIncome, AccountingExpense, CollectionRoute, Branch } from "@ultranet/shared-types";
-import { createIncomeAction, createExpenseAction, deleteIncomeAction, deleteExpenseAction } from "../actions";
+import { createIncomeAction, deleteIncomeAction, deleteExpenseAction } from "../actions";
 import CollectModal from "../collect-modal";
 import { DeleteEntryButton } from "../delete-entry-button";
 import { EditExpenseModal } from "../edit-expense-modal";
 import { loadOwnerFixedExpenseBurden } from "@/lib/owner-expense-burden";
 import { loadComputerRoomSetupCostTotal } from "@/lib/computer-room-accounting";
-import { ACCOUNTING_EXPENSE_CATEGORIES } from "@/lib/accounting-categories";
 import { AccountingTabs } from "../accounting-tabs";
+import { AddExpenseForm } from "./add-expense-form";
 
 const BUSINESS_LABELS: Record<string, string> = {
   computers: "מחשבים",
@@ -178,49 +178,11 @@ export default async function AccountingPage() {
         אותה.
       </p>
       <div className="mb-6 grid grid-cols-1 gap-3 lg:grid-cols-2">
-        <form action={createExpenseAction} className="flex flex-col gap-2.5 rounded-card border border-card-border bg-white p-4 shadow-card">
-          <h2 className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-muted"><Upload className="h-4 w-4" />הוספת הוצאה</h2>
-          <input type="date" name="date" required className={FIELD} />
-          <select name="category" defaultValue="" className={FIELD}>
-            <option value="">קטגוריה (לא חובה)</option>
-            {ACCOUNTING_EXPENSE_CATEGORIES.map((c) => (
-              <option key={c} value={c}>{c}</option>
-            ))}
-          </select>
-          <input name="desc" placeholder="תיאור" className={FIELD} />
-          <input type="number" name="amount" min={0} placeholder="סכום" required className={FIELD} />
-          <select name="branchId" defaultValue="" className={FIELD}>
-            <option value="">כללי — לא משויך לסניף</option>
-            {cashRegisterBranches.length > 0 && (
-              <optgroup label="חדרי מחשבים">
-                {cashRegisterBranches.map((b) => (
-                  <option key={b.id} value={b.id}>{b.name}</option>
-                ))}
-              </optgroup>
-            )}
-            {laptopBranches.length > 0 && (
-              <optgroup label="ניידים / השכרות">
-                {laptopBranches.map((b) => (
-                  <option key={b.id} value={b.id}>{b.name}</option>
-                ))}
-              </optgroup>
-            )}
-            {coworkingBranches.length > 0 && (
-              <optgroup label="משרד שיתופי">
-                {coworkingBranches.map((b) => (
-                  <option key={b.id} value={b.id}>{b.name}</option>
-                ))}
-              </optgroup>
-            )}
-          </select>
-          <p className="text-[11px] text-muted">
-            בחירת סניף רושמת את ההוצאה בספר של אותו סניף. &quot;כללי&quot; רושם אותה בהנה&quot;ח האישית
-            שלך (&quot;שלי&quot;) בלבד.
-          </p>
-          <button type="submit" className="self-start rounded-[10px] bg-gradient-to-br from-teal to-teal-light px-5 py-2 text-sm font-bold text-white shadow-primary transition hover:opacity-90">
-            הוספה
-          </button>
-        </form>
+        <AddExpenseForm
+          rooms={cashRegisterBranches.map((b) => ({ id: b.id, name: b.name }))}
+          rentals={laptopBranches.map((b) => ({ id: b.id, name: b.name }))}
+          coworking={coworkingBranches.map((b) => ({ id: b.id, name: b.name }))}
+        />
 
         <CollectModal routes={routes} />
       </div>

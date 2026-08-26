@@ -412,7 +412,13 @@ export default async function BranchAccountingOverviewPage({
             modeTabs={<ModeTabs cum={cum} monthlyHref={selfHref(month)} cumHref={selfHref(month, "cum")} />}
           />
 
-          <AddBranchExpense branch={branch} ownerName={ownerName} restricted={restricted} />
+          <AddBranchExpense
+            branch={branch}
+            ownerName={ownerName}
+            partnerName={partnerName}
+            hasPartner={hasPartner}
+            restricted={restricted}
+          />
 
           <CostTable
             title={`פירוט הוצאות ${mLabel(month)}`}
