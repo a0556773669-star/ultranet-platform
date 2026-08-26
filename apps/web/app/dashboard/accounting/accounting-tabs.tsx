@@ -10,23 +10,43 @@ const TABS = [
   { href: "/dashboard/accounting/import", label: "ייבוא מאקסל" },
 ];
 
-/** Owner-only navigation between the accounting screens. `active` is the href of the current tab. */
+const ENTRIES_HREF = "/dashboard/accounting/entries";
+
+/**
+ * Owner-only navigation between the accounting screens. `active` is the href of the current tab.
+ * Every accounting screen must render this - a screen without it strands the user with no way
+ * back to the rest of the module.
+ *
+ * The "הזנת נתונים" button rides along on purpose: adding an income or an expense is the one
+ * thing done from anywhere in the module, so it stays one click away instead of being buried
+ * behind whichever tab happens to be open.
+ */
 export function AccountingTabs({ active }: { active: string }) {
   return (
-    <div className="flex gap-1 rounded-xl border border-card-border bg-white p-1">
-      {TABS.map((t) => (
+    <div className="flex flex-wrap items-center gap-2">
+      <div className="flex flex-wrap gap-1 rounded-xl border border-card-border bg-white p-1">
+        {TABS.map((t) => (
+          <Link
+            key={t.href}
+            href={t.href}
+            className={
+              t.href === active
+                ? "rounded-lg bg-teal-bg px-3 py-1.5 text-[13px] font-bold text-teal-dark"
+                : "rounded-lg px-3 py-1.5 text-[13px] font-bold text-muted transition hover:bg-gray-100"
+            }
+          >
+            {t.label}
+          </Link>
+        ))}
+      </div>
+      {active !== ENTRIES_HREF && (
         <Link
-          key={t.href}
-          href={t.href}
-          className={
-            t.href === active
-              ? "rounded-lg bg-teal-bg px-3 py-1.5 text-[13px] font-bold text-teal-dark"
-              : "rounded-lg px-3 py-1.5 text-[13px] font-bold text-muted transition hover:bg-gray-100"
-          }
+          href={ENTRIES_HREF}
+          className="whitespace-nowrap rounded-[10px] bg-gradient-to-br from-teal to-teal-light px-4 py-2 text-[13px] font-bold text-white shadow-primary transition hover:opacity-90"
         >
-          {t.label}
+          + הזנת נתונים
         </Link>
-      ))}
+      )}
     </div>
   );
 }

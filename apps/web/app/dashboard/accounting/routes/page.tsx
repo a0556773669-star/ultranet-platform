@@ -4,6 +4,7 @@ import { requireModuleAccess } from "@/lib/perms";
 import { getAdminFirestore } from "@/lib/firebase-admin";
 import type { CollectionRoute, Branch } from "@ultranet/shared-types";
 import { createCollectionRouteAction, deleteCollectionRouteAction } from "../actions";
+import { AccountingTabs } from "../accounting-tabs";
 import { DeleteRouteButton } from "./delete-route-button";
 import { RouteForm } from "./route-form";
 
@@ -32,7 +33,13 @@ export default async function CollectionRoutesPage() {
 
   return (
     <div>
-      <h1 className="mb-4 flex items-center gap-1.5 text-[21px] font-extrabold text-ink"><CreditCard className="h-5 w-5" />מסלולי גביה</h1>
+      <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
+        <h1 className="flex items-center gap-1.5 text-[21px] font-extrabold text-ink">
+          <CreditCard className="h-5 w-5" />
+          מסלולי גביה
+        </h1>
+        <AccountingTabs active="/dashboard/accounting/routes" />
+      </div>
 
       {isOwner && <RouteForm action={createCollectionRouteAction} submitLabel="הוספת מסלול" />}
 
