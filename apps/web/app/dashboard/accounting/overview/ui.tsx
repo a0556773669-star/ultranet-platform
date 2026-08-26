@@ -660,22 +660,33 @@ export function BranchMiniCards({
   entries,
   hrefFor,
   activeId,
+  title,
+  subtitle,
 }: {
   month: string;
   entries: BranchEntry[];
   hrefFor: (branchId: string) => string;
   activeId?: string;
+  /** lets the same list be reused for a single kind of branch under its own heading */
+  title?: string;
+  subtitle?: string;
 }) {
-  const groups: { label: string; items: typeof entries }[] = [
+  // only groups that actually have branches are rendered, so a list narrowed to one kind
+  // shows just that kind instead of an "אין סניפים" placeholder for the others
+  const groups = [
     { label: "השכרות מחשבים ניידים", items: entries.filter((e) => e.branch.branchType === "rentals") },
     { label: "חדרי מחשבים", items: entries.filter((e) => e.branch.branchType === "computers") },
-  ];
+    { label: "משרד שיתופי", items: entries.filter((e) => e.branch.branchType === "coworking") },
+  ].filter((g) => g.items.length > 0);
+
+  if (groups.length === 0) return null;
+
   return (
     <section className={CARD}>
       <div className={HEAD}>
         <div>
-          <h2 className="text-[15px] font-extrabold text-ink">מעבר מהיר לסניף</h2>
-          <p className="mt-0.5 text-[12.5px] text-muted">{mLabel(month)}</p>
+          <h2 className="text-[15px] font-extrabold text-ink">{title ?? "מעבר מהיר לסניף"}</h2>
+          <p className="mt-0.5 text-[12.5px] text-muted">{subtitle ?? mLabel(month)}</p>
         </div>
       </div>
       <div className="flex flex-col gap-2.5 p-3">

@@ -755,7 +755,11 @@ export async function loadAccountingOverview(endMonth: string, monthCount = 12):
   const months = monthsEndingAt(endMonth, monthCount);
 
   const branches = raw.branches
-    .filter((b) => !b.deleted && (b.branchType === "rentals" || b.branchType === "computers"))
+    .filter(
+      (b) =>
+        !b.deleted &&
+        (b.branchType === "rentals" || b.branchType === "computers" || b.branchType === "coworking"),
+    )
     .sort((a, b) => a.name.localeCompare(b.name, "he"));
 
   const myByMonth = buildMyLedger(months, raw.ahIncome, raw.ahExpenses);

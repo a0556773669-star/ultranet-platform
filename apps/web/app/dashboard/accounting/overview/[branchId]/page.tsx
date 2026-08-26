@@ -18,6 +18,7 @@ import {
 import { loadCostRates } from "@/lib/cost-rates";
 import { AccountingTabs } from "../../accounting-tabs";
 import { BranchCostSettings } from "../branch-cost-settings";
+import { AddBranchExpense } from "../add-branch-expense";
 import {
   BranchMiniCards,
   CostTable,
@@ -410,6 +411,8 @@ export default async function BranchAccountingOverviewPage({
             branchName={branch.name}
             modeTabs={<ModeTabs cum={cum} monthlyHref={selfHref(month)} cumHref={selfHref(month, "cum")} />}
           />
+
+          <AddBranchExpense branch={branch} ownerName={ownerName} restricted={restricted} />
 
           <CostTable
             title={`פירוט הוצאות ${mLabel(month)}`}

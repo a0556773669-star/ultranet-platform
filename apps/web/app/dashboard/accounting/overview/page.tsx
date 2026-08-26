@@ -103,11 +103,16 @@ export default async function AccountingOverviewPage({
   }
 
   const runningBalance = data.rows.slice(0, idx + 1).reduce((sum, r) => sum + r.mine.profit, 0);
+  // The side column is the laptop-rental branches only; computer rooms and the coworking office
+  // sit under the owner's own expenses instead, which is how the owner thinks about them.
   const entries = data.branches.flatMap((branch) => {
     const stats = branchMonthOf(data, branch.id, month);
     const activity = branchActivityOf(data, branch.id);
     return stats && activity ? [{ branch, stats, activity }] : [];
   });
+
+  const rentalEntries = entries.filter((e) => e.branch.branchType === "rentals");
+  const ownEntries = entries.filter((e) => e.branch.branchType !== "rentals");
 
   const branchHref = (branchId: string) => `/dashboard/accounting/overview/${branchId}?month=${month}${modeSuffix}`;
 
@@ -183,6 +188,16 @@ export default async function AccountingOverviewPage({
 
       <MyLedgerCard my={my} runningBalance={runningBalance} defaultDate={`${month}-01`} />
 
+      <div className="mt-3.5">
+        <BranchMiniCards
+          month={month}
+          entries={ownEntries}
+          hrefFor={branchHref}
+          title="חדרי מחשבים ומשרד שיתופי"
+          subtitle={`${mLabel(month)} · הפעילות שכולה שלי`}
+        />
+      </div>
+
       <div className="mt-3.5 grid grid-cols-1 items-start gap-3.5 xl:grid-cols-[minmax(0,1.8fr)_minmax(0,1fr)]">
         <div className="flex flex-col gap-3.5">
           <OverviewReportTable
@@ -220,7 +235,13 @@ export default async function AccountingOverviewPage({
               row.rentals.profit,
             )}.`}
           />
-          <BranchMiniCards month={month} entries={entries} hrefFor={branchHref} />
+          <BranchMiniCards
+            month={month}
+            entries={rentalEntries}
+            hrefFor={branchHref}
+            title="סניפי השכרות ניידים"
+            subtitle={`${mLabel(month)} · לחיצה פותחת את הסניף`}
+          />
         </div>
       </div>
     </div>
