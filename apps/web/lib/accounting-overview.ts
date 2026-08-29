@@ -428,13 +428,17 @@ function computeBranchActivity(b: Branch, raw: RawData): BranchActivity {
   const rentals = raw.rentalsByBranch.get(b.id) ?? [];
   const incomeRows = raw.branchIncomeByBranch.get(b.id) ?? [];
 
+  // INCOME is what starts a branch's book - not expenses.
+  // Buying equipment for a branch, or entering a cost against it, does not mean it is running.
+  // Letting an expense start the book was charging branches that had never taken a shekel in:
+  // the recurring price list (SIMs, advertising) was billed to them every month since that first
+  // expense, and the offsets on those invented lines even produced a transfer owed to the owner
+  // by a branch the screen itself labelled "לא התחיל השכרות".
   const candidates: string[] = [];
   for (const r of rentals) {
     if (r.returnDate) candidates.push(r.returnDate.slice(0, 7));
   }
   for (const i of incomeRows) candidates.push(monthOf(i));
-  for (const e of raw.fixedByBranch.get(b.id) ?? []) if (e.startDate) candidates.push(e.startDate.slice(0, 7));
-  for (const e of raw.variableByBranch.get(b.id) ?? []) candidates.push(monthOf(e));
   const valid = candidates.filter((m) => /^\d{4}-\d{2}$/.test(m)).sort();
   const firstDataMonth = valid[0] ?? null;
 
@@ -444,14 +448,17 @@ function computeBranchActivity(b: Branch, raw: RawData): BranchActivity {
   // already entered into the branch - that's the whole point of it: a branch that exists on paper
   // but isn't working yet must not be charged for anything, whatever happens to sit in it.
   const manuallyNotStarted = b.notStarted === true;
-  const startMonth = manuallyNotStarted ? null : openedMonth ?? firstDataMonth;
+  // A branch that has never taken any income is not running, even if an opening date was set on
+  // it: with nothing coming in there is no income-versus-expense to compute and nothing to
+  // settle, so it stays "not started" until the first shekel arrives.
+  const startMonth = manuallyNotStarted || noIncomeYet ? null : openedMonth ?? firstDataMonth;
   const startSource: BranchStartSource = manuallyNotStarted
     ? "manual_not_started"
-    : openedMonth
-      ? "opened_at"
-      : firstDataMonth
-        ? "first_data"
-        : "none";
+    : !startMonth
+      ? "none"
+      : openedMonth
+        ? "opened_at"
+        : "first_data";
 
   let statusLabel: string | null = null;
   if (!startMonth) {
@@ -617,6 +624,29 @@ function resolveRateLine(
 function preOpenBranchMonth(b: Branch, raw: RawData, month: string, status: BranchMonthStatus): BranchMonth {
   const hasPartner = branchHasPartner(b);
   const lines: CostLine[] = [];
+
+  // Hand-entered recurring costs count too - the owner typed them against this branch on purpose.
+  // Only the PRICE-LIST lines are withheld, since those would be charges nobody actually made.
+  for (const e of raw.fixedByBranch.get(b.id) ?? []) {
+    if (!e.startDate || e.startDate.slice(0, 7) > month) continue;
+    if (e.endDate && e.endDate.slice(0, 7) < month) continue;
+    const amount = e.variableAmount && e.lastAmount != null ? e.lastAmount : e.amount || 0;
+    if (!amount) continue;
+    lines.push(
+      makeLine({
+        key: "fixed",
+        label: e.name || "הוצאה קבועה",
+        qty: 1,
+        unitCost: amount,
+        total: amount,
+        owedBy: hasPartner ? ((e.owedBy as OwedBy) ?? "owner") : "owner",
+        paidBy: hasPartner ? ((e.paidBy as PaidBy) ?? "owner") : "owner",
+        kind: "monthly",
+        source: "fixed",
+        qtyNote: e.category || "הוצאה קבועה שהוזנה ידנית",
+      }),
+    );
+  }
 
   for (const e of raw.variableByBranch.get(b.id) ?? []) {
     if (monthOf(e) !== month) continue;
