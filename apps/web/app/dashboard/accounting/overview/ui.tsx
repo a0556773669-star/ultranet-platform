@@ -615,7 +615,7 @@ export function BranchesTable({
                   </td>
                   <td className={`${TD} ${NUM} ${MINE}`}>{money(s.ownerProfit)}</td>
                   <td className={`${TD} ${NUM}`} title={branchHasPartner(b) ? transferBasis(s, e.activity) : undefined}>
-                    {branchHasPartner(b) && s.status === "active" ? (
+                    {s.transferAvailable ? (
                       <b className="text-teal-dark">{money(s.transferToOwner)}</b>
                     ) : (
                       <span className="text-muted">—</span>
@@ -735,12 +735,12 @@ export function BranchMiniCards({
                 </div>
                 <div
                   className={`mt-2 flex items-center justify-between gap-2 rounded-lg px-2 py-1.5 ${
-                    branchHasPartner(b) && s.status === "active" ? "bg-teal-bg" : "bg-[#f4f6f9]"
+                    s.transferAvailable ? "bg-teal-bg" : "bg-[#f4f6f9]"
                   }`}
                 >
                   <span
                     className={`text-[10.5px] font-extrabold ${
-                      branchHasPartner(b) && s.status === "active" ? "text-teal-dark" : "text-muted"
+                      s.transferAvailable ? "text-teal-dark" : "text-muted"
                     }`}
                   >
                     {!branchHasPartner(b)
@@ -751,13 +751,13 @@ export function BranchMiniCards({
                   </span>
                   <span
                     className={`text-sm font-black tabular-nums ${
-                      branchHasPartner(b) && s.status === "active" ? "text-teal-dark" : "text-muted"
+                      s.transferAvailable ? "text-teal-dark" : "text-muted"
                     }`}
                   >
-                    {branchHasPartner(b) && s.status === "active" ? money(s.transferToOwner) : "—"}
+                    {s.transferAvailable ? money(s.transferToOwner) : "—"}
                   </span>
                 </div>
-                {branchHasPartner(b) && s.status === "active" && (
+                {s.transferAvailable && (
                   <p className="mt-1 px-0.5 text-[10px] leading-snug text-muted">
                     על סמך: {transferBasis(s, activity)}
                   </p>

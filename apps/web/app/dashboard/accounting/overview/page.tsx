@@ -4,7 +4,16 @@ import { BarChart3 } from "lucide-react";
 import { requireModuleAccess } from "@/lib/perms";
 import { getOwnerName } from "@/lib/owner-name";
 import { getAdminFirestore } from "@/lib/firebase-admin";
-import { loadAccountingOverview, currentMonth, branchMonthOf, branchActivityOf } from "@/lib/accounting-overview";
+import {
+  loadAccountingOverview,
+  currentMonth,
+  branchMonthOf,
+  branchActivityOf,
+  bookOf,
+  BOOK_LABEL,
+  type AccountingBook,
+} from "@/lib/accounting-overview";
+import { BookSwitcher, type BookSummary } from "./book-switcher";
 import { AccountingTabs } from "../accounting-tabs";
 import { MyLedgerCard, RulesCard } from "./panels";
 import {
@@ -72,7 +81,7 @@ async function AllTimeStrip() {
 export default async function AccountingOverviewPage({
   searchParams,
 }: {
-  searchParams?: { month?: string; mode?: string };
+  searchParams?: { month?: string; mode?: string; book?: string };
 }) {
   const session = await requireModuleAccess("accounting");
   const isOwner = session.user?.role === "owner";
@@ -84,9 +93,10 @@ export default async function AccountingOverviewPage({
     redirect(`/dashboard/accounting/overview/${myBranchId}`);
   }
 
+  const book: AccountingBook = searchParams?.book === "rooms" ? "rooms" : "rentals";
   const month = searchParams?.month && MONTH_RE.test(searchParams.month) ? searchParams.month : currentMonth();
   const cum = searchParams?.mode === "cum";
-  const modeSuffix = cum ? "&mode=cum" : "";
+  const modeSuffix = `${cum ? "&mode=cum" : ""}&book=${book}`;
 
   const [data, ownerName] = await Promise.all([
     loadAccountingOverview(month),
@@ -111,8 +121,22 @@ export default async function AccountingOverviewPage({
     return stats && activity ? [{ branch, stats, activity }] : [];
   });
 
-  const rentalEntries = entries.filter((e) => e.branch.branchType === "rentals");
-  const ownEntries = entries.filter((e) => e.branch.branchType !== "rentals");
+  const rentalEntries = entries.filter((e) => bookOf(e.branch) === "rentals");
+  const ownEntries = entries.filter((e) => bookOf(e.branch) === "rooms");
+
+  // The two books never share a branch, so their figures are independent and are shown side by
+  // side rather than added up.
+  const bookSummaries: BookSummary[] = (["rentals", "rooms"] as const).map((bk) => {
+    const list = bk === "rentals" ? rentalEntries : ownEntries;
+    return {
+      book: bk,
+      branchCount: list.length,
+      runningCount: list.filter((e) => e.stats.status === "active").length,
+      income: list.reduce((sum, e) => sum + e.stats.income, 0),
+      expense: list.reduce((sum, e) => sum + e.stats.expense, 0),
+    };
+  });
+  const activeList = book === "rentals" ? rentalEntries : ownEntries;
 
   const branchHref = (branchId: string) => `/dashboard/accounting/overview/${branchId}?month=${month}${modeSuffix}`;
 
@@ -184,19 +208,17 @@ export default async function AccountingOverviewPage({
         ]}
       />
 
+      <BookSwitcher
+        summaries={bookSummaries}
+        active={book}
+        monthLabel={mLabel(month)}
+        hrefFor={(bk) => `/dashboard/accounting/overview?month=${month}${cum ? "&mode=cum" : ""}&book=${bk}`}
+      />
+
       <AllTimeStrip />
 
       <MyLedgerCard my={my} runningBalance={runningBalance} defaultDate={`${month}-01`} />
 
-      <div className="mt-3.5">
-        <BranchMiniCards
-          month={month}
-          entries={ownEntries}
-          hrefFor={branchHref}
-          title="חדרי מחשבים ומשרד שיתופי"
-          subtitle={`${mLabel(month)} · הפעילות שכולה שלי`}
-        />
-      </div>
 
       <div className="mt-3.5 grid grid-cols-1 items-start gap-3.5 xl:grid-cols-[minmax(0,1.8fr)_minmax(0,1fr)]">
         <div className="flex flex-col gap-3.5">
@@ -212,7 +234,7 @@ export default async function AccountingOverviewPage({
               />
             }
           />
-          <BranchesTable month={month} entries={entries} hrefFor={branchHref} />
+          <BranchesTable month={month} entries={activeList} hrefFor={branchHref} />
           <RulesCard ownerName={ownerName} />
         </div>
 
@@ -237,9 +259,9 @@ export default async function AccountingOverviewPage({
           />
           <BranchMiniCards
             month={month}
-            entries={rentalEntries}
+            entries={activeList}
             hrefFor={branchHref}
-            title="סניפי השכרות ניידים"
+            title={BOOK_LABEL[book]}
             subtitle={`${mLabel(month)} · לחיצה פותחת את הסניף`}
           />
         </div>

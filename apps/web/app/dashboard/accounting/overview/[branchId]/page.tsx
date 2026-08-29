@@ -356,6 +356,11 @@ export default async function BranchAccountingOverviewPage({
         <section className={`${CARD} px-4 py-3.5`}>
           <h3 className="text-[13px] font-extrabold text-ink">אין העברה בגין {mLabel(month)}</h3>
           <p className="mt-0.5 text-[12.5px] text-muted">{transferBasis(stats, activity)}.</p>
+          <p className="mt-1.5 text-[12.5px] text-muted">
+            <b className="text-ink">ההוצאות כן נספרות.</b> ציוד שנקנה לסניף והוצאות שהוזנו לו מופיעים
+            בפירוט למטה ובטבלת ההשקעה. השורה הזו נשארת ריקה ולא מציגה 0, כי בלי הכנסות אין מה לקזז —
+            ברגע שהסניף יתחיל לעבוד ייפתח כאן החישוב המלא.
+          </p>
         </section>
       ) : hasPartner ? (
         <section className="flex flex-wrap items-center justify-between gap-3.5 rounded-card border border-[#bfe0d8] bg-gradient-to-b from-white to-[#f6fbfa] px-4 py-3.5 shadow-card">

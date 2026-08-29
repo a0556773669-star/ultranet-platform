@@ -78,6 +78,27 @@ export function monthsEndingAt(endMonth: string, count = 12): string[] {
   return out;
 }
 
+/**
+ * The two books the business is kept in. They are never summed together: a branch belongs to
+ * exactly one of them, so the same shekel cannot appear in both.
+ *  - "rentals" - laptop rental branches
+ *  - "rooms"   - computer rooms and the coworking office
+ */
+export type AccountingBook = "rentals" | "rooms";
+
+export const BOOK_LABEL: Record<AccountingBook, string> = {
+  rentals: 'הנה"ח ניידים',
+  rooms: 'הנה"ח חדרי מחשבים ומשרד שיתופי',
+};
+export const BOOK_SHORT: Record<AccountingBook, string> = {
+  rentals: "ניידים",
+  rooms: "חדרים + משרד שיתופי",
+};
+
+export function bookOf(b: Branch): AccountingBook {
+  return b.branchType === "rentals" ? "rentals" : "rooms";
+}
+
 export function branchOwnerPct(b: Branch): number {
   if (b.isMine) return 100;
   const pct = b.myPct ?? 100 - (b.partnerPct ?? 0);
@@ -190,6 +211,13 @@ export interface BranchMonth {
   expenseNet: number;
   /** what the partner transfers to the owner on the 1st (0 when there's no partner) */
   transferToOwner: number;
+  /**
+   * false = there is no transfer to compute, and the screens must show it blank rather than 0.
+   * A branch that has not started yet still carries real costs (equipment already bought,
+   * expenses already entered) but has no income to settle against, so "0 to transfer" would be
+   * a made-up answer to a question that cannot be asked yet. Also false when there is no partner.
+   */
+  transferAvailable: boolean;
   /** the income half of `transferToOwner` - the owner's share of what the branch collected */
   transferIncomePart: number;
   /** labels of the expense lines that actually move money between owner and partner, so a screen
@@ -465,6 +493,7 @@ function emptyBranchMonth(branchId: string, month: string, status: BranchMonthSt
     ownerProfit: 0,
     expenseNet: 0,
     transferToOwner: 0,
+    transferAvailable: false,
     transferIncomePart: 0,
     transferDrivers: [],
     lines: [],
@@ -576,11 +605,56 @@ function resolveRateLine(
   });
 }
 
+/**
+ * A month for a branch that is not running yet.
+ *
+ * Costs the owner has genuinely already paid still count - an expense typed against the branch,
+ * and equipment bought for it. What is NOT invented is the recurring price-list charge (rent,
+ * SIMs, advertising for a branch that isn't open yet) and, above all, the transfer: with no
+ * income there is nothing to settle, so `transferAvailable` is false and the screens leave that
+ * line blank instead of showing a confident 0.
+ */
+function preOpenBranchMonth(b: Branch, raw: RawData, month: string, status: BranchMonthStatus): BranchMonth {
+  const hasPartner = branchHasPartner(b);
+  const lines: CostLine[] = [];
+
+  for (const e of raw.variableByBranch.get(b.id) ?? []) {
+    if (monthOf(e) !== month) continue;
+    const amount = e.amount || 0;
+    if (!amount) continue;
+    lines.push(
+      makeLine({
+        key: "variable",
+        label: e.desc || "הוצאה חד פעמית",
+        qty: 1,
+        unitCost: amount,
+        total: amount,
+        owedBy: hasPartner ? ((e.owedBy as OwedBy) ?? "owner") : "owner",
+        paidBy: hasPartner ? ((e.paidBy as PaidBy) ?? "owner") : "owner",
+        kind: "once",
+        source: "variable",
+        qtyNote: e.category || "הוצאה שהוזנה ידנית לפני פתיחת הסניף",
+      }),
+    );
+  }
+
+  const expense = lines.reduce((s, l) => s + l.total, 0);
+  const ownerExpense = lines.reduce((s, l) => s + l.ownerShare, 0);
+  return {
+    ...emptyBranchMonth(b.id, month, status),
+    expense,
+    profit: -expense,
+    ownerExpense,
+    ownerProfit: -ownerExpense,
+    expenseNet: lines.reduce((s, l) => s + l.netToOwner, 0),
+    lines,
+  };
+}
+
 function computeBranchMonth(b: Branch, raw: RawData, activity: BranchActivity, month: string): BranchMonth {
   const status = monthStatus(activity, month);
-  // Before the branch opened - or before it has any life at all - there is no book for this month:
-  // no income, no price-list cost, and nothing for the partner to transfer.
-  if (status !== "active") return emptyBranchMonth(b.id, month, status);
+  // Not running yet: real costs still count, the recurring price list and the transfer do not.
+  if (status !== "active") return preOpenBranchMonth(b, raw, month, status);
 
   const hasPartner = branchHasPartner(b);
   const ownerPct = branchOwnerPct(b);
@@ -726,6 +800,7 @@ function computeBranchMonth(b: Branch, raw: RawData, activity: BranchActivity, m
     ownerProfit: ownerIncome - ownerExpense,
     expenseNet,
     transferToOwner: hasPartner ? transferIncomePart + expenseNet : 0,
+    transferAvailable: hasPartner,
     transferIncomePart,
     transferDrivers,
     lines,
