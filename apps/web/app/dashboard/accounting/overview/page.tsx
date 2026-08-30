@@ -20,7 +20,6 @@ import {
   BranchesTable,
   BranchMiniCards,
   FlowCard,
-  KpiRow,
   ModeTabs,
   MonthPills,
   OverviewReportTable,
@@ -105,7 +104,6 @@ export default async function AccountingOverviewPage({
 
   const idx = data.months.indexOf(month);
   const row = data.rows[idx];
-  const prevRow = idx > 0 ? data.rows[idx - 1] : undefined;
   const my = data.myByMonth.get(month);
 
   if (!row || !my) {
@@ -176,38 +174,9 @@ export default async function AccountingOverviewPage({
         </div>
       )}
 
-      <KpiRow
-        cards={[
-          {
-            label: `ההכנסות שלי ${mLabel(month)}`,
-            value: row.mine.income,
-            prev: prevRow?.mine.income,
-            color: "#059669",
-            rail: "#059669",
-            footLabel: "הסניפים",
-            foot: row.branches.income,
-          },
-          {
-            label: `ההוצאות שלי ${mLabel(month)}`,
-            value: row.mine.expense,
-            prev: prevRow?.mine.expense,
-            color: "#dc2626",
-            rail: "#dc2626",
-            footLabel: "הסניפים",
-            foot: row.branches.expense,
-          },
-          {
-            label: `הרווח שלי ${mLabel(month)}`,
-            value: row.mine.profit,
-            prev: prevRow?.mine.profit,
-            color: row.mine.profit >= 0 ? "#0f6e56" : "#dc2626",
-            rail: "#1a8a76",
-            footLabel: "הסניפים",
-            foot: row.branches.profit,
-          },
-        ]}
-      />
-
+      {/* The per-month "שלי" cards used to sit here. They duplicated the personal ledger card
+          further down and read 0 whenever nothing had been entered that month, so the screen
+          now opens straight on the two books. */}
       <BookSwitcher
         summaries={bookSummaries}
         active={book}

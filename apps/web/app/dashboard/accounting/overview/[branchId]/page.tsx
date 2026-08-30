@@ -19,6 +19,7 @@ import { loadCostRates } from "@/lib/cost-rates";
 import { AccountingTabs } from "../../accounting-tabs";
 import { BranchCostSettings } from "../branch-cost-settings";
 import { AddBranchExpense } from "../add-branch-expense";
+import { AddBranchIncome } from "../add-branch-income";
 import {
   BranchMiniCards,
   CostTable,
@@ -417,6 +418,15 @@ export default async function BranchAccountingOverviewPage({
             modeTabs={<ModeTabs cum={cum} monthlyHref={selfHref(month)} cumHref={selfHref(month, "cum")} />}
           />
 
+          <AddBranchIncome
+            branchId={branch.id}
+            branchName={branch.name}
+            ownerName={ownerName}
+            partnerName={partnerName}
+            hasPartner={hasPartner}
+            restricted={restricted}
+          />
+
           <AddBranchExpense
             branch={branch}
             ownerName={ownerName}
@@ -456,6 +466,9 @@ export default async function BranchAccountingOverviewPage({
               rates={rateData.rates}
               settings={rateData.settingsByBranchRate}
               autoQty={data.autoQtyByBranch.get(branch.id) ?? new Map()}
+              ownerName={ownerName}
+              partnerName={partnerName}
+              hasPartner={hasPartner}
             />
           )}
 
