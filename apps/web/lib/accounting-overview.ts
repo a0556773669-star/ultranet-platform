@@ -29,8 +29,6 @@ import type {
   BranchIncome,
   FixedExpense,
   VariableExpense,
-  AccountingIncome,
-  AccountingExpense,
   CollectionRoute,
   CostRate,
   BranchCostSetting,
@@ -52,6 +50,8 @@ import {
 import { loadCostRates } from "./cost-rates-data";
 import { ITEM_KIND_LABEL, investmentByLocation, type LocationInvestment } from "./assets";
 import { loadAssets } from "./assets-data";
+import { loadTransactionModel, type UnifiedTx } from "./tx-data";
+import { chargesInMonth } from "./tx";
 import { ADS_RATE_KEY, ADS_RATE_MATCH, adAreaForBranch, adAreaNote, splitAdArea } from "./ad-areas";
 import { loadAdAreas } from "./ad-areas-data";
 
@@ -291,8 +291,8 @@ interface RawData {
   fixedByBranch: Map<string, FixedExpense[]>;
   variableByBranch: Map<string, VariableExpense[]>;
   routesById: Map<string, CollectionRoute>;
-  ahIncome: AccountingIncome[];
-  ahExpenses: AccountingExpense[];
+  /** the unified transaction model - the flow book is derived from it, never stored */
+  transactions: UnifiedTx[];
   rates: CostRate[];
   usingDefaultRates: boolean;
   settings: Map<string, BranchCostSetting>;
@@ -324,8 +324,7 @@ async function loadRaw(): Promise<RawData> {
     fixedSnap,
     variableSnap,
     routesSnap,
-    ahIncomeSnap,
-    ahExpensesSnap,
+    model,
     ratesData,
     adAreas,
     assets,
@@ -338,8 +337,7 @@ async function loadRaw(): Promise<RawData> {
     db.collection("n_fixed_expenses").get(),
     db.collection("n_var_expenses").get(),
     db.collection("n_collection_routes").get(),
-    db.collection("n_ah_income").get(),
-    db.collection("n_ah_expenses").get(),
+    loadTransactionModel(),
     loadCostRates(),
     loadAdAreas(),
     loadAssets(),
@@ -359,8 +357,7 @@ async function loadRaw(): Promise<RawData> {
     fixedByBranch: groupBy(fixedSnap.docs.map((d) => doc<FixedExpense>(d))),
     variableByBranch: groupBy(variableSnap.docs.map((d) => doc<VariableExpense>(d))),
     routesById,
-    ahIncome: ahIncomeSnap.docs.map((d) => doc<AccountingIncome>(d)),
-    ahExpenses: ahExpensesSnap.docs.map((d) => doc<AccountingExpense>(d)),
+    transactions: model.transactions,
     rates: ratesData.rates,
     usingDefaultRates: ratesData.usingDefaults,
     settings: ratesData.settingsByBranchRate,
@@ -376,39 +373,54 @@ async function loadRaw(): Promise<RawData> {
 
 const monthOf = (row: { month?: string; date?: string }) => row.month || (row.date ?? "").slice(0, 7);
 
-function buildMyLedger(
-  months: string[],
-  income: AccountingIncome[],
-  expenses: AccountingExpense[],
-): Map<string, MyMonth> {
+/**
+ * The flow book, derived from the transaction model instead of read out of n_ah_income /
+ * n_ah_expenses.
+ *
+ * The difference is not cosmetic. Read from those two collections, this book only ever showed
+ * rows the owner had typed there - which is exactly why a copy of every branch expense had to be
+ * written into it (the mirror mechanism), why recurring expenses could not be copied at all, and
+ * why several screens each added their own correction on top. Derived, it shows the owner's real
+ * cash position from the movements themselves, with no copies and nothing to keep in sync.
+ *
+ * Capital and transfers are excluded on purpose: equipment is not an expense (כלל 7) and a
+ * settlement is not income (כלל 8). Both are shown in their own right on the bottom-line screen.
+ */
+function buildMyLedger(months: string[], transactions: UnifiedTx[]): Map<string, MyMonth> {
   const map = new Map<string, MyMonth>();
   for (const m of months) {
     map.set(m, { month: m, income: [], expenses: [], incomeTotal: 0, expenseTotal: 0, profit: 0 });
   }
-  for (const i of income) {
-    const bucket = map.get(monthOf(i));
-    if (!bucket) continue;
-    bucket.income.push({
-      id: i.id,
-      date: i.date,
-      label: i.category || i.desc || "הכנסה",
-      category: i.category,
-      amount: i.amount || 0,
-    });
-    bucket.incomeTotal += i.amount || 0;
+
+  for (const tx of transactions) {
+    // Only money that physically moved through the owner's own hands.
+    if ((tx.paidBy ?? "owner") !== "owner") continue;
+    if (tx.nature !== "operating") continue;
+
+    for (const m of months) {
+      if (!chargesInMonth(tx, m)) continue;
+      const bucket = map.get(m)!;
+      // Income counts in full (it reached the owner); an expense counts only at the owner's own
+      // share, since the rest is the partner's cost even when the owner fronted the cash.
+      const amount = tx.direction === "in" ? tx.amount : tx.ownerShare;
+      if (amount <= 0) continue;
+      const entry: MyEntry = {
+        id: `${tx.source}:${tx.id}:${m}`,
+        date: tx.recurring?.from ? `${m}-01` : tx.date,
+        label: tx.category || tx.desc || (tx.direction === "in" ? "הכנסה" : "הוצאה"),
+        category: tx.category,
+        amount,
+      };
+      if (tx.direction === "in") {
+        bucket.income.push(entry);
+        bucket.incomeTotal += amount;
+      } else {
+        bucket.expenses.push(entry);
+        bucket.expenseTotal += amount;
+      }
+    }
   }
-  for (const e of expenses) {
-    const bucket = map.get(monthOf(e));
-    if (!bucket) continue;
-    bucket.expenses.push({
-      id: e.id,
-      date: e.date,
-      label: e.category || e.desc || "הוצאה",
-      category: e.category,
-      amount: e.amount || 0,
-    });
-    bucket.expenseTotal += e.amount || 0;
-  }
+
   for (const bucket of map.values()) {
     bucket.profit = bucket.incomeTotal - bucket.expenseTotal;
     bucket.income.sort((a, b) => b.amount - a.amount);
@@ -886,7 +898,7 @@ export async function loadAccountingOverview(endMonth: string, monthCount = 12):
     )
     .sort((a, b) => a.name.localeCompare(b.name, "he"));
 
-  const myByMonth = buildMyLedger(months, raw.ahIncome, raw.ahExpenses);
+  const myByMonth = buildMyLedger(months, raw.transactions);
 
   const activityByBranch = new Map<string, BranchActivity>();
   const branchMonths = new Map<string, BranchMonth>();

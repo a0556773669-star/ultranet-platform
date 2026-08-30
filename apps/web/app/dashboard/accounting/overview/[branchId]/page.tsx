@@ -17,6 +17,7 @@ import {
 } from "@/lib/accounting-overview";
 import { loadCostRates } from "@/lib/cost-rates-data";
 import { loadMovements, type MovementsData } from "@/lib/accounting-entries-data";
+import { loadBranchCard } from "@/lib/business-ledger";
 import { AccountingTabs } from "../../accounting-tabs";
 import { EntryList } from "../../entry-list";
 import { BranchCostSettings } from "../branch-cost-settings";
@@ -24,6 +25,7 @@ import { AddBranchExpense } from "../add-branch-expense";
 import { AddBranchIncome } from "../add-branch-income";
 import {
   BranchMiniCards,
+  BranchPaybackCard,
   CostTable,
   FlowCard,
   KpiRow,
@@ -237,6 +239,8 @@ export default async function BranchAccountingOverviewPage({
   const monthly = stats.lines.filter((l) => l.kind === "monthly");
   const once = stats.lines.filter((l) => l.kind === "once");
   const investment = data.investmentByBranch.get(branch.id) ?? [];
+  // Owner-only: the payback card carries what the equipment is worth, which a partner never sees.
+  const card = restricted ? null : await loadBranchCard(branch.id, month);
 
   const entries = data.branches.flatMap((b) => {
     const s = branchMonthOf(data, b.id, month);
@@ -344,6 +348,20 @@ export default async function BranchAccountingOverviewPage({
       <div className="mb-3">
         <MonthPills months={data.months} current={month} hrefFor={(m) => selfHref(m, cum ? "cum" : undefined)} />
       </div>
+
+      {card && (
+        <div className="mb-3.5">
+          <BranchPaybackCard
+            invested={card.invested}
+            laptopCount={card.laptopCount}
+            stickCount={card.stickCount}
+            netThisMonth={stats.profit}
+            ownerShare={stats.ownerProfit}
+            payback={card.payback}
+            monthLabel={mLabel(month)}
+          />
+        </div>
+      )}
 
       <KpiRow
         cards={[
@@ -524,8 +542,8 @@ export default async function BranchAccountingOverviewPage({
 
           {!restricted && (
             <CostTable
-              title="השקעה חד-פעמית — מצטבר מאז פתיחת הסניף"
-              subtitle="רכישות ציוד לפי הכמויות הרשומות בסניף. לא נספרות ברווח החודשי — רק בחודש שבו נרכשו"
+              title="השקעה בציוד — לפי הפריטים שנמצאים בסניף"
+              subtitle="עלות אמיתית מחשבוניות הרכש, לא הערכה מהתעריפון. לא נספרת ברווח הסניף באף חודש — ציוד הוא הון, לא הוצאה"
               lines={investment}
               branch={branch}
               ownerName={ownerName}
@@ -535,7 +553,7 @@ export default async function BranchAccountingOverviewPage({
 
         <div className="flex flex-col gap-3.5">
           <FlowCard
-            title={`תזרים — ${branch.name}`}
+            title={`מחזור — ${branch.name}`}
             series={series.map((s) => ({ month: s.month, income: s.income, expense: s.expense }))}
             cumValues={series.map((s) => s.profit)}
             cumLabel="יתרה מצטברת של הסניף"

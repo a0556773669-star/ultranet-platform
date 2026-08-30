@@ -384,3 +384,79 @@ export function flowSnapshot(transactions: UnifiedTx[], todayISO: string): FlowS
   }
   return snap;
 }
+
+/* ------------------------------------------------------------------ *
+ * "מתחילת הדרך" — every month the books actually have life in
+ * ------------------------------------------------------------------ */
+
+/**
+ * Every month any transaction charges, up to `uptoMonth`.
+ *
+ * A one-off contributes its own month; a recurring one contributes every month it is active in,
+ * which is what makes an all-time total of a recurring charge come out right instead of counting
+ * it once. Used as the month scope for the all-time views.
+ */
+export function allActiveMonths(transactions: UnifiedTx[], uptoMonth: string): Set<string> {
+  const out = new Set<string>();
+  for (const tx of transactions) {
+    if (!tx.recurring?.from) {
+      if (tx.month && tx.month <= uptoMonth) out.add(tx.month);
+      continue;
+    }
+    const end = tx.recurring.to && tx.recurring.to < uptoMonth ? tx.recurring.to : uptoMonth;
+    for (const m of txMonthsBetween(tx.recurring.from, end)) out.add(m);
+  }
+  return out;
+}
+
+function txMonthsBetween(from: string, to: string): string[] {
+  if (to < from) return [];
+  const out: string[] = [];
+  const [fy, fm] = from.split("-").map(Number);
+  if (!fy || !fm) return [];
+  let y = fy;
+  let m = fm;
+  while (`${y}-${String(m).padStart(2, "0")}` <= to) {
+    out.push(`${y}-${String(m).padStart(2, "0")}`);
+    m += 1;
+    if (m > 12) {
+      m = 1;
+      y += 1;
+    }
+  }
+  return out;
+}
+
+/**
+ * One branch's card (פרק ז׳): what was invested in it, what it earns, and how much has come back.
+ *
+ * The three figures come from three different layers and are never subtracted from one another -
+ * the investment is compared against the profit, not deducted from it. That is what lets a branch
+ * be the most profitable one and still the furthest from paying for itself, which is exactly the
+ * management signal a monthly profit figure alone cannot give.
+ */
+export async function loadBranchCard(branchId: string, uptoMonth: string): Promise<BranchCard | null> {
+  const { model, assets } = await loadLayeredData();
+  const branch = model.branchById.get(branchId);
+  if (!branch) return null;
+
+  const months = allActiveMonths(model.transactions, uptoMonth);
+  const totals = totalsByNode(model.transactions, months).get(branchId);
+  const inv = assets.investmentByLocation.get(branchId);
+
+  const net = (totals?.income ?? 0) - (totals?.expense ?? 0);
+  const ownerNet = (totals?.income ?? 0) - (totals?.ownerExpense ?? 0);
+  const monthsRun = Math.max(1, months.size);
+
+  return {
+    branch,
+    invested: inv?.total ?? 0,
+    itemCount: inv?.itemCount ?? 0,
+    laptopCount: inv?.countByKind.laptop ?? 0,
+    stickCount: inv?.countByKind.stick ?? 0,
+    netThisMonth: net,
+    ownerShareThisMonth: ownerNet,
+    ownerShareToDate: ownerNet,
+    payback: paybackStatus(inv?.total ?? 0, Math.max(0, ownerNet), Math.max(0, ownerNet) / monthsRun),
+  };
+}

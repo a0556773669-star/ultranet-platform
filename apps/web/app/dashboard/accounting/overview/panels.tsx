@@ -1,5 +1,5 @@
 /**
- * The owner's own book ("שלי") and the data-source / permissions explainer.
+ * The owner's own book ("תזרים") and the data-source / permissions explainer.
  * Only rendered for the owner - a branch manager never sees either of these.
  */
 import type { MyMonth } from "@/lib/accounting-overview";
@@ -44,9 +44,10 @@ export function MyLedgerCard({
     <section className={CARD}>
       <div className={HEAD}>
         <div>
-          <h2 className="text-[15px] font-extrabold text-ink">שלי — {mLabel(my.month)}</h2>
+          <h2 className="text-[15px] font-extrabold text-ink">תזרים — {mLabel(my.month)}</h2>
           <p className="mt-0.5 text-[12.5px] text-muted">
-            רק מה שאני מזין ידנית כל חודש. ספר נפרד — לא מתחבר לספר הסניפים ולא נסכם איתו.
+            כמה כסף באמת עבר דרך הידיים והחשבון שלי. ספר נפרד מה&quot;מחזור&quot; — שתי שאלות שונות על אותו
+            שקל, ולכן הם לא נסכמים.
           </p>
         </div>
         <span className="rounded-full bg-teal-bg px-2.5 py-1 text-[11px] font-extrabold text-teal-dark">
@@ -113,7 +114,7 @@ export function MyLedgerCard({
           </span>
           <span className="text-2xl font-black tabular-nums text-teal-dark">{money(my.profit)}</span>
           <span className="text-[11px] font-bold text-teal-dark/80">
-            יתרה מצטברת שלי: {money(runningBalance)}
+            יתרה מצטברת בתזרים: {money(runningBalance)}
           </span>
         </div>
       </div>
@@ -128,10 +129,11 @@ export function MyLedgerCard({
 
 export function RulesCard({ ownerName }: { ownerName: string }) {
   const perms: [string, boolean][] = [
-    ["ספר \"שלי\" — הזנות ידניות", false],
+    ["ספר התזרים — כל התנועות שלי", false],
     ["סיכומי כל העסק (שורת הסיכום העליונה)", false],
     ["דוח הכנסות והוצאות של כל העסק", false],
-    ["טבלת כל הסניפים ודירוג רווחיות", false],
+    ["טבלת כל הסניפים ודירוג לפי החזר השקעה", false],
+    ["רכש, מלאי וההשקעה פר סניף (שכבת הנכסים)", false],
     ["תעריפון ועריכת עלויות", false],
     ["מסלולי גבייה", false],
     ["הכנסות / הוצאות / רווח של הסניף שלו", true],
@@ -139,12 +141,15 @@ export function RulesCard({ ownerName }: { ownerName: string }) {
     [`כמה להעביר ל${ownerName} ב-1 לחודש`, true],
   ];
   const sources: [string, string][] = [
-    ["הזנה ידנית שלי (אשראי / מזומן / ניידים / חשמל / רו\"ח...)", 'ספר "שלי" בלבד'],
+    ["תנועה שהזנתי (אשראי / מזומן / ניידים / חשמל / רו\"ח...)", "ספר התזרים, ולפי הצומת גם ספר הסניף"],
     ["השכרות שהוחזרו ושולמו", "הכנסת סניף הניידים"],
     ["הכנסה ידנית של סניף", "הכנסת אותו סניף"],
     ["הוצאה קבועה או חד-פעמית של סניף", "הוצאת הסניף, פעם אחת"],
     ["תעריפון (מחשב / תיק / סטיק / סינון וגלישה)", "הוצאת הסניף — רק אם אין כבר הוצאה ידנית מקבילה"],
     ["אזור פרסום משותף", "הוצאת הסניף — רק אם הסניף לא הזין פרסום בעצמו"],
+    ["רכישת ציוד (חשבונית מספק)", "תנועה הונית + פריטים — לא הוצאה של אף סניף"],
+    ["משלוח פריטים לסניף", "העברת ההשקעה בין מיקומים — לא נרשם שקל"],
+    ["העברה חודשית מהשותף", "סילוק חוב — לא הכנסה חדשה"],
   ];
   const TH = "bg-[#f4f6f9] px-2.5 py-2 text-right text-[10.5px] font-extrabold text-muted border-b border-card-border";
   const TD = "px-2.5 py-2 border-b border-[#eef1f6]";
@@ -183,8 +188,9 @@ export function RulesCard({ ownerName }: { ownerName: string }) {
         </div>
 
         <p className="mb-2.5 mt-3 rounded-[10px] border border-card-border bg-[#f4f6f9] px-3 py-2.5 text-xs leading-relaxed text-muted">
-          <b className="text-ink">אין כפילות:</b> לכל סוג נתון מקור אחד בלבד, ושני הספרים — &quot;שלי&quot;
-          והסניפים — לא נסכמים זה עם זה.
+          <b className="text-ink">אין כפילות:</b> לכל סוג נתון מקור אחד בלבד; שני הספרים —{" "}
+          <b className="text-ink">תזרים</b> ו<b className="text-ink">מחזור</b> — לא נסכמים זה עם זה; וציוד
+          נמדד בשכבת הנכסים בלבד, ולעולם לא נכנס לספר התפעולי של סניף.
         </p>
         <div className="overflow-x-auto">
           <table className="w-full border-collapse text-[12.5px]">

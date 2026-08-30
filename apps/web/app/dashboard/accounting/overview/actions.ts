@@ -4,7 +4,8 @@ import { revalidatePath } from "next/cache";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { getAdminFirestore } from "@/lib/firebase-admin";
-import type { AccountingIncome, AccountingExpense } from "@ultranet/shared-types";
+import { TX_COLLECTION, buildTransaction } from "@/lib/tx";
+import type { TxBusiness } from "@ultranet/shared-types";
 
 async function requireOwner() {
   const session = await getServerSession(authOptions);
@@ -17,21 +18,21 @@ async function requireOwner() {
 function revalidate() {
   revalidatePath("/dashboard/accounting/overview");
   revalidatePath("/dashboard/accounting");
+  revalidatePath("/dashboard/accounting/entries");
+  revalidatePath("/dashboard/accounting/bottom-line");
 }
 
-/** Keeps the three classic n_ah_income types meaningful; anything else is a free-category entry. */
-function incomeTypeFor(category: string): AccountingIncome["type"] {
-  if (category === "אשראי מהעסק") return "credit";
-  if (category === "מזומן") return "cash";
-  if (category === "ניידים") return "laptops";
-  return "other";
-}
-
-function businessFor(category: string): AccountingIncome["business"] {
+/**
+ * The business unit a quick-entry category belongs to. It only picks the NODE now - not a
+ * collection - because there is one collection. A category that names no unit lands on `hq`,
+ * which is the honest answer for an overhead and a visible one for anything mis-filed: the
+ * integrity screen lists hq rows that have been sitting unattributed for over a month.
+ */
+function businessFor(category: string): TxBusiness {
   if (category === "ניידים") return "rentals";
   if (category === "חדרי מחשבים" || category === "מזומן") return "computers";
   if (category === "משרד שיתופי") return "coworking";
-  return "general";
+  return "hq";
 }
 
 function readEntry(formData: FormData) {
@@ -48,45 +49,38 @@ function readEntry(formData: FormData) {
   return { date, amount, category, desc, month: date.slice(0, 7) };
 }
 
-export async function addMyIncomeAction(formData: FormData) {
+/**
+ * The quick-add rows on the overview card write to n_tx like every other new movement - there is
+ * exactly one place a shekel can enter the books (כלל 1), and a second write path here would be
+ * a second place, however small the form.
+ */
+async function addQuickEntry(formData: FormData, direction: "in" | "out") {
   await requireOwner();
-  const { date, amount, category, desc, month } = readEntry(formData);
-  const data: Omit<AccountingIncome, "id"> = {
+  const { date, amount, category, desc } = readEntry(formData);
+  const business = businessFor(category);
+  const tx = buildTransaction({
     date,
-    month,
+    direction,
     amount,
-    category,
+    // A hand-typed row on the owner's own card is running income or cost. Equipment goes through
+    // the purchase screen, which creates the items along with it.
+    nature: "operating",
+    business,
+    branchId: business === "hq" ? "hq" : "shared",
     desc: desc || category,
-    business: businessFor(category),
-    type: incomeTypeFor(category),
-  };
-  await getAdminFirestore().collection("n_ah_income").add(data);
+    category,
+    paidBy: "owner",
+    // Nothing here is attributed to a partner branch, so it is all the owner's.
+    ownerShare: amount,
+  });
+  await getAdminFirestore().collection(TX_COLLECTION).add(tx);
   revalidate();
+}
+
+export async function addMyIncomeAction(formData: FormData) {
+  await addQuickEntry(formData, "in");
 }
 
 export async function addMyExpenseAction(formData: FormData) {
-  await requireOwner();
-  const { date, amount, category, desc, month } = readEntry(formData);
-  const data: Omit<AccountingExpense, "id"> = {
-    date,
-    month,
-    amount,
-    category,
-    desc: desc || category,
-    business: "general",
-  };
-  await getAdminFirestore().collection("n_ah_expenses").add(data);
-  revalidate();
-}
-
-export async function deleteMyIncomeAction(id: string) {
-  await requireOwner();
-  await getAdminFirestore().collection("n_ah_income").doc(id).delete();
-  revalidate();
-}
-
-export async function deleteMyExpenseAction(id: string) {
-  await requireOwner();
-  await getAdminFirestore().collection("n_ah_expenses").doc(id).delete();
-  revalidate();
+  await addQuickEntry(formData, "out");
 }
