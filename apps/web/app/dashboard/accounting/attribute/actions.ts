@@ -4,7 +4,13 @@ import { revalidatePath } from "next/cache";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { getAdminFirestore } from "@/lib/firebase-admin";
-import type { AccountingExpense, VariableExpense } from "@ultranet/shared-types";
+import {
+  branchExpenseFrom,
+  branchIncomeFrom,
+  entryCollection,
+  type EntryKind,
+} from "@/lib/accounting-entries";
+import type { AccountingExpense, AccountingIncome } from "@ultranet/shared-types";
 
 async function requireOwner() {
   const session = await getServerSession(authOptions);
@@ -15,8 +21,10 @@ async function requireOwner() {
 
 /** One decision the owner made on the attribution screen. */
 export interface Attribution {
-  /** the n_ah_expenses doc being attributed */
+  /** the personal-ledger doc being attributed */
   id: string;
+  /** income or expense - decides which pair of collections the move runs between */
+  kind: EntryKind;
   /** the branches the amount is charged to; more than one = split evenly between them */
   branchIds: string[];
 }
@@ -29,15 +37,15 @@ export interface AttributeResult {
 }
 
 /**
- * Moves expenses out of the owner's personal ledger (n_ah_expenses) into the branch books
- * (n_var_expenses), one row per branch. An expense that covers several branches ("כל סניפי
- * חדרי המחשבים") is split evenly between them, so the total charged stays exactly the original
- * amount and nothing is counted twice.
+ * Moves rows out of the owner's personal ledger into the branch books, one row per branch:
+ * n_ah_expenses -> n_var_expenses, and n_ah_income -> n_branch_income. A row that covers several
+ * branches ("כל סניפי חדרי המחשבים") is split evenly between them, so the total charged stays
+ * exactly the original amount and nothing is counted twice.
  *
  * This is a MOVE, not a copy: the personal-ledger row is deleted in the same batch. The two
- * books are never summed together, so leaving the row in both would double the expense.
+ * books are never summed together, so leaving the row in both would double the money.
  */
-export async function attributeExpensesAction(payload: string): Promise<AttributeResult> {
+export async function attributeEntriesAction(payload: string): Promise<AttributeResult> {
   await requireOwner();
 
   let items: Attribution[];
@@ -54,6 +62,7 @@ export async function attributeExpensesAction(payload: string): Promise<Attribut
 
   const db = getAdminFirestore();
   const notes: string[] = [];
+  const touchedBranches = new Set<string>();
   let moved = 0;
   let created = 0;
 
@@ -61,13 +70,14 @@ export async function attributeExpensesAction(payload: string): Promise<Attribut
   const branchName = new Map(branchesSnap.docs.map((d) => [d.id, (d.data() as { name?: string }).name ?? d.id]));
 
   for (const item of valid) {
-    const ref = db.collection("n_ah_expenses").doc(item.id);
+    const kind: EntryKind = item.kind === "income" ? "income" : "expense";
+    const ref = db.collection(entryCollection(kind, "ledger")).doc(item.id);
     const doc = await ref.get();
     if (!doc.exists) {
       notes.push("שורה אחת כבר לא קיימת — דילגתי");
       continue;
     }
-    const e = doc.data() as Omit<AccountingExpense, "id">;
+    const e = doc.data() as Omit<AccountingExpense | AccountingIncome, "id">;
     const amount = e.amount ?? 0;
     const targets = item.branchIds.filter((id) => branchName.has(id));
     if (targets.length === 0) {
@@ -84,16 +94,18 @@ export async function attributeExpensesAction(payload: string): Promise<Attribut
 
     const batch = db.batch();
     targets.forEach((branchId, i) => {
-      const data: Omit<VariableExpense, "id"> = {
-        branchId,
-        amount: parts[i]!,
-        desc: e.desc || e.category || "הוצאה",
+      const fields = {
+        desc: e.desc || e.category || (kind === "income" ? "הכנסה" : "הוצאה"),
+        category: e.category,
         date: e.date,
-        month: e.month || (e.date ?? "").slice(0, 7),
-        paidBy: "owner",
-        ...(e.category ? { category: e.category } : {}),
+        amount: parts[i]!,
       };
-      batch.set(db.collection("n_var_expenses").doc(), data);
+      const data =
+        kind === "income"
+          ? branchIncomeFrom(fields, branchId)
+          : branchExpenseFrom(fields, branchId);
+      batch.set(db.collection(entryCollection(kind, "branch")).doc(), data);
+      touchedBranches.add(branchId);
       created += 1;
     });
     batch.delete(ref);
@@ -109,11 +121,14 @@ export async function attributeExpensesAction(payload: string): Promise<Attribut
     }
   }
 
+  revalidatePath("/dashboard/accounting");
   revalidatePath("/dashboard/accounting/attribute");
   revalidatePath("/dashboard/accounting/overview");
   revalidatePath("/dashboard/accounting/entries");
   revalidatePath("/dashboard/expenses");
   revalidatePath("/dashboard/rentals/expenses");
+  revalidatePath("/dashboard/rentals/accounting");
+  for (const id of touchedBranches) revalidatePath(`/dashboard/accounting/overview/${id}`);
 
   return { moved, created, notes };
 }

@@ -1,17 +1,12 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import type { Branch } from "@ultranet/shared-types";
-import { attributeExpensesAction, type AttributeResult } from "./actions";
-import { deleteExpenseRowAction } from "../expense-actions";
-
-export interface PendingExpense {
-  id: string;
-  desc: string;
-  category?: string;
-  date: string;
-  amount: number;
-}
+import type { MovementEntry } from "@/lib/accounting-entries";
+import { attributeEntriesAction, type AttributeResult } from "./actions";
+import { deleteEntryAction, type SaveResult } from "../entry-actions";
+import { EditEntryModal, type BranchGroups } from "../edit-entry-modal";
 
 const FIELD =
   "w-full min-w-0 rounded-lg border border-card-border bg-[#f4f6f9] px-2 py-1.5 text-[12px] font-semibold text-ink focus:border-teal focus:bg-white focus:outline-none";
@@ -23,22 +18,41 @@ const money = (n: number) => `${Math.round(n).toLocaleString("he-IL")} ₪`;
 const ALL_ROOMS = "__all_rooms__";
 const ALL_RENTALS = "__all_rentals__";
 
+type Filter = "all" | "expense" | "income";
+
+/**
+ * Files the owner's personal-ledger rows - income and expenses alike - to the branches they
+ * really belong to. Every row typed anywhere in the module lands here first; once filed it moves
+ * into the branch's own book and leaves this screen, so the list is a to-do rather than an
+ * archive.
+ */
 export function AttributeClient({
-  expenses,
+  entries,
   branches,
 }: {
-  expenses: PendingExpense[];
+  entries: MovementEntry[];
   branches: Branch[];
 }) {
+  const router = useRouter();
   const rooms = useMemo(() => branches.filter((b) => b.branchType === "computers"), [branches]);
   const rentals = useMemo(() => branches.filter((b) => b.branchType === "rentals"), [branches]);
   const coworking = useMemo(() => branches.filter((b) => b.branchType === "coworking"), [branches]);
+  const branchGroups: BranchGroups = useMemo(
+    () => ({
+      rooms: rooms.map((b) => ({ id: b.id, name: b.name })),
+      rentals: rentals.map((b) => ({ id: b.id, name: b.name })),
+      coworking: coworking.map((b) => ({ id: b.id, name: b.name })),
+    }),
+    [rooms, rentals, coworking],
+  );
 
-  /** reads the branch out of the description text, the way the rows were written by hand */
+  /** reads the branch out of the row: the branch already typed on it wins, then its text */
   const suggest = useMemo(() => {
     const sorted = [...branches].sort((a, b) => b.name.length - a.name.length);
-    return (text: string) => {
-      const hay = (text || "").replace(/["'׳״]/g, "");
+    const known = new Set(branches.map((b) => b.id));
+    return (e: MovementEntry) => {
+      if (e.branchId && known.has(e.branchId)) return e.branchId;
+      const hay = `${e.desc} ${e.category ?? ""}`.replace(/["'׳״]/g, "");
       if (/כל סניפי חדרי המחשבים|כל חדרי המחשבים/.test(hay)) return ALL_ROOMS;
       if (/כל סניפי ההשכרות|כל ההשכרות|כל סניפי הניידים/.test(hay)) return ALL_RENTALS;
       for (const b of sorted) {
@@ -49,32 +63,38 @@ export function AttributeClient({
     };
   }, [branches]);
 
-  const [choice, setChoice] = useState<Record<string, string>>(() => {
-    const init: Record<string, string> = {};
-    for (const e of expenses) init[e.id] = suggest(`${e.desc} ${e.category ?? ""}`);
-    return init;
-  });
+  // Only rows the owner actually touched are stored. Anything else falls back to the guess, so a
+  // row that arrives after a refresh (an edit moved it, a new one was typed) is still suggested.
+  const [choice, setChoice] = useState<Record<string, string>>({});
+  const choiceOf = (e: MovementEntry) => choice[e.id] ?? suggest(e);
   const [result, setResult] = useState<AttributeResult | null>(null);
   const [pending, startTransition] = useTransition();
   /** rows removed from the screen after a confirmed delete, so the list reflects reality at once */
   const [removed, setRemoved] = useState<Set<string>>(new Set());
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [filter, setFilter] = useState<Filter>("all");
 
-  function removeRow(e: PendingExpense) {
-    const label = `${e.desc || "הוצאה"} — ${money(e.amount)}`;
+  function removeRow(e: MovementEntry) {
+    const label = `${e.desc || "שורה"} — ${money(e.amount)}`;
     if (!window.confirm(`למחוק לגמרי את "${label}"?\nהשורה תימחק מהמערכת ולא ניתן לשחזר אותה.`)) return;
     setBusyId(e.id);
     setResult(null);
     startTransition(async () => {
-      const res = await deleteExpenseRowAction("ledger", e.id);
+      const res = await deleteEntryAction(e.kind, "ledger", e.id);
       setBusyId(null);
       if (res.ok) {
         setRemoved((prev) => new Set(prev).add(e.id));
         setResult({ moved: 0, created: 0, notes: [`נמחק: ${label}`] });
+        router.refresh();
       } else {
         setResult({ moved: 0, created: 0, notes: [], error: res.message });
       }
     });
+  }
+
+  function onEdited(res: SaveResult) {
+    setResult({ moved: 0, created: 0, notes: [res.message] });
+    router.refresh();
   }
 
   const resolve = (value: string): string[] => {
@@ -83,23 +103,44 @@ export function AttributeClient({
     return value ? [value] : [];
   };
 
-  const live = expenses.filter((e) => !removed.has(e.id));
-  const decided = live.filter((e) => resolve(choice[e.id] ?? "").length > 0);
-  const total = decided.reduce((s, e) => s + e.amount, 0);
-  const newRows = decided.reduce((s, e) => s + resolve(choice[e.id] ?? "").length, 0);
+  const all = entries.filter((e) => !removed.has(e.id));
+  const live = all.filter((e) => filter === "all" || e.kind === filter);
+  const decided = live.filter((e) => resolve(choiceOf(e)).length > 0);
+  const total = decided.reduce((s, e) => s + (e.kind === "income" ? e.amount : -e.amount), 0);
+  const newRows = decided.reduce((s, e) => s + resolve(choiceOf(e)).length, 0);
+  const decidedIncome = decided.filter((e) => e.kind === "income").length;
 
   function submit() {
-    const payload = decided.map((e) => ({ id: e.id, branchIds: resolve(choice[e.id] ?? "") }));
+    const payload = decided.map((e) => ({
+      id: e.id,
+      kind: e.kind,
+      branchIds: resolve(choiceOf(e)),
+    }));
     startTransition(async () => {
-      const res = await attributeExpensesAction(JSON.stringify(payload));
+      const res = await attributeEntriesAction(JSON.stringify(payload));
       setResult(res);
+      router.refresh();
     });
   }
 
-  if (live.length === 0) {
+  const tab = (key: Filter, label: string, count: number) => (
+    <button
+      type="button"
+      onClick={() => setFilter(key)}
+      className={
+        filter === key
+          ? "rounded-md bg-teal-bg px-2.5 py-1 text-[12px] font-bold text-teal-dark"
+          : "rounded-md px-2.5 py-1 text-[12px] font-bold text-muted transition hover:bg-[#f4f6f9]"
+      }
+    >
+      {label} ({count})
+    </button>
+  );
+
+  if (all.length === 0) {
     return (
       <section className="rounded-card border border-card-border bg-white px-4 py-6 text-center text-sm text-muted shadow-card">
-        אין הוצאות שממתינות לשיוך — כל ההוצאות כבר משויכות לסניף או מסומנות ככלליות.
+        אין תנועות שממתינות לשיוך — כל ההכנסות וההוצאות כבר משויכות לסניף או מסומנות ככלליות.
       </section>
     );
   }
@@ -116,9 +157,11 @@ export function AttributeClient({
             <p className="text-[13px] font-extrabold text-red-700">{result.error}</p>
           ) : (
             <>
-              <p className="text-[13px] font-extrabold text-teal-dark">
-                ✓ שויכו {result.moved} הוצאות · נוצרו {result.created} שורות בספרי הסניפים
-              </p>
+              {result.moved > 0 && (
+                <p className="text-[13px] font-extrabold text-teal-dark">
+                  ✓ שויכו {result.moved} תנועות · נוצרו {result.created} שורות בספרי הסניפים
+                </p>
+              )}
               {result.notes.length > 0 && (
                 <ul className="mt-2 flex flex-col gap-1">
                   {result.notes.map((n, i) => (
@@ -128,7 +171,6 @@ export function AttributeClient({
                   ))}
                 </ul>
               )}
-              <p className="mt-2 text-[12px] text-muted">רענני את הדף כדי לראות את הרשימה המעודכנת.</p>
             </>
           )}
         </section>
@@ -137,10 +179,15 @@ export function AttributeClient({
       <section className="rounded-card border border-card-border bg-white shadow-card">
         <div className="flex flex-wrap items-center justify-between gap-2.5 border-b border-card-border px-4 py-3">
           <div>
-            <h2 className="text-[15px] font-extrabold text-ink">הוצאות שממתינות לשיוך ({live.length})</h2>
+            <h2 className="text-[15px] font-extrabold text-ink">תנועות שממתינות לשיוך ({all.length})</h2>
             <p className="mt-0.5 text-[12.5px] text-muted">
-              הסניף נוחש מתוך הטקסט ומסומן &quot;זוהה אוטומטית&quot;. אפשר לשנות כל שורה.
+              הסניף נוחש מתוך השורה ומסומן &quot;זוהה אוטומטית&quot;. אפשר לשנות, לערוך או למחוק כל שורה.
             </p>
+          </div>
+          <div className="flex gap-0.5">
+            {tab("all", "הכל", all.length)}
+            {tab("expense", "הוצאות", all.filter((e) => e.kind === "expense").length)}
+            {tab("income", "הכנסות", all.filter((e) => e.kind === "income").length)}
           </div>
         </div>
 
@@ -148,7 +195,7 @@ export function AttributeClient({
           <table className="w-full border-collapse text-[12.5px]">
             <thead>
               <tr>
-                <th className={`${TH} min-w-[220px]`}>ההוצאה</th>
+                <th className={`${TH} min-w-[220px]`}>התנועה</th>
                 <th className={TH}>תאריך</th>
                 <th className={`${TH} text-left`}>סכום</th>
                 <th className={`${TH} min-w-[190px]`}>לשייך לסניף</th>
@@ -158,18 +205,31 @@ export function AttributeClient({
             </thead>
             <tbody>
               {live.map((e, i) => {
-                const value = choice[e.id] ?? "";
+                const value = choiceOf(e);
                 const targets = resolve(value);
-                const auto = suggest(`${e.desc} ${e.category ?? ""}`);
-                const isAuto = value !== "" && value === auto;
+                const isAuto = value !== "" && value === suggest(e);
+                const isIncome = e.kind === "income";
                 return (
                   <tr key={e.id} className={`${i % 2 ? "bg-[#fafbfd]" : ""} ${value ? "" : "bg-[#fffaf0]"}`}>
                     <td className={TD}>
-                      <b className="text-ink">{e.desc || "הוצאה"}</b>
+                      <span
+                        className={`ml-1.5 rounded-full px-1.5 py-px text-[10px] font-extrabold ${
+                          isIncome ? "bg-[#e7f6f0] text-emerald-700" : "bg-[#fdecec] text-red-700"
+                        }`}
+                      >
+                        {isIncome ? "הכנסה" : "הוצאה"}
+                      </span>
+                      <b className="text-ink">{e.desc || (isIncome ? "הכנסה" : "הוצאה")}</b>
                       {e.category && <span className="mr-1 text-[10.5px] text-muted">· {e.category}</span>}
                     </td>
                     <td className={`${TD} whitespace-nowrap text-muted`}>{e.date}</td>
-                    <td className={`${TD} text-left font-extrabold tabular-nums`}>{money(e.amount)}</td>
+                    <td
+                      className={`${TD} text-left font-extrabold tabular-nums ${
+                        isIncome ? "text-emerald-600" : "text-red-600"
+                      }`}
+                    >
+                      {money(e.amount)}
+                    </td>
                     <td className={TD}>
                       <select
                         value={value}
@@ -227,14 +287,17 @@ export function AttributeClient({
                       )}
                     </td>
                     <td className={TD}>
-                      <button
-                        type="button"
-                        onClick={() => removeRow(e)}
-                        disabled={busyId === e.id}
-                        className="whitespace-nowrap rounded-lg border border-red-200 bg-white px-2.5 py-1 text-[11.5px] font-bold text-red-600 transition hover:bg-red-50 disabled:opacity-50"
-                      >
-                        {busyId === e.id ? "מוחק..." : "מחיקה"}
-                      </button>
+                      <div className="flex items-center gap-1.5">
+                        <EditEntryModal entry={e} branches={branchGroups} onSaved={onEdited} />
+                        <button
+                          type="button"
+                          onClick={() => removeRow(e)}
+                          disabled={busyId === e.id}
+                          className="whitespace-nowrap rounded-lg border border-red-200 bg-white px-2.5 py-1 text-[11.5px] font-bold text-red-600 transition hover:bg-red-50 disabled:opacity-50"
+                        >
+                          {busyId === e.id ? "מוחק..." : "מחיקה"}
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 );
@@ -243,10 +306,18 @@ export function AttributeClient({
           </table>
         </div>
 
+        {decidedIncome > 0 && (
+          <p className="border-t border-card-border bg-[#fff9ef] px-4 py-2.5 text-[12px] font-bold text-[#8a5a00]">
+            שים לב: {decidedIncome} הכנסות ייצאו מהספר האישי ויעברו לספר של הסניף. סכומן יפסיק
+            להיספר בכרטיסי &quot;סה&quot;כ הכנסות&quot; של ההנה&quot;ח האישית ובדף הבית, וייספר
+            בספר הסניף במקום. תמיד אפשר להחזיר שורה בעריכה → &quot;כללי&quot;.
+          </p>
+        )}
+
         <div className="sticky bottom-0 flex flex-wrap items-center justify-between gap-3 border-t-2 border-card-border bg-white px-4 py-3">
           <div className="flex flex-wrap items-start gap-5">
             <div className="flex flex-col">
-              <span className="text-[10.5px] font-extrabold text-muted">הוצאות שיישויכו</span>
+              <span className="text-[10.5px] font-extrabold text-muted">תנועות שיישויכו</span>
               <span className="text-[17px] font-black tabular-nums">
                 {decided.length} / {live.length}
               </span>
@@ -256,8 +327,14 @@ export function AttributeClient({
               <span className="text-[17px] font-black tabular-nums text-teal-dark">{newRows}</span>
             </div>
             <div className="flex flex-col">
-              <span className="text-[10.5px] font-extrabold text-muted">סכום כולל</span>
-              <span className="text-[17px] font-black tabular-nums">{money(total)}</span>
+              <span className="text-[10.5px] font-extrabold text-muted">השפעה נטו על הסניפים</span>
+              <span
+                className={`text-[17px] font-black tabular-nums ${
+                  total >= 0 ? "text-emerald-600" : "text-red-600"
+                }`}
+              >
+                {money(total)}
+              </span>
             </div>
           </div>
           <button
@@ -266,7 +343,7 @@ export function AttributeClient({
             disabled={pending || decided.length === 0}
             className="rounded-[10px] bg-gradient-to-br from-teal to-teal-light px-5 py-2.5 text-[13px] font-bold text-white shadow-primary transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
           >
-            {pending ? "משייך..." : `שיוך ${decided.length} הוצאות לסניפים`}
+            {pending ? "משייך..." : `שיוך ${decided.length} תנועות לסניפים`}
           </button>
         </div>
       </section>

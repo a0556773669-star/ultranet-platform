@@ -12,54 +12,10 @@ export interface SaveResult {
   message: string;
 }
 
-/** Where an expense row actually lives, so a delete hits the right collection. */
-export type ExpenseSource = "ledger" | "branch";
-
 /**
- * Deletes one expense row, from either book.
- * A branch expense may have spawned a matching row in the owner's ledger when it was created
- * (VariableExpense.linkedAhExpenseId); that row is removed with it, otherwise deleting the
- * expense would leave a ghost behind in the personal books.
+ * Editing and deleting a saved row live in ./entry-actions.ts, which handles income and
+ * expenses in both books through one pair of actions. This file only creates.
  */
-export async function deleteExpenseRowAction(source: ExpenseSource, id: string): Promise<SaveResult> {
-  try {
-    const session = await getServerSession(authOptions);
-    if (!session) return { ok: false, message: "נדרשת התחברות מחדש" };
-    if (session.user?.role !== "owner") return { ok: false, message: "רק הבעלים יכול למחוק הוצאה" };
-    if (!id) return { ok: false, message: "לא זוהתה שורה למחיקה" };
-
-    const db = getAdminFirestore();
-
-    if (source === "branch") {
-      const ref = db.collection("n_var_expenses").doc(id);
-      const doc = await ref.get();
-      if (!doc.exists) return { ok: false, message: "השורה כבר לא קיימת" };
-      const e = doc.data() as Omit<VariableExpense, "id">;
-      if (e.linkedAhExpenseId) {
-        await db.collection("n_ah_expenses").doc(e.linkedAhExpenseId).delete();
-      }
-      await ref.delete();
-      revalidatePath(`/dashboard/accounting/overview/${e.branchId}`);
-    } else {
-      const ref = db.collection("n_ah_expenses").doc(id);
-      const doc = await ref.get();
-      if (!doc.exists) return { ok: false, message: "השורה כבר לא קיימת" };
-      await ref.delete();
-    }
-
-    revalidatePath("/dashboard/accounting/entries");
-    revalidatePath("/dashboard/accounting/overview");
-    revalidatePath("/dashboard/accounting/attribute");
-    revalidatePath("/dashboard/expenses");
-    revalidatePath("/dashboard/rentals/expenses");
-    return { ok: true, message: "השורה נמחקה" };
-  } catch (err) {
-    return {
-      ok: false,
-      message: `המחיקה נכשלה: ${err instanceof Error ? err.message : "שגיאה לא ידועה"}`,
-    };
-  }
-}
 
 /**
  * Saves an expense from the entry screen.

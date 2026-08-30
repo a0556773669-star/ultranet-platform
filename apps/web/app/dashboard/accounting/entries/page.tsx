@@ -1,116 +1,65 @@
 import Link from "next/link";
-import { BarChart3, Download, Laptop, CreditCard, Banknote } from "lucide-react";
+import { BarChart3, Laptop, CreditCard, Banknote, Split } from "lucide-react";
 import { requireModuleAccess } from "@/lib/perms";
 import { getAdminFirestore } from "@/lib/firebase-admin";
-import type {
-  AccountingIncome,
-  AccountingExpense,
-  CollectionRoute,
-  Branch,
-  VariableExpense,
-} from "@ultranet/shared-types";
-import { createIncomeAction, deleteIncomeAction } from "../actions";
+import type { CollectionRoute } from "@ultranet/shared-types";
+import { isPendingAttribution } from "@/lib/accounting-entries";
+import { loadMovements } from "@/lib/accounting-entries-data";
+import { createIncomeAction } from "../actions";
 import CollectModal from "../collect-modal";
-import { DeleteEntryButton } from "../delete-entry-button";
 import { loadOwnerFixedExpenseBurden } from "@/lib/owner-expense-burden";
 import { loadComputerRoomSetupCostTotal } from "@/lib/computer-room-accounting";
 import { AccountingTabs } from "../accounting-tabs";
 import { AddExpenseForm } from "./add-expense-form";
-import { ExpenseList, type ExpenseRow } from "./expense-list";
-
-const BUSINESS_LABELS: Record<string, string> = {
-  computers: "מחשבים",
-  rentals: "השכרות",
-  coworking: "משרד שיתופי",
-  general: "כללי",
-  other: "אחר",
-};
-
-const INCOME_TYPE_LABELS: Record<string, string> = {
-  laptops: "ניידים",
-  credit: "אשראי מהעסק",
-  cash: "מזומן",
-  fixed: "קבוע",
-  variable: "משתנה",
-};
+import { EntryList } from "../entry-list";
 
 const FIELD = "rounded-lg border border-card-border bg-[#f4f6f9] px-3 py-2 text-sm focus:border-teal focus:bg-white focus:outline-none";
-
-function branchNameOf(branches: Branch[], branchId?: string) {
-  if (!branchId) return undefined;
-  return branches.find((b) => b.id === branchId)?.name;
-}
 
 export default async function AccountingPage() {
   await requireModuleAccess("accounting");
 
   const db = getAdminFirestore();
-  const [incomeSnap, expenseSnap, routesSnap, branchesSnap, branchExpenseSnap] = await Promise.all([
-    db.collection("n_ah_income").get(),
-    db.collection("n_ah_expenses").get(),
+  const [{ entries, liveBranches }, routesSnap] = await Promise.all([
+    loadMovements(),
     db.collection("n_collection_routes").get(),
-    db.collection("n_branches").get(),
-    db.collection("n_var_expenses").get(),
   ]);
-  const income = incomeSnap.docs
-    .map((d) => ({ ...(d.data() as Omit<AccountingIncome, "id">), id: d.id }) as AccountingIncome)
-    .sort((a, b) => b.date.localeCompare(a.date));
-  const expenses = expenseSnap.docs
-    .map((d) => ({ ...(d.data() as Omit<AccountingExpense, "id">), id: d.id }) as AccountingExpense)
-    .sort((a, b) => b.date.localeCompare(a.date));
 
   const routes = routesSnap.docs.map(
     (d) => ({ ...(d.data() as Omit<CollectionRoute, "id">), id: d.id }) as CollectionRoute,
   );
 
-  // One list from BOTH books: personal-ledger rows and branch rows. An expense saved to a branch
-  // used to disappear from this screen entirely, which looked exactly like a failed save.
-  const branchNameById = new Map(
-    branchesSnap.docs.map((d) => [d.id, (d.data() as { name?: string }).name ?? d.id]),
-  );
-  const expenseRows: ExpenseRow[] = [
-    ...expenses.map((e) => ({
-      id: e.id,
-      source: "ledger" as const,
-      desc: e.desc || BUSINESS_LABELS[e.business] || "הוצאה",
-      date: e.date ?? "",
-      amount: e.amount ?? 0,
-      category: e.category,
-    })),
-    ...branchExpenseSnap.docs
-      .map((d) => ({ ...(d.data() as Omit<VariableExpense, "id">), id: d.id }) as VariableExpense)
-      .map((e) => ({
-        id: e.id,
-        source: "branch" as const,
-        desc: e.desc || e.category || "הוצאה",
-        date: e.date ?? "",
-        amount: e.amount ?? 0,
-        category: e.category,
-        branchName: branchNameById.get(e.branchId) ?? "סניף לא ידוע",
-      })),
-  ].sort((a, b) => b.date.localeCompare(a.date));
+  const incomeRows = entries.filter((e) => e.kind === "income");
+  const expenseRows = entries.filter((e) => e.kind === "expense");
+  const pendingCount = entries.filter(isPendingAttribution).length;
 
-  // Kept unfiltered (including deleted) so past entries tied to a since-deleted branch still
-  // resolve a name via branchNameOf() instead of showing blank - only the pickers below (for
-  // filing NEW entries) exclude deleted branches.
-  const branches = branchesSnap.docs.map((d) => ({ ...(d.data() as Omit<Branch, "id">), id: d.id }) as Branch);
-  const laptopBranches = branches
-    .filter((b) => b.branchType === "rentals" && !b.deleted)
-    .sort((a, b) => a.name.localeCompare(b.name, "he"));
-  const cashRegisterBranches = branches
-    .filter((b) => b.branchType === "computers" && !b.deleted)
-    .sort((a, b) => a.name.localeCompare(b.name, "he"));
-  const coworkingBranches = branches
-    .filter((b) => b.branchType === "coworking" && !b.deleted)
-    .sort((a, b) => a.name.localeCompare(b.name, "he"));
+  const laptopBranches = liveBranches
+    .filter((b) => b.branchType === "rentals")
+    .map((b) => ({ id: b.id, name: b.name }));
+  const cashRegisterBranches = liveBranches
+    .filter((b) => b.branchType === "computers")
+    .map((b) => ({ id: b.id, name: b.name }));
+  const coworkingBranches = liveBranches
+    .filter((b) => b.branchType === "coworking")
+    .map((b) => ({ id: b.id, name: b.name }));
+  const branchGroups = {
+    rooms: cashRegisterBranches,
+    rentals: laptopBranches,
+    coworking: coworkingBranches,
+  };
   const creditDefaultDate = `${new Date().toISOString().slice(0, 7)}-10`;
 
   const fixedExpenseBurden = await loadOwnerFixedExpenseBurden();
   const computerRoomSetupCostTotal = await loadComputerRoomSetupCostTotal();
 
-  const totalIncome = income.reduce((sum, i) => sum + i.amount, 0);
+  // The headline cards are the owner's own book ("שלי") - only ledger rows, exactly as before.
+  // A row filed to a branch has left this book on purpose and is counted in the branch's one.
+  const ledgerIncome = incomeRows.filter((e) => e.book === "ledger");
+  const ledgerExpenses = expenseRows.filter((e) => e.book === "ledger");
+  const totalIncome = ledgerIncome.reduce((sum, i) => sum + i.amount, 0);
   const totalExpenses =
-    expenses.reduce((sum, e) => sum + e.amount, 0) + fixedExpenseBurden.toDate + computerRoomSetupCostTotal;
+    ledgerExpenses.reduce((sum, e) => sum + e.amount, 0) +
+    fixedExpenseBurden.toDate +
+    computerRoomSetupCostTotal;
 
   return (
     <div>
@@ -118,7 +67,8 @@ export default async function AccountingPage() {
         <div>
           <h1 className="flex items-center gap-1.5 text-[21px] font-extrabold text-ink"><BarChart3 className="h-5 w-5" />הנהלת חשבונות</h1>
           <p className="mt-1 text-[13px] text-muted">
-            הכנסות והוצאות אישיות — אלו השורות שמרכיבות את ספר &quot;שלי&quot; בדף{" "}
+            כל תנועה שנרשמת — הכנסה או הוצאה — נוחתת כאן ראשית, וממתינה לשיוך לסניף. משויכת לסניף
+            היא עוברת לספר של אותו סניף ויוצאת מהרשימה הזו. ראה גם{" "}
             <Link href="/dashboard/accounting/overview" className="font-bold text-teal hover:underline">
               הסקירה
             </Link>
@@ -130,12 +80,12 @@ export default async function AccountingPage() {
       <div className="mb-6 grid grid-cols-1 gap-2.5 sm:grid-cols-3">
         <div className="relative overflow-hidden rounded-card border border-card-border bg-white p-4 shadow-card">
           <span className="absolute right-0 top-0 h-full w-1 bg-emerald-500" />
-          <p className="text-[11px] font-bold uppercase tracking-wide text-muted">סה&quot;כ הכנסות</p>
+          <p className="text-[11px] font-bold uppercase tracking-wide text-muted">סה&quot;כ הכנסות (הנה&quot;ח אישית)</p>
           <p className="mt-1 text-2xl font-black text-emerald-600">{totalIncome.toLocaleString()} ₪</p>
         </div>
         <div className="relative overflow-hidden rounded-card border border-card-border bg-white p-4 shadow-card">
           <span className="absolute right-0 top-0 h-full w-1 bg-red-500" />
-          <p className="text-[11px] font-bold uppercase tracking-wide text-muted">סה&quot;כ הוצאות</p>
+          <p className="text-[11px] font-bold uppercase tracking-wide text-muted">סה&quot;כ הוצאות (הנה&quot;ח אישית)</p>
           <p className="mt-1 text-2xl font-black text-red-600">{totalExpenses.toLocaleString()} ₪</p>
           <p className="mt-1 text-[11px] text-muted">
             כולל ₪{Math.round(fixedExpenseBurden.toDate).toLocaleString()} חלק הבעלים בהוצאות
@@ -151,6 +101,19 @@ export default async function AccountingPage() {
           </p>
         </div>
       </div>
+
+      {pendingCount > 0 && (
+        <Link
+          href="/dashboard/accounting/attribute"
+          className="mb-5 flex flex-wrap items-center justify-between gap-2 rounded-card border border-[#e6a23c] bg-[#fff9ef] px-4 py-3 shadow-card transition hover:bg-[#fff4e0]"
+        >
+          <span className="flex items-center gap-1.5 text-[13px] font-extrabold text-[#8a5a00]">
+            <Split className="h-4 w-4" />
+            {pendingCount} תנועות ממתינות לשיוך לסניפים
+          </span>
+          <span className="text-[12.5px] font-bold text-[#8a5a00] underline">למסך השיוך ←</span>
+        </Link>
+      )}
 
       <p className="mb-2 text-xs text-muted">
         אלו 3 סוגי ההכנסה היחידים שמתחשבנים בהנה&quot;ח הראשית ובדף הבית. הכנסות ניידים/חדרי מחשבים
@@ -213,44 +176,17 @@ export default async function AccountingPage() {
       </p>
       <div className="mb-6 grid grid-cols-1 gap-3 lg:grid-cols-2">
         <AddExpenseForm
-          rooms={cashRegisterBranches.map((b) => ({ id: b.id, name: b.name }))}
-          rentals={laptopBranches.map((b) => ({ id: b.id, name: b.name }))}
-          coworking={coworkingBranches.map((b) => ({ id: b.id, name: b.name }))}
+          rooms={cashRegisterBranches}
+          rentals={laptopBranches}
+          coworking={coworkingBranches}
         />
 
         <CollectModal routes={routes} />
       </div>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <div>
-          <div className="mb-2 flex items-center justify-between text-xs font-bold uppercase tracking-wide text-muted">
-            <span className="flex items-center gap-1.5"><Download className="h-4 w-4" />הכנסות אחרונות</span>
-            <span className="rounded-full bg-[#f4f6f9] px-2.5 py-0.5 text-ink normal-case">{income.length}</span>
-          </div>
-          <div className="rounded-card border border-card-border bg-white px-4 shadow-card">
-            {income.slice(0, 15).map((i) => {
-            const bound = deleteIncomeAction.bind(null, i.id);
-            const branchName = branchNameOf(branches, i.branchId);
-            return (
-              <div key={i.id} className="flex items-center gap-2.5 border-b border-card-border py-2.5 text-[13px] last:border-b-0">
-                <div className="flex-1">
-                  <div className="font-bold text-ink">{i.desc || BUSINESS_LABELS[i.business]}</div>
-                  <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[11px] text-muted">
-                    <span>{i.date}</span>
-                    {INCOME_TYPE_LABELS[i.type] && (
-                      <span className="rounded-full bg-[#f4f6f9] px-2 py-0.5 text-ink">{INCOME_TYPE_LABELS[i.type]}</span>
-                    )}
-                    {branchName && <span>· {branchName}</span>}
-                  </div>
-                </div>
-                <div className="min-w-[75px] text-left font-extrabold text-emerald-600">{i.amount.toLocaleString()} ₪</div>
-                <DeleteEntryButton confirmText={"למחק את ההכנסה?"} action={bound} successText="ההכנסה נמחקה בהצלחה" />
-              </div>
-            );
-          })}
-          </div>
-        </div>
-        <ExpenseList rows={expenseRows} />
+        <EntryList kind="income" entries={incomeRows} branches={branchGroups} />
+        <EntryList kind="expense" entries={expenseRows} branches={branchGroups} />
       </div>
     </div>
   );

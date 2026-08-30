@@ -16,7 +16,9 @@ import {
   type BranchMonth,
 } from "@/lib/accounting-overview";
 import { loadCostRates } from "@/lib/cost-rates";
+import { loadMovements, type MovementsData } from "@/lib/accounting-entries-data";
 import { AccountingTabs } from "../../accounting-tabs";
+import { EntryList } from "../../entry-list";
 import { BranchCostSettings } from "../branch-cost-settings";
 import { AddBranchExpense } from "../add-branch-expense";
 import { AddBranchIncome } from "../add-branch-income";
@@ -188,10 +190,14 @@ export default async function BranchAccountingOverviewPage({
   const cum = searchParams?.mode === "cum";
   const modeSuffix = cum ? "&mode=cum" : "";
 
-  const [data, ownerName, rateData] = await Promise.all([
+  const [data, ownerName, rateData, movements] = await Promise.all([
     loadAccountingOverview(month),
     getOwnerName(isOwner ? session.user?.name : null),
     loadCostRates(),
+    // only the owner may edit or delete these rows, so a partner never pays for the extra reads
+    isOwner
+      ? loadMovements()
+      : Promise.resolve({ entries: [], branches: [], liveBranches: [] } as MovementsData),
   ]);
 
   const branch = data.branches.find((b) => b.id === params.branchId);
@@ -209,6 +215,24 @@ export default async function BranchAccountingOverviewPage({
   const shareLabel = restricted ? "חלקך" : "חלקי";
   const shareIncome = restricted ? stats.income - stats.ownerIncome : stats.ownerIncome;
   const shareExpense = restricted ? stats.expense - stats.ownerExpense : stats.ownerExpense;
+
+  // The branch's own book, row by row - the same documents the cost table sums up, but reachable
+  // one at a time so a row filed here by mistake is fixed where it landed instead of only on the
+  // entry screen. Owner-only: editing and deleting them is an owner action.
+  const branchRows = movements.entries.filter((e) => e.book === "branch" && e.branchId === branch.id);
+  const branchIncomeRows = branchRows.filter((e) => e.kind === "income");
+  const branchExpenseRows = branchRows.filter((e) => e.kind === "expense");
+  const branchGroups = {
+    rooms: movements.liveBranches
+      .filter((b) => b.branchType === "computers")
+      .map((b) => ({ id: b.id, name: b.name })),
+    rentals: movements.liveBranches
+      .filter((b) => b.branchType === "rentals")
+      .map((b) => ({ id: b.id, name: b.name })),
+    coworking: movements.liveBranches
+      .filter((b) => b.branchType === "coworking")
+      .map((b) => ({ id: b.id, name: b.name })),
+  };
 
   const monthly = stats.lines.filter((l) => l.kind === "monthly");
   const once = stats.lines.filter((l) => l.kind === "once");
@@ -434,6 +458,32 @@ export default async function BranchAccountingOverviewPage({
             hasPartner={hasPartner}
             restricted={restricted}
           />
+
+          {!restricted && (
+            <section className={`${CARD} px-4 py-3.5`}>
+              <h3 className="text-[13px] font-extrabold text-ink">התנועות של {branch.name}</h3>
+              <p className="mb-3 mt-0.5 text-[12.5px] text-muted">
+                כל ההכנסות וההוצאות שנרשמו לספר של הסניף הזה — ישירות או דרך מסך השיוך. אפשר לערוך,
+                למחוק, או להעביר שורה לסניף אחר או בחזרה להנה&quot;ח האישית.
+              </p>
+              <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+                <EntryList
+                  kind="income"
+                  entries={branchIncomeRows}
+                  branches={branchGroups}
+                  heading="הכנסות הסניף"
+                  splitPending={false}
+                />
+                <EntryList
+                  kind="expense"
+                  entries={branchExpenseRows}
+                  branches={branchGroups}
+                  heading="הוצאות הסניף"
+                  splitPending={false}
+                />
+              </div>
+            </section>
+          )}
 
           <CostTable
             title={`פירוט הוצאות ${mLabel(month)}`}
