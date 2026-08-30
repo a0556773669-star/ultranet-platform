@@ -788,7 +788,14 @@ function computeBranchMonth(b: Branch, raw: RawData, activity: BranchActivity, m
       const line = resolveRateLine(rate, b, raw, qty, note, "monthly", rate.label);
       if (line) lines.push(line);
     } else if (rate.qtySource === "laptops") {
-      // one-time equipment only hits a month when a computer was actually added that month
+      // One-time equipment only hits a month when a computer was actually added that month.
+      // But once the owner has typed a quantity for this branch by hand, she is stating a TOTAL
+      // ("this branch has 11 computers"), not a purchase date - and charging one month for the
+      // single machine that happens to carry that month's addedDate showed 1,200 where 11 × 1,200
+      // was meant. In that case the equipment belongs in the investment table only, which does
+      // use the typed quantity, so no monthly purchase line is derived at all.
+      const manualQty = raw.settings.get(branchCostSettingId(b.id, rate.key))?.qty != null;
+      if (manualQty) continue;
       const added = (raw.laptopsByBranch.get(b.id) ?? []).filter(
         (l) => l.addedDate && l.addedDate.slice(0, 7) === month,
       ).length;
