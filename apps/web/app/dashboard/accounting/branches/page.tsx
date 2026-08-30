@@ -22,9 +22,13 @@ import {
   monthLabelLong,
   type BranchActivity,
 } from "@/lib/accounting-overview";
+import { getAdminFirestore } from "@/lib/firebase-admin";
+import { getOwnerName } from "@/lib/owner-name";
+import type { Branch } from "@ultranet/shared-types";
 import { AccountingTabs } from "../accounting-tabs";
 import { mLabel, money } from "../overview/ui";
 import { saveBranchStatusAction } from "./actions";
+import { ManageBranches, type ManagedBranch } from "./manage-branches";
 
 const CARD = "rounded-card border border-card-border bg-white shadow-card";
 const TH =
@@ -70,20 +74,47 @@ export default async function BranchesStatusPage({ searchParams }: { searchParam
   const missingDate = rows.filter((r) => r.activity.missingOpenedAt).length;
   const notCalculated = rows.filter((r) => r.stats.status !== "active").length;
 
+  // Read the branches directly rather than through the overview: that one drops deleted branches
+  // on purpose, and this screen is exactly where a deleted branch has to stay visible so it can
+  // be restored.
+  const allSnap = await getAdminFirestore().collection("n_branches").get();
+  const ownerName = await getOwnerName(session.user?.name);
+  const managed: ManagedBranch[] = allSnap.docs
+    .map((d) => ({ ...(d.data() as Omit<Branch, "id">), id: d.id }) as Branch)
+    .filter((b) => ["rentals", "computers", "coworking"].includes(b.branchType))
+    .map((b) => {
+      const stats = branchMonthOf(data, b.id, month);
+      return {
+        id: b.id,
+        name: b.name,
+        branchType: b.branchType,
+        partnerName: b.partnerName?.trim() || null,
+        partnerPct: 100 - branchOwnerPct(b),
+        openedAt: b.openedAt?.trim() || b.founded?.trim() || null,
+        deleted: b.deleted === true,
+        income: stats?.income ?? 0,
+        expense: stats?.expense ?? 0,
+      };
+    })
+    .sort((a, b) => Number(a.deleted) - Number(b.deleted) || a.name.localeCompare(b.name, "he"));
+
   return (
     <div>
       <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="flex items-center gap-1.5 text-[21px] font-extrabold text-ink">
             <CalendarClock className="h-5 w-5" />
-            סטטוס הסניפים ותאריכי פתיחה
+            ניהול סניפים
           </h1>
           <p className="mt-0.5 text-[12.5px] text-muted">
-            מכאן נקבע מאיזה חודש כל סניף נכנס לחישוב ההכנסות וההוצאות. סניף שעדיין לא התחיל לעבוד — מסמנים, והוא לא
-            נספר בשום מקום עד שמסירים את הסימון.
+            הוספה, מחיקה ושחזור של סניפים, וקביעת תאריך הפתיחה שממנו כל סניף נכנס לחישוב.
           </p>
         </div>
         <AccountingTabs active="/dashboard/accounting/branches" />
+      </div>
+
+      <div className="mb-3.5">
+        <ManageBranches branches={managed} ownerName={ownerName} />
       </div>
 
       {(missingDate > 0 || notCalculated > 0) && (

@@ -2,7 +2,7 @@ import Link from "next/link";
 
 const TABS = [
   { href: "/dashboard/accounting/overview", label: "סקירה" },
-  { href: "/dashboard/accounting/branches", label: "סטטוס סניפים" },
+  { href: "/dashboard/accounting/branches", label: "ניהול סניפים" },
   { href: "/dashboard/accounting/entries", label: "רישום ותנועות" },
   { href: "/dashboard/accounting/routes", label: "מסלולי גביה" },
   { href: "/dashboard/accounting/rates", label: "תעריפון" },
