@@ -18,6 +18,7 @@ import { buildBranchLedger } from "@/lib/branch-ledger";
 import { computePartnerSettlement } from "@/lib/partner-settlement";
 import { monthsBetween } from "@/lib/branch-accounting";
 import { loadReportRecipients, loadOwnerEmail } from "@/lib/branch-report-recipients";
+import { monthLabel } from "@/lib/branch-month-report";
 import { mailerConfigError } from "@/lib/mailer";
 import { BranchAccountingView } from "./branch-view";
 import { OwnerBranchesOverview } from "./owner-overview";
@@ -110,6 +111,7 @@ export default async function RentalsAccountingPage({
           <MonthPicker month={month} months={monthOptions} />
           <ReportButtons
             month={month}
+            monthLabel={monthLabel(month)}
             recipients={recipients}
             ownerEmail={ownerEmail}
             mailerError={mailerConfigError()}

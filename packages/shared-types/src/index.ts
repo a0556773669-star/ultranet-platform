@@ -534,6 +534,10 @@ export interface BranchTransfer {
    *  Kept in sync (updated/deleted) whenever transferredAmount changes; undefined if the recorded
    *  amount is 0 or negative (owner owes the branch/partner - not owner income). */
   linkedAhIncomeId?: string;
+  /** ISO timestamp of when this branch/month's statement was emailed to the branch. Set by the
+   *  monthly report run (lib/branch-report-send.ts) and used to skip a month that already went
+   *  out, so re-triggering the run never mails the same statement twice. */
+  reportSentAt?: string;
   /** true once a receipt was issued for this branch/month's transfer, owner-marked. */
   receiptIssued?: boolean;
 }
