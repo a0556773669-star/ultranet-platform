@@ -2,6 +2,7 @@ import { notFound, redirect } from "next/navigation";
 import { Building2 } from "lucide-react";
 import { requireModuleAccess } from "@/lib/perms";
 import { getAdminFirestore } from "@/lib/firebase-admin";
+import { getOwnerName } from "@/lib/owner-name";
 import type { Branch } from "@ultranet/shared-types";
 import { BranchForm } from "../branch-form";
 import { DeleteButton } from "../delete-button";
@@ -28,6 +29,7 @@ export default async function BranchDetailPage({ params }: { params: { id: strin
   }
 
   if (role !== "owner") {
+    const ownerName = await getOwnerName();
     return (
       <div className="max-w-2xl">
         <h1 className="mb-4 flex items-center gap-1.5 text-[21px] font-extrabold text-ink"><Building2 className="h-5 w-5" />{branch.name}</h1>
@@ -39,6 +41,18 @@ export default async function BranchDetailPage({ params }: { params: { id: strin
           <div className="rounded-card border border-card-border bg-white p-4 shadow-card">
             <p className="text-[11px] font-bold uppercase tracking-wide text-muted">האחוז שלי</p>
             <p className="mt-1 font-bold text-teal-dark">{branch.isMine ? "100%" : `${branch.myPct}%`}</p>
+          </div>
+          {/* Read-only on purpose: the opening date decides from which month this branch is
+              charged and settled, so it is the owner's call alone - a partner sees it but
+              cannot move it. */}
+          <div className="col-span-2 rounded-card border border-card-border bg-white p-4 shadow-card">
+            <p className="text-[11px] font-bold uppercase tracking-wide text-muted">תאריך פתיחה</p>
+            <p className="mt-1 font-bold text-ink">
+              {(branch.openedAt || branch.founded)?.slice(0, 10) || "טרם נקבע"}
+            </p>
+            <p className="mt-1 text-[11.5px] text-muted">
+              מהתאריך הזה מתחיל החישוב של הסניף. רק {ownerName} יכול לשנות אותו.
+            </p>
           </div>
         </div>
       </div>

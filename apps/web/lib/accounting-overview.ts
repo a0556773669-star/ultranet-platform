@@ -428,7 +428,7 @@ function computeBranchActivity(b: Branch, raw: RawData): BranchActivity {
   const rentals = raw.rentalsByBranch.get(b.id) ?? [];
   const incomeRows = raw.branchIncomeByBranch.get(b.id) ?? [];
 
-  // INCOME is what starts a branch's book - not expenses.
+  // With no opening date set, INCOME is what starts a branch's book - not expenses.
   // Buying equipment for a branch, or entering a cost against it, does not mean it is running.
   // Letting an expense start the book was charging branches that had never taken a shekel in:
   // the recurring price list (SIMs, advertising) was billed to them every month since that first
@@ -448,10 +448,14 @@ function computeBranchActivity(b: Branch, raw: RawData): BranchActivity {
   // already entered into the branch - that's the whole point of it: a branch that exists on paper
   // but isn't working yet must not be charged for anything, whatever happens to sit in it.
   const manuallyNotStarted = b.notStarted === true;
-  // A branch that has never taken any income is not running, even if an opening date was set on
-  // it: with nothing coming in there is no income-versus-expense to compute and nothing to
-  // settle, so it stays "not started" until the first shekel arrives.
-  const startMonth = manuallyNotStarted || noIncomeYet ? null : openedMonth ?? firstDataMonth;
+  // An opening date that the owner typed IS the statement that the branch is open: from that
+  // month on it has a book of its own, even before the first shekel comes in. That is the whole
+  // reason the field exists - a branch that pays rent and SIMs from the day it opened must carry
+  // those months itself, not sit in limbo until income appears. Only the manual
+  // "עדיין לא התחיל לפעול" mark - which only the owner can set - holds a dated branch back.
+  // Without a date we still need income before opening the book, since an expense alone says
+  // nothing about whether the branch is running.
+  const startMonth = manuallyNotStarted ? null : openedMonth ?? firstDataMonth;
   const startSource: BranchStartSource = manuallyNotStarted
     ? "manual_not_started"
     : !startMonth
