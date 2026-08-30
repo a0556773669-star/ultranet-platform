@@ -1,7 +1,7 @@
 import { Tag } from "lucide-react";
 import { requireOwner } from "@/lib/perms";
 import { loadCostRates } from "@/lib/cost-rates-data";
-import { DEFAULT_COST_RATES } from "@/lib/cost-rates";
+import { DEFAULT_COST_RATES, isRetiredRate } from "@/lib/cost-rates";
 import { AccountingTabs } from "../accounting-tabs";
 import { saveRateAction, seedDefaultRatesAction } from "./actions";
 
@@ -21,7 +21,10 @@ export default async function CostRatesPage() {
   await requireOwner();
   const { rates, usingDefaults } = await loadCostRates();
   const have = new Set(rates.map((r) => r.key));
-  const missing = usingDefaults ? [] : DEFAULT_COST_RATES.filter((r) => !have.has(r.key));
+  // Retired rates must not be offered as "missing categories" - they are deliberately absent.
+  const missing = usingDefaults
+    ? []
+    : DEFAULT_COST_RATES.filter((r) => !isRetiredRate(r) && !have.has(r.key));
 
   return (
     <div>
@@ -32,11 +35,23 @@ export default async function CostRatesPage() {
             תעריפון
           </h1>
           <p className="mt-0.5 text-[12.5px] text-muted">
-            כמה עולה כל דבר, ועל מי הוא נופל כברירת מחדל. מכאן מחושב פירוט העלויות בכל סניף. כאן נמצאות רק
-            עלויות עם מחיר יחידה קבוע — פרסום והדפסת התקנון משתנים מחודש לחודש ולכן מוזנים ידנית בכל סניף.
+            עלויות חוזרות בלבד: כמה עולה כל דבר בחודש, ועל מי הוא נופל כברירת מחדל. פרסום והדפסת התקנון
+            משתנים מחודש לחודש ולכן מוזנים ידנית בכל סניף.
           </p>
         </div>
         <AccountingTabs active="/dashboard/accounting/rates" />
+      </div>
+
+      <div className="mb-3 rounded-card border border-card-border bg-white px-4 py-3 text-[12.5px] leading-relaxed text-muted shadow-card">
+        <b className="text-ink">עלויות הציוד כבר לא כאן.</b> שורות הרכישה החד-פעמיות (מחשב · תיק · סטיק)
+        היו הערכה אחת שטוחה לכל מחשב בעסק, ולכן חשבונית אמיתית של 15,000 ₪ לא יכלה להתאזן מול מה
+        שהסניפים הציגו — שני מספרים בלי שום קשר מתמטי ביניהם. העלות האמיתית מגיעה עכשיו מ
+        <a href="/dashboard/accounting/purchases" className="text-teal underline">
+          {" "}
+          חשבוניות הרכש
+        </a>
+        , שבהן כל פריט נושא את מה שהוא באמת עלה. השורות הישנות לא נמחקו מ-Firestore — הן פשוט מסוננות,
+        באותה דרך שבה הוצאו פרסום והדפסות.
       </div>
 
       {usingDefaults && (
@@ -146,7 +161,19 @@ export default async function CostRatesPage() {
                   >
                     שמירה
                   </button>
-                  {usingDefaults && (
+                  <div className="mb-3 rounded-card border border-card-border bg-white px-4 py-3 text-[12.5px] leading-relaxed text-muted shadow-card">
+        <b className="text-ink">עלויות הציוד כבר לא כאן.</b> שורות הרכישה החד-פעמיות (מחשב · תיק · סטיק)
+        היו הערכה אחת שטוחה לכל מחשב בעסק, ולכן חשבונית אמיתית של 15,000 ₪ לא יכלה להתאזן מול מה
+        שהסניפים הציגו — שני מספרים בלי שום קשר מתמטי ביניהם. העלות האמיתית מגיעה עכשיו מ
+        <a href="/dashboard/accounting/purchases" className="text-teal underline">
+          {" "}
+          חשבוניות הרכש
+        </a>
+        , שבהן כל פריט נושא את מה שהוא באמת עלה. השורות הישנות לא נמחקו מ-Firestore — הן פשוט מסוננות,
+        באותה דרך שבה הוצאו פרסום והדפסות.
+      </div>
+
+      {usingDefaults && (
                     <span className="mr-2 text-[11.5px] text-muted">שמרי קודם את התעריפון למעלה</span>
                   )}
                 </div>

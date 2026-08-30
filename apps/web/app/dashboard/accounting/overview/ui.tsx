@@ -407,7 +407,7 @@ export function OverviewReportTable({
         <div>
           <h2 className="text-[15px] font-extrabold text-ink">דוח הכנסות והוצאות</h2>
           <p className="mt-0.5 text-[12.5px] text-muted">
-            בכל קבוצה: <b className="text-teal-dark">שלי</b> · <b className="text-[#2563eb]">ניידים</b> ·{" "}
+            בכל קבוצה: <b className="text-teal-dark">תזרים</b> · <b className="text-[#2563eb]">ניידים</b> ·{" "}
             <b className="text-[#6b3fa0]">חדרי מחשבים</b>
           </p>
         </div>
@@ -430,17 +430,17 @@ export function OverviewReportTable({
                 רווח
               </th>
               <th rowSpan={2} className={`${TH} ${NUM}`}>
-                יתרה מצטברת שלי
+                יתרה מצטברת — תזרים
               </th>
             </tr>
             <tr>
-              <th className={`${TH} ${NUM}`}>שלי</th>
+              <th className={`${TH} ${NUM}`}>תזרים</th>
               <th className={`${TH} ${NUM} ${SEP}`}>ניידים</th>
               <th className={`${TH} ${NUM}`}>חדרים</th>
-              <th className={`${TH} ${NUM} ${SEP}`}>שלי</th>
+              <th className={`${TH} ${NUM} ${SEP}`}>תזרים</th>
               <th className={`${TH} ${NUM} ${SEP}`}>ניידים</th>
               <th className={`${TH} ${NUM}`}>חדרים</th>
-              <th className={`${TH} ${NUM} ${SEP}`}>שלי</th>
+              <th className={`${TH} ${NUM} ${SEP}`}>תזרים</th>
               <th className={`${TH} ${NUM} ${SEP}`}>ניידים</th>
               <th className={`${TH} ${NUM}`}>חדרים</th>
             </tr>
@@ -480,10 +480,12 @@ export function OverviewReportTable({
         </table>
       </div>
       <p className="px-4 pb-3.5 pt-2.5 text-[11.5px] leading-relaxed text-muted">
-        <b className="text-teal-dark">שלי</b> = רק מה שהזנתי ידנית בהנה&quot;ח (אשראי, מזומן, ניידים, רו&quot;ח,
-        ביטוח לאומי...). <b className="text-[#2563eb]">ניידים</b> + <b className="text-[#6b3fa0]">חדרים</b> = הספרים
-        של הסניפים עצמם, בסכומים מלאים. <b className="text-ink">שני הספרים לא מתחברים זה לזה</b> — ולכן אין כפילות:
-        כסף שעבר מהסניף לכיס שלי נספר ב&quot;שלי&quot; רק כשהזנתי אותו.
+        <b className="text-teal-dark">תזרים</b> = כמה כסף באמת עבר דרך הידיים והחשבון שלי — נגזר מהתנועות
+        עצמן, כולל חלקי בהוצאות הסניפים. <b className="text-[#2563eb]">ניידים</b> +{" "}
+        <b className="text-[#6b3fa0]">חדרים</b> = ה<b className="text-ink">מחזור</b>: כמה העסק ייצר בפועל
+        בסניפים, בסכומים מלאים, בלי קשר לכיס שדרכו זה עבר.{" "}
+        <b className="text-ink">שני הספרים לא נסכמים זה עם זה</b> — לא כי זו כפילות, אלא כי אותו שקל עונה כאן
+        על שתי שאלות שונות, וחיבורן לא עונה על אף אחת מהן.
       </p>
     </section>
   );
@@ -903,6 +905,103 @@ export function CostTable({
           </tfoot>
         </table>
       </div>
+    </section>
+  );
+}
+
+/* ------------------------- branch payback card -------------------------- */
+
+/**
+ * The card that answers "איפה הסניף אוחז" (פרק ז׳).
+ *
+ * Three independent numbers and the ratio between them: how much was invested (שכבה 2), how much
+ * the branch earns (שכבה 3), and how much of the investment has already come back. None of them
+ * is subtracted from another anywhere in the system - the investment is compared against the
+ * profit, never deducted from it - which is what keeps equipment out of the operating book while
+ * leaving it fully visible.
+ *
+ * Owner-only: a partner sees how many machines are at his branch, because he has to run them,
+ * but never what they are worth.
+ */
+export function BranchPaybackCard({
+  invested,
+  laptopCount,
+  stickCount,
+  netThisMonth,
+  ownerShare,
+  payback,
+  monthLabel,
+}: {
+  invested: number;
+  laptopCount: number;
+  stickCount: number;
+  netThisMonth: number;
+  ownerShare: number;
+  payback: { ratio: number; remaining: number; returned: number; monthsToBreakEven: number | null };
+  monthLabel: string;
+}) {
+  const ratioPct = Math.round(payback.ratio * 100);
+  const cells: [string, string][] = [
+    ["השקעה", money(invested)],
+    [`נטו ${monthLabel}`, money(netThisMonth)],
+    ["חלקי מצטבר", money(payback.returned)],
+    ["חלקי החודש", money(ownerShare)],
+  ];
+
+  return (
+    <section className={CARD}>
+      <div className={HEAD}>
+        <div>
+          <h2 className="text-[15px] font-extrabold text-ink">השקעה מול החזר</h2>
+          <p className="mt-0.5 text-[12.5px] text-muted">
+            {laptopCount} מחשבים · {stickCount} סטיקים — לפי הפריטים שנמצאים פיזית בסניף
+          </p>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-px bg-card-border sm:grid-cols-4">
+        {cells.map(([label, value]) => (
+          <div key={label} className="bg-white px-3.5 py-2.5">
+            <p className="text-[10.5px] font-extrabold text-muted">{label}</p>
+            <p className="mt-px text-[17px] font-black tabular-nums text-ink">{value}</p>
+          </div>
+        ))}
+      </div>
+
+      {invested > 0 ? (
+        <div className="border-t border-card-border px-4 py-3">
+          <div className="flex items-center justify-between gap-2 text-[12px] font-extrabold">
+            <span className="text-muted">החזר השקעה</span>
+            <span className="tabular-nums text-ink">{ratioPct}%</span>
+          </div>
+          <span className="mt-1.5 block h-2 overflow-hidden rounded-full bg-[#eef1f6]">
+            <span
+              className="block h-full rounded-full transition-all"
+              style={{
+                width: `${Math.min(100, ratioPct)}%`,
+                background: payback.ratio >= 1 ? "#0f6e56" : "#1a8a76",
+              }}
+            />
+          </span>
+          <p className="mt-1.5 text-[11.5px] text-muted">
+            {payback.remaining > 0 ? (
+              <>
+                נותרו {money(payback.remaining)} להחזר ·{" "}
+                {payback.monthsToBreakEven == null
+                  ? "בקצב הנוכחי הסניף לא מחזיר את עצמו"
+                  : `צפי איזון: עוד כ-${payback.monthsToBreakEven} חודשים`}
+              </>
+            ) : (
+              "הסניף כבר החזיר את מלוא ההשקעה בציוד שבו"
+            )}
+          </p>
+        </div>
+      ) : (
+        <p className="border-t border-card-border px-4 py-3 text-[11.5px] leading-relaxed text-muted">
+          עדיין לא משויכת לסניף הזה אף רכישה, ולכן אין ממה לחשב החזר השקעה. הזנת החשבונית במסך הרכש
+          ומשלוח הפריטים לסניף ייצרו את המספר הזה לבד.
+        </p>
+      )}
     </section>
   );
 }

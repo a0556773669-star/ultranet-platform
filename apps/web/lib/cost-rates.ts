@@ -49,6 +49,25 @@ export const DEFAULT_COST_RATES: Omit<CostRate, "id">[] = [
 export const RETIRED_RATE_KEYS = new Set(["ads", "print"]);
 
 /**
+ * Every one-time equipment rate is retired too, and for a stronger reason than the two above.
+ *
+ * A `kind: "once"` rate is an ESTIMATE - one flat price for every computer in the business,
+ * counted in whichever month the machine happened to be added. A supplier invoice for 15,000 ₪
+ * could therefore never reconcile against what the branches showed: they were two numbers with
+ * no mathematical relationship to each other. Real per-unit cost now comes from the asset layer
+ * (n_items.unitCost, lib/assets.ts), where every unit carries what it actually cost on its own
+ * invoice and sits in exactly one place.
+ *
+ * Retired the same way `ads` and `print` were - as a filter, not a migration. A price list saved
+ * before this change still holds those documents, and they simply stop producing cost lines
+ * without anyone having to delete anything. Turning the asset layer off again would bring them
+ * straight back.
+ */
+export function isRetiredRate(rate: Pick<CostRate, "key" | "kind">): boolean {
+  return RETIRED_RATE_KEYS.has(rate.key) || rate.kind === "once";
+}
+
+/**
  * Words that mark an existing manual branch expense as "the same thing" as a rate category.
  * Used to suppress the rate line for that branch/month so a cost the owner already typed by
  * hand (n_fixed_expenses / n_var_expenses) is never counted a second time from the price list.

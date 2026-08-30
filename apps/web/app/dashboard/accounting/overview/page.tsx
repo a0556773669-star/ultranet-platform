@@ -3,7 +3,8 @@ import { redirect } from "next/navigation";
 import { BarChart3 } from "lucide-react";
 import { requireModuleAccess } from "@/lib/perms";
 import { getOwnerName } from "@/lib/owner-name";
-import { getAdminFirestore } from "@/lib/firebase-admin";
+import { loadTransactionModel } from "@/lib/tx-data";
+import { flowTotals } from "@/lib/business-ledger";
 import {
   loadAccountingOverview,
   currentMonth,
@@ -30,32 +31,36 @@ import {
 const MONTH_RE = /^\d{4}-\d{2}$/;
 
 /**
- * All-time totals of the owner's own ledger, with no month window at all.
+ * All-time totals of the flow book, with no month window at all.
  * The monthly report deliberately shows a 12-month window, which silently hides everything
  * older than that - and most of this business's spending (branch setup) predates it. This strip
  * is the "מתחילת הדרך" answer that used to be the whole of the old accounting screen.
+ *
+ * Derived from the transaction model like every other flow figure, so it can no longer disagree
+ * with the report below it - and equipment is shown as its own cell rather than folded into
+ * expenses, because it is capital, not cost.
  */
 async function AllTimeStrip() {
-  const db = getAdminFirestore();
-  const [incomeSnap, expenseSnap] = await Promise.all([
-    db.collection("n_ah_income").get(),
-    db.collection("n_ah_expenses").get(),
-  ]);
-  const income = incomeSnap.docs.reduce((s, d) => s + ((d.data() as { amount?: number }).amount ?? 0), 0);
-  const expense = expenseSnap.docs.reduce((s, d) => s + ((d.data() as { amount?: number }).amount ?? 0), 0);
-  const balance = income - expense;
+  const model = await loadTransactionModel();
+  const totals = flowTotals(model.transactions);
   const nf = new Intl.NumberFormat("he-IL", { maximumFractionDigits: 0 });
   const fmt = (n: number) => `${nf.format(Math.round(n))} ₪`;
 
   const cells = [
-    { label: 'סה"כ הכנסות מתחילת הדרך', value: fmt(income), color: "#059669", rail: "#059669" },
-    { label: 'סה"כ הוצאות מתחילת הדרך', value: fmt(expense), color: "#dc2626", rail: "#dc2626" },
-    { label: "מאזן מתחילת הדרך", value: fmt(balance), color: balance >= 0 ? "#0f6e56" : "#dc2626", rail: "#1a8a76" },
+    { label: "תזרים — הכנסות מתחילת הדרך", value: fmt(totals.income), color: "#059669", rail: "#059669" },
+    { label: "תזרים — הוצאות מתחילת הדרך", value: fmt(totals.expense), color: "#dc2626", rail: "#dc2626" },
+    {
+      label: "מאזן מתחילת הדרך",
+      value: fmt(totals.balance),
+      color: totals.balance >= 0 ? "#0f6e56" : "#dc2626",
+      rail: "#1a8a76",
+    },
+    { label: "השקעה בציוד (הוני)", value: fmt(totals.capital), color: "#6b46c1", rail: "#6b46c1" },
   ];
 
   return (
     <section className="mb-3">
-      <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-3">
+      <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-4">
         {cells.map((c) => (
           <article
             key={c.label}
@@ -69,9 +74,12 @@ async function AllTimeStrip() {
           </article>
         ))}
       </div>
-      <p className="mt-1.5 px-1 text-[11.5px] text-muted">
-        כל ההכנסות וההוצאות שהוזנו להנה&quot;ח האישית, מהיום הראשון ובלי הגבלת חודשים — בניגוד לדוח
-        למטה, שמציג חלון של 12 חודשים.
+      <p className="mt-1.5 px-1 text-[11.5px] leading-relaxed text-muted">
+        כל התנועות מהיום הראשון, בלי הגבלת חודשים — בניגוד לדוח למטה, שמציג חלון של 12 חודשים.
+        ההשקעה בציוד מוצגת בנפרד ולא בתוך ההוצאות: היא הון, לא הוצאה.{" "}
+        <Link href="/dashboard/accounting/bottom-line" className="underline">
+          לשורה התחתונה המלאה ולמזכר ההוני
+        </Link>
       </p>
     </section>
   );
@@ -174,7 +182,7 @@ export default async function AccountingOverviewPage({
         </div>
       )}
 
-      {/* The per-month "שלי" cards used to sit here. They duplicated the personal ledger card
+      {/* The per-month "תזרים" cards used to sit here. They duplicated the personal ledger card
           further down and read 0 whenever nothing had been entered that month, so the screen
           now opens straight on the two books. */}
       <BookSwitcher
@@ -209,7 +217,7 @@ export default async function AccountingOverviewPage({
 
         <div className="flex flex-col gap-3.5">
           <FlowCard
-            title="תזרים — הסניפים"
+            title="מחזור — כל הסניפים"
             series={data.rows.slice(0, idx + 1).map((r) => ({
               month: r.month,
               income: r.branches.income,
@@ -217,10 +225,10 @@ export default async function AccountingOverviewPage({
             }))}
             lapProfit={data.rows.slice(0, idx + 1).map((r) => r.rentals.profit)}
             cumValues={data.rows.slice(0, idx + 1).map((r) => r.mine.profit)}
-            cumLabel="יתרה מצטברת שלי — לפי מה שהזנתי"
-            footLeftLabel={`יתרה מצטברת שלי עד ${mLabel(month)}`}
+            cumLabel="יתרה מצטברת בתזרים"
+            footLeftLabel={`יתרה מצטברת בתזרים עד ${mLabel(month)}`}
             footLeftValue={runningBalance}
-            footRightLabel="רווח הסניפים החודש"
+            footRightLabel="רווח המחזור החודש"
             footRightValue={row.branches.profit}
             note={`עמודות = כל הסניפים יחד (ניידים + חדרי מחשבים). הקו הכחול = הרווח מהשכרות הניידים בלבד — החודש ${money(
               row.rentals.profit,

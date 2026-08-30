@@ -19,7 +19,8 @@ import {
   createLinkedOwnerLedgerExpense,
   deleteLinkedOwnerLedgerExpense,
 } from "@/lib/branch-expense-ledger";
-import type { BranchIncome, VariableExpense } from "@ultranet/shared-types";
+import { normalizeAllocations } from "@/lib/tx";
+import type { BranchIncome, Transaction, VariableExpense } from "@ultranet/shared-types";
 
 /** Same contract as the rest of the accounting forms: never throw, always answer. */
 export interface SaveResult {
@@ -99,7 +100,16 @@ export async function deleteEntryAction(
     const doc = await ref.get();
     if (!doc.exists) return { ok: false, message: "השורה כבר לא קיימת" };
 
-    const data = doc.data() as { branchId?: string; linkedAhExpenseId?: string };
+    const data = doc.data() as { branchId?: string; linkedAhExpenseId?: string; purchaseId?: string };
+    // A capital transaction is one third of a purchase (invoice + transaction + items). Deleting
+    // it alone would leave an invoice pointing at nothing and break the balance the asset layer
+    // rests on, so it is deleted from the purchase screen - which removes all three together.
+    if (book === "tx" && data.purchaseId) {
+      return {
+        ok: false,
+        message: "זו תנועה של רכישה. למחיקה יש להיכנס לרכישה עצמה — שם נמחקים גם החשבונית והפריטים יחד איתה.",
+      };
+    }
     if (kind === "expense" && book === "branch") {
       await deleteLinkedOwnerLedgerExpense(data.linkedAhExpenseId);
     }
@@ -141,6 +151,58 @@ export async function updateEntryAction(
     const targetBook: EntryBook = targetBranchId ? "branch" : "ledger";
 
     const db = getAdminFirestore();
+
+    /* --- the unified book: a transaction is edited in place ------------------ *
+     * A tx row never moves between books, because there is only one. Re-tagging it to another
+     * branch is a change of node, not a change of collection - which is the whole point of
+     * collapsing the two-axis grid into one place. `ownerShare` is rescaled with the amount so
+     * an edited total can never drift away from the split it carries.                        */
+    if (book === "tx") {
+      const txRef = db.collection(entryCollection(kind, "tx")).doc(id);
+      const txDoc = await txRef.get();
+      if (!txDoc.exists) return { ok: false, message: "התנועה כבר לא קיימת" };
+      const tx = txDoc.data() as Partial<Transaction>;
+
+      const oldAmount = tx.amount || 0;
+      const ratio = oldAmount > 0 ? fields.amount / oldAmount : 1;
+      const patch: Record<string, unknown> = {
+        date: fields.date,
+        month: fields.date.slice(0, 7),
+        amount: Math.round(fields.amount),
+        desc: fields.desc || fields.category || (kind === "income" ? "הכנסה" : "הוצאה"),
+        category: fields.category ?? FieldValue.delete(),
+        ownerShare: Math.round((tx.ownerShare ?? oldAmount) * ratio),
+      };
+      if (tx.allocations?.length) {
+        patch.allocations = normalizeAllocations(
+          fields.amount,
+          tx.allocations.map((a) => ({ branchId: a.branchId, amount: a.amount * ratio })),
+        );
+      }
+      if (targetBranchId && targetBranchId !== tx.node?.branchId) {
+        const branchDoc = await db.collection("n_branches").doc(targetBranchId).get();
+        if (!branchDoc.exists) return { ok: false, message: "הסניף שנבחר לא נמצא" };
+        const branchType = (branchDoc.data() as { branchType?: string }).branchType;
+        patch.node = {
+          business:
+            branchType === "rentals" || branchType === "computers" || branchType === "coworking"
+              ? branchType
+              : "hq",
+          branchId: targetBranchId,
+        };
+        // Re-tagging to one branch replaces any previous split; keeping both would let the
+        // allocations disagree with the node the row now hangs on.
+        patch.allocations = FieldValue.delete();
+      }
+
+      await txRef.set(patch, { merge: true });
+      revalidateEverywhere([tx.node?.branchId, targetBranchId]);
+      return {
+        ok: true,
+        message: `התנועה עודכנה: ${fields.desc || fields.category} — ${money(fields.amount)}`,
+      };
+    }
+
     const ref = db.collection(entryCollection(kind, book)).doc(id);
     const doc = await ref.get();
     if (!doc.exists) return { ok: false, message: "השורה כבר לא קיימת" };

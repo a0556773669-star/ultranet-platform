@@ -11,8 +11,10 @@ import type {
   AccountingIncome,
   Branch,
   BranchIncome,
+  Transaction,
   VariableExpense,
 } from "@ultranet/shared-types";
+import { TX_COLLECTION, TX_NATURE_LABEL } from "./tx";
 
 const INCOME_TYPE_LABELS: Record<string, string> = {
   laptops: "ניידים",
@@ -47,13 +49,14 @@ export interface MovementsData {
  */
 export async function loadMovements(): Promise<MovementsData> {
   const db = getAdminFirestore();
-  const [ahIncomeSnap, ahExpenseSnap, branchIncomeSnap, varExpenseSnap, branchesSnap] =
+  const [ahIncomeSnap, ahExpenseSnap, branchIncomeSnap, varExpenseSnap, branchesSnap, txSnap] =
     await Promise.all([
       db.collection("n_ah_income").get(),
       db.collection("n_ah_expenses").get(),
       db.collection("n_branch_income").get(),
       db.collection("n_var_expenses").get(),
       db.collection("n_branches").get(),
+      db.collection(TX_COLLECTION).get(),
     ]);
 
   const doc = <T>(d: QueryDocumentSnapshot) => ({ ...(d.data() as Omit<T, "id">), id: d.id }) as T;
@@ -117,6 +120,22 @@ export async function loadMovements(): Promise<MovementsData> {
       branchId: e.branchId,
       branchName: nameOf(e.branchId),
     })),
+    // The unified book. One collection for income and expense alike: a transaction already says
+    // which it is, so the two-axis grid above collapses into a single destination.
+    ...txSnap.docs
+      .map((d) => doc<Transaction>(d))
+      .map((t) => ({
+        id: t.id,
+        kind: (t.direction === "in" ? "income" : "expense") as "income" | "expense",
+        book: "tx" as const,
+        desc: t.desc || t.category || (t.direction === "in" ? "הכנסה" : "הוצאה"),
+        category: t.category,
+        date: t.date ?? "",
+        amount: t.amount ?? 0,
+        branchId: t.node?.branchId,
+        branchName: nameOf(t.node?.branchId),
+        natureLabel: TX_NATURE_LABEL[t.nature] ?? undefined,
+      })),
   ].sort((a, b) => b.date.localeCompare(a.date));
 
   const liveBranches = branches

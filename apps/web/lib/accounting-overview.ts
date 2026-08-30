@@ -29,8 +29,6 @@ import type {
   BranchIncome,
   FixedExpense,
   VariableExpense,
-  AccountingIncome,
-  AccountingExpense,
   CollectionRoute,
   CostRate,
   BranchCostSetting,
@@ -50,6 +48,10 @@ import {
   GRAPHICS_RATE_KEY,
 } from "./cost-rates";
 import { loadCostRates } from "./cost-rates-data";
+import { ITEM_KIND_LABEL, investmentByLocation, type LocationInvestment } from "./assets";
+import { loadAssets } from "./assets-data";
+import { loadTransactionModel, type UnifiedTx } from "./tx-data";
+import { chargesInMonth } from "./tx";
 import { ADS_RATE_KEY, ADS_RATE_MATCH, adAreaForBranch, adAreaNote, splitAdArea } from "./ad-areas";
 import { loadAdAreas } from "./ad-areas-data";
 
@@ -246,8 +248,10 @@ export interface OverviewData {
   branchMonths: Map<string, BranchMonth>;
   /** branchId -> when its book opens and whether it has started taking money in */
   activityByBranch: Map<string, BranchActivity>;
-  /** branchId -> cumulative one-time equipment lines (investment to date) */
+  /** branchId -> cumulative equipment investment, valued from the asset layer (שכבה 2) */
   investmentByBranch: Map<string, CostLine[]>;
+  /** false while no purchase has been entered yet - the screens then ask for one */
+  hasAssetLayer: boolean;
   /** branchId -> rateKey -> the quantity the system derives on its own, before any manual
    *  override; the per-branch settings form shows it as the placeholder */
   autoQtyByBranch: Map<string, Map<string, number>>;
@@ -287,12 +291,16 @@ interface RawData {
   fixedByBranch: Map<string, FixedExpense[]>;
   variableByBranch: Map<string, VariableExpense[]>;
   routesById: Map<string, CollectionRoute>;
-  ahIncome: AccountingIncome[];
-  ahExpenses: AccountingExpense[];
+  /** the unified transaction model - the flow book is derived from it, never stored */
+  transactions: UnifiedTx[];
   rates: CostRate[];
   usingDefaultRates: boolean;
   settings: Map<string, BranchCostSetting>;
   adAreas: AdArea[];
+  /** שכבה 2: real per-branch investment, from where the items physically are */
+  investmentByBranch: Map<string, LocationInvestment>;
+  /** true once at least one real purchase exists - before that, there is nothing to show */
+  hasAssetLayer: boolean;
 }
 
 function groupBy<T extends { branchId: string }>(items: T[]): Map<string, T[]> {
@@ -316,10 +324,10 @@ async function loadRaw(): Promise<RawData> {
     fixedSnap,
     variableSnap,
     routesSnap,
-    ahIncomeSnap,
-    ahExpensesSnap,
+    model,
     ratesData,
     adAreas,
+    assets,
   ] = await Promise.all([
     db.collection("n_branches").get(),
     db.collection("n_laptops").get(),
@@ -329,10 +337,10 @@ async function loadRaw(): Promise<RawData> {
     db.collection("n_fixed_expenses").get(),
     db.collection("n_var_expenses").get(),
     db.collection("n_collection_routes").get(),
-    db.collection("n_ah_income").get(),
-    db.collection("n_ah_expenses").get(),
+    loadTransactionModel(),
     loadCostRates(),
     loadAdAreas(),
+    loadAssets(),
   ]);
 
   const doc = <T>(d: QueryDocumentSnapshot) => ({ ...(d.data() as Omit<T, "id">), id: d.id }) as T;
@@ -349,12 +357,13 @@ async function loadRaw(): Promise<RawData> {
     fixedByBranch: groupBy(fixedSnap.docs.map((d) => doc<FixedExpense>(d))),
     variableByBranch: groupBy(variableSnap.docs.map((d) => doc<VariableExpense>(d))),
     routesById,
-    ahIncome: ahIncomeSnap.docs.map((d) => doc<AccountingIncome>(d)),
-    ahExpenses: ahExpensesSnap.docs.map((d) => doc<AccountingExpense>(d)),
+    transactions: model.transactions,
     rates: ratesData.rates,
     usingDefaultRates: ratesData.usingDefaults,
     settings: ratesData.settingsByBranchRate,
     adAreas,
+    investmentByBranch: investmentByLocation(assets.items),
+    hasAssetLayer: assets.items.length > 0,
   };
 }
 
@@ -364,39 +373,54 @@ async function loadRaw(): Promise<RawData> {
 
 const monthOf = (row: { month?: string; date?: string }) => row.month || (row.date ?? "").slice(0, 7);
 
-function buildMyLedger(
-  months: string[],
-  income: AccountingIncome[],
-  expenses: AccountingExpense[],
-): Map<string, MyMonth> {
+/**
+ * The flow book, derived from the transaction model instead of read out of n_ah_income /
+ * n_ah_expenses.
+ *
+ * The difference is not cosmetic. Read from those two collections, this book only ever showed
+ * rows the owner had typed there - which is exactly why a copy of every branch expense had to be
+ * written into it (the mirror mechanism), why recurring expenses could not be copied at all, and
+ * why several screens each added their own correction on top. Derived, it shows the owner's real
+ * cash position from the movements themselves, with no copies and nothing to keep in sync.
+ *
+ * Capital and transfers are excluded on purpose: equipment is not an expense (כלל 7) and a
+ * settlement is not income (כלל 8). Both are shown in their own right on the bottom-line screen.
+ */
+function buildMyLedger(months: string[], transactions: UnifiedTx[]): Map<string, MyMonth> {
   const map = new Map<string, MyMonth>();
   for (const m of months) {
     map.set(m, { month: m, income: [], expenses: [], incomeTotal: 0, expenseTotal: 0, profit: 0 });
   }
-  for (const i of income) {
-    const bucket = map.get(monthOf(i));
-    if (!bucket) continue;
-    bucket.income.push({
-      id: i.id,
-      date: i.date,
-      label: i.category || i.desc || "הכנסה",
-      category: i.category,
-      amount: i.amount || 0,
-    });
-    bucket.incomeTotal += i.amount || 0;
+
+  for (const tx of transactions) {
+    // Only money that physically moved through the owner's own hands.
+    if ((tx.paidBy ?? "owner") !== "owner") continue;
+    if (tx.nature !== "operating") continue;
+
+    for (const m of months) {
+      if (!chargesInMonth(tx, m)) continue;
+      const bucket = map.get(m)!;
+      // Income counts in full (it reached the owner); an expense counts only at the owner's own
+      // share, since the rest is the partner's cost even when the owner fronted the cash.
+      const amount = tx.direction === "in" ? tx.amount : tx.ownerShare;
+      if (amount <= 0) continue;
+      const entry: MyEntry = {
+        id: `${tx.source}:${tx.id}:${m}`,
+        date: tx.recurring?.from ? `${m}-01` : tx.date,
+        label: tx.category || tx.desc || (tx.direction === "in" ? "הכנסה" : "הוצאה"),
+        category: tx.category,
+        amount,
+      };
+      if (tx.direction === "in") {
+        bucket.income.push(entry);
+        bucket.incomeTotal += amount;
+      } else {
+        bucket.expenses.push(entry);
+        bucket.expenseTotal += amount;
+      }
+    }
   }
-  for (const e of expenses) {
-    const bucket = map.get(monthOf(e));
-    if (!bucket) continue;
-    bucket.expenses.push({
-      id: e.id,
-      date: e.date,
-      label: e.category || e.desc || "הוצאה",
-      category: e.category,
-      amount: e.amount || 0,
-    });
-    bucket.expenseTotal += e.amount || 0;
-  }
+
   for (const bucket of map.values()) {
     bucket.profit = bucket.incomeTotal - bucket.expenseTotal;
     bucket.income.sort((a, b) => b.amount - a.amount);
@@ -779,35 +803,16 @@ function computeBranchMonth(b: Branch, raw: RawData, activity: BranchActivity, m
       });
       continue;
     }
-    if (rate.kind === "monthly") {
-      const setting = raw.settings.get(branchCostSettingId(b.id, rate.key));
-      const { qty, note } = resolveQty(rate, b, raw, setting);
-      const line = resolveRateLine(rate, b, raw, qty, note, "monthly", rate.label);
-      if (line) lines.push(line);
-    } else if (rate.qtySource === "laptops") {
-      // One-time equipment only hits a month when a computer was actually added that month.
-      // But once the owner has typed a quantity for this branch by hand, she is stating a TOTAL
-      // ("this branch has 11 computers"), not a purchase date - and charging one month for the
-      // single machine that happens to carry that month's addedDate showed 1,200 where 11 × 1,200
-      // was meant. In that case the equipment belongs in the investment table only, which does
-      // use the typed quantity, so no monthly purchase line is derived at all.
-      const manualQty = raw.settings.get(branchCostSettingId(b.id, rate.key))?.qty != null;
-      if (manualQty) continue;
-      const added = (raw.laptopsByBranch.get(b.id) ?? []).filter(
-        (l) => l.addedDate && l.addedDate.slice(0, 7) === month,
-      ).length;
-      const line = resolveRateLine(
-        rate,
-        b,
-        raw,
-        added,
-        "מחשבים שנוספו לסניף החודש",
-        "once",
-        `${rate.label} (נרכש החודש)`,
-      );
-      if (line) lines.push(line);
-    }
-    // "once" rates with no date on the item (sticks) never hit a month - investment table only
+    // Only recurring charges can reach a branch's operating book at all. The price list no
+    // longer holds one-time equipment rates (see isRetiredRate): equipment is capital, it is
+    // valued from the real invoices in the asset layer, and it never enters this book (כלל 7).
+    // The old "מחשב (נרכש החודש)" line - a flat estimate charged in whichever month a machine
+    // happened to be added - is gone with them.
+    if (rate.kind !== "monthly") continue;
+    const setting = raw.settings.get(branchCostSettingId(b.id, rate.key));
+    const { qty, note } = resolveQty(rate, b, raw, setting);
+    const line = resolveRateLine(rate, b, raw, qty, note, "monthly", rate.label);
+    if (line) lines.push(line);
   }
 
   const incomeLines = branchIncomeLines(b, raw, month);
@@ -842,17 +847,39 @@ function computeBranchMonth(b: Branch, raw: RawData, activity: BranchActivity, m
   };
 }
 
-/** Cumulative one-time equipment cost of a branch, independent of any month. */
+/**
+ * Cumulative equipment investment in a branch — from the asset layer, not from the price list.
+ *
+ * This used to multiply a flat estimate ("every computer costs 1,200 ₪") by a derived quantity,
+ * which is why a real 15,000 ₪ invoice could never be reconciled against what the branches
+ * showed. Now each line is the sum of what the units of that kind ACTUALLY cost on their own
+ * invoices, summed over the units physically located in this branch. Equipment is capital, so
+ * `owedBy` is always the owner and `netToOwner` is always 0: it never splits with a partner and
+ * never enters the branch's operating book (כלל 7).
+ */
 function computeInvestment(b: Branch, raw: RawData): CostLine[] {
+  const investment = raw.investmentByBranch.get(b.id);
+  if (!investment) return [];
   const out: CostLine[] = [];
-  for (const rate of raw.rates) {
-    if (rate.kind !== "once") continue;
-    const setting = raw.settings.get(branchCostSettingId(b.id, rate.key));
-    const { qty, note } = resolveQty(rate, b, raw, setting);
-    const line = resolveRateLine(rate, b, raw, qty, note, "once", rate.label);
-    if (line) out.push(line);
+  for (const [kind, total] of Object.entries(investment.totalByKind)) {
+    const qty = investment.countByKind[kind as keyof typeof investment.countByKind];
+    if (!qty || !total) continue;
+    out.push(
+      makeLine({
+        key: `item_${kind}`,
+        label: ITEM_KIND_LABEL[kind as keyof typeof ITEM_KIND_LABEL],
+        qty,
+        unitCost: total / qty,
+        total,
+        owedBy: "owner",
+        paidBy: "owner",
+        kind: "once",
+        source: "rate",
+        qtyNote: "עלות אמיתית מחשבוניות הרכש, לפי הפריטים שנמצאים בסניף",
+      }),
+    );
   }
-  return out;
+  return out.sort((a, b2) => b2.total - a.total);
 }
 
 /* ------------------------------------------------------------------ *
@@ -871,7 +898,7 @@ export async function loadAccountingOverview(endMonth: string, monthCount = 12):
     )
     .sort((a, b) => a.name.localeCompare(b.name, "he"));
 
-  const myByMonth = buildMyLedger(months, raw.ahIncome, raw.ahExpenses);
+  const myByMonth = buildMyLedger(months, raw.transactions);
 
   const activityByBranch = new Map<string, BranchActivity>();
   const branchMonths = new Map<string, BranchMonth>();
@@ -924,6 +951,7 @@ export async function loadAccountingOverview(endMonth: string, monthCount = 12):
   return {
     months,
     branches,
+    hasAssetLayer: raw.hasAssetLayer,
     rates: raw.rates,
     usingDefaultRates: raw.usingDefaultRates,
     adAreas: raw.adAreas,

@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { getAdminFirestore } from "@/lib/firebase-admin";
-import { COST_RATES_COLLECTION, DEFAULT_COST_RATES } from "@/lib/cost-rates";
+import { COST_RATES_COLLECTION, DEFAULT_COST_RATES, isRetiredRate } from "@/lib/cost-rates";
 import type { CostRate } from "@ultranet/shared-types";
 
 async function requireOwner() {
@@ -30,7 +30,9 @@ export async function seedDefaultRatesAction() {
   const db = getAdminFirestore();
   const existing = await db.collection(COST_RATES_COLLECTION).get();
   const have = new Set(existing.docs.map((d) => d.id));
-  const missing = DEFAULT_COST_RATES.filter((r) => !have.has(r.key));
+  // Retired categories are never seeded: writing a document that is filtered out on every read
+  // would only leave something in Firestore that looks like a live rate and isn't.
+  const missing = DEFAULT_COST_RATES.filter((r) => !isRetiredRate(r) && !have.has(r.key));
   if (missing.length === 0) return;
   const batch = db.batch();
   for (const rate of missing) {
