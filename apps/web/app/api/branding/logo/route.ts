@@ -17,7 +17,6 @@ export async function GET() {
   return new NextResponse(decoded.body, {
     headers: {
       "Content-Type": decoded.contentType,
-      "Content-Length": String(decoded.body.byteLength),
       // Safe to cache forever: callers link to ?v=<content hash>, so a changed logo is a
       // different URL rather than a stale hit on this one.
       "Cache-Control": "public, max-age=31536000, immutable",
