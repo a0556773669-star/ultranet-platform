@@ -19,7 +19,7 @@ import { computePartnerSettlement } from "@/lib/partner-settlement";
 import { monthsBetween } from "@/lib/branch-accounting";
 import { loadReportRecipients, loadOwnerEmail } from "@/lib/branch-report-recipients";
 import { monthLabel } from "@/lib/branch-month-report";
-import { mailerConfigError } from "@/lib/mailer";
+import { mailerConfigError, mailerSandboxMode, SANDBOX_NOTICE } from "@/lib/mailer";
 import { BranchAccountingView } from "./branch-view";
 import { OwnerBranchesOverview } from "./owner-overview";
 import { UnifiedBranchesTable } from "./unified-branches-table";
@@ -115,6 +115,7 @@ export default async function RentalsAccountingPage({
             recipients={recipients}
             ownerEmail={ownerEmail}
             mailerError={mailerConfigError()}
+            sandboxNotice={mailerSandboxMode() ? SANDBOX_NOTICE : null}
           />
         </div>
         <UnifiedBranchesTable branches={rentalsBranches} raw={raw} month={month} />

@@ -41,6 +41,7 @@ export function ReportButtons({
   recipients,
   ownerEmail,
   mailerError,
+  sandboxNotice,
 }: {
   month: string;
   monthLabel: string;
@@ -48,6 +49,8 @@ export function ReportButtons({
   ownerEmail: string | null;
   /** null when sending is configured; otherwise the Hebrew reason it isn't. */
   mailerError: string | null;
+  /** set when sending works but only reaches your own inbox (Resend's sandbox sender). */
+  sandboxNotice: string | null;
 }) {
   const withEmail = recipients.filter((r) => r.email);
   const missingEmail = recipients.filter((r) => !r.email);
@@ -131,6 +134,11 @@ export function ReportButtons({
           {mailerError && (
             <p className="mb-3 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-[12px] leading-relaxed text-amber-800">
               {mailerError}
+            </p>
+          )}
+          {!mailerError && sandboxNotice && (
+            <p className="mb-3 rounded-lg border border-sky-300 bg-sky-50 px-3 py-2 text-[12px] leading-relaxed text-sky-900">
+              {sandboxNotice}
             </p>
           )}
           <div className="flex flex-col gap-3">
@@ -220,6 +228,11 @@ export function ReportButtons({
               {mailerError && (
                 <p className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-[12px] leading-relaxed text-amber-800">
                   {mailerError}
+                </p>
+              )}
+              {!mailerError && sandboxNotice && (
+                <p className="rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-[12px] font-bold leading-relaxed text-red-800">
+                  {sandboxNotice} כלומר שליחה לסניפים תיכשל כרגע.
                 </p>
               )}
               <p className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-[13px] font-bold leading-relaxed text-amber-900">

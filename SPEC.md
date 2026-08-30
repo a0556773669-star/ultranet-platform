@@ -535,9 +535,9 @@ pnpm dev        # turbo run dev — מריץ web + api
     ההודעה דרך `Attachment.contentId` של Resend. לוגו `https://` מועבר כמו שהוא ללא צורך
     בכל זה; `svg` מוחזר כ-null בכוונה (חסום כמעט בכל לקוחות המייל, ועדיף fallback לטקסט
     "אולטרנט" מאשר תמונה שבורה). **התצוגה המקדימה בדפדפן** ממשיכה להשתמש ב-data URI ישירות.
-  - שליחה בפועל: `apps/web/lib/mailer.ts` (Resend, שכבר היה dependency), דורש
-    `RESEND_API_KEY` + `REPORT_FROM_EMAIL` ב-`.env.local`. בלעדיהם `mailerConfigError()`
-    מחזיר הודעה בעברית שאומרת בדיוק מה חסר, והדיאלוג מציג אותה מראש. **מכוון שזה נפרד
+  - שליחה בפועל: `apps/web/lib/mailer.ts` (Resend, שכבר היה dependency), דורש **רק** `RESEND_API_KEY`. `REPORT_FROM_EMAIL` הוא רשות: בלעדיו השליחה נופלת לכתובת הבדיקה של Resend (`onboarding@resend.dev`), שמגיעה רק לכתובת שאיתה נרשמת שם - `mailerSandboxMode()` מחזיר `true` וה-UI אומר את זה במפורש (רמז כחול בדיאלוג הבדיקה, אזהרה אדומה ב"שלח לכל הסניפים", כי שם זה פשוט ייכשל).
+    בלי `RESEND_API_KEY` בכלל, `mailerConfigError()` מחזיר הודעה בעברית שאומרת בדיוק מה חסר
+    ואיפה להגדיר אותו, והדיאלוג מציג אותה מראש. **מכוון שזה נפרד
     מ-EmailJS** שבמסכי ההתחברות: אלה רצים בדפדפן מול תבנית טקסט קבועה (קוד בן 6 ספרות) שלא
     יכולה לשאת מסמך HTML מעוצב או attachment.
   - כתובת לכל סניף (`lib/branch-report-recipients.ts`): `Branch.partnerEmail`, ובהיעדרה

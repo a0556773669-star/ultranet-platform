@@ -17,21 +17,41 @@ export interface SendResult {
 }
 
 const MISSING_KEY =
-  'שליחת המייל לא מוגדרת עדיין: חסר RESEND_API_KEY בקובץ apps/web/.env.local. ' +
-  'פתח חשבון ב-resend.com, אמת דומיין שליחה, והדבק את המפתח שם. התצוגה המקדימה עובדת גם בלי זה.';
-const MISSING_FROM =
-  'שליחת המייל לא מוגדרת עדיין: חסר REPORT_FROM_EMAIL בקובץ apps/web/.env.local ' +
-  '(כתובת השולח, למשל "אולטרנט <reports@your-domain.co.il>"). היא חייבת להיות בדומיין שאימתת ב-Resend.';
+  'שליחת המייל לא מוגדרת עדיין: חסר RESEND_API_KEY. פתח חשבון ב-resend.com, צור API Key, ' +
+  'והוסף אותו כמשתנה סביבה בפריסה (ב-Vercel: Settings → Environment Variables), ואז Redeploy. ' +
+  'התצוגה המקדימה של הדו"ח עובדת גם בלי זה.';
 
-export function mailerConfigured(): boolean {
-  return !!process.env.RESEND_API_KEY && !!process.env.REPORT_FROM_EMAIL;
+/**
+ * Resend's shared sandbox sender, usable with any API key and no DNS setup at all - but it can
+ * only deliver to the address the Resend account itself was opened with. That makes it exactly
+ * right for "send myself a test" and useless for mailing partners, which is why
+ * mailerSandboxMode() exists: the UI has to say so rather than let a send to a partner fail
+ * with an unexplained Resend error.
+ */
+const SANDBOX_FROM = "onboarding@resend.dev";
+
+export const SANDBOX_NOTICE =
+  'מצב בדיקה: לא הוגדרה כתובת שולח (REPORT_FROM_EMAIL), ולכן המייל נשלח מכתובת הבדיקה של Resend. ' +
+  'היא מצליחה להגיע רק לכתובת שאיתה נרשמת ל-Resend. כדי לשלוח לשותפים צריך לאמת דומיין ב-Resend ' +
+  'ולהגדיר REPORT_FROM_EMAIL.';
+
+function fromAddress(): string {
+  return process.env.REPORT_FROM_EMAIL?.trim() || SANDBOX_FROM;
 }
 
-/** The reason the mailer isn't usable, or null when it is. Lets the UI warn before the click. */
+export function mailerConfigured(): boolean {
+  return !!process.env.RESEND_API_KEY;
+}
+
+/** true when sending falls back to Resend's sandbox sender - deliverable only to your own inbox. */
+export function mailerSandboxMode(): boolean {
+  return mailerConfigured() && !process.env.REPORT_FROM_EMAIL?.trim();
+}
+
+/** The reason the mailer isn't usable at all, or null when it can send. A missing sender address
+ *  is NOT a blocker any more - it degrades to the sandbox sender, see mailerSandboxMode(). */
 export function mailerConfigError(): string | null {
-  if (!process.env.RESEND_API_KEY) return MISSING_KEY;
-  if (!process.env.REPORT_FROM_EMAIL) return MISSING_FROM;
-  return null;
+  return process.env.RESEND_API_KEY ? null : MISSING_KEY;
 }
 
 export async function sendHtmlEmail(params: {
@@ -54,7 +74,7 @@ export async function sendHtmlEmail(params: {
       contentId: img.contentId,
     }));
     const { error } = await resend.emails.send({
-      from: process.env.REPORT_FROM_EMAIL as string,
+      from: fromAddress(),
       to: params.to,
       subject: params.subject,
       html: params.html,
