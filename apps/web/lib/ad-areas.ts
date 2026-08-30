@@ -10,8 +10,9 @@
  * `ownerPct`% (200 ₪) and the branch/partner the rest (200 ₪). Summed over the area's branches
  * that is exactly the campaign again: 3 × 400 = 1,200, of which the owner 3 × 200 = 600.
  *
- * An area replaces the flat per-branch "פרסום" line of the price list (n_cost_rates) for every
- * branch listed in it - see lib/accounting-overview.ts.
+ * An area is the ONE automatic advertising line a branch can get; the price list no longer holds
+ * a flat "פרסום" rate. A branch outside every area (or one that typed its own advertising
+ * expense) is charged only what was entered by hand - see lib/accounting-overview.ts.
  *
  * Pure module on purpose (no firebase-admin import): the setup screen's live preview is a client
  * component and imports splitAdArea() straight from here. Loading n_ad_areas lives in
@@ -20,8 +21,14 @@
 import type { AdArea } from "@ultranet/shared-types";
 
 export const AD_AREAS_COLLECTION = "n_ad_areas";
-/** the price-list key an area campaign takes over from */
+/** the cost-line key a campaign is charged under */
 export const ADS_RATE_KEY = "ads";
+/**
+ * Advertising is no longer a price-list rate (it is a different amount every month - see
+ * RETIRED_RATE_KEYS in lib/cost-rates.ts), so the check "does this branch already have an
+ * advertising expense of its own?" runs against this fixed descriptor instead of a stored rate.
+ */
+export const ADS_RATE_MATCH = { key: ADS_RATE_KEY, label: "פרסום" } as const;
 export const DEFAULT_AD_OWNER_PCT = 50;
 
 export interface AdAreaSplit {

@@ -351,8 +351,10 @@ export interface BranchCostSetting {
  * evenly between the `branchCount` branches of the area, so each branch pays
  * `monthlyCost * (100 - ownerPct) / 100 / branchCount`.
  *
- * Replaces the flat per-branch "פרסום" line of the price list (n_cost_rates) for the branches
- * listed in `branchIds` - see apps/web/lib/ad-areas.ts.
+ * The only automatic advertising line a branch can get: the price list (n_cost_rates) no longer
+ * carries a flat "פרסום" rate, because the amount changes every month. A branch outside every
+ * area - or one that typed its own advertising expense - is charged only what was entered by
+ * hand. See apps/web/lib/ad-areas.ts.
  */
 export interface AdArea {
   id: string;

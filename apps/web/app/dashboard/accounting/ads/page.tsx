@@ -53,7 +53,7 @@ export default async function AdAreasPage({ searchParams }: { searchParams?: { e
         <b className="text-ink">איך זה עובד:</b> מזינים את עלות הפרסום החודשית של האזור ואת מספר הסניפים שבו.{" "}
         {ownerName} נושא באחוז שנקבע (ברירת מחדל 50%), והיתרה מתחלקת שווה בשווה בין הסניפים. לדוגמה — קרית ספר,
         1,200 ₪ לחודש, 3 סניפים: {ownerName} משלם 600 ₪ וכל סניף משלם 200 ₪. השורה נכנסת אוטומטית לפירוט
-        ההוצאות של כל סניף במקום שורת &quot;פרסום&quot; הקבועה של התעריפון.
+        ההוצאות של כל סניף — אלא אם הסניף כבר הזין הוצאת פרסום משלו לאותו חודש, ואז ההזנה הידנית מנצחת.
       </div>
 
       <section className={`${CARD} mb-3.5 overflow-hidden`}>
@@ -86,7 +86,8 @@ export default async function AdAreasPage({ searchParams }: { searchParams?: { e
 
       {areas.length === 0 ? (
         <p className={`${CARD} px-4 py-6 text-center text-sm text-muted`}>
-          עדיין לא הוגדרו אזורי פרסום. כל עוד אין אזור, הפרסום נלקח משורת התעריפון הרגילה לכל סניף בנפרד.
+          עדיין לא הוגדרו אזורי פרסום. כל עוד אין אזור, הפרסום נספר רק לפי מה שכל סניף מזין בעצמו בהוצאות שלו —
+          אין שורת פרסום אוטומטית בתעריפון.
         </p>
       ) : (
         <div className="flex flex-col gap-3.5">
