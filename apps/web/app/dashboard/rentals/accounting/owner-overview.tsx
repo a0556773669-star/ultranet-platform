@@ -42,9 +42,11 @@ function MiniStats({ f }: { f: BranchFinancials }) {
 type Props = {
   parents: BranchFinancials[];
   childrenByParent: Record<string, BranchFinancials[]>;
+  /** the month currently selected in the table above, kept on every drill-down link */
+  month: string;
 };
 
-export function OwnerBranchesOverview({ parents, childrenByParent }: Props) {
+export function OwnerBranchesOverview({ parents, childrenByParent, month }: Props) {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
   // Flat list of every branch (parents + children) for the filter checkboxes and the filtered view.
@@ -119,7 +121,7 @@ export function OwnerBranchesOverview({ parents, childrenByParent }: Props) {
             <div key={p.branch.id} className="rounded-card border border-card-border bg-white p-4">
               <div className="flex items-center justify-between">
                 <Link
-                  href={`/dashboard/rentals/accounting?branchId=${p.branch.id}#branch-history`}
+                  href={`/dashboard/rentals/accounting?month=${month}&branchId=${p.branch.id}#branch-history`}
                   className="text-sm font-extrabold text-ink hover:underline"
                   title="מעקב היסטוריה מלאה על הסניף הזה"
                 >
@@ -149,7 +151,7 @@ export function OwnerBranchesOverview({ parents, childrenByParent }: Props) {
               {kids.map((k) => (
                 <div key={k.branch.id} className="mt-2 rounded-[10px] border border-card-border bg-[#fafbfc] p-3">
                   <Link
-                    href={`/dashboard/rentals/accounting?branchId=${k.branch.id}#branch-history`}
+                    href={`/dashboard/rentals/accounting?month=${month}&branchId=${k.branch.id}#branch-history`}
                     className="text-xs font-bold text-ink hover:underline"
                     title="מעקב היסטוריה מלאה על הסניף הזה"
                   >
@@ -166,7 +168,7 @@ export function OwnerBranchesOverview({ parents, childrenByParent }: Props) {
           {filteredFlat.map(({ f, isChild, parentName }) => (
             <div key={f.branch.id} className="rounded-card border border-card-border bg-white p-4">
               <Link
-                href={`/dashboard/rentals/accounting?branchId=${f.branch.id}#branch-history`}
+                href={`/dashboard/rentals/accounting?month=${month}&branchId=${f.branch.id}#branch-history`}
                 className="text-sm font-extrabold text-ink hover:underline"
                 title="מעקב היסטוריה מלאה על הסניף הזה"
               >

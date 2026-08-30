@@ -185,6 +185,7 @@ pnpm dev        # turbo run dev — מריץ web + api
 | `n_rock_reviews` | `RockReview` | סיכום/לקחים לכל פגישת רבעון/חודש/שבוע - מזהה דטרמיניסטי `${period}_${periodKey}` (upsert, רשומה אחת לתקופה) |
 | `n_cost_rates` | `CostRate` | תעריפון עלויות התפעול (`/dashboard/accounting/rates`) - מחשב/תיק/סטיק/סינון וגלישה: `unitCost`, `kind` (`once`/`monthly`), `owedBy` (ברירת מחדל של חלוקת החוב), `qtySource` (מאיפה נגזרת הכמות בסניף). כשהקולקשן ריק מוצגות ברירות המחדל מ-`lib/cost-rates.ts` בזיכרון בלבד עד ששומרים אותן במפורש |
 | `n_branch_cost_settings` | `BranchCostSetting` | דריסה של שורת תעריפון לסניף מסוים - מזהה דטרמיניסטי `${branchId}__${rateKey}` (upsert). כל שדה רשות: `qty`/`unitCost`/`owedBy`/`paidBy`/`enabled` - מה שלא מוגדר נופל חזרה לערך שבתעריפון |
+| `n_multi_branch_expenses` | `MultiBranchExpense` | הוצאה חד-פעמית אחת שמתחלקת בין כמה סניפי השכרות (`/dashboard/rentals/expenses`): `amount` (הסכום המלא), `ownerPct` (כמה אחוז ממנה על הבעלים), `branchIds` (בין מי מתחלק השאר, שווה בשווה), `paidBy` (מי שילם בפועל - משפיע על כיוון ההתחשבנות בלבד, לא על הפיצול), `date`/`month`, `linkedAhExpenseId` (רשות - רשומת `n_ah_expenses` של חלק הבעלים, נוצרת רק כשהבעלים שילם). הכללה של מודל `n_ad_areas` מפרסום-בלבד לכל הוצאה חד-פעמית; **לא** נשמר כ-N שורות `n_var_expenses` נפרדות כי `owedBy` יודע לבטא רק בעלים/שותף/50-50 ולא אחוז חופשי. נפרס לשורת הוצאה פר-סניף בזמן קריאה (`expandExpenseLines`, `lib/branch-accounting-data.ts`), בדיוק כמו `n_ad_areas` |
 | `n_ad_areas` | `AdArea` | אזור פרסום - קמפיין אחד המשותף לכמה סניפים באותה עיר (`/dashboard/accounting/ads`): `monthlyCost`, `ownerPct` (חלק הבעלים בקמפיין), `branchIds`/`branchCount` (בין כמה סניפים מתחלק השאר), `startMonth`/`endMonth`, `paidBy`. שורת הפרסום האוטומטית היחידה בסניף (בתעריפון אין שורת פרסום) - אלא אם הסניף הזין פרסום ידנית |
 
 > הערה: `RentalClient` שומר `cardLast4` (תצוגה בלבד), `cardExpiry` (MM/YY,
@@ -414,6 +415,20 @@ pnpm dev        # turbo run dev — מריץ web + api
   סימון "הועבר" על ההעברה החודשית עצמה (`syncBranchTransferIncome`) - זה לא סותר את הכלל, זה
   ההבדל בין "הכנסת ניידים גולמית של הסניף" (לעולם לא אוטומטית) לבין "כסף שהבעלים בפועל אישר
   שקיבל" (כן אוטומטית, כי זו פעולה מפורשת של הבעלים בדיוק כמו הקלדה ידנית).
+
+  **הוצאה על כמה סניפים (`n_multi_branch_expenses`, owner בלבד)** — בעמוד האינדקס של ההוצאות
+  (`/dashboard/rentals/expenses`, לא בתוך סניף מסוים, כי היא לא שייכת לאחד): טופס
+  `multi-branch-form.tsx` → `createMultiBranchExpenseAction`/`deleteMultiBranchExpenseAction`
+  (`multi-branch-actions.ts`). הבעלים מזין תיאור, סכום מלא, תאריך, **אחוז שעליו**, מי שילם
+  בפועל, ומסמן אילו סניפים מתחלקים בשאר — עם תצוגה חיה של הפיצול המתקבל. הכלל, במילים של בעל
+  העסק: *הוצאה של 1,000 ₪ על 4 סניפים, 40% עליי = 400 ₪, והסניפים מתחלקים ב-600 = 150 לכל
+  סניף.* הפיצול עצמו הוא `splitMultiBranchExpense` (`apps/web/lib/multi-branch-expense.ts`),
+  מודול טהור (בלי `firebase-admin`) כדי שגם טופס ה-client וגם החישוב בשרת ישתמשו באותה
+  פונקציה — מקבילה מכוונת ל-`splitAdArea` (`lib/ad-areas.ts`), שממנה המודל הוכלל.
+  בספר הבעלים נרשם רק חלקו (`ownerTotal`) ורק כשהוא שילם, דרך
+  `createLinkedOwnerLedgerExpense` הקיים. **שים לב שזה שונה מ-`shared-rentals`**: הוצאה
+  ב-`shared-rentals` נספרת בספר הבעלים בלבד ואינה מתחלקת לאף סניף, ואילו הוצאה רב-סניפית
+  אכן נכנסת להתחשבנות של כל סניף שנבחר.
 - **`/accounting`** — הנה"ח ברמת סניף השכרות. **partner/employee** (לא owner) רואים תצוגת
   סניף אישית - `BranchAccountingView` עם סימון העברות (`mark-transferred-button.tsx`,
   `n_branch_transfers`) - בדיוק כמו קודם, ללא שינוי.
@@ -421,19 +436,33 @@ pnpm dev        # turbo run dev — מריץ web + api
   **owner** רואה עמוד מאוחד (מיזוג של מה שהיה קודם שני עמודים נפרדים - "הנה\"ח" וה-tab
   הישן "חישוב הנה\"ח" ב-`/ledger` - הוסר מ-`rentals-tabs.tsx`, `/ledger` היום עושה `redirect`
   ל-`/accounting`):
+  0. **בורר חודש + הפקת דו"ח** (שורה מעל הטבלה): מימין `MonthPicker` (`month-picker.tsx`) -
+     `<select>` של 24 החודשים האחרונים עד החודש הנוכחי, מנווט ל-`?month=YYYY-MM`; ברירת המחדל
+     היא החודש הנוכחי, וכל ערך פגום/עתידי נופל בחזרה אליו (הליג'ר נבנה רק עד היום). החודש
+     הנבחר מזרים את **כל** העמוד - הטבלה, כרטיס שותפי המחשבים, ה-drill-down וכל קישורי
+     ההיסטוריה שומרים עליו. משמאל `ReportButtons` (`report-buttons.tsx`) - ראו "דו"ח חודשי
+     במייל" למטה.
   1. **`UnifiedBranchesTable`** (`unified-branches-table.tsx`) - טבלה אחת מסוגננת כמו גיליון
-     אקסל, **שורה אחת לכל סניף** (סניפי-בת מסומנים ↳ ומקובצים מתחת לסניף-האב), לחודש הנוכחי
-     בלבד: סניף, חודש, **"הוצאות שלי"** (`BranchFinancials.myExpenseThisMonth` - הוצאות
-     שהבעלים שילם בפועל, מוצג בערך שהשותף חייב עליהן - `partnerExpenseBurden`), **"הוצאות
-     שלו"** (`hisExpenseThisMonth` - הוצאות שהשותף שילם, בערך שהבעלים חייב עליהן -
-     `ownerExpenseBurden`), הכנסות החודש (`grossIncomeThisMonth` - סה"כ ברוטו, לפני חלוקה),
-     יתרה מחודש קודם (`LedgerMonthRow.openingBalance`), עמודת "להעברה" צבועה (ירוק = חיובי =
-     מגיע לבעלים, אדום = שלילי = הבעלים חייב), ותא **"הועבר"** - תיבת סימון + שדה סכום
-     (`TransferMarkCell` → `recordBranchTransferAction` הקיים מ-`ledger/actions.ts`; סימון
-     התיבה קובע סכום מלא, ואפשר לערוך ידנית להעברה חלקית). שלוש השדות `myExpenseThisMonth`/
-     `hisExpenseThisMonth`/`grossIncomeThisMonth` נוספו ל-`BranchFinancials`
-     (`branch-accounting-data.ts`) לצד השדות הקיימים, מחושבים מאותם `thisMonthExpenses`/
-     `thisMonthIncome` שכבר יש שם.
+     אקסל, **שורה אחת לכל סניף** (סניפי-בת מסומנים ↳ ומקובצים מתחת לסניף-האב), לחודש הנבחר.
+     העמודות נקראות מימין לשמאל כמו דף חשבון: סניף · **יתרה מחודש קודם**
+     (`LedgerMonthRow.openingBalance`) · **הוצאות** (`settlementExpenseThisMonth`) · **הכנסות**
+     (`grossIncomeThisMonth` - סה"כ ברוטו, לפני חלוקה) · **צריך להעביר**
+     (`LedgerMonthRow.netToOwner` - החודש בלבד) · **כולל חודש קודם** (`LedgerMonthRow.totalDue`
+     - השורה התחתונה) · **הועבר** (`TransferMarkCell` → `recordBranchTransferAction` הקיים
+     מ-`ledger/actions.ts`; סימון התיבה קובע סכום מלא, ואפשר לערוך ידנית להעברה חלקית) ·
+     **הוצאנו קבלה** (`ReceiptCheckbox`). כל עמודות הכסף צבועות באותה מוסכמה: ירוק/+ = הסניף
+     צריך להעביר לבעלים, אדום/− = הבעלים צריך להעביר לסניף. בתחתית שורת **סה"כ** לכל העמודות
+     המספריות. חודש שקודם לתחילת הפעילות של הסניף פשוט אין לו שורת ליג'ר, ואז כל נתוני
+     ההתחשבנות שלו אפס (לא נופל).
+
+     **מה נספר ב"הוצאות":** `settlementExpenseThisMonth` (חדש ב-`BranchFinancials`) = **סה"כ
+     שהוצא** על שורות שיש עליהן התחשבנות בלבד, כלומר `expenseNetToOwner !== 0` - הוצאות
+     משותפות, והוצאות שצד אחד שילם עבור השני (כולל שורות של הוצאה רב-סניפית). הוצאה שהבעלים
+     גם שילם וגם כולה עליו **לא** נספרת - זה חשבון מול שותפים, לא דו"ח רווח והפסד. הפירוט
+     עצמו זמין ב-`settlementExpenseLinesForMonth`.
+
+     העמודות הישנות "חודש"/"הוצאות שלי"/"הוצאות שלו" הוסרו מהטבלה. השדות `myExpenseThisMonth`/
+     `hisExpenseThisMonth` נשארו ב-`BranchFinancials` ואינם בשימוש בתצוגה כרגע.
   2. **`OwnerBranchesOverview`** (`owner-overview.tsx`, `"use client"`), כותרת **"מעקב
      התקדמות הסניפים"** (שונתה מ"סניפים - מבט על") - לכל סניף (מקובץ אב/בת): "הוצאתי עד היום"
      (`ownerInvestedToDate` - עלות מלאה על הוצאות `owedBy: owner`/ברירת מחדל, חצי על `shared`,
@@ -463,6 +492,41 @@ pnpm dev        # turbo run dev — מריץ web + api
      שותפים על מחשבים שונים. זה נפרד לגמרי מהתחשבנות שותף-סניף הקיימת
      (`Branch.partnerPct`/`myPct`, `computeBranchFinancials`) - מיועד לשותפות על מחשבים
      ספציפיים בתוך סניף שהוא "שלי" (`Branch.isMine`), לא על סניף שלם.
+
+  **דו"ח חודשי במייל לסניף** (`ReportButtons` מעל הטבלה, owner בלבד):
+  - **"תצוגה מקדימה"** → `/dashboard/rentals/accounting/report-preview?branchId=&month=` —
+    מרנדר ב-`<iframe srcDoc>` בדיוק את ה-HTML שיישלח (מסמך עצמאי עם ה-`<body>` שלו, ולכן
+    ב-iframe ולא inline). **עובד בלי שום הגדרת מייל** - זו הדרך לאשר את העיצוב לפני שליחה.
+  - **"שלח מייל לבדיקה"** → דיאלוג עם **שני בוררים בלתי-תלויים**: *לאיזה מייל לשלוח* (רשימת
+    הסניפים עם כתובותיהם + הכתובת של הבעלים) ו*של איזה סניף הדו"ח*. ההפרדה מכוונת: כך אפשר
+    לשלוח לעצמך את הדו"ח של כל סניף לבדיקה לפני ששותף מקבל משהו. → `sendBranchReportAction`
+    (`report-actions.ts`, owner בלבד) שמחזיר `{ ok, message }` במקום לזרוק, כי "המייל עוד לא
+    מוגדר" הוא מצב תקין שצריך להציג במלואו.
+  - תוכן הדו"ח (`apps/web/lib/branch-month-report.ts`): לוגו מ-`n_label_settings/default`
+    (אותו מקור ככותרת הדשבורד), שם סניף וחודש, מספר השכרות + סה"כ הכנסות, **פירוט** שורות
+    ההוצאה המשותפות (תיאור / מי שילם / על חשבון מי / סכום - בשמות אמיתיים, לא "אני"/"השותף",
+    דרך `getOwnerName`/`partnerName`), יתרה קודמת, התחשבנות החודש, סה"כ, ושורה תחתונה מנוסחת
+    מנקודת מבט השותף ("עליך להעביר X" / "מגיע לך X" / "מאוזן"). ה-HTML מבוסס טבלאות עם עיצוב
+    inline בלבד — Gmail/Outlook מתעלמים מ-`<style>` ומ-flex/grid.
+  - שליחה בפועל: `apps/web/lib/mailer.ts` (Resend, שכבר היה dependency), דורש
+    `RESEND_API_KEY` + `REPORT_FROM_EMAIL` ב-`.env.local`. בלעדיהם `mailerConfigError()`
+    מחזיר הודעה בעברית שאומרת בדיוק מה חסר, והדיאלוג מציג אותה מראש. **מכוון שזה נפרד
+    מ-EmailJS** שבמסכי ההתחברות: אלה רצים בדפדפן מול תבנית טקסט קבועה (קוד בן 6 ספרות) שלא
+    יכולה לשאת מסמך HTML מעוצב.
+  - כתובת לכל סניף (`lib/branch-report-recipients.ts`): `Branch.partnerEmail`, ובהיעדרה
+    המשתמש ב-`n_users` שה-`branchId` שלו תואם. סניף בלי אף כתובת מדווח ככזה ולא מושמט בשקט.
+  - **טרם נבנה:** שליחה אוטומטית בכל 1 לחודש לכל הסניפים. `sendBranchReportAction` בנוי כך
+    שאפשר לקרוא לו מ-cron/route בהמשך.
+
+  **חישוב חלקו של כל צד בהוצאה — `ownerShare`:** כל שורת הוצאה
+  (`DatedExpenseLine`, `lib/branch-accounting-data.ts`) נושאת שדה `ownerShare` = חלק הבעלים
+  בשקלים. לשורה רגילה הוא פשוט `ownerExpenseBurden(amount, owedBy)`, ולשורה של הוצאה
+  רב-סניפית הוא `perBranchOwnerShare` (אחוז חופשי ש-`owedBy` לא יודע לבטא). **כל** חישובי
+  ההוצאות קוראים ממנו: נטל הבעלים = `ownerShare`, נטל השותף = `amount - ownerShare`, ונטו
+  לבעלים = `expenseNetToOwnerFromShares(amount, ownerShare, paidBy)`. לשורות רגילות זה זהה
+  לחלוטין ל-`expenseNetToOwner(amount, paidBy, owedBy)` הישן (ראו הערת התיעוד על
+  `expenseNetToOwnerFromShares` ב-`lib/branch-accounting.ts`) - כלומר המעבר לא שינה אף מספר
+  היסטורי, הוא רק פתח את המודל לפיצול באחוזים.
 
   **חשוב:** גם `computeBranchFinancials` (דרך `buildIncomeLines`,
   `apps/web/lib/branch-accounting-data.ts`) וגם `computePartnerSettlement` סופרים רק השכרות
@@ -1093,6 +1157,10 @@ app שרץ בדפדפן ניתן ל"התקנה" כאפליקציה עם אייק
 | `apps/web/lib/branch-ledger.ts` | בניית היסטוריית התחשבנות מלאה פר-סניף עם יתרה מצטברת (מוצג תחת `/dashboard/rentals/accounting`, owner בלבד - `/ledger` הישן עושה `redirect` לשם) |
 | `apps/web/lib/computer-room-accounting.ts` | חישובי "השקעה מול רווח" פר סניף חדר מחשבים (הקמה/הוצאות/הכנסות/רווח) |
 | `apps/web/lib/expense-shared-scope.ts` | סנטינלים `SHARED_RENTALS_BRANCH_ID`/`SHARED_COMPUTERS_BRANCH_ID` להוצאות משותפות לכל הסניפים |
+| `apps/web/lib/multi-branch-expense.ts` | פיצול הוצאה חד-פעמית בין כמה סניפים לפי אחוז הבעלים (`splitMultiBranchExpense`). מודול טהור - גם טופס ה-client וגם החישוב בשרת מייבאים אותו |
+| `apps/web/lib/branch-month-report.ts` | בניית הדו"ח החודשי לסניף ורינדורו ל-HTML עצמאי (טבלאות + inline styles, בשביל Gmail/Outlook) |
+| `apps/web/lib/branch-report-recipients.ts` | לאיזו כתובת נשלח הדו"ח של כל סניף - `Branch.partnerEmail` ואז המשתמש התואם ב-`n_users` |
+| `apps/web/lib/mailer.ts` | שליחת HTML במייל מהשרת דרך Resend; בלי `RESEND_API_KEY`/`REPORT_FROM_EMAIL` מחזיר שגיאה מוסברת במקום ליפול |
 | `apps/web/lib/accounting-entries.ts` | אוצר המילים של תנועה ידנית: `EntryKind`/`EntryBook`, `entryCollection`, `isPendingAttribution` והבנאים של כל צורת יעד. נקי מ-`firebase-admin` — נצרך גם ע"י קומפוננטות לקוח |
 | `apps/web/lib/accounting-entries-data.ts` | `loadMovements()` — קריאת כל ארבע קולקשני התנועות והשטחתן ל-`MovementEntry[]` |
 | `apps/web/lib/branch-expense-ledger.ts` | יצירה/מחיקה של רשומת `n_ah_expenses` מקושרת מהוצאה חד-פעמית (חלק הבעלים בלבד) |

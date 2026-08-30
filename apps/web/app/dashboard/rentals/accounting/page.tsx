@@ -16,15 +16,33 @@ const FIELD =
 import { loadBranchAccountingRawData, computeBranchFinancials, currentMonth as getCurrentMonth } from "@/lib/branch-accounting-data";
 import { buildBranchLedger } from "@/lib/branch-ledger";
 import { computePartnerSettlement } from "@/lib/partner-settlement";
+import { monthsBetween } from "@/lib/branch-accounting";
+import { loadReportRecipients, loadOwnerEmail } from "@/lib/branch-report-recipients";
+import { mailerConfigError } from "@/lib/mailer";
 import { BranchAccountingView } from "./branch-view";
 import { OwnerBranchesOverview } from "./owner-overview";
 import { UnifiedBranchesTable } from "./unified-branches-table";
+import { MonthPicker } from "./month-picker";
+import { ReportButtons } from "./report-buttons";
 import { BalanceSummaryCard, BranchLedgerTable } from "../ledger/branch-ledger-table";
+
+/** The months the picker offers: the last two years up to (never past) the current month, since
+ *  the ledger every figure reads is only built up to today. */
+function selectableMonths(now: string): string[] {
+  const [y, m] = now.split("-").map(Number);
+  let startY = y ?? new Date().getFullYear();
+  let startM = (m ?? 1) - 23;
+  while (startM < 1) {
+    startM += 12;
+    startY -= 1;
+  }
+  return monthsBetween(`${startY}-${String(startM).padStart(2, "0")}`, now).reverse();
+}
 
 export default async function RentalsAccountingPage({
   searchParams,
 }: {
-  searchParams?: { branchId?: string };
+  searchParams?: { branchId?: string; month?: string };
 }) {
   const session = await requireModuleAccess("rentals");
   const isOwner = session.user?.role === "owner";
@@ -32,7 +50,15 @@ export default async function RentalsAccountingPage({
 
   const db = getAdminFirestore();
   const raw = await loadBranchAccountingRawData();
-  const month = getCurrentMonth();
+  const thisMonth = getCurrentMonth();
+  const monthOptions = selectableMonths(thisMonth);
+  const requested = searchParams?.month;
+  // Anything malformed or in the future falls back to the current month rather than rendering an
+  // empty table for a month the ledger was never built for.
+  const month =
+    requested && /^\d{4}-\d{2}$/.test(requested) && requested <= thisMonth && monthOptions.includes(requested)
+      ? requested
+      : thisMonth;
   // Deleted branches stay in Firestore (soft-delete, see deleteRentalBranchAction) precisely so
   // their accounting history remains resolvable - `allRentalsBranches` includes them (for the
   // history section + drilldown-by-id below), `rentalsBranches` excludes them (for every
@@ -73,10 +99,24 @@ export default async function RentalsAccountingPage({
     // they CAN be reached via a history-section link below, so look them up across ALL branches.
     const selectedBranch = searchParams?.branchId ? allRentalsBranches.find((b) => b.id === searchParams.branchId) : undefined;
 
+    const [recipients, ownerEmail] = await Promise.all([
+      loadReportRecipients(rentalsBranches),
+      loadOwnerEmail(session.user?.email),
+    ]);
+
     ownerDrillDown = (
       <div className="mb-6 space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <MonthPicker month={month} months={monthOptions} />
+          <ReportButtons
+            month={month}
+            recipients={recipients}
+            ownerEmail={ownerEmail}
+            mailerError={mailerConfigError()}
+          />
+        </div>
         <UnifiedBranchesTable branches={rentalsBranches} raw={raw} month={month} />
-        <OwnerBranchesOverview parents={parentFinancials} childrenByParent={childrenByParent} />
+        <OwnerBranchesOverview parents={parentFinancials} childrenByParent={childrenByParent} month={month} />
         {selectedBranch && (
           <BranchAccountingView
             financials={computeBranchFinancials(selectedBranch, raw, month)}
@@ -107,7 +147,10 @@ export default async function RentalsAccountingPage({
                 {selectedBranch ? `היסטוריה מלאה - ${selectedBranch.name}` : "היסטוריה מלאה לכל הסניפים (כולל סניפים שנמחקו)"}
               </span>
               {selectedBranch && (
-                <a href="/dashboard/rentals/accounting#branch-history" className="text-xs font-bold text-teal hover:underline">
+                <a
+                  href={`/dashboard/rentals/accounting?month=${month}#branch-history`}
+                  className="text-xs font-bold text-teal hover:underline"
+                >
                   הצג היסטוריה של כל הסניפים
                 </a>
               )}

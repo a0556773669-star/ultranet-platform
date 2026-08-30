@@ -377,6 +377,42 @@ export interface AdArea {
   note?: string;
 }
 
+/**
+ * collection: n_multi_branch_expenses
+ *
+ * הוצאה חד-פעמית אחת שמתחלקת בין כמה סניפים, עם אחוז שהבעלים לוקח על עצמו.
+ * Generalises the AdArea split above (see apps/web/lib/ad-areas.ts) from "advertising only,
+ * recurring monthly" to "any one-off expense": the owner carries `ownerPct`% of the total and
+ * the branches in `branchIds` divide the rest equally between them.
+ *
+ * Deliberately NOT stored as N separate n_var_expenses rows: `owedBy` can only express
+ * owner / partner / 50-50, so a free percentage (e.g. 30% on the owner) has no representation
+ * there. Kept as one doc and expanded into a per-branch line at read time
+ * (expandExpenseLines, apps/web/lib/branch-accounting-data.ts) - same approach as n_ad_areas.
+ */
+export interface MultiBranchExpense {
+  id: string;
+  /** which module's branches this expense belongs to (rentals for now) */
+  module: "rentals";
+  desc: string;
+  category?: string;
+  /** the expense's full cost, before any split */
+  amount: number;
+  /** the owner's share of it, in percent (50 = half). The branches divide the rest equally. */
+  ownerPct: number;
+  /** the branches the per-branch share is charged to */
+  branchIds: string[];
+  /** who fronted the cash (affects the settlement direction only, never the split) */
+  paidBy?: "owner" | "partner";
+  /** ISO date the expense was made */
+  date: string;
+  /** YYYY-MM the expense is charged in (derived from `date`) */
+  month: string;
+  /** id of the matching n_ah_expenses doc auto-created for the owner's share, when the owner
+   *  is the one who paid. Deleted together with this expense. */
+  linkedAhExpenseId?: string;
+}
+
 /** collection: n_cw_stations */
 export interface CoworkingStation {
     id: string;
