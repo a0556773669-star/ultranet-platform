@@ -2,7 +2,7 @@ import Link from "next/link";
 import { FileText, Laptop as LaptopIcon, Wifi } from "lucide-react";
 import { requireModuleAccess } from "@/lib/perms";
 import { getAdminFirestore } from "@/lib/firebase-admin";
-import { resolveNedarimCreds, listNedarimRoutes } from "@/lib/nedarim";
+import { makeNedarimResolver, nedarimRouteOptions } from "@/lib/nedarim";
 import type { Rental, RentalClient, Laptop, Stick, Branch, CollectionRoute } from "@ultranet/shared-types";
 import { effectiveLaptopRates, effectiveStickRates } from "@/lib/rental-pricing";
 import { RentalsLists, type ActiveRowData, type HistoryRowData } from "./rentals-lists";
@@ -14,7 +14,7 @@ async function loadData() {
     db.collection("n_rental_clients").get(),
     db.collection("n_laptops").get(),
     db.collection("n_sticks").get(),
-    db.collection("n_branches").where("branchType", "==", "rentals").get(),
+    db.collection("n_branches").get(),
     db.collection("n_collection_routes").get(),
   ]);
   const rentals = rentalsSnap.docs.map((d) => ({ ...(d.data() as Omit<Rental, "id">), id: d.id }) as Rental);
@@ -23,10 +23,15 @@ async function loadData() {
   const sticksList = sticksSnap.docs.map((d) => ({ ...(d.data() as Omit<Stick, "id">), id: d.id }) as Stick);
   const laptops = new Map(laptopsList.map((l) => [l.id, l]));
   const sticks = new Map(sticksList.map((s) => [s.id, s]));
-  const branchesList = branchesSnap.docs.map((d) => ({ ...(d.data() as Omit<Branch, "id">), id: d.id }) as Branch);
+  // Every branch is read (not just branchType === "rentals") purely so charge-route resolution can
+  // look a branch up in memory instead of fetching its document again; the rentals screens below
+  // still work off `branchesList`, which stays rentals-only exactly as before.
+  const allBranchesList = branchesSnap.docs.map((d) => ({ ...(d.data() as Omit<Branch, "id">), id: d.id }) as Branch);
+  const allBranches = new Map(allBranchesList.map((b) => [b.id, b]));
+  const branchesList = allBranchesList.filter((b) => b.branchType === "rentals");
   const branches = new Map(branchesList.map((b) => [b.id, b]));
   const routesList = routesSnap.docs.map((d) => ({ ...(d.data() as Omit<CollectionRoute, "id">), id: d.id }) as CollectionRoute);
-  return { rentals, clients, laptops, sticks, laptopsList, sticksList, branches, branchesList, routesList };
+  return { rentals, clients, laptops, sticks, laptopsList, sticksList, branches, branchesList, allBranches, routesList };
 }
 
 export default async function RentalsPage({ searchParams }: { searchParams?: { mine?: string } }) {
@@ -38,7 +43,8 @@ export default async function RentalsPage({ searchParams }: { searchParams?: { m
   const canDelete = role === "owner" || role === "partner";
   const onlyMine = searchParams?.mine === "1";
 
-  const { rentals, clients, laptops, sticks, laptopsList, sticksList, branches, branchesList, routesList } = await loadData();
+  const { rentals, clients, laptops, sticks, laptopsList, sticksList, branches, branchesList, allBranches, routesList } =
+    await loadData();
 
   const myOwnBranchIds = branchesList.filter((b) => b.isMine === true).map((b) => b.id);
   const visible = rentals.filter((r) => (role === "owner" && !onlyMine) || r.branchId === myBranchId || (onlyMine && myOwnBranchIds.includes(r.branchId)));
@@ -59,54 +65,83 @@ export default async function RentalsPage({ searchParams }: { searchParams?: { m
     ? branchesList
     : branchesList.filter((b) => b.id === myBranchId);
 
-  const chargeRoutes = await listNedarimRoutes();
+  // Both of these used to be extra Firestore waves after loadData - a second full read of
+  // n_collection_routes, then up to three sequential document reads per distinct (branch, route)
+  // pair. Every one of those documents is already loaded above, so they're resolved in memory.
+  const chargeRoutes = nedarimRouteOptions(routesList);
+  const resolveCreds = makeNedarimResolver(routesList, allBranches);
 
   // Charging a saved token must go through the same route it was tokenized under - resolve per
   // (branch, client route) combo actually in use, not just per branch, so each client's charge
   // button reflects the business their card is really tied to.
-  const tokenRouteKeys = Array.from(
-    new Set(
-      active
-        .filter((r) => {
-          const c = clients.get(r.clientId);
-          return !!(c?.gatewayToken && c?.cardExpiry);
-        })
-        .map((r) => `${r.branchId}::${clients.get(r.clientId)?.collectionRouteId ?? ""}`)
-    )
-  );
-  const tokenCredsEntries = await Promise.all(
-    tokenRouteKeys.map(async (key) => {
-      const [branchId, routeId] = key.split("::");
-      return [key, await resolveNedarimCreds(branchId, routeId || undefined)] as const;
-    })
-  );
-  const tokenCredsMap = new Map(tokenCredsEntries);
+  const tokenCredsMap = new Map<string, ReturnType<typeof resolveCreds>>();
+  for (const r of active) {
+    const c = clients.get(r.clientId);
+    if (!c?.gatewayToken || !c?.cardExpiry) continue;
+    const routeId = c.collectionRouteId ?? "";
+    const key = `${r.branchId}::${routeId}`;
+    if (tokenCredsMap.has(key)) continue;
+    tokenCredsMap.set(key, resolveCreds(r.branchId, routeId || undefined));
+  }
+
+  // The item/branch lookups below are hit once per rendered card and once per rental row. Indexing
+  // them up front keeps the page linear; scanning `active`/`sticksList` per lookup made it grow
+  // with rentals x items, which is what made this screen crawl as the history piled up.
+  // First entry wins, matching the .find() these replace - should the data ever hold two active
+  // rentals for one item, the same one keeps being reported as before.
+  const activeByItem = new Map<string, Rental>();
+  for (const r of active) {
+    const key = `${r.kind}::${r.itemId}`;
+    if (!activeByItem.has(key)) activeByItem.set(key, r);
+  }
+  const stickByLinkedLaptop = new Map<string, Stick>();
+  for (const s of sticksList) {
+    if (s.linkedLaptopId && !stickByLinkedLaptop.has(s.linkedLaptopId)) {
+      stickByLinkedLaptop.set(s.linkedLaptopId, s);
+    }
+  }
 
   function renterName(itemId: string, kind: "laptop" | "stick") {
-    const rental = active.find((r) => r.itemId === itemId && r.kind === kind);
+    const rental = activeByItem.get(`${kind}::${itemId}`);
     if (!rental) return null;
     return clients.get(rental.clientId)?.name ?? "לקוח";
   }
 
   function linkedStickRentedOut(laptopId: string) {
-    const stick = sticksList.find((s) => s.linkedLaptopId === laptopId);
+    const stick = stickByLinkedLaptop.get(laptopId);
     return stick ? !!renterName(stick.id, "stick") : false;
   }
 
-function routesForBranch(branchId: string): { id: string; name: string }[] {
+  // These two are memoised per key rather than rebuilt per row, which matters twice over: it drops
+  // the repeated Hebrew localeCompare sorts, and - because every row for a branch now shares one
+  // array instance - the RSC serializer emits each list once and references it thereafter instead
+  // of writing a full copy into the payload for all several-hundred history rows.
+  const routesByBranch = new Map<string, { id: string; name: string }[]>();
+  function routesForBranch(branchId: string): { id: string; name: string }[] {
+    const cached = routesByBranch.get(branchId);
+    if (cached) return cached;
     const branch = branches.get(branchId);
-    if (!branch?.allowCollection) return [];
-    return routesList
-      .filter((rt) => !rt.branchScope || rt.branchScope === branchId)
-      .map((rt) => ({ id: rt.id, name: rt.name }));
+    const result = !branch?.allowCollection
+      ? []
+      : routesList
+          .filter((rt) => !rt.branchScope || rt.branchScope === branchId)
+          .map((rt) => ({ id: rt.id, name: rt.name }));
+    routesByBranch.set(branchId, result);
+    return result;
   }
 
+  const itemOptionsCache = new Map<string, { id: string; name: string }[]>();
   function itemOptionsFor(branchId: string, kind: "laptop" | "stick"): { id: string; name: string }[] {
+    const key = `${kind}::${branchId}`;
+    const cached = itemOptionsCache.get(key);
+    if (cached) return cached;
     const list = kind === "stick" ? sticksList : laptopsList;
-    return list
+    const result = list
       .filter((it) => it.branchId === branchId)
       .map((it) => ({ id: it.id, name: it.name }))
       .sort((a, b) => a.name.localeCompare(b.name, "he", { numeric: true }));
+    itemOptionsCache.set(key, result);
+    return result;
   }
 
     function rowInfo(r: Rental) {
