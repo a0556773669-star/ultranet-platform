@@ -168,7 +168,11 @@ export interface NodeTotals {
   income: number;
   expense: number;
   profit: number;
+  /** the owner's share of the income - not the full amount, when a partner takes a cut */
+  ownerIncome: number;
   ownerExpense: number;
+  /** ownerIncome - ownerExpense: what the branch actually earns the owner */
+  ownerProfit: number;
 }
 
 /**
@@ -183,11 +187,14 @@ export interface NodeTotals {
 export function totalsByNode(transactions: UnifiedTx[], months: Set<string>): Map<string, NodeTotals> {
   const map = new Map<string, NodeTotals>();
   const add = (nodeId: string, patch: Partial<NodeTotals>) => {
-    const cur = map.get(nodeId) ?? { income: 0, expense: 0, profit: 0, ownerExpense: 0 };
+    const cur =
+      map.get(nodeId) ?? { income: 0, expense: 0, profit: 0, ownerIncome: 0, ownerExpense: 0, ownerProfit: 0 };
     cur.income += patch.income ?? 0;
     cur.expense += patch.expense ?? 0;
+    cur.ownerIncome += patch.ownerIncome ?? 0;
     cur.ownerExpense += patch.ownerExpense ?? 0;
     cur.profit = cur.income - cur.expense;
+    cur.ownerProfit = cur.ownerIncome - cur.ownerExpense;
     map.set(nodeId, cur);
   };
 
@@ -200,7 +207,7 @@ export function totalsByNode(transactions: UnifiedTx[], months: Set<string>): Ma
     for (const slice of branchSlices(tx)) {
       const ownerPart = ownerShareOfSlice(tx, slice) * charges;
       const amount = slice.amount * charges;
-      if (tx.direction === "in") add(slice.branchId, { income: amount });
+      if (tx.direction === "in") add(slice.branchId, { income: amount, ownerIncome: ownerPart });
       else add(slice.branchId, { expense: amount, ownerExpense: ownerPart });
     }
   }
@@ -232,8 +239,10 @@ export interface BranchCard {
  * ------------------------------------------------------------------ */
 
 export interface BottomLine {
-  /** מחזור כל היחידות */
+  /** מחזור כל היחידות — revenue on business-unit nodes only; headquarters is not a unit */
   turnover: number;
+  /** income recorded on the headquarters node (e.g. business-wide card clearing) */
+  hqIncome: number;
   /** פחות הוצאות תפעול */
   operatingExpense: number;
   /** רווח תפעולי */
@@ -267,6 +276,7 @@ export function buildBottomLine(
   capitalReturned: number,
 ): BottomLine {
   let turnover = 0;
+  let hqIncome = 0;
   let operatingExpense = 0;
   let ownerExpense = 0;
   let ownerIncome = 0;
@@ -283,7 +293,12 @@ export function buildBottomLine(
     const isHq = tx.node.branchId === "hq";
 
     if (tx.direction === "in") {
-      turnover += amount;
+      // Headquarters generates no revenue of its own, so income tagged there is not turnover -
+      // it is shown on its own line. Keeping it out matters: if such a row is really the cash
+      // arriving for revenue already recorded in a branch, folding it into turnover would count
+      // that revenue twice. (The right fix for such a row is to reclassify it as `transfer`.)
+      if (isHq) hqIncome += amount;
+      else turnover += amount;
       ownerIncome += ownerPart;
       continue;
     }
@@ -302,6 +317,7 @@ export function buildBottomLine(
 
   return {
     turnover,
+    hqIncome,
     operatingExpense,
     operatingProfit,
     // Whatever of the operating profit is not the owner's, is the partners' - derived, so it can
@@ -444,8 +460,10 @@ export async function loadBranchCard(branchId: string, uptoMonth: string): Promi
   const totals = totalsByNode(model.transactions, months).get(branchId);
   const inv = assets.investmentByLocation.get(branchId);
 
-  const net = (totals?.income ?? 0) - (totals?.expense ?? 0);
-  const ownerNet = (totals?.income ?? 0) - (totals?.ownerExpense ?? 0);
+  const net = totals?.profit ?? 0;
+  // What comes back against the investment is the OWNER's share of the profit: the equipment is
+  // his capital alone (כלל 7), so the partner's half of a branch's profit does not repay it.
+  const ownerNet = totals?.ownerProfit ?? 0;
   const monthsRun = Math.max(1, months.size);
 
   return {

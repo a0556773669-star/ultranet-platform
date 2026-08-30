@@ -57,13 +57,14 @@ export default async function BottomLinePage({
 
   const nodeTotals = totalsByNode(model.transactions, scopeMonths);
 
-  // How much of the capital has come back: the owner's cumulative operating profit across every
-  // branch. Three independent numbers compared, never subtracted from one another (פרק ז׳).
-  const capitalReturned = liveBranches.reduce((sum, b) => {
-    const t = nodeTotals.get(b.id);
-    if (!t) return sum;
-    return sum + Math.max(0, t.income - t.expense);
-  }, 0);
+  // How much of the capital has come back: the OWNER's cumulative share of the operating profit,
+  // across every branch. His share and not the full profit, because the equipment is his capital
+  // alone (כלל 7) - the partner's half of a branch's profit does not repay it. Three independent
+  // numbers compared, never subtracted from one another (פרק ז׳).
+  const capitalReturned = liveBranches.reduce(
+    (sum, b) => sum + Math.max(0, nodeTotals.get(b.id)?.ownerProfit ?? 0),
+    0,
+  );
 
   const bottom = buildBottomLine(model.transactions, scopeMonths, assets, capitalReturned);
   const flow = flowTotals(model.transactions);
@@ -76,6 +77,9 @@ export default async function BottomLinePage({
     { label: "רווח תפעולי", value: bottom.operatingProfit, tone: "sub" as const },
     { label: "פחות חלק השותפים", value: -bottom.partnersShare, tone: "out" as const },
     { label: `הרווח של ${ownerName} מהתפעול`, value: bottom.ownerOperatingProfit, tone: "sub" as const },
+    ...(bottom.hqIncome > 0
+      ? [{ label: "ועוד הכנסות מטה (אשראי מהעסק)", value: bottom.hqIncome, tone: "in" as const }]
+      : []),
     { label: "פחות הוצאות מטה", value: -bottom.hqExpense, tone: "out" as const },
     { label: `הרווח הנקי של ${ownerName}`, value: bottom.ownerNetProfit, tone: "final" as const },
   ];
@@ -85,14 +89,14 @@ export default async function BottomLinePage({
     .map((b) => {
       const inv = assets.investmentByLocation.get(b.id);
       const t = nodeTotals.get(b.id);
-      const returned = Math.max(0, (t?.income ?? 0) - (t?.expense ?? 0));
+      const returned = Math.max(0, t?.ownerProfit ?? 0);
       const monthsRun = Math.max(1, scopeMonths.size);
       return {
         branch: b,
         invested: inv?.total ?? 0,
         laptops: inv?.countByKind.laptop ?? 0,
         sticks: inv?.countByKind.stick ?? 0,
-        net: (t?.income ?? 0) - (t?.expense ?? 0),
+        net: t?.profit ?? 0,
         payback: paybackStatus(inv?.total ?? 0, returned, returned / monthsRun),
       };
     })
@@ -139,8 +143,12 @@ export default async function BottomLinePage({
       <section className={`${CARD} mb-3.5 overflow-hidden`}>
         <div className="border-b border-card-border px-4 py-3">
           <h2 className="text-[15px] font-extrabold text-ink">שורת המאזן של אולטרנט</h2>
-          <p className="mt-0.5 text-[12px] text-muted">
-            הוצאות מטה נפרדות מהוצאות הסניפים לפי הצומת שעליה הן תלויות — לא לפי ניחוש קטגוריה
+          <p className="mt-0.5 text-[12px] leading-relaxed text-muted">
+            הוצאות והכנסות מטה נפרדות מאלה של הסניפים לפי הצומת שעליה הן תלויות — לא לפי ניחוש
+            קטגוריה. <b className="text-ink">שים לב:</b> שורת &quot;אשראי מהעסק&quot; נספרת כאן
+            כהכנסה נפרדת ולא כחלק מהמחזור. אם בפועל היא הכסף שמגיע עבור הכנסות שכבר רשומות בספר של
+            סניף — הסיווג הנכון שלה הוא <b className="text-ink">העברה</b>, וכך היא תפסיק להיספר
+            כהכנסה בכלל (כלל 8).
           </p>
         </div>
         <table className="w-full border-collapse">
@@ -282,7 +290,7 @@ export default async function BottomLinePage({
                   <th className={TH}>סטיקים</th>
                   <th className={TH}>השקעה</th>
                   <th className={TH}>נטו תפעולי</th>
-                  <th className={TH}>הוחזר</th>
+                  <th className={TH}>חלקי מצטבר</th>
                   <th className={TH}>החזר השקעה</th>
                   <th className={TH}>יתרה להחזר</th>
                   <th className={TH}>צפי איזון</th>

@@ -32,13 +32,15 @@ import type {
   BranchIncome,
   BranchTransfer,
   FixedExpense,
+  CollectionRoute,
   MultiBranchExpense,
   Purchase,
+  Rental,
   Transaction,
   TxBusiness,
   VariableExpense,
 } from "@ultranet/shared-types";
-import { ownerExpenseBurden } from "./branch-accounting";
+import { isCollectedByOwner, ownerExpenseBurden } from "./branch-accounting";
 import { HQ_NODE_ID, SHARED_NODE_ID, TX_COLLECTION, normalizeAllocations } from "./tx";
 import { splitOf } from "./multi-branch-expense";
 import { splitAdArea } from "./ad-areas";
@@ -55,6 +57,7 @@ export type TxSource =
   | "multi_branch"
   | "ad_area"
   | "branch_income"
+  | "rental"
   | "purchase"
   | "setup_cost";
 
@@ -67,6 +70,7 @@ export const TX_SOURCE_LABEL: Record<TxSource, string> = {
   multi_branch: "הוצאה רב-סניפית",
   ad_area: "אזור פרסום",
   branch_income: "הכנסה בספר הסניף",
+  rental: "השכרה",
   purchase: "רכישה",
   setup_cost: "עלות הקמה",
 };
@@ -82,6 +86,21 @@ export interface UnifiedTx extends Transaction {
 }
 
 const doc = <T>(d: QueryDocumentSnapshot) => ({ ...(d.data() as Omit<T, "id">), id: d.id }) as T;
+
+/**
+ * The earliest month any dated movement lands in - the floor for a recurring row that declares
+ * no start. Falls back to the current month rather than to an arbitrary epoch: with no dated
+ * movement at all, "since forever" can only honestly mean "since now".
+ */
+function earliestDatedMonth(rows: { month?: string; recurring?: { from: string } | null }[]): string {
+  let earliest: string | null = null;
+  for (const row of rows) {
+    const month = row.recurring?.from ?? row.month;
+    if (!month || !/^\d{4}-\d{2}$/.test(month)) continue;
+    if (!earliest || month < earliest) earliest = month;
+  }
+  return earliest ?? new Date().toISOString().slice(0, 7);
+}
 
 function businessOf(branch: Branch | undefined): TxBusiness {
   switch (branch?.branchType) {
@@ -149,6 +168,8 @@ export async function loadTransactionModel(): Promise<TransactionModel> {
     transfersSnap,
     purchasesSnap,
     branchIncomeSnap,
+    rentalsSnap,
+    routesSnap,
   ] = await Promise.all([
     db.collection(TX_COLLECTION).get(),
     db.collection("n_branches").get(),
@@ -161,11 +182,14 @@ export async function loadTransactionModel(): Promise<TransactionModel> {
     db.collection("n_branch_transfers").get(),
     db.collection(PURCHASES_COLLECTION).get(),
     db.collection("n_branch_income").get(),
+    db.collection("n_rentals").where("status", "==", "returned").get(),
+    db.collection("n_collection_routes").get(),
   ]);
 
   const branches = branchesSnap.docs.map((d) => doc<Branch>(d));
   const branchById = new Map(branches.map((b) => [b.id, b]));
   const purchases = purchasesSnap.docs.map((d) => doc<Purchase>(d));
+  const routesById = new Map(routesSnap.docs.map((d) => [d.id, doc<CollectionRoute>(d)]));
 
   const varExpenses = varSnap.docs.map((d) => doc<VariableExpense>(d));
   const multiExpenses = multiSnap.docs.map((d) => doc<MultiBranchExpense>(d));
@@ -199,15 +223,53 @@ export async function loadTransactionModel(): Promise<TransactionModel> {
       month: i.month || (i.date ?? "").slice(0, 7),
       direction: "in",
       amount,
-      // A transfer from the partner is not new income - the income it pays for is already in the
-      // branch's book. Classifying it as `transfer` is what keeps the two books addable one day
-      // without producing a phantom shekel (כלל 8).
-      nature: transferIncomeIds.has(i.id) ? "transfer" : "operating",
+      // Money reaching the owner FROM a rentals branch is a settlement, not new income: the
+      // rentals it pays for are already recorded in that branch's own book (from n_rentals
+      // below). Counting it as income too would be exactly the duplication כלל 8 exists to
+      // prevent - and it is the duplication the old model avoided only by never summing the two
+      // books at all. It holds for the rows auto-created behind a marked transfer and for ones
+      // the owner typed by hand before that linking existed, because both describe the same act.
+      //
+      // A computer room is the opposite case: `cash` pulled from its till IS the room's real
+      // operating income - there is no other record of it anywhere - so it stays `operating`.
+      nature:
+        transferIncomeIds.has(i.id) || (i.type === "laptops" && !!i.branchId) ? "transfer" : "operating",
       node,
       desc: i.desc || i.category || "הכנסה",
       category: i.category,
       paidBy: "owner",
       ownerShare: amount,
+      createdAt: 0,
+    });
+  }
+
+  /* --- n_rentals: the real income of a rentals branch ---------------------- */
+  // The branch book's largest number, and the one source that was never in any ledger: rentals
+  // are recorded in their own module. Without them מחזור and the bottom line would show a
+  // business with costs and almost no revenue. Same rule as lib/branch-accounting-data.ts -
+  // only a rental that was returned AND paid is money anyone is holding.
+  for (const d of rentalsSnap.docs) {
+    const r = doc<Rental>(d);
+    if (r.status !== "returned" || !r.returnDate || !r.paid) continue;
+    const branch = branchById.get(r.branchId);
+    const amount = r.finalPrice ?? r.calcPrice ?? 0;
+    if (!amount) continue;
+    const route = r.collectionRouteId ? routesById.get(r.collectionRouteId) ?? null : null;
+    const collectedByOwner = isCollectedByOwner(r.paymentMethod, route);
+    const ownerPct = branch && branchHasPartner(branch) ? branch.myPct ?? 100 - (branch.partnerPct ?? 0) : 100;
+    out.push({
+      id: r.id,
+      source: "rental",
+      date: r.returnDate,
+      month: r.returnDate.slice(0, 7),
+      direction: "in",
+      amount,
+      nature: "operating",
+      node: nodeFor(r.branchId, branchById),
+      desc: "השכרה",
+      // Whoever physically holds the cash. The owner's flow book counts only what reached him.
+      paidBy: collectedByOwner ? "owner" : "partner",
+      ownerShare: (amount * ownerPct) / 100,
       createdAt: 0,
     });
   }
@@ -316,6 +378,7 @@ export async function loadTransactionModel(): Promise<TransactionModel> {
   /* --- n_ad_areas: a shared advertising campaign --------------------------- */
   // The same idea as the previous block, implemented a second time. In this model they are one
   // shape: an amount, a free owner percentage, and a list of branches to spread the rest over.
+  const datedFloor = earliestDatedMonth(out);
   for (const d of adAreasSnap.docs) {
     const area = doc<AdArea>(d);
     const split = splitAdArea(area);
@@ -323,7 +386,10 @@ export async function loadTransactionModel(): Promise<TransactionModel> {
       area.monthlyCost,
       (area.branchIds ?? []).map((branchId) => ({ branchId, amount: split.perBranchLineTotal })),
     );
-    const from = area.startMonth || "2000-01";
+    // An area with no start month is "active since forever". Windowed screens never noticed, but
+    // an all-time total would multiply the monthly cost by every month since the year 2000. The
+    // books cannot start before the first dated movement in them, so that is the floor.
+    const from = area.startMonth || datedFloor;
     out.push({
       id: area.id,
       source: "ad_area",
@@ -373,6 +439,10 @@ export async function loadTransactionModel(): Promise<TransactionModel> {
   for (const d of branchIncomeSnap.docs) {
     const i = doc<BranchIncome>(d);
     const branch = branchById.get(i.branchId);
+    // For a computer room these rows are a status-tracking log only (see the type's doc comment):
+    // the room's real income is the `cash` ledger row from its till, and counting both would
+    // double it. For a rentals branch they ARE real income, merged exactly like a rental.
+    if (branch?.branchType === "computers") continue;
     const amount = i.amount || 0;
     const ownerPct = branch && branchHasPartner(branch) ? branch.myPct ?? 100 - (branch.partnerPct ?? 0) : 100;
     out.push({
