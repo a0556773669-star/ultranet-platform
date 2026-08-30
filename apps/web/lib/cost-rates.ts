@@ -4,11 +4,12 @@
  * falls on by default (owner / partner / 50-50). Only costs with a stable unit price live here -
  * anything that is a different amount every month is typed per branch (see RETIRED_RATE_KEYS).
  *
- * Reads n_cost_rates. When that collection is still empty the DEFAULTS below are returned
- * in-memory instead - a page render must never write to Firestore, so seeding is an explicit
- * owner action on /dashboard/accounting/rates ("שמירת התעריפון").
+ * Pure module on purpose (no firebase-admin import): the branch cost-settings editor is a client
+ * component and imports branchCostSettingId() straight from here. Loading n_cost_rates lives in
+ * lib/cost-rates-data.ts - same split as ad-areas.ts / ad-areas-data.ts and
+ * branch-accounting.ts / branch-accounting-data.ts. Pulling firebase-admin in here dragged it
+ * into the client bundle and broke `next build` with "Can't resolve 'http2'/'fs'".
  */
-import { getAdminFirestore } from "./firebase-admin";
 import type { CostRate, BranchCostSetting } from "@ultranet/shared-types";
 
 export const COST_RATES_COLLECTION = "n_cost_rates";
@@ -81,29 +82,4 @@ export interface CostRatesData {
   usingDefaults: boolean;
   /** key: `${branchId}__${rateKey}` */
   settingsByBranchRate: Map<string, BranchCostSetting>;
-}
-
-export async function loadCostRates(): Promise<CostRatesData> {
-  const db = getAdminFirestore();
-  const [ratesSnap, settingsSnap] = await Promise.all([
-    db.collection(COST_RATES_COLLECTION).get(),
-    db.collection(BRANCH_COST_SETTINGS_COLLECTION).get(),
-  ]);
-
-  const stored = ratesSnap.docs
-    .map((d) => ({ ...(d.data() as Omit<CostRate, "id">), id: d.id }) as CostRate)
-    .filter((r) => !RETIRED_RATE_KEYS.has(r.key));
-  const usingDefaults = stored.length === 0;
-  const rates = (usingDefaults
-    ? DEFAULT_COST_RATES.map((r) => ({ ...r, id: r.key }) as CostRate)
-    : stored
-  ).sort((a, b) => (a.order ?? 99) - (b.order ?? 99));
-
-  const settingsByBranchRate = new Map<string, BranchCostSetting>();
-  for (const d of settingsSnap.docs) {
-    const s = { ...(d.data() as Omit<BranchCostSetting, "id">), id: d.id } as BranchCostSetting;
-    settingsByBranchRate.set(branchCostSettingId(s.branchId, s.rateKey), s);
-  }
-
-  return { rates, usingDefaults, settingsByBranchRate };
 }

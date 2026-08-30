@@ -44,12 +44,12 @@ import {
   type RentalIncomeLine,
 } from "./branch-accounting";
 import {
-  loadCostRates,
   branchCostSettingId,
   expenseCoversRate,
   COMPUTER_RATE_KEY,
   GRAPHICS_RATE_KEY,
 } from "./cost-rates";
+import { loadCostRates } from "./cost-rates-data";
 import { ADS_RATE_KEY, ADS_RATE_MATCH, adAreaForBranch, adAreaNote, splitAdArea } from "./ad-areas";
 import { loadAdAreas } from "./ad-areas-data";
 

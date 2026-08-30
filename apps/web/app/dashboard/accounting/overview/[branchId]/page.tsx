@@ -15,7 +15,7 @@ import {
   monthLabelLong,
   type BranchMonth,
 } from "@/lib/accounting-overview";
-import { loadCostRates } from "@/lib/cost-rates";
+import { loadCostRates } from "@/lib/cost-rates-data";
 import { loadMovements, type MovementsData } from "@/lib/accounting-entries-data";
 import { AccountingTabs } from "../../accounting-tabs";
 import { EntryList } from "../../entry-list";

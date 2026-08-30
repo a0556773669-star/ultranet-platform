@@ -1,6 +1,7 @@
 import { Tag } from "lucide-react";
 import { requireOwner } from "@/lib/perms";
-import { loadCostRates, DEFAULT_COST_RATES } from "@/lib/cost-rates";
+import { loadCostRates } from "@/lib/cost-rates-data";
+import { DEFAULT_COST_RATES } from "@/lib/cost-rates";
 import { AccountingTabs } from "../accounting-tabs";
 import { saveRateAction, seedDefaultRatesAction } from "./actions";
 
