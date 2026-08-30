@@ -102,6 +102,51 @@ export async function createBranchAction(formData: FormData): Promise<BranchActi
 }
 
 /**
+ * Writes the opening dates the owner approved on the proposals table - many branches in one go.
+ *
+ * Only the rows she ticked are written, each with the date shown in its own field, so a proposal
+ * she corrected is saved as corrected and a proposal she left unticked is not saved at all.
+ * Nothing is written unless every ticked row carries a valid date: a partial write here would
+ * leave the books half-fixed, which is harder to see than not having run it.
+ *
+ * Saving a date also clears `notStarted`, and the screen says so: an opening date IS the
+ * statement that the branch is open, so leaving the "hasn't started" mark on would keep the
+ * branch out of its own book and make the date look broken.
+ */
+export async function applyOpeningDatesAction(formData: FormData): Promise<BranchActionResult> {
+  try {
+    await requireOwner();
+
+    const ids = formData.getAll("branchId").map(String).filter(Boolean);
+    if (ids.length === 0) return { ok: false, message: "לא סומן אף סניף" };
+
+    const dates = new Map<string, string>();
+    for (const id of ids) {
+      const date = String(formData.get(`date_${id}`) ?? "").trim();
+      const name = String(formData.get(`name_${id}`) ?? "").trim() || "סניף";
+      if (!date) return { ok: false, message: `לסניף "${name}" לא הוזן תאריך — נא למלא או להסיר את הסימון` };
+      if (!DATE_RE.test(date)) return { ok: false, message: `תאריך לא תקין בסניף "${name}"` };
+      dates.set(id, date);
+    }
+
+    const db = getAdminFirestore();
+    const batch = db.batch();
+    for (const [id, date] of dates) {
+      batch.set(db.collection("n_branches").doc(id), { openedAt: date, notStarted: false }, { merge: true });
+    }
+    await batch.commit();
+
+    revalidateBranchScreens();
+    return {
+      ok: true,
+      message: `נשמרו תאריכי פתיחה ל-${dates.size} סניפים — מהחודש של כל תאריך הסניף נכנס לספר שלו`,
+    };
+  } catch (err) {
+    return { ok: false, message: err instanceof Error ? err.message : "השמירה נכשלה" };
+  }
+}
+
+/**
  * Soft-delete, matching the rest of the app: the branch drops out of every active screen but its
  * income, expenses and settlements stay in Firestore. A report for a past month must not change
  * retroactively just because a partner left today - and the branch can be restored intact.

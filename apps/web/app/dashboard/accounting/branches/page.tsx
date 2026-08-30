@@ -24,11 +24,13 @@ import {
 } from "@/lib/accounting-overview";
 import { getAdminFirestore } from "@/lib/firebase-admin";
 import { getOwnerName } from "@/lib/owner-name";
+import { loadOpeningProposals, proposalFor } from "@/lib/branch-opening-proposals";
 import type { Branch } from "@ultranet/shared-types";
 import { AccountingTabs } from "../accounting-tabs";
 import { mLabel, money } from "../overview/ui";
 import { saveBranchStatusAction } from "./actions";
 import { ManageBranches, type ManagedBranch } from "./manage-branches";
+import { OpeningDateProposals, type OpeningRow } from "./opening-date-proposals";
 
 const CARD = "rounded-card border border-card-border bg-white shadow-card";
 const TH =
@@ -77,11 +79,40 @@ export default async function BranchesStatusPage({ searchParams }: { searchParam
   // Read the branches directly rather than through the overview: that one drops deleted branches
   // on purpose, and this screen is exactly where a deleted branch has to stay visible so it can
   // be restored.
-  const allSnap = await getAdminFirestore().collection("n_branches").get();
-  const ownerName = await getOwnerName(session.user?.name);
-  const managed: ManagedBranch[] = allSnap.docs
+  const [allSnap, ownerName, proposals] = await Promise.all([
+    getAdminFirestore().collection("n_branches").get(),
+    getOwnerName(session.user?.name),
+    loadOpeningProposals(),
+  ]);
+  const allBranches = allSnap.docs
     .map((d) => ({ ...(d.data() as Omit<Branch, "id">), id: d.id }) as Branch)
-    .filter((b) => ["rentals", "computers", "coworking"].includes(b.branchType))
+    .filter((b) => ["rentals", "computers", "coworking"].includes(b.branchType));
+
+  // The proposals table works on live branches only: a deleted branch is out of every
+  // calculation anyway, and dating one would quietly bring its months back.
+  const openingRows: OpeningRow[] = allBranches
+    .filter((b) => b.deleted !== true)
+    .map((b) => {
+      const p = proposalFor(proposals, b.id);
+      return {
+        id: b.id,
+        name: b.name,
+        branchType: b.branchType,
+        currentDate: b.openedAt?.trim() || b.founded?.trim() || null,
+        proposedDate: p.proposedDate,
+        note: p.note,
+        weak: p.weak,
+        notStarted: b.notStarted === true,
+      };
+    })
+    // the branches that still need a date come first - that is what this table is for
+    .sort(
+      (a, b) =>
+        Number(Boolean(a.currentDate)) - Number(Boolean(b.currentDate)) ||
+        a.name.localeCompare(b.name, "he"),
+    );
+
+  const managed: ManagedBranch[] = allBranches
     .map((b) => {
       const stats = branchMonthOf(data, b.id, month);
       return {
@@ -107,7 +138,8 @@ export default async function BranchesStatusPage({ searchParams }: { searchParam
             ניהול סניפים
           </h1>
           <p className="mt-0.5 text-[12.5px] text-muted">
-            הוספה, מחיקה ושחזור של סניפים, וקביעת תאריך הפתיחה שממנו כל סניף נכנס לחישוב.
+            הוספה, מחיקה ושחזור של סניפים, וקביעת תאריך הפתיחה שממנו כל סניף נכנס לחישוב — כולל
+            הצעה אוטומטית של תאריך פתיחה לכל סניף, לאישור שלך.
           </p>
         </div>
         <AccountingTabs active="/dashboard/accounting/branches" />
@@ -115,6 +147,10 @@ export default async function BranchesStatusPage({ searchParams }: { searchParam
 
       <div className="mb-3.5">
         <ManageBranches branches={managed} ownerName={ownerName} />
+      </div>
+
+      <div className="mb-3.5">
+        <OpeningDateProposals rows={openingRows} />
       </div>
 
       {(missingDate > 0 || notCalculated > 0) && (
