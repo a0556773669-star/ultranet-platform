@@ -14,9 +14,12 @@ export default async function CompleteCardsPage() {
   const viewClientBranchIds = (session.user as { viewClientBranchIds?: string[] } | undefined)?.viewClientBranchIds ?? [];
 
   const db = getAdminFirestore();
-  const [clientsSnap, branchesSnap] = await Promise.all([
+  // The route list joins the same wave - awaiting it separately made the page wait out two
+  // round-trips back to back for queries that have nothing to do with each other.
+  const [clientsSnap, branchesSnap, routes] = await Promise.all([
     db.collection("n_rental_clients").get(),
     db.collection("n_branches").where("branchType", "==", "rentals").get(),
+    listNedarimRoutes(),
   ]);
   const branches = branchesSnap.docs.map(
     (d) => ({ ...(d.data() as Omit<Branch, "id">), id: d.id }) as Branch
@@ -33,7 +36,6 @@ export default async function CompleteCardsPage() {
 
   // new cards always go to the route flagged as default (falls back to the first connected
   // route if none is flagged) - same rule the individual client page uses.
-  const routes = await listNedarimRoutes();
   const defaultRoute = routes.find((r) => r.defaultForNewCards) ?? routes[0] ?? null;
 
   const queueItems = defaultRoute

@@ -34,10 +34,13 @@ export default async function RentalBranchesPage() {
   if (session.user?.role !== "owner") redirect("/dashboard/rentals");
 
   const db = getAdminFirestore();
+  // Both of the item collections are only tallied per branch below, so only branchId is fetched.
+  // n_rentals in particular grows without bound - pulling every full rental document just to
+  // count them was the single heaviest read on this page.
   const [branchesSnap, laptopsSnap, rentalsSnap] = await Promise.all([
     db.collection("n_branches").where("branchType", "==", "rentals").get(),
-    db.collection("n_laptops").get(),
-    db.collection("n_rentals").get(),
+    db.collection("n_laptops").select("branchId").get(),
+    db.collection("n_rentals").select("branchId").get(),
   ]);
   const branches = branchesSnap.docs
     .map((d) => ({ ...(d.data() as Omit<Branch, "id">), id: d.id }) as Branch)

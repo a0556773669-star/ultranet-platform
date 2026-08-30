@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { getAdminFirestore } from "@/lib/firebase-admin";
 import { requireOwner } from "@/lib/perms";
+import { invalidateUserSyncCache } from "@/lib/auth";
 import type { UserRole } from "@ultranet/shared-types";
 
 const PERM_KEYS = ["branches", "computers", "rentals", "coworking", "accounting", "tasks", "charging", "shop", "duxus"] as const;
@@ -91,6 +92,11 @@ export async function updateUserAction(id: string, formData: FormData) {
     branchId,
   });
 
+  // Role/branch/perms edits shouldn't wait out the session sync window - drop both addresses so
+  // the affected user picks the change up on their very next request.
+  invalidateUserSyncCache(prevEmail);
+  invalidateUserSyncCache(data.email);
+
   revalidatePath("/dashboard/users");
   redirect("/dashboard/users");
 }
@@ -107,6 +113,7 @@ export async function deleteUserAction(id: string) {
   await docRef.delete();
   if (email) {
     await db.collection("n_approved_emails").doc(email).delete();
+    invalidateUserSyncCache(email);
   }
   revalidatePath("/dashboard/users");
   redirect("/dashboard/users");

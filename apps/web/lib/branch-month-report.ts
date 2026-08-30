@@ -11,7 +11,7 @@
  * clients (Gmail, Outlook) strip <style> blocks and ignore flex/grid.
  */
 import type { Branch } from "@ultranet/shared-types";
-import { getAdminFirestore } from "./firebase-admin";
+import { getStoredLogo } from "./branding";
 import {
   computeBranchFinancials,
   settlementExpenseLinesForMonth,
@@ -71,12 +71,9 @@ export function buildBranchMonthReport(
 /** Reads the business logo once (same source the dashboard header uses) so it can be embedded at
  *  the top of the report. Returns "" when unset or unreachable - the report falls back to text. */
 export async function loadReportLogoUrl(): Promise<string> {
-  try {
-    const doc = await getAdminFirestore().collection("n_label_settings").doc("default").get();
-    return String((doc.data() as { logoUrl?: string } | undefined)?.logoUrl ?? "");
-  } catch {
-    return "";
-  }
+  // The raw stored value, not the served URL: logoForEmail needs the base64 payload itself to
+  // build the `cid:` inline attachment that mail clients require.
+  return (await getStoredLogo())?.value ?? "";
 }
 
 const HE_MONTHS = [
