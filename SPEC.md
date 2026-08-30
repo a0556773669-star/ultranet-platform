@@ -501,22 +501,44 @@ pnpm dev        # turbo run dev — מריץ web + api
     הסניפים עם כתובותיהם + הכתובת של הבעלים) ו*של איזה סניף הדו"ח*. ההפרדה מכוונת: כך אפשר
     לשלוח לעצמך את הדו"ח של כל סניף לבדיקה לפני ששותף מקבל משהו. → `sendBranchReportAction`
     (`report-actions.ts`, owner בלבד) שמחזיר `{ ok, message }` במקום לזרוק, כי "המייל עוד לא
-    מוגדר" הוא מצב תקין שצריך להציג במלואו.
+    מוגדר" הוא מצב תקין שצריך להציג במלואו. מייל בדיקה **לא** מסמן `reportSentAt`, כדי שלא
+    ימנע שליחה אמיתית לאותו סניף אחר כך.
+  - **"שלח לכל הסניפים"** → `sendMonthlyReportsAction` → `sendMonthlyReports`
+    (`lib/branch-report-send.ts`). הדיאלוג מציג **לפני** השליחה בדיוק לאילו סניפים וכתובות
+    זה ילך, מי יידלג בגלל חוסר כתובת, ואזהרה שאי אפשר לבטל מייל שנשלח; אחריה מוצגת תוצאה
+    פר-סניף. סניף שכבר קיבל את הדו"ח לאותו חודש מדולג (`reportSentAt`), כך שאפשר להריץ שוב
+    בבטחה. סניפים `deleted`/`notStarted` לא נכללים.
+  - **שליחה אוטומטית ב-1 לחודש**: `POST /api/rentals/monthly-reports`
+    (`apps/web/app/api/rentals/monthly-reports/route.ts`), מיועד ל-cron. אין כאן session,
+    ולכן הנתיב מוגן ב-`REPORTS_CRON_SECRET` (`Authorization: Bearer <secret>`) ו**מסרב לפעול
+    בכלל** כשהמשתנה לא מוגדר. ברירת המחדל היא **החודש הקודם** - "מריצים ב-1 לחודש" פירושו
+    לדווח על החודש שנסגר, לא על זה שהתחיל הבוקר; אפשר לעקוף עם `?month=YYYY-MM`. מחזיר
+    `{ ok, month, sent, skipped, failed[] }`.
   - תוכן הדו"ח (`apps/web/lib/branch-month-report.ts`): לוגו מ-`n_label_settings/default`
     (אותו מקור ככותרת הדשבורד), שם סניף וחודש, מספר השכרות + סה"כ הכנסות, **פירוט** שורות
     ההוצאה המשותפות (תיאור / מי שילם / על חשבון מי / סכום - בשמות אמיתיים, לא "אני"/"השותף",
     דרך `getOwnerName`/`partnerName`), יתרה קודמת, התחשבנות החודש, סה"כ, ושורה תחתונה מנוסחת
     מנקודת מבט השותף ("עליך להעביר X" / "מגיע לך X" / "מאוזן"). ה-HTML מבוסס טבלאות עם עיצוב
     inline בלבד — Gmail/Outlook מתעלמים מ-`<style>` ומ-flex/grid.
+  - **הלוגו במייל (`apps/web/lib/email-logo.ts`) — חשוב:** הלוגו נשמר ב-
+    `n_label_settings/default.logoUrl` כ-**data URI בבסיס 64** (זה מה שמסך העלאת הלוגו
+    ב-`/dashboard/rentals/labels/settings` מייצר, דרך `FileReader.readAsDataURL`). דפדפן
+    מרנדר את זה מצוין, אבל **Gmail ו-Outlook מסירים תמונות `data:`** - כלומר דו"ח שנשלח היה
+    מאבד את הלוגו בשקט. הפתרון הוא **inline attachment עם `cid:`**: `logoForEmail()` מפרק את
+    ה-data URI ל-base64 + mime, ה-HTML מפנה ל-`src="cid:ultranet-logo"`, והתמונה נוסעת בתוך
+    ההודעה דרך `Attachment.contentId` של Resend. לוגו `https://` מועבר כמו שהוא ללא צורך
+    בכל זה; `svg` מוחזר כ-null בכוונה (חסום כמעט בכל לקוחות המייל, ועדיף fallback לטקסט
+    "אולטרנט" מאשר תמונה שבורה). **התצוגה המקדימה בדפדפן** ממשיכה להשתמש ב-data URI ישירות.
   - שליחה בפועל: `apps/web/lib/mailer.ts` (Resend, שכבר היה dependency), דורש
     `RESEND_API_KEY` + `REPORT_FROM_EMAIL` ב-`.env.local`. בלעדיהם `mailerConfigError()`
     מחזיר הודעה בעברית שאומרת בדיוק מה חסר, והדיאלוג מציג אותה מראש. **מכוון שזה נפרד
     מ-EmailJS** שבמסכי ההתחברות: אלה רצים בדפדפן מול תבנית טקסט קבועה (קוד בן 6 ספרות) שלא
-    יכולה לשאת מסמך HTML מעוצב.
+    יכולה לשאת מסמך HTML מעוצב או attachment.
   - כתובת לכל סניף (`lib/branch-report-recipients.ts`): `Branch.partnerEmail`, ובהיעדרה
     המשתמש ב-`n_users` שה-`branchId` שלו תואם. סניף בלי אף כתובת מדווח ככזה ולא מושמט בשקט.
-  - **טרם נבנה:** שליחה אוטומטית בכל 1 לחודש לכל הסניפים. `sendBranchReportAction` בנוי כך
-    שאפשר לקרוא לו מ-cron/route בהמשך.
+  - **בנייה אחת לכל הנתיבים** (`lib/branch-report-send.ts`): התצוגה המקדימה, מייל הבדיקה,
+    "שלח לכל הסניפים" והשליחה האוטומטית כולם עוברים דרך `buildBranchReportEmail()`, כדי
+    שהתוכן לא יוכל להתפצל ביניהם.
 
   **חישוב חלקו של כל צד בהוצאה — `ownerShare`:** כל שורת הוצאה
   (`DatedExpenseLine`, `lib/branch-accounting-data.ts`) נושאת שדה `ownerShare` = חלק הבעלים
@@ -1160,7 +1182,9 @@ app שרץ בדפדפן ניתן ל"התקנה" כאפליקציה עם אייק
 | `apps/web/lib/multi-branch-expense.ts` | פיצול הוצאה חד-פעמית בין כמה סניפים לפי אחוז הבעלים (`splitMultiBranchExpense`). מודול טהור - גם טופס ה-client וגם החישוב בשרת מייבאים אותו |
 | `apps/web/lib/branch-month-report.ts` | בניית הדו"ח החודשי לסניף ורינדורו ל-HTML עצמאי (טבלאות + inline styles, בשביל Gmail/Outlook) |
 | `apps/web/lib/branch-report-recipients.ts` | לאיזו כתובת נשלח הדו"ח של כל סניף - `Branch.partnerEmail` ואז המשתמש התואם ב-`n_users` |
-| `apps/web/lib/mailer.ts` | שליחת HTML במייל מהשרת דרך Resend; בלי `RESEND_API_KEY`/`REPORT_FROM_EMAIL` מחזיר שגיאה מוסברת במקום ליפול |
+| `apps/web/lib/mailer.ts` | שליחת HTML במייל מהשרת דרך Resend, כולל תמונות inline (`cid:`); בלי `RESEND_API_KEY`/`REPORT_FROM_EMAIL` מחזיר שגיאה מוסברת במקום ליפול |
+| `apps/web/lib/email-logo.ts` | הפיכת הלוגו השמור (data URI) ל-inline attachment עם `cid:` - כי Gmail/Outlook מסירים תמונות `data:` |
+| `apps/web/lib/branch-report-send.ts` | בניית מייל הדו"ח (מקור אמת אחד לכל הנתיבים) ושליחה חודשית לכל הסניפים, כולל דילוג על מה שכבר נשלח (`reportSentAt`) |
 | `apps/web/lib/accounting-entries.ts` | אוצר המילים של תנועה ידנית: `EntryKind`/`EntryBook`, `entryCollection`, `isPendingAttribution` והבנאים של כל צורת יעד. נקי מ-`firebase-admin` — נצרך גם ע"י קומפוננטות לקוח |
 | `apps/web/lib/accounting-entries-data.ts` | `loadMovements()` — קריאת כל ארבע קולקשני התנועות והשטחתן ל-`MovementEntry[]` |
 | `apps/web/lib/branch-expense-ledger.ts` | יצירה/מחיקה של רשומת `n_ah_expenses` מקושרת מהוצאה חד-פעמית (חלק הבעלים בלבד) |

@@ -9,6 +9,7 @@
  * { ok: false } with a Hebrew message naming exactly what's missing, so the UI can say so.
  */
 import { Resend } from "resend";
+import type { EmailInlineImage } from "./email-logo";
 
 export interface SendResult {
   ok: boolean;
@@ -37,17 +38,27 @@ export async function sendHtmlEmail(params: {
   to: string;
   subject: string;
   html: string;
+  /** Images the HTML references as src="cid:<contentId>" - see lib/email-logo.ts for why the
+   *  logo has to travel inside the message rather than as a data: URI. */
+  inlineImages?: EmailInlineImage[];
 }): Promise<SendResult> {
   const configError = mailerConfigError();
   if (configError) return { ok: false, message: configError };
 
   try {
     const resend = new Resend(process.env.RESEND_API_KEY);
+    const attachments = (params.inlineImages ?? []).map((img) => ({
+      content: Buffer.from(img.base64, "base64"),
+      filename: img.filename,
+      contentType: img.contentType,
+      contentId: img.contentId,
+    }));
     const { error } = await resend.emails.send({
       from: process.env.REPORT_FROM_EMAIL as string,
       to: params.to,
       subject: params.subject,
       html: params.html,
+      ...(attachments.length > 0 ? { attachments } : {}),
     });
     if (error) {
       return { ok: false, message: `שליחת המייל נכשלה: ${error.message ?? "שגיאה לא ידועה מ-Resend"}` };
