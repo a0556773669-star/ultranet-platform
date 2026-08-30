@@ -100,7 +100,16 @@ export async function deleteEntryAction(
     const doc = await ref.get();
     if (!doc.exists) return { ok: false, message: "השורה כבר לא קיימת" };
 
-    const data = doc.data() as { branchId?: string; linkedAhExpenseId?: string };
+    const data = doc.data() as { branchId?: string; linkedAhExpenseId?: string; purchaseId?: string };
+    // A capital transaction is one third of a purchase (invoice + transaction + items). Deleting
+    // it alone would leave an invoice pointing at nothing and break the balance the asset layer
+    // rests on, so it is deleted from the purchase screen - which removes all three together.
+    if (book === "tx" && data.purchaseId) {
+      return {
+        ok: false,
+        message: "זו תנועה של רכישה. למחיקה יש להיכנס לרכישה עצמה — שם נמחקים גם החשבונית והפריטים יחד איתה.",
+      };
+    }
     if (kind === "expense" && book === "branch") {
       await deleteLinkedOwnerLedgerExpense(data.linkedAhExpenseId);
     }

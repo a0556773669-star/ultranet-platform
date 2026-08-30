@@ -396,22 +396,29 @@ export async function deleteLeftoverMirrors(): Promise<number> {
   const model = await loadTransactionModel();
   if (model.mirrors.length === 0) return 0;
 
-  const batch = db.batch();
-  for (const mirror of model.mirrors) {
-    batch.delete(db.collection("n_ah_expenses").doc(mirror.id));
-  }
-  // Clear the now-dangling back-references so nothing points at a deleted document.
+  // Clear the now-dangling back-references too, so nothing points at a deleted document.
   const [varSnap, multiSnap] = await Promise.all([
     db.collection("n_var_expenses").get(),
     db.collection("n_multi_branch_expenses").get(),
   ]);
   const mirrorIds = new Set(model.mirrors.map((m) => m.id));
+
+  const writes: ((b: FirebaseFirestore.WriteBatch) => void)[] = [];
+  for (const mirror of model.mirrors) {
+    writes.push((b) => b.delete(db.collection("n_ah_expenses").doc(mirror.id)));
+  }
   for (const d of [...varSnap.docs, ...multiSnap.docs]) {
     const linked = (d.data() as { linkedAhExpenseId?: string }).linkedAhExpenseId;
-    if (linked && mirrorIds.has(linked)) batch.update(d.ref, { linkedAhExpenseId: null });
+    if (linked && mirrorIds.has(linked)) writes.push((b) => b.update(d.ref, { linkedAhExpenseId: null }));
   }
 
-  await batch.commit();
+  // A business with years of history can hold more mirrors than a batch's 500-write limit.
+  const PER_BATCH = 400;
+  for (let i = 0; i < writes.length; i += PER_BATCH) {
+    const batch = db.batch();
+    for (const write of writes.slice(i, i + PER_BATCH)) write(batch);
+    await batch.commit();
+  }
   return model.mirrors.length;
 }
 

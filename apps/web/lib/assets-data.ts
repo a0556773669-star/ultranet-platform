@@ -105,8 +105,14 @@ export async function moveItems(params: {
   const refs = ids.map((id) => db.collection(ITEMS_COLLECTION).doc(id));
   const snaps = await db.getAll(...refs);
 
-  const batch = db.batch();
   const now = Date.now();
+  // Each move is two writes (the item's new location + its history row), and a Firestore batch
+  // holds 500. "Select all" on a full warehouse would silently exceed that, so the writes are
+  // chunked; a partial failure leaves earlier chunks committed, which is the right trade here -
+  // an item that moved and was recorded as moving is consistent on its own.
+  const MOVES_PER_BATCH = 200;
+  let batch = db.batch();
+  let inBatch = 0;
   let moved = 0;
 
   for (const snap of snaps) {
@@ -129,8 +135,15 @@ export async function moveItems(params: {
     };
     batch.set(db.collection(ITEM_MOVES_COLLECTION).doc(), move);
     moved += 1;
+    inBatch += 1;
+
+    if (inBatch >= MOVES_PER_BATCH) {
+      await batch.commit();
+      batch = db.batch();
+      inBatch = 0;
+    }
   }
 
-  if (moved > 0) await batch.commit();
+  if (inBatch > 0) await batch.commit();
   return moved;
 }

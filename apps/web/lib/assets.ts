@@ -95,6 +95,9 @@ export function purchaseUnitCount(lines: Pick<PurchaseLine, "qty">[]): number {
   return lines.reduce((sum, l) => sum + Math.max(0, Math.round(l.qty) || 0), 0);
 }
 
+/** Units one invoice may create in a single atomic write. See validatePurchase. */
+export const MAX_UNITS_PER_PURCHASE = 240;
+
 export interface PurchaseValidation {
   ok: boolean;
   linesTotal: number;
@@ -119,6 +122,16 @@ export function validatePurchase(
 
   if (lines.length === 0) return { ...base, ok: false, error: "נא להזין לפחות שורה אחת לחשבונית" };
   if (unitCount === 0) return { ...base, ok: false, error: "נא להזין כמות לפחות בשורה אחת" };
+  // A purchase is written as one atomic batch (invoice + transaction + two writes per unit), and
+  // a Firestore batch holds 500. Splitting a real invoice into two saves is the honest way past
+  // that, and keeps the "one invoice, one transaction" guarantee intact.
+  if (unitCount > MAX_UNITS_PER_PURCHASE) {
+    return {
+      ...base,
+      ok: false,
+      error: `חשבונית אחת יכולה להכיל עד ${MAX_UNITS_PER_PURCHASE} יחידות (הוזנו ${unitCount}). נא לפצל אותה לשתי רכישות.`,
+    };
+  }
   if (!Number.isFinite(total) || total <= 0) {
     return { ...base, ok: false, error: "נא להזין את סכום החשבונית" };
   }
