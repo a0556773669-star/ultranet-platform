@@ -8,16 +8,17 @@ import type {
   Laptop,
   BranchTransfer,
   BranchIncome,
+  MultiBranchExpense,
 } from "@ultranet/shared-types";
 import {
   ownerExpenseBurden,
-  partnerExpenseBurden,
-  expenseNetToOwner,
+  expenseNetToOwnerFromShares,
   isCollectedByOwner,
   monthsBetween,
   buildComputerProfitTrend,
   type ComputerProfitMonth,
 } from "./branch-accounting";
+import { MULTI_BRANCH_EXPENSES_COLLECTION, splitOf } from "./multi-branch-expense";
 
 export function currentMonth(): string {
   return new Date().toISOString().slice(0, 7);
@@ -28,23 +29,128 @@ interface DatedExpenseLine {
   paidBy?: string;
   owedBy?: string;
   month: string;
+  /** Human-readable name of the expense, carried through so the monthly partner report can
+   *  itemise the lines instead of only showing their total. */
+  desc: string;
+  /** true for a recurring fixed expense, false for a one-off variable one. */
+  recurring: boolean;
+  /**
+   * The owner's economic share of this line, in ₪. For an ordinary branch expense that is just
+   * ownerExpenseBurden(amount, owedBy) - all / half / none, per `owedBy`. Multi-branch expenses
+   * need this field because their split is a free percentage that `owedBy` cannot express, so
+   * every downstream calculation reads `ownerShare` rather than re-deriving from `owedBy`.
+   */
+  ownerShare: number;
+  /** set only on a multi-branch expense line - the owner's percentage of it, for display. */
+  ownerPct?: number;
 }
 
-/** Expands recurring fixed expenses into one line per active month, plus all variable expense lines. */
-function expandExpenseLines(fixed: FixedExpense[], variable: VariableExpense[], uptoMonth: string): DatedExpenseLine[] {
+/** Expands recurring fixed expenses into one line per active month, plus all variable expense
+ *  lines, plus this branch's slice of every multi-branch expense it takes part in. */
+function expandExpenseLines(
+  fixed: FixedExpense[],
+  variable: VariableExpense[],
+  multiBranch: MultiBranchExpense[],
+  uptoMonth: string
+): DatedExpenseLine[] {
   const lines: DatedExpenseLine[] = [];
   for (const e of fixed) {
     if (!e.startDate) continue;
     const endMonth = e.endDate && e.endDate.slice(0, 7) < uptoMonth ? e.endDate.slice(0, 7) : uptoMonth;
     const amount = e.variableAmount && e.lastAmount != null ? e.lastAmount : e.amount || 0;
     for (const month of monthsBetween(e.startDate, endMonth)) {
-      lines.push({ amount, paidBy: e.paidBy, owedBy: e.owedBy, month });
+      lines.push({
+        amount,
+        paidBy: e.paidBy,
+        owedBy: e.owedBy,
+        month,
+        desc: e.name || "הוצאה קבועה",
+        recurring: true,
+        ownerShare: ownerExpenseBurden(amount, e.owedBy),
+      });
     }
   }
   for (const e of variable) {
-    lines.push({ amount: e.amount || 0, paidBy: e.paidBy, owedBy: e.owedBy, month: e.month });
+    const amount = e.amount || 0;
+    lines.push({
+      amount,
+      paidBy: e.paidBy,
+      owedBy: e.owedBy,
+      month: e.month,
+      desc: e.desc || "הוצאה חד פעמית",
+      recurring: false,
+      ownerShare: ownerExpenseBurden(amount, e.owedBy),
+    });
+  }
+  // One line per multi-branch expense: this branch's slice of it, with the owner's percentage
+  // of that same slice carried in ownerShare. See lib/multi-branch-expense.ts for the split.
+  for (const e of multiBranch) {
+    const split = splitOf(e);
+    lines.push({
+      amount: split.perBranchLineTotal,
+      paidBy: e.paidBy,
+      // owedBy stays undefined on purpose - the split is a percentage, not an owner/partner/50-50
+      // bucket, so ownerShare below is the only correct source for it.
+      month: e.month,
+      desc: e.desc || "הוצאה משותפת",
+      recurring: false,
+      ownerShare: split.perBranchOwnerShare,
+      ownerPct: split.ownerPct,
+    });
   }
   return lines;
+}
+
+/** The owner's net for one expense line, from its resolved shares. Identical to
+ *  expenseNetToOwner(amount, paidBy, owedBy) for every ordinary line - see the doc comment on
+ *  expenseNetToOwnerFromShares - and the only correct form for a multi-branch line. */
+function lineNetToOwner(line: DatedExpenseLine): number {
+  return expenseNetToOwnerFromShares(line.amount, line.ownerShare, line.paidBy);
+}
+
+/** One expense line as it appears in the partner settlement: the full amount that was spent,
+ *  plus how much of it nets to the owner (positive: the partner owes the owner for it). */
+export interface SettlementExpenseLine {
+  desc: string;
+  amount: number;
+  paidBy?: string;
+  owedBy?: string;
+  recurring: boolean;
+  netToOwner: number;
+  /** the owner's share of this line in ₪ - the authority on the split for every line type */
+  ownerShare: number;
+  /** set only on a multi-branch expense line, so the report can say "40% על הבעלים" instead of
+   *  trying to phrase a free percentage as an owner/partner/50-50 bucket */
+  ownerPct?: number;
+}
+
+/**
+ * The month's expense lines that actually take part in the owner/partner settlement - i.e. the
+ * ones either side owes the other something for: shared expenses, and expenses one side paid on
+ * the other's behalf. An expense the owner both paid AND fully owes (owedBy "owner", paidBy
+ * "owner") is *not* a settlement matter at all - it's the owner's own P&L - so it's left out.
+ */
+export function settlementExpenseLinesForMonth(
+  branch: Branch,
+  raw: BranchAccountingRawData,
+  month: string
+): SettlementExpenseLine[] {
+  const fixed = raw.fixedByBranch.get(branch.id) ?? [];
+  const variable = raw.variableByBranch.get(branch.id) ?? [];
+  const multiBranch = raw.multiBranchByBranch.get(branch.id) ?? [];
+  return expandExpenseLines(fixed, variable, multiBranch, month)
+    .filter((e) => e.month === month)
+    .map((e) => ({
+      desc: e.desc,
+      amount: e.amount,
+      paidBy: e.paidBy,
+      owedBy: e.owedBy,
+      recurring: e.recurring,
+      netToOwner: lineNetToOwner(e),
+      ownerShare: e.ownerShare,
+      ownerPct: e.ownerPct,
+    }))
+    .filter((e) => Math.abs(e.netToOwner) > 0.005);
 }
 
 interface DatedIncomeLine {
@@ -102,6 +208,13 @@ export interface BranchFinancials {
   hisExpenseThisMonth: number;
   /** This month's total collected income for the branch, before any owner/partner split. */
   grossIncomeThisMonth: number;
+  /** This month's total spend on the expense lines that take part in the settlement (shared ones,
+   *  and ones one side paid on the other's behalf) - the full amount spent, not either side's
+   *  share of it. Expenses the owner both paid and fully owes are excluded: they're the owner's
+   *  own P&L, not a partner matter. See settlementExpenseLinesForMonth. */
+  settlementExpenseThisMonth: number;
+  /** Number of income events counted this month (paid+returned rentals plus manual income rows). */
+  rentalCountThisMonth: number;
 }
 
 export interface BranchAccountingRawData {
@@ -113,21 +226,36 @@ export interface BranchAccountingRawData {
   routesById: Map<string, CollectionRoute>;
   transfersByBranchMonth: Map<string, BranchTransfer>; // key: `${branchId}|${month}`
   branchIncomeByBranch: Map<string, BranchIncome[]>;
+  /** A multi-branch expense is indexed under EVERY branch it applies to - each of them gets its
+   *  own slice of it as an expense line. See expandExpenseLines. */
+  multiBranchByBranch: Map<string, MultiBranchExpense[]>;
+  /** Every multi-branch expense, once, for the management list on /rentals/expenses. */
+  multiBranchExpenses: MultiBranchExpense[];
 }
 
 export async function loadBranchAccountingRawData(): Promise<BranchAccountingRawData> {
   const db = getAdminFirestore();
-  const [branchesSnap, fixedSnap, variableSnap, rentalsSnap, laptopsSnap, routesSnap, transfersSnap, branchIncomeSnap] =
-    await Promise.all([
-      db.collection("n_branches").get(),
-      db.collection("n_fixed_expenses").get(),
-      db.collection("n_var_expenses").get(),
-      db.collection("n_rentals").get(),
-      db.collection("n_laptops").get(),
-      db.collection("n_collection_routes").get(),
-      db.collection("n_branch_transfers").get(),
-      db.collection("n_branch_income").get(),
-    ]);
+  const [
+    branchesSnap,
+    fixedSnap,
+    variableSnap,
+    rentalsSnap,
+    laptopsSnap,
+    routesSnap,
+    transfersSnap,
+    branchIncomeSnap,
+    multiBranchSnap,
+  ] = await Promise.all([
+    db.collection("n_branches").get(),
+    db.collection("n_fixed_expenses").get(),
+    db.collection("n_var_expenses").get(),
+    db.collection("n_rentals").get(),
+    db.collection("n_laptops").get(),
+    db.collection("n_collection_routes").get(),
+    db.collection("n_branch_transfers").get(),
+    db.collection("n_branch_income").get(),
+    db.collection(MULTI_BRANCH_EXPENSES_COLLECTION).get(),
+  ]);
 
   const branches = branchesSnap.docs.map((d) => ({ ...(d.data() as Omit<Branch, "id">), id: d.id }) as Branch);
 
@@ -182,6 +310,18 @@ export async function loadBranchAccountingRawData(): Promise<BranchAccountingRaw
     branchIncomeByBranch.set(i.branchId, arr);
   }
 
+  const multiBranchExpenses = multiBranchSnap.docs.map(
+    (d) => ({ ...(d.data() as Omit<MultiBranchExpense, "id">), id: d.id }) as MultiBranchExpense
+  );
+  const multiBranchByBranch = new Map<string, MultiBranchExpense[]>();
+  for (const e of multiBranchExpenses) {
+    for (const branchId of e.branchIds ?? []) {
+      const arr = multiBranchByBranch.get(branchId) ?? [];
+      arr.push(e);
+      multiBranchByBranch.set(branchId, arr);
+    }
+  }
+
   return {
     branches,
     fixedByBranch,
@@ -191,6 +331,8 @@ export async function loadBranchAccountingRawData(): Promise<BranchAccountingRaw
     routesById,
     transfersByBranchMonth,
     branchIncomeByBranch,
+    multiBranchByBranch,
+    multiBranchExpenses,
   };
 }
 
@@ -208,8 +350,9 @@ export function computeBranchFinancials(branch: Branch, raw: BranchAccountingRaw
   const laptops = raw.laptopsByBranch.get(branch.id) ?? [];
 
   const branchIncome = raw.branchIncomeByBranch.get(branch.id) ?? [];
+  const multiBranch = raw.multiBranchByBranch.get(branch.id) ?? [];
 
-  const expenseLines = expandExpenseLines(fixed, variable, month);
+  const expenseLines = expandExpenseLines(fixed, variable, multiBranch, month);
   const incomeLines = [...buildIncomeLines(rentals, raw.routesById), ...buildManualIncomeLines(branchIncome)];
 
   const ownerPct = branchOwnerPct(branch);
@@ -218,21 +361,25 @@ export function computeBranchFinancials(branch: Branch, raw: BranchAccountingRaw
   const thisMonthExpenses = expenseLines.filter((e) => e.month === month);
   const thisMonthIncome = incomeLines.filter((i) => i.month === month);
 
+  // Every expense figure below reads the line's resolved shares (`ownerShare`, and `amount -
+  // ownerShare` for the partner) rather than re-deriving them from `owedBy`, so that a
+  // multi-branch expense's free percentage split flows through identically to an ordinary
+  // owner/partner/50-50 one. For ordinary lines the two forms are equal by construction.
   const incomeThisMonth = thisMonthIncome.reduce((sum, i) => sum + (i.amount * partnerPct) / 100, 0);
-  const expenseThisMonth = thisMonthExpenses.reduce((sum, e) => sum + partnerExpenseBurden(e.amount, e.owedBy), 0);
+  const expenseThisMonth = thisMonthExpenses.reduce((sum, e) => sum + (e.amount - e.ownerShare), 0);
 
   const incomeToDate = incomeLines.reduce((sum, i) => sum + (i.amount * partnerPct) / 100, 0);
-  const expenseToDate = expenseLines.reduce((sum, e) => sum + partnerExpenseBurden(e.amount, e.owedBy), 0);
+  const expenseToDate = expenseLines.reduce((sum, e) => sum + (e.amount - e.ownerShare), 0);
 
   const settlementIncome = thisMonthIncome.reduce((sum, i) => {
     if (i.collectedByOwner) return sum - (i.amount * partnerPct) / 100;
     return sum + (i.amount * ownerPct) / 100;
   }, 0);
-  const settlementExpense = thisMonthExpenses.reduce((sum, e) => sum + expenseNetToOwner(e.amount, e.paidBy, e.owedBy), 0);
+  const settlementExpense = thisMonthExpenses.reduce((sum, e) => sum + lineNetToOwner(e), 0);
 
   const ownerNetProfitThisMonth =
     thisMonthIncome.reduce((sum, i) => sum + (i.amount * ownerPct) / 100, 0) -
-    thisMonthExpenses.reduce((sum, e) => sum + ownerExpenseBurden(e.amount, e.owedBy), 0);
+    thisMonthExpenses.reduce((sum, e) => sum + e.ownerShare, 0);
 
   // Build a trend of the last 12 months of owner net profit for the per-computer graph.
   const trendMonths: string[] = [];
@@ -254,7 +401,7 @@ export function computeBranchFinancials(branch: Branch, raw: BranchAccountingRaw
     const expLines = expenseLines.filter((e) => e.month === mo);
     const netProfit =
       incLines.reduce((sum, i) => sum + (i.amount * ownerPct) / 100, 0) -
-      expLines.reduce((sum, e) => sum + ownerExpenseBurden(e.amount, e.owedBy), 0);
+      expLines.reduce((sum, e) => sum + e.ownerShare, 0);
     return { month: mo, netProfit };
   });
   const addedDates = laptops.map((l) => l.addedDate);
@@ -266,11 +413,15 @@ export function computeBranchFinancials(branch: Branch, raw: BranchAccountingRaw
   // owner's overview table can show both sides instead of just the net.
   const myExpenseThisMonth = thisMonthExpenses
     .filter((e) => e.paidBy !== "partner")
-    .reduce((sum, e) => sum + partnerExpenseBurden(e.amount, e.owedBy), 0);
+    .reduce((sum, e) => sum + (e.amount - e.ownerShare), 0);
   const hisExpenseThisMonth = thisMonthExpenses
     .filter((e) => e.paidBy === "partner")
-    .reduce((sum, e) => sum + ownerExpenseBurden(e.amount, e.owedBy), 0);
+    .reduce((sum, e) => sum + e.ownerShare, 0);
   const grossIncomeThisMonth = thisMonthIncome.reduce((sum, i) => sum + i.amount, 0);
+  const settlementExpenseThisMonth = thisMonthExpenses
+    .filter((e) => Math.abs(lineNetToOwner(e)) > 0.005)
+    .reduce((sum, e) => sum + e.amount, 0);
+  const rentalCountThisMonth = thisMonthIncome.length;
 
   return {
     branch,
@@ -282,14 +433,16 @@ export function computeBranchFinancials(branch: Branch, raw: BranchAccountingRaw
     balanceToDate: incomeToDate - expenseToDate,
     settlementNetToOwner: settlementIncome + settlementExpense,
     ownerNetProfitThisMonth,
-    ownerInvestedToDate: expenseLines.reduce((sum, e) => sum + ownerExpenseBurden(e.amount, e.owedBy), 0),
+    ownerInvestedToDate: expenseLines.reduce((sum, e) => sum + e.ownerShare, 0),
     ownerEarnedToDate: incomeLines.reduce((sum, i) => sum + (i.amount * ownerPct) / 100, 0),
     ownerBalanceToDate:
       incomeLines.reduce((sum, i) => sum + (i.amount * ownerPct) / 100, 0) -
-      expenseLines.reduce((sum, e) => sum + ownerExpenseBurden(e.amount, e.owedBy), 0),
+      expenseLines.reduce((sum, e) => sum + e.ownerShare, 0),
     computerProfitTrend,
     myExpenseThisMonth,
     hisExpenseThisMonth,
     grossIncomeThisMonth,
+    settlementExpenseThisMonth,
+    rentalCountThisMonth,
   };
 }
