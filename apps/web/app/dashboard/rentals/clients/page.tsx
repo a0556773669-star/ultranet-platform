@@ -1,7 +1,7 @@
 import { requireModuleAccess } from "@/lib/perms";
 import { getAdminFirestore } from "@/lib/firebase-admin";
-import type { RentalClient, Branch } from "@ultranet/shared-types";
-import { resolveNedarimCreds } from "@/lib/nedarim";
+import type { RentalClient, Branch, CollectionRoute } from "@ultranet/shared-types";
+import { makeNedarimResolver } from "@/lib/nedarim";
 import { createClientAction, importClientsAction } from "../actions";
 import { ClientsHeader } from "./clients-header";
 import { ClientsTable } from "./clients-table";
@@ -28,13 +28,19 @@ export default async function RentalClientsPage({
   const canCharge = isOwner || !!perms?.charging;
 
   const db = getAdminFirestore();
-  const [clientsSnap, branchesSnap] = await Promise.all([
+  // Branches and routes are read in full so charge-route resolution below can run in memory
+  // instead of re-fetching the same documents once per client route; `branches`, which every
+  // section on this page uses, stays the rentals-only, non-deleted list it always was.
+  const [clientsSnap, branchesSnap, routesSnap] = await Promise.all([
     db.collection("n_rental_clients").get(),
-    db.collection("n_branches").where("branchType", "==", "rentals").get(),
+    db.collection("n_branches").get(),
+    db.collection("n_collection_routes").get(),
   ]);
-  const branches = branchesSnap.docs
-    .map((d) => ({ ...(d.data() as Omit<Branch, "id">), id: d.id }) as Branch)
-    .filter((b) => !b.deleted);
+  const allBranches = branchesSnap.docs.map((d) => ({ ...(d.data() as Omit<Branch, "id">), id: d.id }) as Branch);
+  const branches = allBranches.filter((b) => b.branchType === "rentals" && !b.deleted);
+  const routesList = routesSnap.docs.map(
+    (d) => ({ ...(d.data() as Omit<CollectionRoute, "id">), id: d.id }) as CollectionRoute
+  );
   const allClients = clientsSnap.docs.map(
     (d) => ({ ...(d.data() as Omit<RentalClient, "id">), id: d.id }) as RentalClient
   );
@@ -50,19 +56,14 @@ export default async function RentalClientsPage({
   // token is actually chargeable through (same rule the manage page and charge API use)
   const routeNameById: Record<string, string> = {};
   if (canCharge) {
-    const tokenClients = clients.filter((c) => c.gatewayToken && c.cardExpiry);
-    const tokenRouteKeys = Array.from(
-      new Set(tokenClients.map((c) => `${c.branchId}::${c.collectionRouteId ?? ""}`))
-    );
-    const tokenCredsEntries = await Promise.all(
-      tokenRouteKeys.map(async (key) => {
-        const [branchId, routeId] = key.split("::");
-        return [key, await resolveNedarimCreds(branchId, routeId || undefined)] as const;
-      })
-    );
-    const tokenCredsMap = new Map(tokenCredsEntries);
-    for (const c of tokenClients) {
-      const creds = tokenCredsMap.get(`${c.branchId}::${c.collectionRouteId ?? ""}`);
+    const resolveCreds = makeNedarimResolver(routesList, new Map(allBranches.map((b) => [b.id, b])));
+    const tokenCredsMap = new Map<string, ReturnType<typeof resolveCreds>>();
+    for (const c of clients) {
+      if (!c.gatewayToken || !c.cardExpiry) continue;
+      const routeId = c.collectionRouteId ?? "";
+      const key = `${c.branchId}::${routeId}`;
+      if (!tokenCredsMap.has(key)) tokenCredsMap.set(key, resolveCreds(c.branchId, routeId || undefined));
+      const creds = tokenCredsMap.get(key);
       if (creds) routeNameById[c.id] = creds.name;
     }
   }

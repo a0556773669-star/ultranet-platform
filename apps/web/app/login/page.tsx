@@ -1,15 +1,9 @@
 import { Suspense } from "react";
 import { LoginForm } from "./login-form";
-import { getAdminFirestore } from "@/lib/firebase-admin";
+import { getLogoSrc } from "@/lib/branding";
 
 export default async function LoginPage() {
-  let logoUrl = "";
-  try {
-    const doc = await getAdminFirestore().collection("n_label_settings").doc("default").get();
-    logoUrl = String((doc.data() as { logoUrl?: string } | undefined)?.logoUrl ?? "");
-  } catch {
-    logoUrl = "";
-  }
+  const logoUrl = await getLogoSrc();
 
   return (
     <main className="flex min-h-screen flex-col items-center justify-center gap-6 bg-gray-50 p-4">

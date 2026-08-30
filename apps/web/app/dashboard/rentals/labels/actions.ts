@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireModuleAccess, requireOwner } from "@/lib/perms";
 import { getAdminFirestore } from "@/lib/firebase-admin";
+import { invalidateLogoCache } from "@/lib/branding";
 
 export type LabelSettings = {
   computerWidthMm: number;
@@ -79,6 +80,9 @@ export async function updateLabelSettingsAction(formData: FormData) {
   }
 
   await ref.set(settings);
+  // The header/favicon/login logo is cached and served by URL - drop it so a new (or removed)
+  // logo shows up immediately instead of at the end of the cache window.
+  invalidateLogoCache();
   revalidatePath("/dashboard/rentals/labels");
   revalidatePath("/dashboard/rentals/labels/settings");
   redirect("/dashboard/rentals/labels");

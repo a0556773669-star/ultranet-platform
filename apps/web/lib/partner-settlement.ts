@@ -23,10 +23,17 @@ export interface PartnerSettlementLine {
  */
 export async function computePartnerSettlement(month: string): Promise<PartnerSettlementLine[]> {
   const db = getAdminFirestore();
+  // Projected down to the fields this function actually reads. Every returned rental ever is
+  // scanned here (the month filter is applied in memory below), so the documents' full contents -
+  // notes, client ids, pricing breakdowns - were being shipped for nothing.
   const [laptopsSnap, sticksSnap, rentalsSnap] = await Promise.all([
-    db.collection("n_laptops").get(),
-    db.collection("n_sticks").get(),
-    db.collection("n_rentals").where("status", "==", "returned").get(),
+    db.collection("n_laptops").select("hasPartner", "partnerPct", "partnerName", "branchId", "name").get(),
+    db.collection("n_sticks").select("linkedLaptopId").get(),
+    db
+      .collection("n_rentals")
+      .where("status", "==", "returned")
+      .select("paid", "returnDate", "kind", "itemId", "finalPrice", "calcPrice")
+      .get(),
   ]);
 
   const laptops = laptopsSnap.docs.map((d) => ({ ...(d.data() as Omit<Laptop, "id">), id: d.id }) as Laptop);

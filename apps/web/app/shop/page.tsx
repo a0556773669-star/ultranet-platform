@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { getAdminFirestore } from "@/lib/firebase-admin";
+import { getLogoSrc } from "@/lib/branding";
 import type { ShopAddon, ShopComputerConfig } from "@ultranet/shared-types";
 import { ShopChatClient } from "./shop-chat-client";
 
@@ -18,12 +19,12 @@ export default async function ShopPage() {
   let addons: ShopAddon[] = [];
 
   try {
-    const [logoDoc, catalogSnap, addonsSnap] = await Promise.all([
-      db.collection("n_label_settings").doc("default").get(),
+    const [logoSrc, catalogSnap, addonsSnap] = await Promise.all([
+      getLogoSrc(),
       db.collection("n_shop_catalog").where("active", "==", true).get(),
       db.collection("n_shop_addons").where("active", "==", true).get(),
     ]);
-    logoUrl = String((logoDoc.data() as { logoUrl?: string } | undefined)?.logoUrl ?? "");
+    logoUrl = logoSrc ?? "";
     catalog = catalogSnap.docs.map((d) => ({ ...(d.data() as Omit<ShopComputerConfig, "id">), id: d.id }));
     addons = addonsSnap.docs.map((d) => ({ ...(d.data() as Omit<ShopAddon, "id">), id: d.id }));
   } catch {

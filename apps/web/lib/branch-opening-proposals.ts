@@ -48,11 +48,13 @@ type Evidence = Partial<Record<Exclude<ProposalSource, "none">, string>>;
 
 export async function loadOpeningProposals(): Promise<Map<string, OpeningProposal>> {
   const db = getAdminFirestore();
+  // Only the branch and the one date each loop below reads - these collections are scanned in
+  // full every time, and n_rentals in particular keeps growing.
   const [rentalsSnap, incomeSnap, expensesSnap, laptopsSnap] = await Promise.all([
-    db.collection("n_rentals").get(),
-    db.collection("n_branch_income").get(),
-    db.collection("n_var_expenses").get(),
-    db.collection("n_laptops").get(),
+    db.collection("n_rentals").select("branchId", "startDate").get(),
+    db.collection("n_branch_income").select("branchId", "date", "month").get(),
+    db.collection("n_var_expenses").select("branchId", "date", "month").get(),
+    db.collection("n_laptops").select("branchId", "addedDate").get(),
   ]);
 
   const byBranch = new Map<string, Evidence>();

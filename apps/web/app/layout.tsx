@@ -6,26 +6,20 @@ import { PwaRegister } from "./pwa-register";
 
 // const heebo = ...
 
-import { getAdminFirestore } from "@/lib/firebase-admin";
+import { getLogoSrc } from "@/lib/branding";
 
 export const viewport: Viewport = {
   themeColor: "#1a2332",
 };
 
 export async function generateMetadata(): Promise<Metadata> {
-  let logoUrl = "";
-  try {
-    const doc = await getAdminFirestore().collection("n_label_settings").doc("default").get();
-    logoUrl = String((doc.data() as { logoUrl?: string } | undefined)?.logoUrl ?? "");
-  } catch {
-    logoUrl = "";
-  }
+  const logoUrl = await getLogoSrc();
   return {
     title: "אולטרנט מערכת ניהול",
     description: "אולטרנט מערכת ניהול - סניפים, השכרות, וחדרות מחשבים",
     manifest: "/manifest.webmanifest",
     icons: {
-      icon: logoUrl ? logoUrl : "/icons/icon-512.png",
+      icon: logoUrl ?? "/icons/icon-512.png",
       apple: "/icons/apple-touch-icon.png",
     },
     appleWebApp: {

@@ -10,7 +10,7 @@ import { TopNav } from "./top-nav";
 import type { PermKey } from "@/lib/perms";
 
 import { NAV_ITEMS, visibleFor } from "@/lib/nav-items";
-import { getAdminFirestore } from "@/lib/firebase-admin";
+import { getLogoSrc } from "@/lib/branding";
 
 export default async function DashboardLayout({ children }: { children: ReactNode }) {
   const session = await getServerSession(authOptions);
@@ -37,13 +37,7 @@ export default async function DashboardLayout({ children }: { children: ReactNod
     icon: <item.icon className="ml-1 h-4 w-4" />,
   }));
 
-  let logoUrl = "";
-  try {
-    const logoDoc = await getAdminFirestore().collection("n_label_settings").doc("default").get();
-    logoUrl = String((logoDoc.data() as { logoUrl?: string } | undefined)?.logoUrl ?? "");
-  } catch {
-    logoUrl = "";
-  }
+  const logoUrl = await getLogoSrc();
 
   return (
     <div className="min-h-screen bg-page">

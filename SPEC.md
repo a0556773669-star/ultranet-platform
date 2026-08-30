@@ -141,7 +141,13 @@ pnpm dev        # turbo run dev — מריץ web + api
 
 ה-JWT מסנכרן מחדש `role` / `branchId` / `perms` / `viewClientBranchIds`
 מ-Firestore כל ~2 דקות, כך ששינויי הרשאה נכנסים לתוקף בלי צורך בכניסה מחדש.
-בנוסף קיים אימות מכשיר (`/verify-device`, `lib/device-trust.ts`).
+**הערה חשובה למימוש**: `getServerSession()` מריץ את ה-callback אבל אין לו תשובה לכתוב
+אליה, ולכן ה-`branchSyncedAt` המעודכן נזרק ולא נשמר בעוגייה — חלון ה-2 דקות שעל הטוקן
+לעולם לא נסגר בזמן רינדור. לכן הקריאה ל-`n_users` עצמה מקושרת לפי אימייל באותו חלון
+(`loadUserForSync` ב-`lib/auth.ts`); בלי זה כל קריאת session בצד שרת הייתה שאילתה נפרדת,
+ובכל דף יש לפחות שתיים (layout ואז `requireModuleAccess`) ועוד אחת לכל Server Action.
+פעולות עריכת משתמש קוראות ל-`invalidateUserSyncCache(email)` כדי ששינוי הרשאה ייכנס לתוקף
+מיד ולא בסוף החלון. בנוסף קיים אימות מכשיר (`/verify-device`, `lib/device-trust.ts`).
 
 ---
 
@@ -529,9 +535,9 @@ pnpm dev        # turbo run dev — מריץ web + api
     ההודעה דרך `Attachment.contentId` של Resend. לוגו `https://` מועבר כמו שהוא ללא צורך
     בכל זה; `svg` מוחזר כ-null בכוונה (חסום כמעט בכל לקוחות המייל, ועדיף fallback לטקסט
     "אולטרנט" מאשר תמונה שבורה). **התצוגה המקדימה בדפדפן** ממשיכה להשתמש ב-data URI ישירות.
-  - שליחה בפועל: `apps/web/lib/mailer.ts` (Resend, שכבר היה dependency), דורש
-    `RESEND_API_KEY` + `REPORT_FROM_EMAIL` ב-`.env.local`. בלעדיהם `mailerConfigError()`
-    מחזיר הודעה בעברית שאומרת בדיוק מה חסר, והדיאלוג מציג אותה מראש. **מכוון שזה נפרד
+  - שליחה בפועל: `apps/web/lib/mailer.ts` (Resend, שכבר היה dependency), דורש **רק** `RESEND_API_KEY`. `REPORT_FROM_EMAIL` הוא רשות: בלעדיו השליחה נופלת לכתובת הבדיקה של Resend (`onboarding@resend.dev`), שמגיעה רק לכתובת שאיתה נרשמת שם - `mailerSandboxMode()` מחזיר `true` וה-UI אומר את זה במפורש (רמז כחול בדיאלוג הבדיקה, אזהרה אדומה ב"שלח לכל הסניפים", כי שם זה פשוט ייכשל).
+    בלי `RESEND_API_KEY` בכלל, `mailerConfigError()` מחזיר הודעה בעברית שאומרת בדיוק מה חסר
+    ואיפה להגדיר אותו, והדיאלוג מציג אותה מראש. **מכוון שזה נפרד
     מ-EmailJS** שבמסכי ההתחברות: אלה רצים בדפדפן מול תבנית טקסט קבועה (קוד בן 6 ספרות) שלא
     יכולה לשאת מסמך HTML מעוצב או attachment.
   - כתובת לכל סניף (`lib/branch-report-recipients.ts`): `Branch.partnerEmail`, ובהיעדרה
@@ -1068,6 +1074,16 @@ checkbox - הסימון "בוצע" נעשה בקומות השבוע/החודש, 
 
 כל הדף הציבורי משתמש באותו `logoUrl` מ-`n_label_settings/default` שמוצג גם בדשבורד (עם
 וורדמארק טקסטואלי "אולטרנט" כברירת מחדל כשאין לוגו מוגדר) - אין מסלול לוגו נפרד לחנות ה-AI.
+
+**הגשת הלוגו (`apps/web/lib/branding.ts` + `GET /api/branding/logo`)** — הלוגו שמור
+כ-data URI בבסיס 64, ולכן **אף מסך לא משבץ אותו ישירות ב-HTML שלו**. `getLogoSrc()` מחזיר
+כתובת קצרה `/api/branding/logo?v=<hash>` שהדפדפן מוריד פעם אחת ושומר בקאש; ה-hash הוא של
+תוכן הלוגו, כך שלוגו חדש = כתובת חדשה והמסלול יכול להחזיר `immutable` בלי סכנת קאש ישן.
+הקריאה ל-Firestore מקושרת (cache של דקה בתהליך), ו-`updateLabelSettingsAction` קורא
+ל-`invalidateLogoCache()` כדי שלוגו שהוחלף יופיע מיד. המסלול ציבורי בכוונה (ה-middleware
+מגן רק על `/dashboard/*`) כי הלוגו מוצג גם בעמוד ההתחברות וב-`/shop`. הדו"ח שנשלח במייל
+ממשיך לקבל את ה-data URI הגולמי דרך `getStoredLogo().value` — `logoForEmail` צריך את
+הבסיס-64 עצמו כדי לבנות את הצרופה עם `cid:`.
 
 ### מודולים רוחביים
 - **משתמשים** (`/users`) — ניהול משתמשים והרשאות (owner).

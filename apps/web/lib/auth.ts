@@ -3,6 +3,48 @@ import CredentialsProvider from "next-auth/providers/credentials";
 import GoogleProvider from "next-auth/providers/google";
 import { getAdminFirestore } from "@/lib/firebase-admin";
 
+/** How long a role/branch/perms sync is considered fresh. */
+const USER_SYNC_TTL_MS = 2 * 60 * 1000;
+
+type SyncedUserFields = {
+  role?: string;
+  branchId?: string;
+  perms?: unknown;
+  viewClientBranchIds?: unknown;
+};
+
+/**
+ * The jwt callback below re-reads n_users when the token's `branchSyncedAt` is older than
+ * USER_SYNC_TTL_MS. That gate never actually closed during page rendering: getServerSession()
+ * runs the callback but has no response to write to, so the refreshed `branchSyncedAt` is
+ * discarded and the next render starts from the same stale timestamp. Every server-side session
+ * read therefore ran a fresh n_users query - and a page hits at least two of them (the dashboard
+ * layout, then requireModuleAccess), plus one per server action.
+ *
+ * Caching the lookup by email for that same window restores what the code always meant: role and
+ * permission changes take effect within about two minutes, at one query per window rather than
+ * one per request. Failures are deliberately not cached, so a transient Firestore error doesn't
+ * pin a user to stale values for the rest of the window.
+ */
+const userSyncCache = new Map<string, { at: number; fields: SyncedUserFields | null }>();
+
+async function loadUserForSync(email: string): Promise<SyncedUserFields | null> {
+  const cached = userSyncCache.get(email);
+  if (cached && Date.now() - cached.at < USER_SYNC_TTL_MS) return cached.fields;
+
+  const snap = await getAdminFirestore().collection("n_users").where("email", "==", email).get();
+  const fields = snap.empty ? null : (snap.docs[0]!.data() as SyncedUserFields);
+  userSyncCache.set(email, { at: Date.now(), fields });
+  return fields;
+}
+
+/** Drops a user's cached sync so the next session read picks their new values up immediately -
+ *  for the screens that edit roles/permissions and shouldn't wait out the window. */
+export function invalidateUserSyncCache(email?: string | null) {
+  if (email) userSyncCache.delete(email.toLowerCase());
+  else userSyncCache.clear();
+}
+
 // Mirrors the login logic already used in app.html:
 // - email+password checked against n_users (same collection, same fields)
 // - Google sign-in only succeeds if the Google account's email already exists in n_users
@@ -120,25 +162,14 @@ export const authOptions: NextAuthOptions = {
       // after the user's last full sign-in (e.g. linking a partner to a branch)
       // take effect without forcing them to log out and back in.
       const lastSync = (token as { branchSyncedAt?: number }).branchSyncedAt ?? 0;
-      const staleMs = 2 * 60 * 1000;
-      if (token.email && Date.now() - lastSync > staleMs) {
+      if (token.email && Date.now() - lastSync > USER_SYNC_TTL_MS) {
         try {
-          const db = getAdminFirestore();
-          const snap = await db
-            .collection("n_users")
-            .where("email", "==", String(token.email).toLowerCase())
-            .get();
-          if (!snap.empty) {
-            const data = snap.docs[0]!.data() as {
-            role?: string;
-            branchId?: string;
-            perms?: unknown;
-            viewClientBranchIds?: unknown;
-          };
+          const data = await loadUserForSync(String(token.email).toLowerCase());
+          if (data) {
             token.role = data.role;
             token.branchId = data.branchId;
             token.perms = data.perms ?? null;
-          token.viewClientBranchIds = data.viewClientBranchIds ?? [];
+            token.viewClientBranchIds = data.viewClientBranchIds ?? [];
           }
         } catch {
           // ignore transient Firestore errors; keep existing cached token values

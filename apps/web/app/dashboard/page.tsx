@@ -71,9 +71,14 @@ export default async function DashboardHomePage() {
   let unpaidRentals: { id: string; clientName: string; itemName: string; amount: number }[] | null = null;
 
   if (has("rentals")) {
-    const [laptopsSnap, rentalsSnap] = await Promise.all([
-      db.collection("n_laptops").get(),
+    // One wave instead of two: the second pair used to wait on the first for no reason, doubling
+    // this section's latency. The laptop and client collections are read for names only, so they
+    // fetch just that field rather than every document in full.
+    const [laptopsSnap, rentalsSnap, clientsSnap2, unpaidSnap] = await Promise.all([
+      db.collection("n_laptops").select("name").get(),
       db.collection("n_rentals").where("status", "==", "active").where("kind", "==", "laptop").get(),
+      db.collection("n_rental_clients").select("name").get(),
+      db.collection("n_rentals").where("status", "==", "returned").where("paid", "==", false).get(),
     ]);
     const laptopNames: Record<string, string> = {};
     laptopsSnap.docs.forEach((d) => {
@@ -84,10 +89,6 @@ export default async function DashboardHomePage() {
       .filter((r) => isOwner || r.branchId === branchId)
       .map((r) => ({ name: laptopNames[r.itemId] || "נייד", startDate: r.startDate }));
 
-    const [clientsSnap2, unpaidSnap] = await Promise.all([
-      db.collection("n_rental_clients").get(),
-      db.collection("n_rentals").where("status", "==", "returned").where("paid", "==", false).get(),
-    ]);
     const clientNames: Record<string, string> = {};
     clientsSnap2.docs.forEach((d) => {
       clientNames[d.id] = (d.data() as { name: string }).name;
