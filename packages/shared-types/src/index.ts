@@ -207,6 +207,11 @@ export interface Laptop {
   partnerName?: string;
   /** percent of this computer's (and its linked stick's) rental income owed to the partner; defaults to 15 */
   partnerPct?: number;
+  /** n_items doc id of the physical machine this catalogue entry stands for (שכבה 2).
+   *  Set when the computer was shipped to the branch from a real purchase; that item carries the
+   *  real `unitCost`. Unset for computers registered before the asset layer existed - those are
+   *  listed as "מחשב בלי רכישה משויכת" on the integrity screen. */
+  itemId?: string;
 }
 
 /** collection: n_sticks */
@@ -226,6 +231,8 @@ export interface Stick {
     /** מחיר לחודש (רשות; 0/ריק = אין מדרגת חודש לסטיק הזה) */
     monthPrice?: number;
     linkedLaptopId?: string | null;
+    /** n_items doc id of the physical stick this catalogue entry stands for (שכבה 2). */
+    itemId?: string;
 }
 
 /** collection: n_rental_clients */
@@ -724,4 +731,207 @@ export interface RockReview {
   createdAt: number;
   updatedAt: number;
   createdBy?: string;
+}
+
+/* ================================================================== *
+ * מודל שלוש השכבות — שכבה 2 (נכסים) ושכבה 1 (תנועות)
+ *
+ * The three questions the business is asked, each answered by its own layer, so a shekel is
+ * recorded once and looked at from as many angles as needed:
+ *   שכבה 1 · כסף     — "איפה הכסף שלי עכשיו?"          -> Transaction (n_tx)
+ *   שכבה 2 · נכסים   — "מה יש לי, איפה, וכמה זה עלה?"  -> Purchase / Item / ItemMove
+ *   שכבה 3 · רווחיות — "כמה הרווחתי, ואיפה?"           -> the branch book (existing collections)
+ *
+ * The founding rule: buying equipment is NOT an expense, it is a conversion of money into an
+ * asset. A capital transaction stops at layer 2 and becomes items; the items carry their cost
+ * with them from the warehouse to a branch WITHOUT a single new shekel being recorded. That is
+ * why per-branch investment and the owner's cash-out can both be true at once, and why neither
+ * can double-count the other.
+ * ================================================================== */
+
+/** What a physical unit is. `other` covers anything bought that doesn't fit the four staples. */
+export type ItemKind = "laptop" | "stick" | "bag" | "sim" | "other";
+
+/** Where an item currently is: a branch id, or the warehouse sentinel (`"warehouse"`). */
+export type ItemLocation = string;
+
+export type ItemStatus = "active" | "repair" | "lost" | "sold" | "writtenoff";
+
+/** Why an item moved. Deliberately has no amount attached anywhere - see ItemMove. */
+export type ItemMoveReason = "allocation" | "return" | "transfer" | "repair" | "writeoff" | "initial";
+
+/** One line of a supplier invoice: N units of one kind at one unit price. */
+export interface PurchaseLine {
+  kind: ItemKind;
+  /** free-text name for the line, e.g. "Lenovo T480". Falls back to the kind's Hebrew label. */
+  label?: string;
+  qty: number;
+  unitCost: number;
+}
+
+/**
+ * collection: n_purchases — the supplier invoice itself (שכבה 2).
+ *
+ * Invariant enforced on write and re-checked by the integrity screen:
+ *   Σ(line.qty × line.unitCost) === total === the linked transaction's amount
+ * Creating a purchase creates exactly one capital Transaction and `Σ qty` Item documents; it
+ * never creates an expense in any branch's book.
+ */
+export interface Purchase {
+  id: string;
+  /** ISO date of the invoice */
+  date: string;
+  /** YYYY-MM, derived from `date` */
+  month: string;
+  supplier: string;
+  invoiceNo?: string;
+  /** the invoice total, in ₪ */
+  total: number;
+  /** id of the capital n_tx document this purchase created (שכבה 1) */
+  txId?: string;
+  lines: PurchaseLine[];
+  /** link/reference to the scanned invoice, if the owner has one */
+  doc?: string;
+  note?: string;
+  createdAt: number;
+}
+
+/**
+ * collection: n_items — one physical unit, with its REAL cost and its current location (שכבה 2).
+ *
+ * `unitCost` is the field the whole model rests on: it is what this specific unit actually cost
+ * on its invoice, not a flat price-list estimate (n_cost_rates `kind: "once"`, now retired).
+ * Investment in a branch = Σ unitCost of the items whose `location` is that branch - which is
+ * why shipping equipment to a branch records no money at all.
+ *
+ * An item may be linked to the rental catalogue (n_laptops / n_sticks) so the same physical
+ * machine isn't described twice: the item is the asset record, the laptop/stick doc is the
+ * rental-pricing record.
+ */
+export interface Item {
+  id: string;
+  kind: ItemKind;
+  label?: string;
+  serial?: string;
+  /** the invoice this unit came from; empty only for units back-filled without one */
+  purchaseId?: string;
+  /** what this unit actually cost, in ₪ */
+  unitCost: number;
+  /** ISO date the unit entered the business */
+  acquiredAt: string;
+  /** branch id, or WAREHOUSE_LOCATION. Mandatory - an item is in exactly one place (כלל 5). */
+  location: ItemLocation;
+  status: ItemStatus;
+  /** n_laptops doc id this unit is the physical machine for */
+  linkedLaptopId?: string;
+  /** n_sticks doc id this unit is the physical stick for */
+  linkedStickId?: string;
+  note?: string;
+}
+
+/**
+ * collection: n_item_moves — an item went from one place to another, and when.
+ *
+ * There is no amount field here, on purpose, forever (כלל 2): the cost travels with the item
+ * itself, so a move can never create money. A screen that offers a sum field on a shipment is
+ * the exact moment double counting is born.
+ */
+export interface ItemMove {
+  id: string;
+  itemId: string;
+  from: ItemLocation;
+  to: ItemLocation;
+  /** ISO date */
+  date: string;
+  reason: ItemMoveReason;
+  note?: string;
+  createdAt: number;
+}
+
+/* ------------------------------------------------------------------ *
+ * שכבה 1 — התנועה
+ * ------------------------------------------------------------------ */
+
+/**
+ * Which layer a movement belongs to. This single field is the whole classification:
+ *  - `operating` — real running income/cost. Goes to the branch book, splits with the partner.
+ *  - `capital`   — equipment. Stops at the asset layer, NEVER enters a branch's operating book
+ *                  and is never split with a partner (כלל 7). It is the owner's own capital.
+ *  - `transfer`  — settling a debt (the partner's monthly transfer, a move between the owner's
+ *                  own accounts). Neither income nor expense (כלל 8): the income it settles is
+ *                  already recorded in the branch's book, so counting it again would duplicate.
+ */
+export type TxNature = "operating" | "capital" | "transfer";
+
+export type TxDirection = "in" | "out";
+
+/** Which unit of the business a transaction hangs on, in the profit-centre tree (פרק ה׳). */
+export type TxBusiness = "rentals" | "computers" | "coworking" | "hq";
+
+/**
+ * The node a transaction hangs on. Tag at the LOWEST node actually known: when the branch is
+ * unknown, `"shared"` (the business-wide parent node) is a correct answer, not a sloppy one.
+ */
+export interface TxNode {
+  business: TxBusiness;
+  /** a branch id, `"shared"` (the whole business unit) or `"hq"` (headquarters/overheads) */
+  branchId: string;
+}
+
+/** One branch's slice of a transaction. Σ amount over allocations must equal tx.amount (כלל 3). */
+export interface TxAllocation {
+  branchId: string;
+  amount: number;
+}
+
+/** A transaction that repeats monthly, expanded into per-month lines at read time. */
+export interface TxRecurring {
+  /** YYYY-MM, inclusive */
+  from: string;
+  /** YYYY-MM, inclusive; empty = still running */
+  to?: string;
+  /** day of month the charge falls on (1-31); display only */
+  dayOfMonth?: number;
+}
+
+/**
+ * collection: n_tx — every shekel that moves, recorded exactly once (שכבה 1, כלל 1).
+ *
+ * Replaces, as the single write path, what used to be seven separate sources: n_ah_income,
+ * n_ah_expenses, n_var_expenses, n_fixed_expenses, n_multi_branch_expenses and n_ad_areas.
+ * Existing documents in those collections are NOT migrated - they are projected into this same
+ * shape at read time (apps/web/lib/tx-data.ts), the same "filter instead of migrate" technique
+ * RETIRED_RATE_KEYS uses. New rows are written here.
+ *
+ * `amount` is ALWAYS the full sum before any split. `ownerShare` says how much of it is the
+ * owner's economically - a plain number rather than an owner/partner/50-50 bucket, so a free
+ * percentage (30% on the owner) needs no separate collection to express it.
+ */
+export interface Transaction {
+  id: string;
+  /** ISO date the money actually moved */
+  date: string;
+  /** YYYY-MM, derived from `date` */
+  month: string;
+  direction: TxDirection;
+  /** the full amount, in ₪, before any split */
+  amount: number;
+  nature: TxNature;
+  node: TxNode;
+  desc: string;
+  category?: string;
+  /** who physically paid/received the cash. Affects settlement direction only, never the split. */
+  paidBy?: "owner" | "partner";
+  /** the owner's economic share of `amount`, in ₪ */
+  ownerShare: number;
+  /** per-branch split; empty/absent = the whole amount sits on `node`. Σ must equal `amount`. */
+  allocations?: TxAllocation[];
+  /** set when this row stands for a monthly recurring charge rather than a single dated payment */
+  recurring?: TxRecurring | null;
+  /** set only when `nature === "capital"` - the invoice this outflow paid for */
+  purchaseId?: string;
+  /** invoice / receipt reference */
+  doc?: string;
+  note?: string;
+  createdAt: number;
 }
