@@ -59,9 +59,14 @@ export async function getLogoSrc(): Promise<string | null> {
   return `/api/branding/logo?v=${logo.version}`;
 }
 
-/** Decodes a stored `data:` URI into the bytes the route handler serves. */
-export function decodeStoredLogo(logo: StoredLogo): { contentType: string; body: Uint8Array } | null {
+/** Decodes a stored `data:` URI into the bytes the route handler serves. An ArrayBuffer rather
+ *  than a Uint8Array because that is what Response accepts as a BodyInit. */
+export function decodeStoredLogo(logo: StoredLogo): { contentType: string; body: ArrayBuffer } | null {
   const match = DATA_URI.exec(logo.value);
   if (!match) return null;
-  return { contentType: match[1] as string, body: new Uint8Array(Buffer.from(match[2] as string, "base64")) };
+  // Buffer.from() can return a view into a larger pooled allocation, so slice out exactly this
+  // image's bytes instead of handing over the whole pool.
+  const buf = Buffer.from(match[2] as string, "base64");
+  const body = buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength) as ArrayBuffer;
+  return { contentType: match[1] as string, body };
 }
