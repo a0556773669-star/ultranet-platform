@@ -332,3 +332,55 @@ export async function loadLayeredData(): Promise<LayeredData> {
 }
 
 export { paybackStatus };
+
+/* ------------------------------------------------------------------ *
+ * The home dashboard's money strip
+ * ------------------------------------------------------------------ */
+
+export interface FlowSnapshot {
+  todayIncome: number;
+  todayExpenses: number;
+  monthIncome: number;
+  monthExpenses: number;
+  /** capital out this month, kept out of `monthExpenses` on purpose (כלל 7) */
+  monthCapital: number;
+}
+
+/**
+ * Today's and this month's cash movement, derived from the same model the accounting screens
+ * read. Derived rather than summed out of n_ah_income / n_ah_expenses, so the home page and the
+ * entry screen can no longer disagree - which they did, because each added the recurring
+ * expenses and the room setup costs back in by hand, in its own way.
+ */
+export function flowSnapshot(transactions: UnifiedTx[], todayISO: string): FlowSnapshot {
+  const month = todayISO.slice(0, 7);
+  const snap: FlowSnapshot = {
+    todayIncome: 0,
+    todayExpenses: 0,
+    monthIncome: 0,
+    monthExpenses: 0,
+    monthCapital: 0,
+  };
+
+  for (const tx of transactions) {
+    if ((tx.paidBy ?? "owner") !== "owner") continue;
+    if (tx.nature === "transfer") continue;
+    const inMonth = chargesInMonth(tx, month);
+    // A recurring charge has no single date, so it never counts as "today" - only as this month.
+    const isToday = !tx.recurring?.from && tx.date === todayISO;
+    if (!inMonth && !isToday) continue;
+
+    if (tx.nature === "capital") {
+      if (tx.direction === "out" && inMonth) snap.monthCapital += tx.ownerShare;
+      continue;
+    }
+    if (tx.direction === "in") {
+      if (inMonth) snap.monthIncome += tx.amount;
+      if (isToday) snap.todayIncome += tx.amount;
+    } else {
+      if (inMonth) snap.monthExpenses += tx.ownerShare;
+      if (isToday) snap.todayExpenses += tx.ownerShare;
+    }
+  }
+  return snap;
+}

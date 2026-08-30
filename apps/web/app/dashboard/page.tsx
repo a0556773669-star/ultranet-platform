@@ -8,14 +8,10 @@ import type { PermKey } from "@/lib/perms";
 import { NAV_ITEMS, visibleFor, type NavItem } from "@/lib/nav-items";
 import HomeClock from "./home-clock";
 import { getInventorySnapshotAction } from "./(computer-rooms)/inventory/actions";
-import type {
-  AccountingIncome,
-  AccountingExpense,
-  Laptop,
-  Rental,
-} from "@ultranet/shared-types";
+import type { Laptop, Rental } from "@ultranet/shared-types";
 import type { BranchKey, InventoryItem } from "@/lib/legacy-inventory";
-import { loadOwnerFixedExpenseBurden } from "@/lib/owner-expense-burden";
+import { loadTransactionModel } from "@/lib/tx-data";
+import { flowSnapshot } from "@/lib/business-ledger";
 
 export default async function DashboardHomePage() {
   const session = await getServerSession(authOptions);
@@ -40,31 +36,12 @@ export default async function DashboardHomePage() {
   } | null = null;
 
   if (has("accounting")) {
-    const [incomeSnap, expenseSnap] = await Promise.all([
-      db.collection("n_ah_income").get(),
-      db.collection("n_ah_expenses").get(),
-    ]);
-    const todayStr = new Date().toISOString().slice(0, 10);
-    const monthStr = todayStr.slice(0, 7);
-    let todayIncome = 0;
-    let todayExpenses = 0;
-    let monthIncome = 0;
-    let monthExpenses = 0;
-    incomeSnap.docs.forEach((d) => {
-      const data = d.data() as AccountingIncome;
-      if (data.date === todayStr) todayIncome += data.amount;
-      if ((data.month || data.date?.slice(0, 7)) === monthStr) monthIncome += data.amount;
-    });
-    expenseSnap.docs.forEach((d) => {
-      const data = d.data() as AccountingExpense;
-      if (data.date === todayStr) todayExpenses += data.amount;
-      if ((data.month || data.date?.slice(0, 7)) === monthStr) monthExpenses += data.amount;
-    });
-    // owner's burden of active fixed/recurring branch expenses (ניידים + חדרי מחשבים) - computed
-    // live rather than dated rows, so it's added on top here instead of coming from n_ah_expenses.
-    const fixedBurden = await loadOwnerFixedExpenseBurden();
-    monthExpenses += fixedBurden.thisMonth;
-    moneyStats = { todayIncome, todayExpenses, monthIncome, monthExpenses };
+    // Derived from the unified transaction model, exactly like every accounting screen. The
+    // recurring branch expenses and the computer-room setup costs used to be added back on top
+    // here by hand; they are ordinary transactions in the model now, so there is nothing left to
+    // add and nothing that can be added differently in two places.
+    const model = await loadTransactionModel();
+    moneyStats = flowSnapshot(model.transactions, new Date().toISOString().slice(0, 10));
   }
 
   let rentedLaptops: { name: string; startDate: string }[] | null = null;

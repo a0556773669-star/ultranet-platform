@@ -17,7 +17,7 @@ import {
   BRANCH_COST_SETTINGS_COLLECTION,
   COST_RATES_COLLECTION,
   DEFAULT_COST_RATES,
-  RETIRED_RATE_KEYS,
+  isRetiredRate,
   branchCostSettingId,
   type CostRatesData,
 } from "./cost-rates";
@@ -31,10 +31,13 @@ export async function loadCostRates(): Promise<CostRatesData> {
 
   const stored = ratesSnap.docs
     .map((d) => ({ ...(d.data() as Omit<CostRate, "id">), id: d.id }) as CostRate)
-    .filter((r) => !RETIRED_RATE_KEYS.has(r.key));
-  const usingDefaults = stored.length === 0;
+    .filter((r) => !isRetiredRate(r));
+  // "usingDefaults" asks whether a price list was ever SAVED, so it counts the raw documents -
+  // a saved list made entirely of now-retired equipment rates is still a saved list, and warning
+  // the owner that nothing was saved would be false.
+  const usingDefaults = ratesSnap.empty;
   const rates = (usingDefaults
-    ? DEFAULT_COST_RATES.map((r) => ({ ...r, id: r.key }) as CostRate)
+    ? DEFAULT_COST_RATES.map((r) => ({ ...r, id: r.key }) as CostRate).filter((r) => !isRetiredRate(r))
     : stored
   ).sort((a, b) => (a.order ?? 99) - (b.order ?? 99));
 
