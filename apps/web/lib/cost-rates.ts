@@ -1,7 +1,8 @@
 /**
  * The price list ("תעריפון") behind the per-branch operating-cost breakdown on
- * /dashboard/accounting/overview: what one computer / bag / stick / SIM / ad / printing run
- * costs, and who the cost falls on by default (owner / partner / 50-50).
+ * /dashboard/accounting/overview: what one computer / bag / stick / SIM costs, and who the cost
+ * falls on by default (owner / partner / 50-50). Only costs with a stable unit price live here -
+ * anything that is a different amount every month is typed per branch (see RETIRED_RATE_KEYS).
  *
  * Reads n_cost_rates. When that collection is still empty the DEFAULTS below are returned
  * in-memory instead - a page render must never write to Firestore, so seeding is an explicit
@@ -30,9 +31,21 @@ export const DEFAULT_COST_RATES: Omit<CostRate, "id">[] = [
   { key: "bag", label: "תיק למחשב", unitCost: 50, kind: "once", owedBy: "owner", qtySource: "laptops", order: 3 },
   { key: "stick", label: "סטיק", unitCost: 120, kind: "once", owedBy: "owner", qtySource: "sticks", order: 4 },
   { key: "sim", label: "סינון וגלישה", unitCost: 70, kind: "monthly", owedBy: "shared", qtySource: "sims", order: 5 },
-  { key: "ads", label: "פרסום", unitCost: 600, kind: "monthly", owedBy: "shared", qtySource: "one", order: 6 },
-  { key: "print", label: "הדפסות (החתמה על תקנון)", unitCost: 20, kind: "monthly", owedBy: "owner", qtySource: "one", order: 7 },
 ];
+
+/**
+ * Rates that used to sit in the price list and were taken out of it.
+ *
+ * פרסום and הדפסת התקנון are a different amount every month, so a flat per-branch rate was
+ * always either too high or too low. They are now typed by hand per branch and per month, like
+ * any other expense (הוצאה קבועה / הוצאה חד-פעמית on the branch screen) - shared advertising
+ * across a whole city still has its own screen (/dashboard/accounting/ads).
+ *
+ * Kept as a filter rather than a migration: a price list saved before this change still holds
+ * the two documents in n_cost_rates, and they must stop producing cost lines without anyone
+ * having to delete anything.
+ */
+export const RETIRED_RATE_KEYS = new Set(["ads", "print"]);
 
 /**
  * Words that mark an existing manual branch expense as "the same thing" as a rate category.
@@ -46,8 +59,9 @@ const MATCH_TOKENS: Record<string, string[]> = {
   bag: ["תיק"],
   stick: ["סטיק", "סטיקים"],
   sim: ["סינון", "גלישה", "סים", "אינטרנט סלולרי"],
+  // no longer a price-list rate, but still the words that mark a hand-entered advertising
+  // expense - an ad area must not charge a branch that already typed its own פרסום line.
   ads: ["פרסום", "פרסומת", "שיווק", "מודעה"],
-  print: ["הדפס", "תקנון", "צילומים"],
 };
 
 export function rateMatchTokens(rate: Pick<CostRate, "key" | "label">): string[] {
@@ -76,7 +90,9 @@ export async function loadCostRates(): Promise<CostRatesData> {
     db.collection(BRANCH_COST_SETTINGS_COLLECTION).get(),
   ]);
 
-  const stored = ratesSnap.docs.map((d) => ({ ...(d.data() as Omit<CostRate, "id">), id: d.id }) as CostRate);
+  const stored = ratesSnap.docs
+    .map((d) => ({ ...(d.data() as Omit<CostRate, "id">), id: d.id }) as CostRate)
+    .filter((r) => !RETIRED_RATE_KEYS.has(r.key));
   const usingDefaults = stored.length === 0;
   const rates = (usingDefaults
     ? DEFAULT_COST_RATES.map((r) => ({ ...r, id: r.key }) as CostRate)

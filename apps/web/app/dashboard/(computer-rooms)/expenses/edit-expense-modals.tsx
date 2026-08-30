@@ -7,7 +7,7 @@ import type { FixedExpense, VariableExpense } from "@ultranet/shared-types";
 import { updateFixedExpenseAction, updateVariableExpenseAction } from "./actions";
 import { useToast } from "@/lib/toast";
 
-const CATEGORIES = ["שכירות", "חשמל ומים", "משכורות", "ציוד ותחזוקה", "שיווק ופרסום", "ביטוח", "אחר"];
+const CATEGORIES = ["שכירות", "חשמל ומים", "משכורות", "ציוד ותחזוקה", "שיווק ופרסום", "הדפסות ותקנונים", "ביטוח", "אחר"];
 
 const FIELD = "w-full rounded-lg border border-card-border bg-[#f4f6f9] px-3 py-2 text-sm focus:border-teal focus:bg-white focus:outline-none";
 const LABEL = "mb-1 block text-xs font-semibold text-muted";

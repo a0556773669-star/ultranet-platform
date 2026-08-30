@@ -50,7 +50,7 @@ import {
   COMPUTER_RATE_KEY,
   GRAPHICS_RATE_KEY,
 } from "./cost-rates";
-import { ADS_RATE_KEY, adAreaForBranch, adAreaNote, splitAdArea } from "./ad-areas";
+import { ADS_RATE_KEY, ADS_RATE_MATCH, adAreaForBranch, adAreaNote, splitAdArea } from "./ad-areas";
 import { loadAdAreas } from "./ad-areas-data";
 
 export type OwedBy = "owner" | "partner" | "shared";
@@ -739,11 +739,11 @@ function computeBranchMonth(b: Branch, raw: RawData, activity: BranchActivity, m
   const texts = manualExpenseTexts(b, raw, month);
 
   // --- shared advertising campaign: one campaign for a whole city, split between its branches.
-  // It takes the place of the flat per-branch "פרסום" rate, unless the branch already has a
-  // hand-entered advertising expense of its own - then that one wins, like any other rate. ---
-  const adsRate = raw.rates.find((r) => r.key === ADS_RATE_KEY);
+  // The only automatic advertising line there is - advertising left the price list because the
+  // amount changes every month. A branch that already typed an advertising expense of its own
+  // keeps that one, and the campaign line is dropped so it is never counted twice. ---
   const area = adAreaForBranch(raw.adAreas, b.id, month);
-  const manualAds = adsRate ? texts.some((t) => expenseCoversRate(t, adsRate)) : false;
+  const manualAds = texts.some((t) => expenseCoversRate(t, ADS_RATE_MATCH));
   const adsFromArea = Boolean(area) && !manualAds;
   if (area && adsFromArea) {
     const split = splitAdArea(area);
@@ -771,13 +771,6 @@ function computeBranchMonth(b: Branch, raw: RawData, activity: BranchActivity, m
 
   // --- price-list lines, but only where nothing hand-entered already covers them ---
   for (const rate of raw.rates) {
-    if (adsFromArea && rate.key === ADS_RATE_KEY) {
-      suppressed.push({
-        rateLabel: rate.label,
-        reason: `מחושב לפי אזור הפרסום "${area!.name}" ולא לפי התעריפון`,
-      });
-      continue;
-    }
     const covering = texts.find((t) => expenseCoversRate(t, rate));
     if (covering) {
       suppressed.push({
