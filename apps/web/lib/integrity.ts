@@ -15,9 +15,12 @@ import { getAdminFirestore } from "./firebase-admin";
 import type { QueryDocumentSnapshot } from "firebase-admin/firestore";
 import {
   ITEMS_COLLECTION,
+  SOLD_LOCATION,
   WAREHOUSE_LOCATION,
   itemCountsAsHeld,
+  itemHasExited,
   itemLabel,
+  locationsAtMonth,
   purchaseLinesTotal,
 } from "./assets";
 import { loadAssets } from "./assets-data";
@@ -54,7 +57,9 @@ export interface IntegrityReport {
     purchased: number;
     inBranches: number;
     inWarehouse: number;
-    /** purchased - (branches + warehouse); 0 when the books close */
+    /** cost of the units that have left (sold / written off / lost) - still part of the balance */
+    exited: number;
+    /** purchased - (branches + warehouse + exited); 0 when the books close */
     difference: number;
   };
 }
@@ -86,6 +91,8 @@ export async function runIntegrityChecks(): Promise<IntegrityReport> {
     checkItemLocations(assets.items, validLocations, branchName),
     checkAssetBalance(assets),
     checkOrphanCatalogue(laptops, sticks, assets.items),
+    checkMoveConsistency(assets),
+    checkExitedItems(assets.items),
     checkPendingAttribution(model),
     checkMirrors(model),
     checkDeletedBranches(assets.items, branchById),
@@ -96,6 +103,9 @@ export async function runIntegrityChecks(): Promise<IntegrityReport> {
     .filter(([location]) => location !== WAREHOUSE_LOCATION)
     .reduce((sum, [, inv]) => sum + inv.total, 0);
   const inWarehouse = assets.investmentByLocation.get(WAREHOUSE_LOCATION)?.total ?? 0;
+  // A sold unit does not vanish from the balance - it moves to the other side of it (כלל 4,
+  // as revised in פרק יג׳). Leaving it out would make every sale look like a missing item.
+  const exited = assets.capital.cost;
 
   return {
     checks,
@@ -106,7 +116,8 @@ export async function runIntegrityChecks(): Promise<IntegrityReport> {
       purchased: assets.totalPurchased,
       inBranches,
       inWarehouse,
-      difference: assets.totalPurchased - (inBranches + inWarehouse),
+      exited,
+      difference: assets.totalPurchased - (inBranches + inWarehouse + exited),
     },
   };
 }
@@ -225,7 +236,7 @@ function checkItemLocations(
 function checkAssetBalance(assets: Awaited<ReturnType<typeof loadAssets>>): IntegrityCheck {
   const findings: IntegrityFinding[] = [];
   const held = assets.items.filter(itemCountsAsHeld).reduce((s, i) => s + (i.unitCost || 0), 0);
-  const gone = assets.items.filter((i) => !itemCountsAsHeld(i)).reduce((s, i) => s + (i.unitCost || 0), 0);
+  const gone = assets.items.filter(itemHasExited).reduce((s, i) => s + (i.unitCost || 0), 0);
   const difference = assets.totalPurchased - (held + gone);
 
   if (Math.abs(difference) > 0.5) {
@@ -256,7 +267,9 @@ function checkAssetBalance(assets: Awaited<ReturnType<typeof loadAssets>>): Inte
   return {
     key: "asset_balance",
     title: "המאזן ההוני — סניפים + מחסן מול הרכש",
-    rule: "Σ עלות פריטים בסניפים + מחסן = Σ הרכש ההוני. אם לא — יש פריט יתום, והמערכת אומרת איזה.",
+    rule:
+      "Σ עלות פריטים פעילים (סניפים + מחסן) + Σ עלות פריטים שיצאו (נמכרו · נגרטו · אבדו) = Σ הרכש ההוני. " +
+      "פריט שנמכר לא נעלם מהמאזן — הוא רק עובר לצד השני שלו.",
     findings,
   };
 }
@@ -423,3 +436,99 @@ export async function deleteLeftoverMirrors(): Promise<number> {
 }
 
 export { ITEMS_COLLECTION };
+
+/* --- פרק טו׳: תנועות המלאי הן מקור האמת למיקום --------------------------- */
+
+/**
+ * `Item.location` must always equal the destination of that item's latest move.
+ *
+ * This is the single most consequential invariant in the asset layer, and the one with no visible
+ * symptom when it breaks: the moment the cached location and the move history can disagree, every
+ * historical figure in the system - every past month's investment, every payback percentage -
+ * becomes a guess, while today's screens keep looking perfectly fine.
+ */
+function checkMoveConsistency(assets: Awaited<ReturnType<typeof loadAssets>>): IntegrityCheck {
+  const findings: IntegrityFinding[] = [];
+  // "Now" as replayed from the moves themselves - if the cache is honest, this equals `location`.
+  const replayed = locationsAtMonth(assets.moves, "9999-12");
+
+  for (const item of assets.items) {
+    const fromMoves = replayed.get(item.id);
+    if (fromMoves === undefined) {
+      findings.push({
+        check: "move_consistency",
+        severity: "error",
+        title: `${itemLabel(item)} — פריט בלי אף תנועת מלאי`,
+        detail:
+          `הפריט ${item.serial || item.id} רשום ב-"${item.location}", אבל אין לו אפילו תנועה אחת. ` +
+          "בלי היסטוריית תנועות אי אפשר לדעת איפה הוא היה בחודשים קודמים, וכל חישוב היסטורי שלו הוא ניחוש.",
+        href: "/dashboard/accounting/inventory",
+      });
+      continue;
+    }
+    if (fromMoves !== item.location) {
+      findings.push({
+        check: "move_consistency",
+        severity: "error",
+        title: `${itemLabel(item)} — המיקום לא תואם את תנועות המלאי`,
+        detail: `השדה location אומר "${item.location}", אבל התנועה האחרונה מובילה ל-"${fromMoves}". תנועות המלאי הן מקור האמת; השדה הוא רק מטמון שלהן.`,
+        href: "/dashboard/accounting/inventory",
+      });
+    }
+  }
+
+  return {
+    key: "move_consistency",
+    title: "המיקום השמור מול היסטוריית התנועות",
+    rule:
+      "n_item_moves הוא מקור האמת למיקום; item.location הוא רק מטמון של התנועה האחרונה. " +
+      "אסור לכתוב ל-location בלי לכתוב תנועה מתאימה באותו batch.",
+    findings,
+  };
+}
+
+/* --- פרק יג׳: שלמות הרישום של פריטים שיצאו ------------------------------- */
+
+function checkExitedItems(items: Item[]): IntegrityCheck {
+  const findings: IntegrityFinding[] = [];
+  for (const item of items) {
+    if (!itemHasExited(item)) continue;
+
+    // The field that is easiest to forget and most expensive to omit.
+    if (!item.lastBranchId) {
+      findings.push({
+        check: "exited",
+        severity: "error",
+        title: `${itemLabel(item)} — יצא בלי לרשום מאיפה`,
+        detail:
+          `הפריט ${item.serial || item.id} סומן כיצא, אבל אין לו lastBranchId. ` +
+          "אי אפשר לייחס את התמורה לסניף, ולכן החזר ההון של אותו סניף שגוי.",
+        href: "/dashboard/accounting/sales",
+      });
+    }
+    if (!item.soldAt) {
+      findings.push({
+        check: "exited",
+        severity: "warning",
+        title: `${itemLabel(item)} — יצא בלי תאריך`,
+        detail: "בלי תאריך יציאה, ההשקעה ההיסטורית של הסניף בחודשים שקדמו לה לא תחושב נכון.",
+        href: "/dashboard/accounting/sales",
+      });
+    }
+    if (item.location !== SOLD_LOCATION) {
+      findings.push({
+        check: "exited",
+        severity: "error",
+        title: `${itemLabel(item)} — סטטוס יצא אבל המיקום עדיין פעיל`,
+        detail: `הסטטוס הוא "${item.status}" אבל המיקום הוא "${item.location}". הפריט נספר בטעות כהשקעה במקום שהוא כבר לא נמצא בו.`,
+        href: "/dashboard/accounting/inventory",
+      });
+    }
+  }
+  return {
+    key: "exited",
+    title: "פריטים שיצאו מהעסק — שלמות הרישום",
+    rule: "לכל פריט שיצא חייבים להיות סטטוס סופי, תאריך, מיקום סופי, והסניף שממנו יצא.",
+    findings,
+  };
+}

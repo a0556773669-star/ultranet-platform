@@ -79,7 +79,29 @@ export interface Branch {
    *  accounting history view intentionally includes deleted branches. */
   deleted?: boolean;
   deletedAt?: string;
+  /**
+   * מדיניות התשלום של הסניף (פרק יד׳) - who fronts the cash for each recurring cost category.
+   *
+   * The branch manager enters FACTS (what, how much, when, the receipt); who pays is a TERM of
+   * the agreement and is derived from here, never typed per expense. Moving the decision up to
+   * the branch is what makes 30 branches comparable: the split stops depending on who happened
+   * to type the row.
+   */
+  expensePolicy?: Partial<Record<ExpensePolicyKey, "owner" | "partner">>;
+  /**
+   * התאריך שבו הסניף הפסיק לפעול (פרק טו׳). NOT the same as `deletedAt`, which is when someone
+   * got around to pressing "delete": a branch that closed on 15 July and was only marked deleted
+   * in September must stop accruing from July, or it collects two months of internet, filtering
+   * and advertising it never used - the same failure `openedAt` already fixed at the other end.
+   */
+  closedAt?: string;
 }
+
+/**
+ * The recurring cost categories a branch can have a payment policy for. Deliberately a closed
+ * list: it is the vocabulary of the agreement with a branch, not free text.
+ */
+export type ExpensePolicyKey = "ads" | "internet" | "filtering" | "rent" | "electricity" | "print";
 
 /** collection: n_users */
 export interface AppUser {
@@ -755,10 +777,23 @@ export type ItemKind = "laptop" | "stick" | "bag" | "sim" | "other";
 /** Where an item currently is: a branch id, or the warehouse sentinel (`"warehouse"`). */
 export type ItemLocation = string;
 
-export type ItemStatus = "active" | "repair" | "lost" | "sold" | "writtenoff";
+/**
+ * An item never leaves the books, it only changes status (פרק יג׳). Deleting a sold or broken
+ * unit would break the balance of כלל 4 AND erase the knowledge that money was lost there, so
+ * `sold` / `writeoff` / `lost` are terminal states, not removals.
+ */
+export type ItemStatus = "active" | "repair" | "sold" | "writeoff" | "lost";
 
 /** Why an item moved. Deliberately has no amount attached anywhere - see ItemMove. */
-export type ItemMoveReason = "allocation" | "return" | "transfer" | "repair" | "writeoff" | "initial";
+export type ItemMoveReason =
+  | "allocation"
+  | "return"
+  | "transfer"
+  | "repair"
+  | "writeoff"
+  | "sale"
+  | "branch_closed"
+  | "initial";
 
 /** One line of a supplier invoice: N units of one kind at one unit price. */
 export interface PurchaseLine {
@@ -826,6 +861,20 @@ export interface Item {
   linkedLaptopId?: string;
   /** n_sticks doc id this unit is the physical stick for */
   linkedStickId?: string;
+  /** ISO date the unit left the business (sold, written off or lost) */
+  soldAt?: string;
+  /** this unit's share of the sale proceeds; 0 for a write-off or a loss */
+  soldPrice?: number;
+  /** the incoming capital transaction the sale created; absent for a write-off */
+  saleTxId?: string;
+  /**
+   * The branch the unit was in when it left (פרק יג׳). MANDATORY on any exit.
+   *
+   * Once a unit is sold, `location` no longer points at a branch - so without remembering where
+   * it came from, the proceeds cannot be attributed and that branch's capital-return figure is
+   * wrong forever. This is the single field that is easiest to forget and most expensive to omit.
+   */
+  lastBranchId?: string;
   note?: string;
 }
 
@@ -933,5 +982,34 @@ export interface Transaction {
   /** invoice / receipt reference */
   doc?: string;
   note?: string;
+  /**
+   * Who typed this row (פרק יד׳). Set when a branch manager enters an expense themselves, so the
+   * owner's review list can show whose row it is. Absent on the owner's own entries.
+   */
+  enteredBy?: { userId: string; name: string; branchId: string };
+  /**
+   * ISO timestamp the owner ticked this row off the review list. The list is a REVIEW, never an
+   * approval gate: the row counts in the settlement from the moment it is entered, whether or
+   * not this is set. A gate would mean the branch manager has to wait for the owner, which is
+   * exactly the friction the whole design avoids.
+   */
+  reviewedAt?: string;
+  /** why the review list surfaced this row - set at entry time, cleared on review */
+  flags?: TxFlag[];
   createdAt: number;
 }
+
+/**
+ * Why a branch-entered row is worth a second of the owner's attention (פרק יד׳). None of these
+ * blocks anything; they only sort the review list so the unusual rows float to the top. In an
+ * ordinary month the list is almost empty.
+ */
+export type TxFlag =
+  /** more than twice the branch's own average in this category over the last 3 months */
+  | "spike"
+  /** a category this branch has never had an expense in before */
+  | "new_category"
+  /** no receipt attached, above the amount threshold */
+  | "no_receipt"
+  /** dated into a month whose settlement with the partner has already been recorded */
+  | "closed_month";

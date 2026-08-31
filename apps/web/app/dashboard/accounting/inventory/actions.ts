@@ -48,7 +48,10 @@ export async function moveItemsAction(formData: FormData) {
   revalidate();
 }
 
-const STATUSES: ItemStatus[] = ["active", "repair", "lost", "sold", "writtenoff"];
+// Only the two non-terminal states are settable here. Selling, writing off or losing a unit is
+// an EXIT (פרק יג׳): it needs a date, a reason, proceeds and the branch it left - so it goes
+// through the sale screen, which records all four, and never through a bare status change.
+const STATUSES: ItemStatus[] = ["active", "repair"];
 
 /**
  * Changing an item's condition. A sold or lost unit stops counting as investment in the branch
@@ -60,7 +63,9 @@ export async function setItemStatusAction(formData: FormData) {
 
   const itemIds = formData.getAll("itemIds").map(String).filter(Boolean);
   const statusRaw = String(formData.get("status") ?? "");
-  if (!STATUSES.includes(statusRaw as ItemStatus)) throw new Error("מצב פריט לא תקין");
+  if (!STATUSES.includes(statusRaw as ItemStatus)) {
+    throw new Error("מכירה, גריטה או אבדן נרשמים במסך יציאת ציוד — שם נשמרים גם התמורה, התאריך והסניף שממנו יצא");
+  }
   if (itemIds.length === 0) throw new Error("נא לסמן לפחות פריט אחד");
 
   const db = getAdminFirestore();

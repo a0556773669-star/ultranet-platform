@@ -13,8 +13,12 @@ import {
   ITEMS_COLLECTION,
   ITEM_MOVES_COLLECTION,
   PURCHASES_COLLECTION,
+  SOLD_LOCATION,
   WAREHOUSE_LOCATION,
+  capitalResult,
   investmentByLocation,
+  itemHasExited,
+  type CapitalResult,
   type LocationInvestment,
 } from "./assets";
 
@@ -30,13 +34,25 @@ export interface AssetsData {
   investmentByLocation: Map<ItemLocation, LocationInvestment>;
   /** Σ of every invoice ever entered */
   totalPurchased: number;
+  /**
+   * Every stock movement ever, oldest first.
+   *
+   * The source of truth for where an item was at any date (פרק טו׳) - `Item.location` is only a
+   * cache of the last one. Loaded in full because every historical figure is a replay of these.
+   */
+  moves: ItemMove[];
+  /** cost, proceeds and gain/loss on every unit that has left the business */
+  capital: CapitalResult;
+  /** units that have left (sold / written off / lost) */
+  exitedItems: Item[];
 }
 
 export async function loadAssets(): Promise<AssetsData> {
   const db = getAdminFirestore();
-  const [purchasesSnap, itemsSnap] = await Promise.all([
+  const [purchasesSnap, itemsSnap, movesSnap] = await Promise.all([
     db.collection(PURCHASES_COLLECTION).get(),
     db.collection(ITEMS_COLLECTION).get(),
+    db.collection(ITEM_MOVES_COLLECTION).get(),
   ]);
 
   const purchases = purchasesSnap.docs
@@ -58,6 +74,10 @@ export async function loadAssets(): Promise<AssetsData> {
     }
   }
 
+  const moves = movesSnap.docs
+    .map((d) => doc<ItemMove>(d))
+    .sort((a, b) => (a.date ?? "").localeCompare(b.date ?? "") || (a.createdAt ?? 0) - (b.createdAt ?? 0));
+
   return {
     purchases,
     purchaseById: new Map(purchases.map((p) => [p.id, p])),
@@ -66,6 +86,9 @@ export async function loadAssets(): Promise<AssetsData> {
     itemsByPurchase,
     investmentByLocation: investmentByLocation(items),
     totalPurchased: purchases.reduce((sum, p) => sum + (p.total || 0), 0),
+    moves,
+    capital: capitalResult(items),
+    exitedItems: items.filter(itemHasExited),
   };
 }
 
@@ -83,6 +106,8 @@ export async function loadRecentItemMoves(limit = 60): Promise<ItemMove[]> {
     .sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0))
     .slice(0, limit);
 }
+
+export { SOLD_LOCATION };
 
 /**
  * Moves items to a new location and records why.

@@ -245,13 +245,14 @@ export function ShipmentClient({
             <select name="status" defaultValue="repair" className={FIELD}>
               <option value="active">תקין ופעיל</option>
               <option value="repair">בתיקון</option>
-              <option value="lost">אבד</option>
-              <option value="sold">נמכר</option>
-              <option value="writtenoff">הושבת</option>
             </select>
             <p className="text-[11.5px] leading-relaxed text-muted">
-              פריט שנמכר או אבד מפסיק להיחשב כהשקעה בסניף — הוא באמת כבר לא שם. תנועת הרכש שלו נשארת
-              בשכבת הכסף לתמיד, כי הכסף הזה באמת יצא.
+              מכירה, גריטה או אבדן לא נרשמים כאן אלא במסך{" "}
+              <a href="/dashboard/accounting/sales" className="font-bold text-teal underline">
+                יציאת ציוד
+              </a>{" "}
+              — שם נשמרים גם התמורה, התאריך והסניף שממנו הפריט יצא. בלי הסניף האחרון אי אפשר לייחס
+              את התמורה, והחזר ההון של אותו סניף יהיה שגוי לנצח.
             </p>
             <button
               type="submit"
