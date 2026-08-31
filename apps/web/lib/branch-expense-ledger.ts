@@ -1,39 +1,47 @@
 /**
- * Reconciles one-time (variable) branch expenses - from both the rentals (ניידים) and
- * computer-rooms (נייחים) expense modules - into the main ledger (n_ah_expenses).
- * Only counts as a real owner expense when the owner actually paid it (paidBy === "owner"),
- * and even then only the owner's true share (ownerExpenseBurden, driven by `owedBy`).
- * An expense the partner paid is NOT written here even if the owner owes part/all of it - the
- * owner never had a real cash outflow for it, so it nets out of the partner's month-end
- * settlement transfer instead (see lib/branch-accounting.ts: ownerLedgerExpenseAmount).
- * Fixed/recurring expenses are handled separately (see lib/owner-expense-burden.ts) since they
- * recur every month rather than being a single dated transaction.
+ * The mirror mechanism — retired.
+ *
+ * WHAT IT USED TO DO
+ * Every one-off branch expense wrote a SECOND document into n_ah_expenses holding the owner's
+ * share of it, so the same cost could be seen from a second angle: once as the branch's expense,
+ * once as the owner's cash outflow. Every edit had to delete and re-create that copy; every
+ * screen had to know it was a copy and exclude it (`MovementEntry.mirror`) so it wasn't counted
+ * twice. Fixed expenses could not be mirrored at all - they recur - so a whole parallel module
+ * computed their owner burden live and added it on top, in each screen's own way.
+ *
+ * WHY IT IS GONE
+ * A mirror is a copy of a row made so it can be looked at from another angle, and a query looks
+ * at a row from any angle for free. The owner's cash book is now derived from the transaction
+ * model (lib/business-ledger.ts: buildFlow / flowTotals - `paidBy === "owner"`, summing
+ * `ownerShare`), which already sees branch expenses, recurring ones included. There is nothing
+ * to keep in sync, nothing to re-create on edit, and nothing that can drift.
+ *
+ * WHY THE FUNCTION STAYS
+ * Creating is now a no-op, kept so the eight call sites across the rentals, computer-rooms and
+ * import screens keep working untouched and simply stop producing copies. Deleting stays real:
+ * mirrors written before this change still exist in Firestore, and an expense being deleted must
+ * still take its old copy with it. The leftovers are listed on the integrity screen and can be
+ * removed in one action (lib/integrity.ts: deleteLeftoverMirrors).
  */
 import { getAdminFirestore } from "./firebase-admin";
-import { ownerLedgerExpenseAmount } from "./branch-accounting";
-import type { AccountingExpense } from "@ultranet/shared-types";
 
-export async function createLinkedOwnerLedgerExpense(params: {
-  business: AccountingExpense["business"];
+/**
+ * No longer writes anything, and returns `undefined` so no `linkedAhExpenseId` is stored on the
+ * new expense. Same signature as before on purpose: the callers do not need to change, and the
+ * rule they were implementing is now enforced in one place instead of eight.
+ */
+export async function createLinkedOwnerLedgerExpense(_params: {
+  business: string;
   desc: string;
   amount: number;
   paidBy?: string;
   owedBy?: string;
   date: string;
 }): Promise<string | undefined> {
-  const ledgerAmount = ownerLedgerExpenseAmount(params.amount, params.paidBy, params.owedBy);
-  if (ledgerAmount <= 0) return undefined;
-  const data: Omit<AccountingExpense, "id"> = {
-    amount: ledgerAmount,
-    desc: params.desc,
-    business: params.business,
-    date: params.date,
-    month: params.date.slice(0, 7),
-  };
-  const ref = await getAdminFirestore().collection("n_ah_expenses").add(data);
-  return ref.id;
+  return undefined;
 }
 
+/** Still real: an expense written before this change may carry an old mirror that must go with it. */
 export async function deleteLinkedOwnerLedgerExpense(id: string | undefined): Promise<void> {
   if (!id) return;
   await getAdminFirestore().collection("n_ah_expenses").doc(id).delete();

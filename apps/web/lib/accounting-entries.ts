@@ -19,9 +19,16 @@
 import type { AccountingExpense, AccountingIncome, BranchIncome, VariableExpense } from "@ultranet/shared-types";
 
 export type EntryKind = "income" | "expense";
-export type EntryBook = "ledger" | "branch";
+/**
+ * `tx` is the third book and the destination of every NEW movement (n_tx): one collection that
+ * holds income and expense alike, because a transaction already says which it is (`direction`)
+ * and which node it hangs on. The two legacy books stay readable and editable so existing rows
+ * keep working exactly where they are - see lib/tx-data.ts on why nothing is migrated.
+ */
+export type EntryBook = "ledger" | "branch" | "tx";
 
 export function entryCollection(kind: EntryKind, book: EntryBook): string {
+  if (book === "tx") return "n_tx";
   if (kind === "income") return book === "branch" ? "n_branch_income" : "n_ah_income";
   return book === "branch" ? "n_var_expenses" : "n_ah_expenses";
 }
@@ -47,6 +54,8 @@ export interface MovementEntry {
   mirror?: boolean;
   /** ledger income only: "ניידים" / "מזומן" / "אשראי מהעסק", the form it was entered from */
   typeLabel?: string;
+  /** tx rows only: "תפעולית" / "הונית" / "העברה" - which layer the movement belongs to */
+  natureLabel?: string;
 }
 
 /**
@@ -55,6 +64,9 @@ export interface MovementEntry {
  * branch expense and only exist to record the owner's cash outflow.
  */
 export function isPendingAttribution(e: MovementEntry): boolean {
+  // A transaction is classified the moment it is entered - it names its node and its nature on
+  // the form - so it is never "waiting to be filed".
+  if (e.book === "tx") return false;
   return e.book === "ledger" && !e.mirror;
 }
 

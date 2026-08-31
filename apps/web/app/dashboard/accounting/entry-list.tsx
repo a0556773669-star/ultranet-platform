@@ -90,7 +90,14 @@ export function EntryList({
           {e.typeLabel && (
             <span className="rounded-full bg-[#f4f6f9] px-2 py-0.5 font-bold text-ink">{e.typeLabel}</span>
           )}
-          {e.book === "branch" ? (
+          {e.natureLabel && (
+            <span className="rounded-full bg-[#eef7f4] px-2 py-0.5 font-bold text-teal-dark">{e.natureLabel}</span>
+          )}
+          {e.book === "tx" ? (
+            <span className="rounded-full bg-[#e8effc] px-2 py-0.5 font-bold text-[#1d4fb8]">
+              {e.branchName ?? "משותף"}
+            </span>
+          ) : e.book === "branch" ? (
             <span className="rounded-full bg-[#e8effc] px-2 py-0.5 font-bold text-[#1d4fb8]">
               {e.branchName}
             </span>

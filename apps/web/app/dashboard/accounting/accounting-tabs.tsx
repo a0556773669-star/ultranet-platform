@@ -1,14 +1,23 @@
 import Link from "next/link";
 
+/**
+ * The tabs follow the three layers, in order: the money (רישום ותנועות), the assets
+ * (רכש וציוד · מלאי ומשלוחים), and profitability (סקירה · השורה התחתונה), with the setup and
+ * verification screens after them.
+ */
 const TABS = [
   { href: "/dashboard/accounting/overview", label: "סקירה" },
+  { href: "/dashboard/accounting/bottom-line", label: "השורה התחתונה" },
   { href: "/dashboard/accounting/branches", label: "ניהול סניפים" },
   { href: "/dashboard/accounting/entries", label: "רישום ותנועות" },
+  { href: "/dashboard/accounting/purchases", label: "רכש וציוד" },
+  { href: "/dashboard/accounting/inventory", label: "מלאי ומשלוחים" },
   { href: "/dashboard/accounting/routes", label: "מסלולי גביה" },
   { href: "/dashboard/accounting/rates", label: "תעריפון" },
   { href: "/dashboard/accounting/ads", label: "פרסום משותף" },
   { href: "/dashboard/accounting/attribute", label: "שיוך לסניפים" },
   { href: "/dashboard/accounting/import", label: "ייבוא מאקסל" },
+  { href: "/dashboard/accounting/integrity", label: "בדיקת שלמות" },
 ];
 
 const ENTRIES_HREF = "/dashboard/accounting/entries";
