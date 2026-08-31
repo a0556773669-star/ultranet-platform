@@ -7,7 +7,7 @@ import { requireOwner } from "@/lib/perms";
 import { invalidateUserSyncCache } from "@/lib/auth";
 import type { UserRole } from "@ultranet/shared-types";
 
-const PERM_KEYS = ["branches", "computers", "rentals", "coworking", "accounting", "tasks", "charging", "shop", "duxus"] as const;
+const PERM_KEYS = ["accounting"] as const;
 
 function parseUserForm(formData: FormData) {
   const name = String(formData.get("name") ?? "").trim();
@@ -19,13 +19,7 @@ function parseUserForm(formData: FormData) {
   for (const key of PERM_KEYS) {
     perms[key] = formData.get(`perm_${key}`) === "on";
   }
-  const viewClientBranchIds: string[] = [];
-  for (const [key, value] of formData.entries()) {
-    if (key.startsWith("viewBranch_") && value === "on") {
-      viewClientBranchIds.push(key.slice("viewBranch_".length));
-    }
-  }
-  return { name, email, pass, role, branchId, perms, viewClientBranchIds };
+  return { name, email, pass, role, branchId, perms };
 }
 
 export async function createUserAction(formData: FormData) {
@@ -47,7 +41,6 @@ export async function createUserAction(formData: FormData) {
     role: data.role,
     branchId,
     perms: data.perms,
-    viewClientBranchIds: data.viewClientBranchIds,
   });
   await db.collection("n_approved_emails").doc(data.email).set({
     name: data.name,
@@ -76,7 +69,6 @@ export async function updateUserAction(id: string, formData: FormData) {
     role: data.role,
     branchId,
     perms: data.perms,
-    viewClientBranchIds: data.viewClientBranchIds,
   };
   if (data.pass) {
     update.pass = data.pass;

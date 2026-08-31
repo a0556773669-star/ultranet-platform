@@ -13,16 +13,10 @@ const ROLE_OPTIONS: { value: UserRole; label: string }[] = [
   { value: "owner", label: "בעלים" },
 ];
 
+// One module, one permission. A branch manager needs none of it: his own expense screen is
+// authorised by the branch on his session, not by a flag.
 const PERM_OPTIONS: { key: keyof NonNullable<AppUser["perms"]>; label: string }[] = [
-  { key: "branches", label: "סניפים" },
-  { key: "computers", label: "מלאי" },
-  { key: "rentals", label: "השכרות" },
-  { key: "coworking", label: "משרד שיתופי" },
-  { key: "accounting", label: "הנה\"ח" },
-  { key: "tasks", label: "משימות" },
-  { key: "charging", label: "סליקה וקבלות" },
-  { key: "shop", label: "חנות AI" },
-  { key: "duxus", label: "משימות ונהלים" },
+  { key: "accounting", label: "הנהלת חשבונות (כל העסק)" },
 ];
 
 export function UserForm({
@@ -38,14 +32,9 @@ export function UserForm({
 }) {
   const [role, setRole] = useState<UserRole>(initial?.role ?? "employee");
   const [perms, setPerms] = useState<Partial<Record<string, boolean>>>(initial?.perms ?? {});
-  const [viewBranches, setViewBranches] = useState<string[]>(initial?.viewClientBranchIds ?? []);
 
   const togglePerm = (key: string) => {
     setPerms((prev) => ({ ...prev, [key]: !prev[key] }));
-  };
-
-  const toggleViewBranch = (id: string) => {
-    setViewBranches((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
   };
 
   return (
@@ -127,33 +116,6 @@ export function UserForm({
           {PERM_OPTIONS.map((p) => (
             <input key={p.key} type="hidden" name={`perm_${p.key}`} value={perms[p.key] ? "on" : ""} />
           ))}
-              <div className="mt-3">
-                <label className="mb-1 block text-[11px] font-semibold text-muted">סניפים נוספים שהלקוחות שלהם יוצגו גם למשתמש זה</label>
-                <div className="flex flex-wrap gap-2">
-                  {branches.map((b) => (
-                    <button
-                      key={b.id}
-                      type="button"
-                      onClick={() => toggleViewBranch(b.id)}
-                      className={
-                        viewBranches.includes(b.id)
-                          ? "rounded-full border border-teal bg-teal-bg px-3 py-1 text-xs font-bold text-teal-dark"
-                          : "rounded-full border border-card-border bg-[#f4f6f9] px-3 py-1 text-xs font-bold text-muted"
-                      }
-                    >
-                      {b.name}
-                    </button>
-                  ))}
-                </div>
-                {branches.map((b) => (
-                  <input
-                    key={b.id}
-                    type="hidden"
-                    name={`viewBranch_${b.id}`}
-                    value={viewBranches.includes(b.id) ? "on" : ""}
-                  />
-                ))}
-              </div>
         </div>
       )}
 
