@@ -5,7 +5,7 @@ import { getAdminFirestore } from "@/lib/firebase-admin";
  * The business logo, read once and served as a real image instead of inlined bytes.
  *
  * The logo lives in n_label_settings/default.logoUrl as a base64 `data:` URI - that's what the
- * upload field in /dashboard/rentals/labels/settings produces (FileReader.readAsDataURL). Every
+ * upload field in /dashboard/accounting produces (FileReader.readAsDataURL). Every
  * screen that showed it used to embed that whole string straight into its HTML: the root layout
  * as a favicon href, the dashboard header, the login page and the shop page. Base64 adds a third
  * again to the byte count, HTML is never cached, and the dashboard paid for it twice per

@@ -2,7 +2,7 @@
  * הלוגו בדו"ח שנשלח במייל.
  *
  * The business logo is stored in n_label_settings/default.logoUrl as a base64 `data:` URI
- * (that's what the upload field in /dashboard/rentals/labels/settings produces - it reads the
+ * (that's what the upload field in /dashboard/accounting produces - it reads the
  * file with FileReader.readAsDataURL). A browser renders that fine, but **Gmail and Outlook
  * strip `data:` image sources**, so an emailed report would silently lose its logo.
  *

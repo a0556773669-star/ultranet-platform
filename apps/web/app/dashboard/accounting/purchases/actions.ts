@@ -273,5 +273,4 @@ export async function convertSetupCostAction(branchId: string) {
   await batch.commit();
 
   revalidate();
-  revalidatePath("/dashboard/computer-rooms-accounting");
 }

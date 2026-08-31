@@ -39,7 +39,6 @@ export async function saveBranchStatusAction(branchId: string, formData: FormDat
   revalidatePath("/dashboard/accounting/branches");
   revalidatePath("/dashboard/accounting/overview");
   revalidatePath(`/dashboard/accounting/overview/${branchId}`);
-  revalidatePath("/dashboard/rentals/branches");
   revalidatePath("/dashboard/branches");
 }
 
@@ -199,7 +198,6 @@ function revalidateBranchScreens() {
   revalidatePath("/dashboard/accounting/entries");
   revalidatePath("/dashboard/accounting/inventory");
   revalidatePath("/dashboard/accounting/policies");
-  revalidatePath("/dashboard/rentals/branches");
   revalidatePath("/dashboard/branches");
 }
 

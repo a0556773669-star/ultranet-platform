@@ -7,7 +7,11 @@ import { requireOwner } from "@/lib/perms";
 import { invalidateUserSyncCache } from "@/lib/auth";
 import type { UserRole } from "@ultranet/shared-types";
 
-const PERM_KEYS = ["branches", "computers", "rentals", "coworking", "accounting", "tasks", "charging", "shop", "duxus"] as const;
+/**
+ * Mirrors PERM_OPTIONS on the form. Keys of removed modules are deliberately absent: a key the
+ * form never renders would come back as "off" on every save and quietly wipe the stored value.
+ */
+const PERM_KEYS = ["accounting", "rentals"] as const;
 
 function parseUserForm(formData: FormData) {
   const name = String(formData.get("name") ?? "").trim();

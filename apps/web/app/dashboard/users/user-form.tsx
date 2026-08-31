@@ -13,16 +13,14 @@ const ROLE_OPTIONS: { value: UserRole; label: string }[] = [
   { value: "owner", label: "בעלים" },
 ];
 
+/**
+ * Only the two permissions that still gate a screen. The keys of the modules that were removed
+ * stay in `n_users.perms` untouched — they are simply no longer editable here, so a user document
+ * written before the cleanup keeps its history and nothing is silently reset to false.
+ */
 const PERM_OPTIONS: { key: keyof NonNullable<AppUser["perms"]>; label: string }[] = [
-  { key: "branches", label: "סניפים" },
-  { key: "computers", label: "מלאי" },
-  { key: "rentals", label: "השכרות" },
-  { key: "coworking", label: "משרד שיתופי" },
   { key: "accounting", label: "הנה\"ח" },
-  { key: "tasks", label: "משימות" },
-  { key: "charging", label: "סליקה וקבלות" },
-  { key: "shop", label: "חנות AI" },
-  { key: "duxus", label: "משימות ונהלים" },
+  { key: "rentals", label: "העברות, דוחות והוצאות סניף" },
 ];
 
 export function UserForm({

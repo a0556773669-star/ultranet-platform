@@ -1,7 +1,7 @@
 /**
  * Keeps a n_ah_income record ("laptops" type) in sync with a branch/month's recorded transfer
  * (n_branch_transfers.transferredAmount), so marking a transfer as done automatically shows up
- * as income in both the main ledger (/dashboard/accounting) and per-branch (/dashboard/rentals/accounting)
+ * as income in both the main ledger (/dashboard/accounting) and per-branch (/dashboard/settlement)
  * without the owner re-typing it there by hand. Mirrors the branch-expense-ledger.ts pattern used
  * for one-time expenses (createLinkedOwnerLedgerExpense/deleteLinkedOwnerLedgerExpense).
  * Only a positive transferredAmount (partner/branch paid the owner) counts as owner income - a

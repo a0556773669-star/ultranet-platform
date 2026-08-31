@@ -85,7 +85,7 @@ export async function createIncomeAction(formData: FormData) {
   await db.collection("n_ah_income").add(data);
   revalidatePath("/dashboard/accounting");
   revalidatePath("/dashboard/accounting/overview");
-  revalidatePath("/dashboard/rentals/accounting");
+  revalidatePath("/dashboard/settlement");
 }
 
 export async function createExpenseAction(formData: FormData) {
@@ -120,7 +120,6 @@ export async function createExpenseAction(formData: FormData) {
     revalidatePath("/dashboard/accounting/overview");
     revalidatePath("/dashboard/accounting/entries");
     revalidatePath("/dashboard/expenses");
-    revalidatePath("/dashboard/rentals/expenses");
     return;
   }
 
@@ -137,7 +136,7 @@ export async function createExpenseAction(formData: FormData) {
   await getAdminFirestore().collection("n_ah_expenses").add(data);
   revalidatePath("/dashboard/accounting");
   revalidatePath("/dashboard/accounting/overview");
-  revalidatePath("/dashboard/rentals/accounting");
+  revalidatePath("/dashboard/settlement");
 }
 
 export async function deleteIncomeAction(id: string) {
@@ -145,7 +144,7 @@ export async function deleteIncomeAction(id: string) {
   await getAdminFirestore().collection("n_ah_income").doc(id).delete();
   revalidatePath("/dashboard/accounting");
   revalidatePath("/dashboard/accounting/overview");
-  revalidatePath("/dashboard/rentals/accounting");
+  revalidatePath("/dashboard/settlement");
 }
 
 export async function deleteExpenseAction(id: string) {
@@ -153,7 +152,7 @@ export async function deleteExpenseAction(id: string) {
   await getAdminFirestore().collection("n_ah_expenses").doc(id).delete();
   revalidatePath("/dashboard/accounting");
   revalidatePath("/dashboard/accounting/overview");
-  revalidatePath("/dashboard/rentals/accounting");
+  revalidatePath("/dashboard/settlement");
 }
 
 export async function updateExpenseAction(id: string, formData: FormData) {
@@ -177,7 +176,7 @@ export async function updateExpenseAction(id: string, formData: FormData) {
   await getAdminFirestore().collection("n_ah_expenses").doc(id).set(data, { merge: true });
   revalidatePath("/dashboard/accounting");
   revalidatePath("/dashboard/accounting/overview");
-  revalidatePath("/dashboard/rentals/accounting");
+  revalidatePath("/dashboard/settlement");
 }
 
 export async function createCollectionRouteAction(formData: FormData) {

@@ -9,8 +9,8 @@ export type OwedBy = "owner" | "partner" | "shared" | undefined;
 
 /**
  * Net amount owed TO the owner for a single expense line.
- * Mirrors the existing netToOwner() logic already used in
- * apps/web/app/dashboard/rentals/expenses/branch-expenses.tsx, kept in sync intentionally.
+ * The single implementation of netToOwner(): the branch expense screens that used to carry
+ * their own copy of it are gone.
  */
 export function expenseNetToOwner(amount: number, paidBy?: string, owedBy?: string): number {
   const p = paidBy === "partner" ? "partner" : "owner";
