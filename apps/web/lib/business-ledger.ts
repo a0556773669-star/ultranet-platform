@@ -489,8 +489,19 @@ function txMonthsBetween(from: string, to: string): string[] {
  * be the most profitable one and still the furthest from paying for itself, which is exactly the
  * management signal a monthly profit figure alone cannot give.
  */
-export async function loadBranchCard(branchId: string, uptoMonth: string): Promise<BranchCard | null> {
-  const { model, assets } = await loadLayeredData();
+export async function loadBranchCard(
+  branchId: string,
+  uptoMonth: string,
+  /**
+   * The already-loaded layers, when the caller has them.
+   *
+   * Every caller does: the branch page has just built the whole overview, which loads both. Making
+   * this an argument instead of a second load is the difference between one read of every
+   * collection and two.
+   */
+  loaded?: LayeredData,
+): Promise<BranchCard | null> {
+  const { model, assets } = loaded ?? (await loadLayeredData());
   const branch = model.branchById.get(branchId);
   if (!branch) return null;
 

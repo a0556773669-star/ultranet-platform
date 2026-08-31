@@ -235,7 +235,8 @@ export default async function BranchAccountingOverviewPage({
   const once = stats.lines.filter((l) => l.kind === "once");
   const investment = data.investmentByBranch.get(branch.id) ?? [];
   // Owner-only: the payback card carries what the equipment is worth, which a partner never sees.
-  const card = restricted ? null : await loadBranchCard(branch.id, month);
+  // Reuses the model and asset layer the overview already loaded - no second read.
+  const card = restricted ? null : await loadBranchCard(branch.id, month, { model: data.model, assets: data.assets });
 
   const entries = data.branches.flatMap((b) => {
     const s = branchMonthOf(data, b.id, month);

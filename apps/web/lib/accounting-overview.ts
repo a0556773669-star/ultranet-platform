@@ -40,8 +40,8 @@ import {
   type RentalIncomeLine,
 } from "./branch-accounting";
 import { ITEM_KIND_LABEL, investmentByLocation, type LocationInvestment } from "./assets";
-import { loadAssets } from "./assets-data";
-import { loadTransactionModel, type UnifiedTx } from "./tx-data";
+import { loadAssets, type AssetsData } from "./assets-data";
+import { loadTransactionModel, type TransactionModel, type UnifiedTx } from "./tx-data";
 import { chargesInMonth } from "./tx";
 
 export type OwedBy = "owner" | "partner" | "shared";
@@ -235,6 +235,16 @@ export interface OverviewData {
   investmentByBranch: Map<string, CostLine[]>;
   /** false while no purchase has been entered yet - the screens then ask for one */
   hasAssetLayer: boolean;
+  /**
+   * The two heavy loads this function already performed, handed back rather than thrown away.
+   *
+   * Every screen that shows the overview also needs one or both of them - the branch page for its
+   * payback card, the overview page for its all-time strip - and re-loading them meant reading
+   * every collection two or three more times in the SAME request. They cost nothing to return and
+   * they are the single biggest reason the accounting screens were slow.
+   */
+  model: TransactionModel;
+  assets: AssetsData;
   rows: OverviewMonthRow[];
 }
 
@@ -273,6 +283,8 @@ interface RawData {
   routesById: Map<string, CollectionRoute>;
   /** the unified transaction model - the flow book is derived from it, never stored */
   transactions: UnifiedTx[];
+  model: TransactionModel;
+  assets: AssetsData;
   /** שכבה 2: real per-branch investment, from where the items physically are */
   investmentByBranch: Map<string, LocationInvestment>;
   /** true once at least one real purchase exists - before that, there is nothing to show */
@@ -330,6 +342,8 @@ async function loadRaw(): Promise<RawData> {
     variableByBranch: groupBy(variableSnap.docs.map((d) => doc<VariableExpense>(d))),
     routesById,
     transactions: model.transactions,
+    model,
+    assets,
     investmentByBranch: investmentByLocation(assets.items),
     hasAssetLayer: assets.items.length > 0,
   };
@@ -797,6 +811,8 @@ export async function loadAccountingOverview(endMonth: string, monthCount = 12):
     months,
     branches,
     hasAssetLayer: raw.hasAssetLayer,
+    model: raw.model,
+    assets: raw.assets,
     myByMonth,
     branchMonths,
     activityByBranch,
