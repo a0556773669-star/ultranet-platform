@@ -43,7 +43,6 @@ import type {
 import { isCollectedByOwner, ownerExpenseBurden } from "./branch-accounting";
 import { HQ_NODE_ID, SHARED_NODE_ID, TX_COLLECTION, normalizeAllocations } from "./tx";
 import { splitOf } from "./multi-branch-expense";
-import { splitAdArea } from "./ad-areas";
 import { PURCHASES_COLLECTION } from "./assets";
 import { SHARED_COMPUTERS_BRANCH_ID, SHARED_RENTALS_BRANCH_ID } from "./expense-shared-scope";
 
@@ -381,7 +380,16 @@ export async function loadTransactionModel(): Promise<TransactionModel> {
   const datedFloor = earliestDatedMonth(out);
   for (const d of adAreasSnap.docs) {
     const area = doc<AdArea>(d);
-    const split = splitAdArea(area);
+    // The advertising-area screen is gone - a campaign is just a recurring transaction with an
+    // owner percentage and a split, which n_tx says on its own. The projection stays so the
+    // campaigns already in Firestore keep producing their historical months exactly as before.
+    const monthlyCost = Math.max(0, area.monthlyCost || 0);
+    const ownerPct = Math.min(100, Math.max(0, area.ownerPct ?? 50));
+    const branchCount = Math.max(1, Math.floor(area.branchCount ?? area.branchIds?.length ?? 1) || 1);
+    const split = {
+      ownerTotal: (monthlyCost * ownerPct) / 100,
+      perBranchLineTotal: monthlyCost / branchCount,
+    };
     const allocations = normalizeAllocations(
       area.monthlyCost,
       (area.branchIds ?? []).map((branchId) => ({ branchId, amount: split.perBranchLineTotal })),

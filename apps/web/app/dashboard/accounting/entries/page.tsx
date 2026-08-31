@@ -2,13 +2,11 @@ import Link from "next/link";
 import { BarChart3, Split } from "lucide-react";
 import { requireModuleAccess } from "@/lib/perms";
 import { getOwnerName } from "@/lib/owner-name";
-import { getAdminFirestore } from "@/lib/firebase-admin";
-import type { Branch, CollectionRoute, TxBusiness } from "@ultranet/shared-types";
+import type { Branch, TxBusiness } from "@ultranet/shared-types";
 import { isPendingAttribution } from "@/lib/accounting-entries";
 import { loadMovements } from "@/lib/accounting-entries-data";
 import { loadTransactionModel } from "@/lib/tx-data";
 import { flowTotals, FLOW_LABEL, FLOW_HELP } from "@/lib/business-ledger";
-import CollectModal from "../collect-modal";
 import { AccountingTabs } from "../accounting-tabs";
 import { EntryList } from "../entry-list";
 import { TransactionForm, type FormBranch } from "./transaction-form";
@@ -28,17 +26,11 @@ function hasPartner(b: Branch): boolean {
 export default async function AccountingPage() {
   const session = await requireModuleAccess("accounting");
 
-  const db = getAdminFirestore();
-  const [{ entries, liveBranches }, routesSnap, model, ownerName] = await Promise.all([
+  const [{ entries, liveBranches }, model, ownerName] = await Promise.all([
     loadMovements(),
-    db.collection("n_collection_routes").get(),
     loadTransactionModel(),
     getOwnerName(session.user?.name),
   ]);
-
-  const routes = routesSnap.docs.map(
-    (d) => ({ ...(d.data() as Omit<CollectionRoute, "id">), id: d.id }) as CollectionRoute,
-  );
 
   const incomeRows = entries.filter((e) => e.kind === "income");
   const expenseRows = entries.filter((e) => e.kind === "expense");
@@ -137,9 +129,8 @@ export default async function AccountingPage() {
         </Link>
       )}
 
-      <div className="mb-6 grid grid-cols-1 items-start gap-3.5 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+      <div className="mb-6">
         <TransactionForm branches={formBranches} ownerName={ownerName} />
-        <CollectModal routes={routes} />
       </div>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">

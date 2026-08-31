@@ -146,6 +146,43 @@ export default async function BranchesStatusPage({ searchParams }: { searchParam
         <AccountingTabs active="/dashboard/accounting/branches" />
       </div>
 
+      {/* The two screens that belong to a branch rather than to the money: who pays what, and
+          what the branch managers entered. One click from here instead of two more top-level tabs. */}
+      <div className="mb-3.5 flex flex-wrap gap-2.5">
+        {[
+          { href: "/dashboard/accounting/policies", label: "מי משלם מה", note: "ההסכמים של כל הסניפים בטבלה אחת" },
+          { href: "/dashboard/accounting/review", label: "סקירת הזנות", note: "מה שמנהלי הסניפים הזינו" },
+        ].map((l) => (
+          <Link
+            key={l.href}
+            href={l.href}
+            className="flex-1 rounded-card border border-card-border bg-white px-4 py-2.5 shadow-card transition hover:border-teal"
+          >
+            <span className="block text-[13.5px] font-extrabold text-ink">{l.label}</span>
+            <span className="block text-[11.5px] text-muted">{l.note}</span>
+          </Link>
+        ))}
+      </div>
+
+      {/* מה ששייך לסניף ולא לכסף: ההסכמים, מה שמנהלי הסניפים הזינו, והגדרות הסליקה.
+          לחיצה אחת מכאן, במקום שלוש לשוניות נוספות בשורה העליונה. */}
+      <div className="mb-3.5 grid grid-cols-1 gap-2.5 sm:grid-cols-3">
+        {[
+          { href: "/dashboard/accounting/policies", label: "מי משלם מה", note: "ההסכמים של כל הסניפים בטבלה אחת" },
+          { href: "/dashboard/accounting/review", label: "סקירת הזנות", note: "מה שמנהלי הסניפים הזינו" },
+          { href: "/dashboard/accounting/routes", label: "מסלולי גבייה", note: "ספקי הסליקה והקבלות" },
+        ].map((l) => (
+          <Link
+            key={l.href}
+            href={l.href}
+            className="rounded-card border border-card-border bg-white px-4 py-2.5 shadow-card transition hover:border-teal"
+          >
+            <span className="block text-[13.5px] font-extrabold text-ink">{l.label}</span>
+            <span className="block text-[11.5px] text-muted">{l.note}</span>
+          </Link>
+        ))}
+      </div>
+
       <div className="mb-3.5">
         <ManageBranches branches={managed} ownerName={ownerName} />
       </div>
