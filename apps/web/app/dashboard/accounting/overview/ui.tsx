@@ -911,17 +911,27 @@ export function CostTable({
 
 /* ------------------------- branch payback card -------------------------- */
 
+export interface InvestmentPointView {
+  month: string;
+  invested: number;
+  added: number;
+}
+
 /**
- * The card that answers "איפה הסניף אוחז" (פרק ז׳).
+ * The card that answers "איפה הסניף אוחז" (פרק ז׳ + פרק טו׳).
  *
- * Three independent numbers and the ratio between them: how much was invested (שכבה 2), how much
- * the branch earns (שכבה 3), and how much of the investment has already come back. None of them
- * is subtracted from another anywhere in the system - the investment is compared against the
- * profit, never deducted from it - which is what keeps equipment out of the operating book while
- * leaving it fully visible.
+ * Three independent numbers and the relation between them: how much was invested (שכבה 2), how
+ * much the branch earns (שכבה 3), and how much of the investment has already come back. None is
+ * subtracted from another - the investment is compared against the profit, never deducted from
+ * it - which is what keeps equipment out of the operating book while leaving it fully visible.
  *
- * Owner-only: a partner sees how many machines are at his branch, because he has to run them,
- * but never what they are worth.
+ * THE HEADLINE IS MONTHS, NOT THE PERCENTAGE.
+ * The percentage is a ratio of two numbers that both move. Enter two more computers and it drops
+ * from 32% to 23% overnight without anything bad having happened - you simply widened the base.
+ * Open the screen the next morning and you would read a healthy branch as a deteriorating one.
+ * Months-to-break-even comes from the actual monthly rate, says something true, and cannot be
+ * misread that way. So it leads, the percentage supports it, and a recent capital addition is
+ * named out loud instead of being left as a riddle.
  */
 export function BranchPaybackCard({
   invested,
@@ -931,22 +941,36 @@ export function BranchPaybackCard({
   ownerShare,
   payback,
   monthLabel,
+  series = [],
+  lastAddition = null,
+  capitalReturnedFromSales = 0,
 }: {
   invested: number;
   laptopCount: number;
   stickCount: number;
   netThisMonth: number;
   ownerShare: number;
-  payback: { ratio: number; remaining: number; returned: number; monthsToBreakEven: number | null };
+  payback: {
+    ratio: number;
+    remaining: number;
+    returned: number;
+    monthsToBreakEven: number | null;
+    unsettled?: boolean;
+  };
   monthLabel: string;
+  series?: InvestmentPointView[];
+  lastAddition?: InvestmentPointView | null;
+  capitalReturnedFromSales?: number;
 }) {
   const ratioPct = Math.round(payback.ratio * 100);
-  const cells: [string, string][] = [
-    ["השקעה", money(invested)],
-    [`נטו ${monthLabel}`, money(netThisMonth)],
-    ["חלקי מצטבר", money(payback.returned)],
-    ["חלקי החודש", money(ownerShare)],
-  ];
+  const peak = Math.max(1, ...series.map((p) => p.invested));
+
+  const forecast =
+    payback.remaining <= 0
+      ? "הוחזר במלואו"
+      : payback.monthsToBreakEven == null
+        ? "לא בקצב הנוכחי"
+        : `עוד כ-${payback.monthsToBreakEven} חודשים`;
 
   return (
     <section className={CARD}>
@@ -959,8 +983,24 @@ export function BranchPaybackCard({
         </div>
       </div>
 
+      {/* The headline: a number that cannot be misread as decline. */}
+      <div className="border-b border-card-border bg-teal-bg px-4 py-3">
+        <p className="text-[10.5px] font-extrabold tracking-wide text-teal-dark">צפי איזון</p>
+        <p className="mt-px text-[26px] font-black leading-tight text-teal-dark">{forecast}</p>
+        {payback.unsettled && (
+          <p className="mt-1 text-[11.5px] font-bold text-[#7a4a12]">
+            טרם התייצב — נוסף הון החודש, והרווח החודשי עוד לא משקף אותו. הצפי יתייצב אחרי חודש מלא.
+          </p>
+        )}
+      </div>
+
       <div className="grid grid-cols-2 gap-px bg-card-border sm:grid-cols-4">
-        {cells.map(([label, value]) => (
+        {([
+          ["השקעה", money(invested)],
+          [`נטו ${monthLabel}`, money(netThisMonth)],
+          ["חלקי מצטבר", money(payback.returned)],
+          ["חלקי החודש", money(ownerShare)],
+        ] as [string, string][]).map(([label, value]) => (
           <div key={label} className="bg-white px-3.5 py-2.5">
             <p className="text-[10.5px] font-extrabold text-muted">{label}</p>
             <p className="mt-px text-[17px] font-black tabular-nums text-ink">{value}</p>
@@ -984,16 +1024,12 @@ export function BranchPaybackCard({
             />
           </span>
           <p className="mt-1.5 text-[11.5px] text-muted">
-            {payback.remaining > 0 ? (
-              <>
-                נותרו {money(payback.remaining)} להחזר ·{" "}
-                {payback.monthsToBreakEven == null
-                  ? "בקצב הנוכחי הסניף לא מחזיר את עצמו"
-                  : `צפי איזון: עוד כ-${payback.monthsToBreakEven} חודשים`}
-              </>
-            ) : (
-              "הסניף כבר החזיר את מלוא ההשקעה בציוד שבו"
-            )}
+            {payback.remaining > 0 ? `נותרו ${money(payback.remaining)} להחזר` : "הסניף החזיר את מלוא ההשקעה בציוד שבו"}
+            {capitalReturnedFromSales > 0 && ` · ${money(capitalReturnedFromSales)} חזרו דרך מכירת ציוד`}
+          </p>
+          <p className="mt-1 text-[11px] leading-relaxed text-muted">
+            האחוז הוא יחס בין שני מספרים שזזים: הזנת ציוד נוסף מרחיבה את הבסיס ומורידה אותו בלי
+            שקרה שום דבר רע. לכן המדד הראשי כאן הוא צפי האיזון.
           </p>
         </div>
       ) : (
@@ -1001,6 +1037,38 @@ export function BranchPaybackCard({
           עדיין לא משויכת לסניף הזה אף רכישה, ולכן אין ממה לחשב החזר השקעה. הזנת החשבונית במסך הרכש
           ומשלוח הפריטים לסניף ייצרו את המספר הזה לבד.
         </p>
+      )}
+
+      {/* The staircase: investment jumps on the day equipment was entered and is flat in between. */}
+      {series.length > 1 && (
+        <div className="border-t border-card-border px-4 py-3">
+          <p className="mb-1.5 text-[10.5px] font-extrabold tracking-wide text-muted">
+            ההשקעה לאורך זמן — קו מדרגות, לא מספר
+          </p>
+          <div className="flex h-16 items-end gap-[3px]">
+            {series.map((p) => (
+              <span
+                key={p.month}
+                title={`${p.month}: ${money(p.invested)}${p.added > 0 ? ` (נוסף ${money(p.added)})` : ""}`}
+                className="flex-1 rounded-t-sm"
+                style={{
+                  height: `${Math.max(2, (p.invested / peak) * 100)}%`,
+                  background: p.added > 0 ? "#6b46c1" : "#cfd8e3",
+                }}
+              />
+            ))}
+          </div>
+          <p className="mt-1 text-[11px] text-muted">
+            {lastAddition && lastAddition.added > 0 ? (
+              <>
+                <b className="text-[#6b46c1]">הון נוסף:</b> {money(lastAddition.added)} ב-{lastAddition.month}.
+                זה מסביר את הקפיצה — אחרת היא נשארת חידה.
+              </>
+            ) : (
+              "לא נוסף הון בשנה האחרונה."
+            )}
+          </p>
+        </div>
       )}
     </section>
   );

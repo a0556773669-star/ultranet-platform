@@ -122,6 +122,7 @@ export default async function BranchesStatusPage({ searchParams }: { searchParam
         partnerName: b.partnerName?.trim() || null,
         partnerPct: 100 - branchOwnerPct(b),
         openedAt: b.openedAt?.trim() || b.founded?.trim() || null,
+        closedAt: b.closedAt?.trim() || null,
         deleted: b.deleted === true,
         income: stats?.income ?? 0,
         expense: stats?.expense ?? 0,

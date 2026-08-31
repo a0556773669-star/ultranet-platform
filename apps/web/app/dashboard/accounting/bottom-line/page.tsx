@@ -269,7 +269,8 @@ export default async function BottomLinePage({
           <p className="mt-0.5 text-[12px] leading-relaxed text-muted">
             שלושה מספרים בלתי-תלויים: כמה הושקע (שכבה 2), כמה הסניף מרוויח (שכבה 3), וכמה מההשקעה
             כבר חזרה. אף אחד מהם לא מנוכה מהשני — ולכן סניף שמרוויח הכי הרבה יכול בכל זאת להיות הכי
-            רחוק מלהחזיר את עצמו.
+            רחוק מלהחזיר את עצמו. <b className="text-ink">המדד לפעולה הוא צפי האיזון בחודשים</b>, לא
+            האחוז: האחוז הוא יחס בין שני מספרים שזזים, והזנת ציוד נוסף מורידה אותו בלי שקרה שום דבר רע.
           </p>
         </div>
         {branchCards.length === 0 ? (
@@ -294,6 +295,7 @@ export default async function BottomLinePage({
                   <th className={TH}>החזר השקעה</th>
                   <th className={TH}>יתרה להחזר</th>
                   <th className={TH}>צפי איזון</th>
+                  <th className={TH} />
                 </tr>
               </thead>
               <tbody>
@@ -332,12 +334,15 @@ export default async function BottomLinePage({
                     <td className={`${TD} tabular-nums`}>
                       {c.payback.remaining > 0 ? money(c.payback.remaining) : "—"}
                     </td>
-                    <td className={`${TD} text-muted`}>
+                    <td className={`${TD} font-bold text-ink`}>
                       {c.payback.remaining === 0
                         ? "הוחזר"
                         : c.payback.monthsToBreakEven == null
                           ? "לא בקצב הנוכחי"
                           : `עוד כ-${c.payback.monthsToBreakEven} חודשים`}
+                    </td>
+                    <td className={`${TD} text-[11px] text-muted`}>
+                      {c.payback.unsettled ? "טרם התייצב — נוסף הון החודש" : ""}
                     </td>
                   </tr>
                 ))}
@@ -350,7 +355,7 @@ export default async function BottomLinePage({
                   <td className={`${TD} font-black tabular-nums text-ink`}>
                     {money(branchCards.reduce((s, c) => s + c.net, 0))}
                   </td>
-                  <td className={TD} colSpan={4} />
+                  <td className={TD} colSpan={5} />
                 </tr>
               </tbody>
             </table>

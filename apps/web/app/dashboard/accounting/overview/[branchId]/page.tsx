@@ -359,6 +359,9 @@ export default async function BranchAccountingOverviewPage({
             ownerShare={stats.ownerProfit}
             payback={card.payback}
             monthLabel={mLabel(month)}
+            series={card.series}
+            lastAddition={card.lastAddition}
+            capitalReturnedFromSales={card.capitalReturnedFromSales}
           />
         </div>
       )}

@@ -17,10 +17,20 @@
  * expense recorded" versus "I don't want anything double counted": both hold, in full, at once.
  */
 import type { Branch } from "@ultranet/shared-types";
-import { WAREHOUSE_LOCATION, paybackStatus, type PaybackStatus } from "./assets";
+import {
+  WAREHOUSE_LOCATION,
+  capitalReturnedFromBranch,
+  investmentAtMonth,
+  investmentSeries,
+  lastCapitalAddition,
+  paybackStatus,
+  type InvestmentPoint,
+  type PaybackStatus,
+} from "./assets";
 import { loadAssets, type AssetsData } from "./assets-data";
 import { affectsBranchBook, branchSlices, ownerShareOfSlice, chargesInMonth } from "./tx";
 import { loadTransactionModel, type TransactionModel, type UnifiedTx } from "./tx-data";
+import { monthsEndingAt } from "./accounting-overview";
 
 export const FLOW_LABEL = "תזרים";
 export const FLOW_HELP = "כמה כסף באמת עבר דרך הידיים והחשבון שלי";
@@ -220,7 +230,7 @@ export function totalsByNode(transactions: UnifiedTx[], months: Set<string>): Ma
 
 export interface BranchCard {
   branch: Branch;
-  /** Σ unitCost of the items physically at this branch (שכבה 2) */
+  /** Σ unitCost of the items at this branch AS OF the month asked for (שכבה 2, פרק טו׳) */
   invested: number;
   itemCount: number;
   laptopCount: number;
@@ -232,6 +242,12 @@ export interface BranchCard {
   /** the owner's cumulative share of the branch's net, since it opened */
   ownerShareToDate: number;
   payback: PaybackStatus;
+  /** the investment step series, so the card can show that it is a staircase and not a number */
+  series: InvestmentPoint[];
+  /** the most recent month capital was added, and how much - explains a jump in the denominator */
+  lastAddition: InvestmentPoint | null;
+  /** capital that came back out of this branch through sales of units that sat here */
+  capitalReturnedFromSales: number;
 }
 
 /* ------------------------------------------------------------------ *
@@ -458,7 +474,6 @@ export async function loadBranchCard(branchId: string, uptoMonth: string): Promi
 
   const months = allActiveMonths(model.transactions, uptoMonth);
   const totals = totalsByNode(model.transactions, months).get(branchId);
-  const inv = assets.investmentByLocation.get(branchId);
 
   const net = totals?.profit ?? 0;
   // What comes back against the investment is the OWNER's share of the profit: the equipment is
@@ -466,15 +481,35 @@ export async function loadBranchCard(branchId: string, uptoMonth: string): Promi
   const ownerNet = totals?.ownerProfit ?? 0;
   const monthsRun = Math.max(1, months.size);
 
+  // Investment AS OF the month asked for, replayed from the stock movements rather than read off
+  // today's snapshot (פרק טו׳) - otherwise every computer ever added is silently backdated.
+  const invested = investmentAtMonth(assets.moves, assets.items, branchId, uptoMonth);
+  const series = investmentSeries(
+    assets.moves,
+    assets.items,
+    branchId,
+    monthsEndingAt(uptoMonth, 12),
+  );
+  const lastAddition = lastCapitalAddition(series);
+
+  // Capital added this very month is already in the denominator but has not had a month to earn
+  // in yet, so the forecast would read worse than reality. The card says so instead of pretending.
+  const unsettled = lastAddition?.month === uptoMonth;
+
+  const held = assets.items.filter((i) => i.location === branchId);
+
   return {
     branch,
-    invested: inv?.total ?? 0,
-    itemCount: inv?.itemCount ?? 0,
-    laptopCount: inv?.countByKind.laptop ?? 0,
-    stickCount: inv?.countByKind.stick ?? 0,
+    invested,
+    itemCount: held.length,
+    laptopCount: held.filter((i) => i.kind === "laptop").length,
+    stickCount: held.filter((i) => i.kind === "stick").length,
     netThisMonth: net,
     ownerShareThisMonth: ownerNet,
     ownerShareToDate: ownerNet,
-    payback: paybackStatus(inv?.total ?? 0, Math.max(0, ownerNet), Math.max(0, ownerNet) / monthsRun),
+    payback: paybackStatus(invested, Math.max(0, ownerNet), Math.max(0, ownerNet) / monthsRun, { unsettled }),
+    series,
+    lastAddition,
+    capitalReturnedFromSales: capitalReturnedFromBranch(assets.items, branchId),
   };
 }
