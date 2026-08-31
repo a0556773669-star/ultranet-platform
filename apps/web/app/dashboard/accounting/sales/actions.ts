@@ -20,7 +20,7 @@
 import { revalidatePath } from "next/cache";
 import { requireOwner } from "@/lib/perms";
 import { getAdminFirestore } from "@/lib/firebase-admin";
-import type { Item, ItemMove, ItemStatus } from "@ultranet/shared-types";
+import type { Item, ItemMove, ItemStatus, TxBusiness } from "@ultranet/shared-types";
 import {
   ITEMS_COLLECTION,
   ITEM_MOVES_COLLECTION,
@@ -86,6 +86,12 @@ export async function recordExitAction(formData: FormData): Promise<SaveResult> 
       items.push(item);
     }
     if (items.length === 0) return { ok: false, message: "כל הפריטים שסומנו כבר יצאו מהעסק" };
+    // Two writes per unit plus the transaction, and a Firestore batch holds 500. The whole exit
+    // has to be atomic - a half-recorded sale would leave items out and break כלל 4's balance -
+    // so an oversized selection is refused rather than split behind the owner's back.
+    if (items.length > 240) {
+      return { ok: false, message: `אפשר לרשום עד 240 פריטים ביציאה אחת (נבחרו ${items.length}). נא לפצל לשתי פעולות.` };
+    }
 
     const shares = splitSaleProceeds(items, proceeds);
     const now = Date.now();
@@ -96,6 +102,15 @@ export async function recordExitAction(formData: FormData): Promise<SaveResult> 
     let txId: string | undefined;
     if (status === "sold" && proceeds > 0) {
       const branches = [...new Set(items.map((i) => i.location))].filter((l) => l !== WAREHOUSE_LOCATION);
+      const soleBranchId = branches.length === 1 ? branches[0]! : null;
+      // The business unit follows the branch the equipment actually sat in - hardcoding "rentals"
+      // would file a computer room's sale under laptop rentals.
+      let business: TxBusiness = "rentals";
+      if (soleBranchId) {
+        const branchSnap = await db.collection("n_branches").doc(soleBranchId).get();
+        const type = (branchSnap.data() as { branchType?: string } | undefined)?.branchType;
+        if (type === "rentals" || type === "computers" || type === "coworking") business = type;
+      }
       const txRef = db.collection(TX_COLLECTION).doc();
       txId = txRef.id;
       batch.set(
@@ -107,8 +122,8 @@ export async function recordExitAction(formData: FormData): Promise<SaveResult> 
           // Capital, not income: this is the owner's own money coming back, so it stops at the
           // asset layer and never reaches any branch's operating book.
           nature: "capital",
-          business: "rentals",
-          branchId: branches.length === 1 ? branches[0]! : "shared",
+          business,
+          branchId: soleBranchId ?? "shared",
           desc: `מכירת ציוד${buyer ? ` ל${buyer}` : ""}`,
           category: "מכירת ציוד",
           paidBy: "owner",

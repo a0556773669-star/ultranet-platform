@@ -191,7 +191,7 @@ export default async function BottomLinePage({
           <div className="mt-2 grid grid-cols-2 gap-3 sm:grid-cols-4">
             {[
               { label: "השקעה מצטברת בציוד", value: bottom.capitalInvested },
-              { label: "מתוכה כבר הוחזרה", value: bottom.capitalReturned },
+              { label: "מתוכה כבר הוחזרה מרווח", value: bottom.capitalReturned },
               { label: "נותרו להחזר", value: bottom.capitalRemaining },
               { label: "המחסן מחזיק", value: bottom.warehouseHolding },
             ].map((c) => (
@@ -201,6 +201,15 @@ export default async function BottomLinePage({
               </div>
             ))}
           </div>
+          {(bottom.capitalRealised > 0 || bottom.capitalGain !== 0) && (
+            <p className="mt-2 text-[12px] font-bold text-[#6b46c1]">
+              מתוך ההשקעה מומשו {money(bottom.capitalRealised)} במכירת ציוד ·{" "}
+              {bottom.capitalGain >= 0 ? "רווח" : "הפסד"} הוני {money(Math.abs(bottom.capitalGain))}
+              <span className="mr-1 font-normal text-muted">
+                — תמורה ממכירת ציוד היא החזר הון, לא הכנסה, ולכן היא כאן ולא במחזור
+              </span>
+            </p>
+          )}
           <p className="mt-2 text-[11.5px] leading-relaxed text-muted">
             ההשקעה ההונית מופיעה במלואה — כל שקל, עם חשבונית. היא פשוט מופיעה מתחת לשורה התחתונה ולא
             בתוכה, כי היא לא הוצאה אלא הון. שני הרצונות — שכל הוצאה תהיה מתועדת, ושלא תהיה כפולה —
@@ -257,8 +266,9 @@ export default async function BottomLinePage({
         </div>
         <p className="border-t border-card-border px-4 py-2.5 text-[12px] text-muted">
           {FLOW_LABEL} מתחילת הדרך: נכנס {money(flow.income)} · יצא {money(flow.expense)} · יתרה{" "}
-          <b className="text-ink">{money(flow.balance)}</b> · ציוד {money(flow.capital)} · העברות שהתקבלו{" "}
-          {money(flow.transfersIn)} (סילוק חוב, לא הכנסה).
+          <b className="text-ink">{money(flow.balance)}</b> · רכישת ציוד {money(flow.capital)} · חזר
+          ממכירת ציוד {money(flow.capitalIn)} · העברות שהתקבלו {money(flow.transfersIn)} (סילוק חוב,
+          לא הכנסה).
         </p>
       </section>
 

@@ -50,13 +50,15 @@ export interface FlowMonth {
   profit: number;
   /** capital out this month - shown separately, never inside `profit` (כלל 7) */
   capital: number;
+  /** capital back IN this month - proceeds from selling equipment (פרק יג׳) */
+  capitalIn: number;
   /** settlements in/out; neither income nor expense (כלל 8) */
   transfersIn: number;
   transfersOut: number;
 }
 
 function emptyFlowMonth(month: string): FlowMonth {
-  return { month, income: 0, expense: 0, profit: 0, capital: 0, transfersIn: 0, transfersOut: 0 };
+  return { month, income: 0, expense: 0, profit: 0, capital: 0, capitalIn: 0, transfersIn: 0, transfersOut: 0 };
 }
 
 /**
@@ -76,7 +78,11 @@ export function buildFlow(transactions: UnifiedTx[], months: string[]): Map<stri
       if (!chargesInMonth(tx, month)) continue;
       const bucket = map.get(month)!;
       if (tx.nature === "capital") {
+        // Both directions count. Selling equipment really does put money in the account - it is
+        // just not income (it is capital coming back), so it sits beside the operating figures
+        // rather than inside them.
         if (tx.direction === "out") bucket.capital += tx.ownerShare;
+        else bucket.capitalIn += tx.amount;
         continue;
       }
       if (tx.nature === "transfer") {
@@ -97,7 +103,10 @@ export interface FlowTotals {
   income: number;
   expense: number;
   balance: number;
+  /** capital spent on equipment */
   capital: number;
+  /** capital realised back through selling equipment */
+  capitalIn: number;
   transfersIn: number;
 }
 
@@ -105,6 +114,7 @@ export function flowTotals(transactions: UnifiedTx[]): FlowTotals {
   let income = 0;
   let expense = 0;
   let capital = 0;
+  let capitalIn = 0;
   let transfersIn = 0;
   for (const tx of transactions) {
     if ((tx.paidBy ?? "owner") !== "owner") continue;
@@ -112,6 +122,7 @@ export function flowTotals(transactions: UnifiedTx[]): FlowTotals {
     const times = tx.recurring?.from ? monthCount(tx.recurring.from, tx.recurring.to) : 1;
     if (tx.nature === "capital") {
       if (tx.direction === "out") capital += tx.ownerShare * times;
+      else capitalIn += tx.amount * times;
       continue;
     }
     if (tx.nature === "transfer") {
@@ -121,7 +132,7 @@ export function flowTotals(transactions: UnifiedTx[]): FlowTotals {
     if (tx.direction === "in") income += tx.amount * times;
     else expense += tx.ownerShare * times;
   }
-  return { income, expense, balance: income - expense, capital, transfersIn };
+  return { income, expense, balance: income - expense, capital, capitalIn, transfersIn };
 }
 
 function monthCount(from: string, to?: string): number {
@@ -276,6 +287,9 @@ export interface BottomLine {
   capitalReturned: number;
   capitalRemaining: number;
   warehouseHolding: number;
+  /** proceeds realised by selling equipment, and the gain/loss against its cost (פרק יג׳) */
+  capitalRealised: number;
+  capitalGain: number;
 }
 
 /**
@@ -346,6 +360,8 @@ export function buildBottomLine(
     capitalReturned,
     capitalRemaining: Math.max(0, capitalInvested - capitalReturned),
     warehouseHolding: warehouse,
+    capitalRealised: assets.capital.proceeds,
+    capitalGain: assets.capital.gain,
   };
 }
 
@@ -376,6 +392,8 @@ export interface FlowSnapshot {
   monthExpenses: number;
   /** capital out this month, kept out of `monthExpenses` on purpose (כלל 7) */
   monthCapital: number;
+  /** capital back in this month, from selling equipment */
+  monthCapitalIn: number;
 }
 
 /**
@@ -392,6 +410,7 @@ export function flowSnapshot(transactions: UnifiedTx[], todayISO: string): FlowS
     monthIncome: 0,
     monthExpenses: 0,
     monthCapital: 0,
+    monthCapitalIn: 0,
   };
 
   for (const tx of transactions) {
@@ -403,7 +422,10 @@ export function flowSnapshot(transactions: UnifiedTx[], todayISO: string): FlowS
     if (!inMonth && !isToday) continue;
 
     if (tx.nature === "capital") {
-      if (tx.direction === "out" && inMonth) snap.monthCapital += tx.ownerShare;
+      if (inMonth) {
+        if (tx.direction === "out") snap.monthCapital += tx.ownerShare;
+        else snap.monthCapitalIn += tx.amount;
+      }
       continue;
     }
     if (tx.direction === "in") {

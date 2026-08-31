@@ -506,9 +506,35 @@ export function investmentSeries(
   branchId: string,
   months: string[],
 ): InvestmentPoint[] {
+  // One pass over the moves per month would be O(months × moves); instead the moves are walked
+  // once in date order and the branch's holding is carried forward. This runs on every branch
+  // page load, and a busy warehouse has a lot of moves.
+  const cost = new Map(items.map((i) => [i.id, i.unitCost || 0]));
+  const sorted = [...moves].sort((a, b) => (a.date ?? "").localeCompare(b.date ?? ""));
+  const atBranch = new Set<string>();
+
+  let cursor = 0;
+  let invested = 0;
   let previous: number | null = null;
+
   return months.map((month) => {
-    const invested = investmentAtMonth(moves, items, branchId, month);
+    const cutoff = endOfMonth(month);
+    while (cursor < sorted.length && (sorted[cursor]!.date ?? "") <= cutoff) {
+      const move = sorted[cursor]!;
+      const value = cost.get(move.itemId);
+      if (value !== undefined) {
+        // Arriving and leaving are both just set membership - which is what makes the balance
+        // impossible to drift: an item is in exactly one place (כלל 5).
+        if (move.to === branchId && !atBranch.has(move.itemId)) {
+          atBranch.add(move.itemId);
+          invested += value;
+        } else if (move.to !== branchId && atBranch.has(move.itemId)) {
+          atBranch.delete(move.itemId);
+          invested -= value;
+        }
+      }
+      cursor += 1;
+    }
     const added = previous == null ? invested : Math.max(0, invested - previous);
     previous = invested;
     return { month, invested, added };

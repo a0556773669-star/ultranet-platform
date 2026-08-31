@@ -111,7 +111,10 @@ export default async function AccountingPage() {
           <span className="absolute right-0 top-0 h-full w-1 bg-[#6b46c1]" />
           <p className="text-[11px] font-bold tracking-wide text-muted">השקעה בציוד (הוני)</p>
           <p className="mt-1 text-2xl font-black text-[#6b46c1]">{Math.round(totals.capital).toLocaleString()} ₪</p>
-          <p className="mt-1 text-[11px] text-muted">מתחת לשורה התחתונה — זה הון, לא הוצאה</p>
+          <p className="mt-1 text-[11px] text-muted">
+            מתחת לשורה התחתונה — זה הון, לא הוצאה
+            {totals.capitalIn > 0 && ` · חזרו ${Math.round(totals.capitalIn).toLocaleString()} ₪ ממכירת ציוד`}
+          </p>
         </div>
       </div>
 

@@ -185,10 +185,13 @@ export async function closeBranch(branchId: string, closedAt: string): Promise<C
 
   const closedMonth = closedAt.slice(0, 7);
   const now = Date.now();
-  const batch = db.batch();
 
-  // 1. The business closing date itself.
-  batch.set(branchRef, { closedAt }, { merge: true });
+  // Closing writes the date, ends every recurring charge and returns every item - which on a
+  // large branch exceeds a batch's 500 writes. The writes are collected first and committed in
+  // chunks, ordered so the closing date lands FIRST: if a later chunk fails, the branch is
+  // already stopped from accruing, which is the safe direction to fail in.
+  const writes: ((b: FirebaseFirestore.WriteBatch) => void)[] = [];
+  writes.push((b) => b.set(branchRef, { closedAt }, { merge: true }));
 
   // 2. End every recurring charge on the branch, so it stops accruing from the closing month.
   let recurringEnded = 0;
@@ -197,7 +200,8 @@ export async function closeBranch(branchId: string, closedAt: string): Promise<C
     if (tx.node?.branchId !== branchId) continue;
     if (!tx.recurring?.from || tx.recurring.to) continue;
     if (tx.recurring.from > closedMonth) continue;
-    batch.set(d.ref, { recurring: { ...tx.recurring, to: closedMonth } }, { merge: true });
+    const recurring = { ...tx.recurring, to: closedMonth };
+    writes.push((b) => b.set(d.ref, { recurring }, { merge: true }));
     recurringEnded += 1;
   }
   // The legacy recurring collection needs the same treatment, or the branch keeps billing there.
@@ -205,7 +209,7 @@ export async function closeBranch(branchId: string, closedAt: string): Promise<C
     const e = d.data() as { endDate?: string; startDate?: string };
     if (e.endDate) continue;
     if (e.startDate && e.startDate > closedAt) continue;
-    batch.update(d.ref, { endDate: closedAt });
+    writes.push((b) => b.update(d.ref, { endDate: closedAt }));
     recurringEnded += 1;
   }
 
@@ -216,7 +220,6 @@ export async function closeBranch(branchId: string, closedAt: string): Promise<C
   for (const d of itemsSnap.docs) {
     const item = d.data() as { status?: string; unitCost?: number };
     if (item.status === "sold" || item.status === "writeoff" || item.status === "lost") continue;
-    batch.update(d.ref, { location: WAREHOUSE_LOCATION });
     const move: Omit<ItemMove, "id"> = {
       itemId: d.id,
       from: branchId,
@@ -225,12 +228,21 @@ export async function closeBranch(branchId: string, closedAt: string): Promise<C
       reason: "branch_closed",
       createdAt: now,
     };
-    batch.set(db.collection(ITEM_MOVES_COLLECTION).doc(), move);
+    // The location and its move go in together, always - see the invariant in lib/assets.ts.
+    writes.push((b) => {
+      b.update(d.ref, { location: WAREHOUSE_LOCATION });
+      b.set(db.collection(ITEM_MOVES_COLLECTION).doc(), move);
+    });
     itemsReturned += 1;
     returnedValue += item.unitCost ?? 0;
   }
 
-  await batch.commit();
+  const PER_BATCH = 200;
+  for (let i = 0; i < writes.length; i += PER_BATCH) {
+    const batch = db.batch();
+    for (const write of writes.slice(i, i + PER_BATCH)) write(batch);
+    await batch.commit();
+  }
 
   return {
     ok: true,
