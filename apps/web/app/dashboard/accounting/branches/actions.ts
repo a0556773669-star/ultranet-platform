@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { getAdminFirestore } from "@/lib/firebase-admin";
+import { closeBranch, reopenBranch } from "@/lib/history";
 
 async function requireOwner() {
   const session = await getServerSession(authOptions);
@@ -196,6 +197,42 @@ function revalidateBranchScreens() {
   revalidatePath("/dashboard/accounting/branches");
   revalidatePath("/dashboard/accounting/overview");
   revalidatePath("/dashboard/accounting/entries");
+  revalidatePath("/dashboard/accounting/inventory");
+  revalidatePath("/dashboard/accounting/policies");
   revalidatePath("/dashboard/rentals/branches");
   revalidatePath("/dashboard/branches");
 }
+
+/**
+ * סגירת סניף (פרק טו׳) — תאריך סגירה עסקי, לא מחיקה.
+ *
+ * `closedAt` is not `deletedAt`. Deleting is a technical act performed whenever someone gets
+ * around to it; closing is the business fact that decides from which month the branch stops
+ * accruing costs and stops owing a transfer. Using the wrong one bills a dead branch for months
+ * it never operated - the exact failure `openedAt` already fixes at the other end.
+ */
+export async function closeBranchAction(branchId: string, formData: FormData): Promise<BranchActionResult> {
+  try {
+    await requireOwner();
+    const closedAt = String(formData.get("closedAt") ?? "").trim();
+    const result = await closeBranch(branchId, closedAt);
+    revalidateBranchScreens();
+    revalidatePath(`/dashboard/accounting/overview/${branchId}`);
+    return { ok: result.ok, message: result.message };
+  } catch (err) {
+    return { ok: false, message: err instanceof Error ? err.message : "הסגירה נכשלה" };
+  }
+}
+
+export async function reopenBranchAction(branchId: string): Promise<BranchActionResult> {
+  try {
+    await requireOwner();
+    const result = await reopenBranch(branchId);
+    revalidateBranchScreens();
+    revalidatePath(`/dashboard/accounting/overview/${branchId}`);
+    return result;
+  } catch (err) {
+    return { ok: false, message: err instanceof Error ? err.message : "הפתיחה מחדש נכשלה" };
+  }
+}
+

@@ -17,10 +17,20 @@
  * expense recorded" versus "I don't want anything double counted": both hold, in full, at once.
  */
 import type { Branch } from "@ultranet/shared-types";
-import { WAREHOUSE_LOCATION, paybackStatus, type PaybackStatus } from "./assets";
+import {
+  WAREHOUSE_LOCATION,
+  capitalReturnedFromBranch,
+  investmentAtMonth,
+  investmentSeries,
+  lastCapitalAddition,
+  paybackStatus,
+  type InvestmentPoint,
+  type PaybackStatus,
+} from "./assets";
 import { loadAssets, type AssetsData } from "./assets-data";
 import { affectsBranchBook, branchSlices, ownerShareOfSlice, chargesInMonth } from "./tx";
 import { loadTransactionModel, type TransactionModel, type UnifiedTx } from "./tx-data";
+import { monthsEndingAt } from "./accounting-overview";
 
 export const FLOW_LABEL = "תזרים";
 export const FLOW_HELP = "כמה כסף באמת עבר דרך הידיים והחשבון שלי";
@@ -40,13 +50,15 @@ export interface FlowMonth {
   profit: number;
   /** capital out this month - shown separately, never inside `profit` (כלל 7) */
   capital: number;
+  /** capital back IN this month - proceeds from selling equipment (פרק יג׳) */
+  capitalIn: number;
   /** settlements in/out; neither income nor expense (כלל 8) */
   transfersIn: number;
   transfersOut: number;
 }
 
 function emptyFlowMonth(month: string): FlowMonth {
-  return { month, income: 0, expense: 0, profit: 0, capital: 0, transfersIn: 0, transfersOut: 0 };
+  return { month, income: 0, expense: 0, profit: 0, capital: 0, capitalIn: 0, transfersIn: 0, transfersOut: 0 };
 }
 
 /**
@@ -66,7 +78,11 @@ export function buildFlow(transactions: UnifiedTx[], months: string[]): Map<stri
       if (!chargesInMonth(tx, month)) continue;
       const bucket = map.get(month)!;
       if (tx.nature === "capital") {
+        // Both directions count. Selling equipment really does put money in the account - it is
+        // just not income (it is capital coming back), so it sits beside the operating figures
+        // rather than inside them.
         if (tx.direction === "out") bucket.capital += tx.ownerShare;
+        else bucket.capitalIn += tx.amount;
         continue;
       }
       if (tx.nature === "transfer") {
@@ -87,7 +103,10 @@ export interface FlowTotals {
   income: number;
   expense: number;
   balance: number;
+  /** capital spent on equipment */
   capital: number;
+  /** capital realised back through selling equipment */
+  capitalIn: number;
   transfersIn: number;
 }
 
@@ -95,6 +114,7 @@ export function flowTotals(transactions: UnifiedTx[]): FlowTotals {
   let income = 0;
   let expense = 0;
   let capital = 0;
+  let capitalIn = 0;
   let transfersIn = 0;
   for (const tx of transactions) {
     if ((tx.paidBy ?? "owner") !== "owner") continue;
@@ -102,6 +122,7 @@ export function flowTotals(transactions: UnifiedTx[]): FlowTotals {
     const times = tx.recurring?.from ? monthCount(tx.recurring.from, tx.recurring.to) : 1;
     if (tx.nature === "capital") {
       if (tx.direction === "out") capital += tx.ownerShare * times;
+      else capitalIn += tx.amount * times;
       continue;
     }
     if (tx.nature === "transfer") {
@@ -111,7 +132,7 @@ export function flowTotals(transactions: UnifiedTx[]): FlowTotals {
     if (tx.direction === "in") income += tx.amount * times;
     else expense += tx.ownerShare * times;
   }
-  return { income, expense, balance: income - expense, capital, transfersIn };
+  return { income, expense, balance: income - expense, capital, capitalIn, transfersIn };
 }
 
 function monthCount(from: string, to?: string): number {
@@ -220,7 +241,7 @@ export function totalsByNode(transactions: UnifiedTx[], months: Set<string>): Ma
 
 export interface BranchCard {
   branch: Branch;
-  /** Σ unitCost of the items physically at this branch (שכבה 2) */
+  /** Σ unitCost of the items at this branch AS OF the month asked for (שכבה 2, פרק טו׳) */
   invested: number;
   itemCount: number;
   laptopCount: number;
@@ -232,6 +253,12 @@ export interface BranchCard {
   /** the owner's cumulative share of the branch's net, since it opened */
   ownerShareToDate: number;
   payback: PaybackStatus;
+  /** the investment step series, so the card can show that it is a staircase and not a number */
+  series: InvestmentPoint[];
+  /** the most recent month capital was added, and how much - explains a jump in the denominator */
+  lastAddition: InvestmentPoint | null;
+  /** capital that came back out of this branch through sales of units that sat here */
+  capitalReturnedFromSales: number;
 }
 
 /* ------------------------------------------------------------------ *
@@ -260,6 +287,9 @@ export interface BottomLine {
   capitalReturned: number;
   capitalRemaining: number;
   warehouseHolding: number;
+  /** proceeds realised by selling equipment, and the gain/loss against its cost (פרק יג׳) */
+  capitalRealised: number;
+  capitalGain: number;
 }
 
 /**
@@ -330,6 +360,8 @@ export function buildBottomLine(
     capitalReturned,
     capitalRemaining: Math.max(0, capitalInvested - capitalReturned),
     warehouseHolding: warehouse,
+    capitalRealised: assets.capital.proceeds,
+    capitalGain: assets.capital.gain,
   };
 }
 
@@ -360,6 +392,8 @@ export interface FlowSnapshot {
   monthExpenses: number;
   /** capital out this month, kept out of `monthExpenses` on purpose (כלל 7) */
   monthCapital: number;
+  /** capital back in this month, from selling equipment */
+  monthCapitalIn: number;
 }
 
 /**
@@ -376,6 +410,7 @@ export function flowSnapshot(transactions: UnifiedTx[], todayISO: string): FlowS
     monthIncome: 0,
     monthExpenses: 0,
     monthCapital: 0,
+    monthCapitalIn: 0,
   };
 
   for (const tx of transactions) {
@@ -387,7 +422,10 @@ export function flowSnapshot(transactions: UnifiedTx[], todayISO: string): FlowS
     if (!inMonth && !isToday) continue;
 
     if (tx.nature === "capital") {
-      if (tx.direction === "out" && inMonth) snap.monthCapital += tx.ownerShare;
+      if (inMonth) {
+        if (tx.direction === "out") snap.monthCapital += tx.ownerShare;
+        else snap.monthCapitalIn += tx.amount;
+      }
       continue;
     }
     if (tx.direction === "in") {
@@ -458,7 +496,6 @@ export async function loadBranchCard(branchId: string, uptoMonth: string): Promi
 
   const months = allActiveMonths(model.transactions, uptoMonth);
   const totals = totalsByNode(model.transactions, months).get(branchId);
-  const inv = assets.investmentByLocation.get(branchId);
 
   const net = totals?.profit ?? 0;
   // What comes back against the investment is the OWNER's share of the profit: the equipment is
@@ -466,15 +503,35 @@ export async function loadBranchCard(branchId: string, uptoMonth: string): Promi
   const ownerNet = totals?.ownerProfit ?? 0;
   const monthsRun = Math.max(1, months.size);
 
+  // Investment AS OF the month asked for, replayed from the stock movements rather than read off
+  // today's snapshot (פרק טו׳) - otherwise every computer ever added is silently backdated.
+  const invested = investmentAtMonth(assets.moves, assets.items, branchId, uptoMonth);
+  const series = investmentSeries(
+    assets.moves,
+    assets.items,
+    branchId,
+    monthsEndingAt(uptoMonth, 12),
+  );
+  const lastAddition = lastCapitalAddition(series);
+
+  // Capital added this very month is already in the denominator but has not had a month to earn
+  // in yet, so the forecast would read worse than reality. The card says so instead of pretending.
+  const unsettled = lastAddition?.month === uptoMonth;
+
+  const held = assets.items.filter((i) => i.location === branchId);
+
   return {
     branch,
-    invested: inv?.total ?? 0,
-    itemCount: inv?.itemCount ?? 0,
-    laptopCount: inv?.countByKind.laptop ?? 0,
-    stickCount: inv?.countByKind.stick ?? 0,
+    invested,
+    itemCount: held.length,
+    laptopCount: held.filter((i) => i.kind === "laptop").length,
+    stickCount: held.filter((i) => i.kind === "stick").length,
     netThisMonth: net,
     ownerShareThisMonth: ownerNet,
     ownerShareToDate: ownerNet,
-    payback: paybackStatus(inv?.total ?? 0, Math.max(0, ownerNet), Math.max(0, ownerNet) / monthsRun),
+    payback: paybackStatus(invested, Math.max(0, ownerNet), Math.max(0, ownerNet) / monthsRun, { unsettled }),
+    series,
+    lastAddition,
+    capitalReturnedFromSales: capitalReturnedFromBranch(assets.items, branchId),
   };
 }

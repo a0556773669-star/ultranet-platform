@@ -56,11 +56,12 @@ export default async function IntegrityPage() {
             {balanced ? "המאזן ההוני סוגר" : "המאזן ההוני לא סוגר"}
           </h2>
         </div>
-        <div className="grid grid-cols-1 gap-px bg-card-border sm:grid-cols-4">
+        <div className="grid grid-cols-1 gap-px bg-card-border sm:grid-cols-5">
           {[
             { label: "נרכש", value: report.balance.purchased },
             { label: "בסניפים", value: report.balance.inBranches },
             { label: "במחסן", value: report.balance.inWarehouse },
+            { label: "יצא מהעסק", value: report.balance.exited },
             { label: "הפרש", value: report.balance.difference },
           ].map((c) => (
             <div key={c.label} className="bg-white px-4 py-3">
@@ -76,8 +77,10 @@ export default async function IntegrityPage() {
           ))}
         </div>
         <p className="border-t border-card-border px-4 py-2.5 text-[12px] text-muted">
-          סניפים + מחסן חייבים להסתכם בדיוק במה שיצא מהחשבון. הבדיקה הזו מחליפה את כל מנגנוני
-          הבבואה וההשתקה של המודל הישן: היא לא מונעת כפילות בכוח, היא פשוט מבחינה בה.
+          סניפים + מחסן + מה שיצא מהעסק חייבים להסתכם בדיוק במה שיצא מהחשבון. פריט שנמכר לא נעלם
+          מהמאזן — הוא רק עובר לצד השני שלו, ולכן גם אחרי מכירות המאזן חייב להמשיך לסגור. הבדיקה
+          הזו מחליפה את כל מנגנוני הבבואה וההשתקה של המודל הישן: היא לא מונעת כפילות בכוח, היא פשוט
+          מבחינה בה.
         </p>
       </section>
 

@@ -2,8 +2,10 @@
 
 import { useState, useTransition } from "react";
 import {
+  closeBranchAction,
   createBranchAction,
   deleteBranchAction,
+  reopenBranchAction,
   restoreBranchAction,
   type BranchActionResult,
 } from "./actions";
@@ -21,6 +23,8 @@ export interface ManagedBranch {
   partnerName: string | null;
   partnerPct: number;
   openedAt: string | null;
+  /** the BUSINESS closing date - not the technical deletedAt (פרק טו׳) */
+  closedAt: string | null;
   deleted: boolean;
   income: number;
   expense: number;
@@ -46,9 +50,41 @@ export function ManageBranches({ branches, ownerName }: { branches: ManagedBranc
   const [confirming, setConfirming] = useState<ManagedBranch | null>(null);
   const [typed, setTyped] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
+  const [closing, setClosing] = useState<ManagedBranch | null>(null);
+  const [closeDate, setCloseDate] = useState(new Date().toISOString().slice(0, 10));
 
   const live = branches.filter((b) => !b.deleted);
   const gone = branches.filter((b) => b.deleted);
+
+  /**
+   * Closing a branch is one batch that ends its recurring charges, brings its equipment back to
+   * the warehouse and stamps the business date - see lib/history.ts. It deletes nothing, and it
+   * does not clear the outstanding balance: closing a branch is not forgiving a debt.
+   */
+  function close() {
+    if (!closing) return;
+    const branch = closing;
+    setBusy(branch.id);
+    setResult(null);
+    const fd = new FormData();
+    fd.set("closedAt", closeDate);
+    startTransition(async () => {
+      const res = await closeBranchAction(branch.id, fd);
+      setBusy(null);
+      setResult(res);
+      if (res.ok) setClosing(null);
+    });
+  }
+
+  function reopen(branch: ManagedBranch) {
+    setBusy(branch.id);
+    setResult(null);
+    startTransition(async () => {
+      const res = await reopenBranchAction(branch.id);
+      setBusy(null);
+      setResult(res);
+    });
+  }
 
   function add(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -100,6 +136,11 @@ export function ManageBranches({ branches, ownerName }: { branches: ManagedBranc
               נמחק
             </span>
           )}
+          {!b.deleted && b.closedAt && (
+            <span className="mr-1.5 rounded-full bg-[#fdecec] px-2 py-0.5 text-[10.5px] font-extrabold text-[#b91c1c]">
+              נסגר ב-{b.closedAt}
+            </span>
+          )}
         </td>
         <td className={TD}>
           <span className={`rounded-full px-2 py-0.5 text-[10.5px] font-extrabold ${t.cls}`}>{t.label}</span>
@@ -137,18 +178,40 @@ export function ManageBranches({ branches, ownerName }: { branches: ManagedBranc
             >
               {busy === b.id ? "משחזר..." : "שחזור"}
             </button>
-          ) : (
+          ) : b.closedAt ? (
             <button
               type="button"
-              onClick={() => {
-                setConfirming(b);
-                setTyped("");
-                setResult(null);
-              }}
-              className="rounded-lg border border-red-200 bg-white px-2.5 py-1 text-[11.5px] font-bold text-red-600 transition hover:bg-red-50"
+              onClick={() => reopen(b)}
+              disabled={busy === b.id}
+              className="rounded-lg border border-card-border bg-white px-2.5 py-1 text-[11.5px] font-bold text-ink transition hover:border-teal hover:text-teal disabled:opacity-50"
             >
-              מחיקה
+              {busy === b.id ? "פותח..." : "פתיחה מחדש"}
             </button>
+          ) : (
+            <div className="flex flex-wrap gap-1.5">
+              <button
+                type="button"
+                onClick={() => {
+                  setClosing(b);
+                  setCloseDate(new Date().toISOString().slice(0, 10));
+                  setResult(null);
+                }}
+                className="rounded-lg border border-[#f0dcb8] bg-white px-2.5 py-1 text-[11.5px] font-bold text-[#b45309] transition hover:bg-[#fdf3e3]"
+              >
+                סגירה
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setConfirming(b);
+                  setTyped("");
+                  setResult(null);
+                }}
+                className="rounded-lg border border-red-200 bg-white px-2.5 py-1 text-[11.5px] font-bold text-red-600 transition hover:bg-red-50"
+              >
+                מחיקה
+              </button>
+            </div>
           )}
         </td>
       </tr>
@@ -288,6 +351,59 @@ export function ManageBranches({ branches, ownerName }: { branches: ManagedBranc
           מהטבלה למעלה.
         </p>
       </div>
+
+      {closing && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[rgba(26,35,50,0.45)] p-5">
+          <div className="w-full max-w-[560px] rounded-card bg-white shadow-[0_12px_40px_rgba(0,0,0,0.25)]">
+            <div className="border-b border-card-border px-4 py-3.5 text-[15px] font-black text-ink">
+              סגירת הסניף &quot;{closing.name}&quot;
+            </div>
+            <div className="px-4 py-3.5 text-[13px] leading-relaxed text-muted">
+              <p className="mb-2">
+                <b className="text-ink">סגירה היא לא מחיקה.</b> הסניף נשאר בכל דוח היסטורי ובטבלת
+                ההיסטוריה המלאה — הוא רק מפסיק לצבור מהתאריך שתזין.
+              </p>
+              <p className="mb-2">
+                <b className="text-ink">תאריך הסגירה הוא עסקי, לא טכני:</b> אם הסניף הפסיק לעבוד ב-15
+                ביולי ורק בספטמבר הגעת לסמן אותו — הזן את יולי. אחרת ייצברו עליו חודשיים של אינטרנט,
+                סינון ופרסום שלא היו, ותידרש העברה מהשותף על סניף שלא עבד.
+              </p>
+              <p className="mb-2">
+                <b className="text-ink">מה יקרה בפעולה אחת:</b> ההוצאות החוזרות של הסניף ייעצרו בחודש
+                הזה · כל הציוד שנשאר בו יחזור למחסן עם תנועת מלאי מתוארכת · הסניף ירד מכל הבוררים.
+                <br />
+                <b className="text-ink">היתרה הפתוחה נשארת פתוחה</b> ומתגלגלת עד שתירשם העברה — סגירת
+                סניף היא לא מחיקת חוב.
+              </p>
+              <label className={LABEL}>תאריך הסגירה בפועל</label>
+              <input
+                type="date"
+                value={closeDate}
+                onChange={(e) => setCloseDate(e.target.value)}
+                className={FIELD}
+                autoFocus
+              />
+            </div>
+            <div className="flex flex-wrap gap-2 border-t border-card-border bg-[#f4f6f9] px-4 py-3">
+              <button
+                type="button"
+                onClick={close}
+                disabled={!closeDate || busy === closing.id}
+                className="rounded-lg border border-[#f0dcb8] bg-white px-3.5 py-2 text-[12.5px] font-extrabold text-[#b45309] transition hover:bg-[#fdf3e3] disabled:cursor-not-allowed disabled:opacity-45"
+              >
+                {busy === closing.id ? "סוגר..." : "סגירת הסניף"}
+              </button>
+              <button
+                type="button"
+                onClick={() => setClosing(null)}
+                className="rounded-lg border border-card-border bg-white px-3.5 py-2 text-[12.5px] font-extrabold text-ink transition hover:border-teal hover:text-teal"
+              >
+                ביטול
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {confirming && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-[rgba(26,35,50,0.45)] p-5">

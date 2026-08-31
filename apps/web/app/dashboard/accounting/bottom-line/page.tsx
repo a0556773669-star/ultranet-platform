@@ -191,7 +191,7 @@ export default async function BottomLinePage({
           <div className="mt-2 grid grid-cols-2 gap-3 sm:grid-cols-4">
             {[
               { label: "השקעה מצטברת בציוד", value: bottom.capitalInvested },
-              { label: "מתוכה כבר הוחזרה", value: bottom.capitalReturned },
+              { label: "מתוכה כבר הוחזרה מרווח", value: bottom.capitalReturned },
               { label: "נותרו להחזר", value: bottom.capitalRemaining },
               { label: "המחסן מחזיק", value: bottom.warehouseHolding },
             ].map((c) => (
@@ -201,6 +201,15 @@ export default async function BottomLinePage({
               </div>
             ))}
           </div>
+          {(bottom.capitalRealised > 0 || bottom.capitalGain !== 0) && (
+            <p className="mt-2 text-[12px] font-bold text-[#6b46c1]">
+              מתוך ההשקעה מומשו {money(bottom.capitalRealised)} במכירת ציוד ·{" "}
+              {bottom.capitalGain >= 0 ? "רווח" : "הפסד"} הוני {money(Math.abs(bottom.capitalGain))}
+              <span className="mr-1 font-normal text-muted">
+                — תמורה ממכירת ציוד היא החזר הון, לא הכנסה, ולכן היא כאן ולא במחזור
+              </span>
+            </p>
+          )}
           <p className="mt-2 text-[11.5px] leading-relaxed text-muted">
             ההשקעה ההונית מופיעה במלואה — כל שקל, עם חשבונית. היא פשוט מופיעה מתחת לשורה התחתונה ולא
             בתוכה, כי היא לא הוצאה אלא הון. שני הרצונות — שכל הוצאה תהיה מתועדת, ושלא תהיה כפולה —
@@ -257,8 +266,9 @@ export default async function BottomLinePage({
         </div>
         <p className="border-t border-card-border px-4 py-2.5 text-[12px] text-muted">
           {FLOW_LABEL} מתחילת הדרך: נכנס {money(flow.income)} · יצא {money(flow.expense)} · יתרה{" "}
-          <b className="text-ink">{money(flow.balance)}</b> · ציוד {money(flow.capital)} · העברות שהתקבלו{" "}
-          {money(flow.transfersIn)} (סילוק חוב, לא הכנסה).
+          <b className="text-ink">{money(flow.balance)}</b> · רכישת ציוד {money(flow.capital)} · חזר
+          ממכירת ציוד {money(flow.capitalIn)} · העברות שהתקבלו {money(flow.transfersIn)} (סילוק חוב,
+          לא הכנסה).
         </p>
       </section>
 
@@ -269,7 +279,8 @@ export default async function BottomLinePage({
           <p className="mt-0.5 text-[12px] leading-relaxed text-muted">
             שלושה מספרים בלתי-תלויים: כמה הושקע (שכבה 2), כמה הסניף מרוויח (שכבה 3), וכמה מההשקעה
             כבר חזרה. אף אחד מהם לא מנוכה מהשני — ולכן סניף שמרוויח הכי הרבה יכול בכל זאת להיות הכי
-            רחוק מלהחזיר את עצמו.
+            רחוק מלהחזיר את עצמו. <b className="text-ink">המדד לפעולה הוא צפי האיזון בחודשים</b>, לא
+            האחוז: האחוז הוא יחס בין שני מספרים שזזים, והזנת ציוד נוסף מורידה אותו בלי שקרה שום דבר רע.
           </p>
         </div>
         {branchCards.length === 0 ? (
@@ -294,6 +305,7 @@ export default async function BottomLinePage({
                   <th className={TH}>החזר השקעה</th>
                   <th className={TH}>יתרה להחזר</th>
                   <th className={TH}>צפי איזון</th>
+                  <th className={TH} />
                 </tr>
               </thead>
               <tbody>
@@ -332,12 +344,15 @@ export default async function BottomLinePage({
                     <td className={`${TD} tabular-nums`}>
                       {c.payback.remaining > 0 ? money(c.payback.remaining) : "—"}
                     </td>
-                    <td className={`${TD} text-muted`}>
+                    <td className={`${TD} font-bold text-ink`}>
                       {c.payback.remaining === 0
                         ? "הוחזר"
                         : c.payback.monthsToBreakEven == null
                           ? "לא בקצב הנוכחי"
                           : `עוד כ-${c.payback.monthsToBreakEven} חודשים`}
+                    </td>
+                    <td className={`${TD} text-[11px] text-muted`}>
+                      {c.payback.unsettled ? "טרם התייצב — נוסף הון החודש" : ""}
                     </td>
                   </tr>
                 ))}
@@ -350,7 +365,7 @@ export default async function BottomLinePage({
                   <td className={`${TD} font-black tabular-nums text-ink`}>
                     {money(branchCards.reduce((s, c) => s + c.net, 0))}
                   </td>
-                  <td className={TD} colSpan={4} />
+                  <td className={TD} colSpan={5} />
                 </tr>
               </tbody>
             </table>

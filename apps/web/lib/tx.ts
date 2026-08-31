@@ -236,3 +236,8 @@ export function buildTransaction(draft: TxDraft): Omit<Transaction, "id"> {
   if (draft.note) tx.note = draft.note;
   return tx;
 }
+
+/** Today's YYYY-MM. Lives here so client components can use it without pulling in a data module. */
+export function currentMonthOf(): string {
+  return new Date().toISOString().slice(0, 7);
+}

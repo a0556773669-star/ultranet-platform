@@ -173,7 +173,7 @@ export interface SuppressedLine {
  *  - "not_started"  - the branch has no opening date and not a single data row yet, so there is
  *                     nothing to calculate from and no cost may be charged to it
  */
-export type BranchMonthStatus = "active" | "before_open" | "not_started";
+export type BranchMonthStatus = "active" | "before_open" | "not_started" | "after_close";
 
 /** Where a branch's start month came from - shown on the branch-status screen. */
 export type BranchStartSource = "manual_not_started" | "opened_at" | "first_data" | "none";
@@ -194,6 +194,9 @@ export interface BranchActivity {
   missingOpenedAt: boolean;
   /** true when not one rental and not one income row was ever entered for this branch */
   noIncomeYet: boolean;
+  /** the business closing date the owner set (n_branches.closedAt), not the technical deletedAt */
+  closedDate: string | null;
+  closedMonth: string | null;
   /** ready-made Hebrew badge for the screens, null when the branch is running normally */
   statusLabel: string | null;
 }
@@ -479,6 +482,13 @@ function computeBranchActivity(b: Branch, raw: RawData): BranchActivity {
   // "עדיין לא התחיל לפעול" mark - which only the owner can set - holds a dated branch back.
   // Without a date we still need income before opening the book, since an expense alone says
   // nothing about whether the branch is running.
+  // The business closing date, which is NOT `deletedAt`: a branch that closed on 15 July and was
+  // only marked deleted in September must stop accruing from July, or it collects two months of
+  // internet, filtering and advertising it never used - the exact failure `openedAt` already
+  // fixed at the other end (פרק טו׳).
+  const closedDate = b.closedAt?.trim() || null;
+  const closedMonth = closedDate && /^\d{4}-\d{2}/.test(closedDate) ? closedDate.slice(0, 7) : null;
+
   const startMonth = manuallyNotStarted ? null : openedMonth ?? firstDataMonth;
   const startSource: BranchStartSource = manuallyNotStarted
     ? "manual_not_started"
@@ -489,7 +499,9 @@ function computeBranchActivity(b: Branch, raw: RawData): BranchActivity {
         : "first_data";
 
   let statusLabel: string | null = null;
-  if (!startMonth) {
+  if (closedMonth) {
+    statusLabel = `נסגר ב-${closedMonth}`;
+  } else if (!startMonth) {
     statusLabel = b.branchType === "rentals" ? "לא התחיל השכרות" : "עדיין לא התחיל לפעול";
   } else if (noIncomeYet) {
     statusLabel = b.branchType === "rentals" ? "לא התחיל השכרות" : "עדיין אין הכנסות";
@@ -504,13 +516,18 @@ function computeBranchActivity(b: Branch, raw: RawData): BranchActivity {
     manuallyNotStarted,
     missingOpenedAt: !openedMonth,
     noIncomeYet,
+    closedDate,
+    closedMonth,
     statusLabel,
   };
 }
 
 function monthStatus(activity: BranchActivity, month: string): BranchMonthStatus {
   if (!activity.startMonth) return "not_started";
-  return activity.startMonth <= month ? "active" : "before_open";
+  if (activity.startMonth > month) return "before_open";
+  // Months after the branch closed are calculated exactly like months before it opened: nothing.
+  if (activity.closedMonth && month > activity.closedMonth) return "after_close";
+  return "active";
 }
 
 /** An untouched month: the branch isn't open yet, so nothing is income, expense or owed. */
@@ -648,6 +665,15 @@ function resolveRateLine(
  * SIMs, advertising for a branch that isn't open yet) and, above all, the transfer: with no
  * income there is nothing to settle, so `transferAvailable` is false and the screens leave that
  * line blank instead of showing a confident 0.
+ */
+/**
+ * A month in which the branch is not running - either not open yet, or already closed.
+ *
+ * Costs the owner genuinely incurred still count (an expense typed against the branch, equipment
+ * already bought), because they really happened. What is NOT invented is the recurring price-list
+ * charge and, above all, the transfer: with no income there is nothing to settle, so
+ * `transferAvailable` stays false and the screens leave the line blank rather than showing a
+ * confident 0.
  */
 function preOpenBranchMonth(b: Branch, raw: RawData, month: string, status: BranchMonthStatus): BranchMonth {
   const hasPartner = branchHasPartner(b);
