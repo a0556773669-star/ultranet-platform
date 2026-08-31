@@ -6,8 +6,12 @@ import { mailerConfigError } from "@/lib/mailer";
  * שליחה אוטומטית של הדו"ח החודשי לכל הסניפים - נועד להיקרא מ-cron ב-1 לחודש.
  *
  * There is no session here, so the only thing standing between the outside world and a mailshot
- * to every partner is REPORTS_CRON_SECRET: without it configured the route refuses outright
- * rather than running unauthenticated.
+ * to every partner is the shared secret: without one configured the route refuses outright
+ * rather than running unauthenticated. Either REPORTS_CRON_SECRET or Vercel's own CRON_SECRET
+ * works, since Vercel Cron sets the latter automatically and sends it as a Bearer token.
+ *
+ * Exposed on both GET and POST on purpose: POST is the honest verb for "send a batch of email",
+ * but Vercel Cron only ever issues GET, so a POST-only route would silently never fire.
  *
  * Defaults to the PREVIOUS month, because that's what "run it on the 1st" means - you report on
  * the month that just closed, not the one that started this morning.
@@ -20,8 +24,8 @@ function previousMonth(): string {
   return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
 }
 
-export async function POST(request: Request) {
-  const secret = process.env.REPORTS_CRON_SECRET;
+async function handle(request: Request) {
+  const secret = process.env.REPORTS_CRON_SECRET || process.env.CRON_SECRET;
   if (!secret) {
     return NextResponse.json(
       { ok: false, error: "REPORTS_CRON_SECRET לא מוגדר - השליחה האוטומטית מושבתת" },
@@ -54,4 +58,12 @@ export async function POST(request: Request) {
     skipped,
     failed: failed.map((f) => ({ branch: f.branchName, reason: f.message })),
   });
+}
+
+export async function GET(request: Request) {
+  return handle(request);
+}
+
+export async function POST(request: Request) {
+  return handle(request);
 }
