@@ -10,7 +10,7 @@
 // - CACHE_NAME is bumped on every deploy indirectly via skipWaiting/claim +
 //   the activate handler purging any cache not in KEEP list, so stale
 //   responses never linger across versions.
-const CACHE_NAME = "ultranet-shell-v1";
+const CACHE_NAME = "ultranet-shell-v2";
 const KEEP = [CACHE_NAME];
 
 self.addEventListener("install", (event) => {
