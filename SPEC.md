@@ -515,8 +515,8 @@ pnpm dev        # turbo run dev — מריץ web + api
     פר-סניף. סניף שכבר קיבל את הדו"ח לאותו חודש מדולג (`reportSentAt`), כך שאפשר להריץ שוב
     בבטחה. סניפים `deleted`/`notStarted` לא נכללים.
   - **שליחה אוטומטית ב-1 לחודש**: `POST /api/rentals/monthly-reports`
-    (`apps/web/app/api/rentals/monthly-reports/route.ts`), מיועד ל-cron. אין כאן session,
-    ולכן הנתיב מוגן ב-`REPORTS_CRON_SECRET` (`Authorization: Bearer <secret>`) ו**מסרב לפעול
+    (`apps/web/app/api/rentals/monthly-reports/route.ts`), מיועד ל-cron - עונה גם ל-GET וגם ל-POST, כי Vercel Cron שולחת GET בלבד ונתיב POST-only פשוט לא היה נורה אף פעם. אין כאן session,
+    ולכן הנתיב מוגן ב-`REPORTS_CRON_SECRET` או ב-`CRON_SECRET` של Vercel (`Authorization: Bearer <secret>`, ש-Vercel שולחת לבד) ו**מסרב לפעול
     בכלל** כשהמשתנה לא מוגדר. ברירת המחדל היא **החודש הקודם** - "מריצים ב-1 לחודש" פירושו
     לדווח על החודש שנסגר, לא על זה שהתחיל הבוקר; אפשר לעקוף עם `?month=YYYY-MM`. מחזיר
     `{ ok, month, sent, skipped, failed[] }`.
