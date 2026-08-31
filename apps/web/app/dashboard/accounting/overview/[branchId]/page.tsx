@@ -15,14 +15,10 @@ import {
   monthLabelLong,
   type BranchMonth,
 } from "@/lib/accounting-overview";
-import { loadCostRates } from "@/lib/cost-rates-data";
 import { loadMovements, type MovementsData } from "@/lib/accounting-entries-data";
 import { loadBranchCard } from "@/lib/business-ledger";
 import { AccountingTabs } from "../../accounting-tabs";
 import { EntryList } from "../../entry-list";
-import { BranchCostSettings } from "../branch-cost-settings";
-import { AddBranchExpense } from "../add-branch-expense";
-import { AddBranchIncome } from "../add-branch-income";
 import {
   BranchMiniCards,
   BranchPaybackCard,
@@ -192,10 +188,9 @@ export default async function BranchAccountingOverviewPage({
   const cum = searchParams?.mode === "cum";
   const modeSuffix = cum ? "&mode=cum" : "";
 
-  const [data, ownerName, rateData, movements] = await Promise.all([
+  const [data, ownerName, movements] = await Promise.all([
     loadAccountingOverview(month),
     getOwnerName(isOwner ? session.user?.name : null),
-    loadCostRates(),
     // only the owner may edit or delete these rows, so a partner never pays for the extra reads
     isOwner
       ? loadMovements()
@@ -463,22 +458,16 @@ export default async function BranchAccountingOverviewPage({
             modeTabs={<ModeTabs cum={cum} monthlyHref={selfHref(month)} cumHref={selfHref(month, "cum")} />}
           />
 
-          <AddBranchIncome
-            branchId={branch.id}
-            branchName={branch.name}
-            ownerName={ownerName}
-            partnerName={partnerName}
-            hasPartner={hasPartner}
-            restricted={restricted}
-          />
-
-          <AddBranchExpense
-            branch={branch}
-            ownerName={ownerName}
-            partnerName={partnerName}
-            hasPartner={hasPartner}
-            restricted={restricted}
-          />
+          {!restricted && (
+            <section className={`${CARD} px-4 py-3.5 text-[12.5px] leading-relaxed text-muted`}>
+              <b className="text-ink">להוספת הכנסה או הוצאה לסניף הזה</b> — מסך{" "}
+              <Link href="/dashboard/accounting/entries" className="font-bold text-teal underline">
+                רישום ותנועות
+              </Link>
+              , ובוחרים את הסניף כצומת. יש בדיוק מסך אחד במערכת שיוצר כסף (כלל 1); כל מסך אחר —
+              הזה בכללם — מסווג, מפצל ומציג.
+            </section>
+          )}
 
           {!restricted && (
             <section className={`${CARD} px-4 py-3.5`}>
@@ -508,40 +497,12 @@ export default async function BranchAccountingOverviewPage({
 
           <CostTable
             title={`פירוט הוצאות ${mLabel(month)}`}
-            subtitle="כל שורה מחושבת לפי התעריפון והכמויות בסניף, או לפי הוצאה שהוזנה ידנית — כולל מי שילם בפועל וכמה נשאר לכל צד"
+            subtitle="כל שורה מגיעה מתנועה אחת שנרשמה — כולל מי שילם בפועל וכמה נשאר לכל צד"
             lines={monthly.concat(once)}
             branch={branch}
             ownerName={ownerName}
           />
 
-          {stats.suppressed.length > 0 && (
-            <section className={`${CARD} px-4 py-3.5`}>
-              <h3 className="text-[13px] font-extrabold text-ink">שורות תעריפון שלא נספרו החודש</h3>
-              <p className="mt-0.5 text-[12.5px] text-muted">
-                כדי שלא ייספר פעמיים: כשקיימת בסניף הוצאה שהוזנה ידנית על אותו נושא, ההוצאה הידנית היא שנספרת,
-                ושורת התעריפון מושמטת.
-              </p>
-              <ul className="mt-2 flex flex-col gap-1">
-                {stats.suppressed.map((s) => (
-                  <li key={s.rateLabel} className="text-[12.5px] text-muted">
-                    <b className="text-ink">{s.rateLabel}</b> — {s.reason}
-                  </li>
-                ))}
-              </ul>
-            </section>
-          )}
-
-          {!restricted && (
-            <BranchCostSettings
-              branch={branch}
-              rates={rateData.rates}
-              settings={rateData.settingsByBranchRate}
-              autoQty={data.autoQtyByBranch.get(branch.id) ?? new Map()}
-              ownerName={ownerName}
-              partnerName={partnerName}
-              hasPartner={hasPartner}
-            />
-          )}
 
           {!restricted && (
             <CostTable

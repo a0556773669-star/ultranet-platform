@@ -2,7 +2,12 @@ import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
 import { authOptions } from "./auth";
 
-export type PermKey = "branches" | "computers" | "rentals" | "coworking" | "accounting" | "tasks" | "charging" | "shop" | "duxus";
+/**
+ * One module, one key. The other eight keys guarded modules that no longer exist; keeping them
+ * would leave permission checks in the code that nothing can ever fail, which is worse than
+ * having none - it reads like protection and protects nothing.
+ */
+export type PermKey = "accounting";
 
 /**
  * Owners always pass. Partners/employees pass only if their n_users.perms[key] is true.

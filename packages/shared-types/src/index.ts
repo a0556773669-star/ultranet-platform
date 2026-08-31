@@ -111,8 +111,8 @@ export interface AppUser {
     pass: string; // legacy plaintext - replace with proper auth before any customer-facing exposure
   role: UserRole;
     branchId: string; // "all" for owner
-  perms?: Partial<Record<"branches" | "computers" | "rentals" | "coworking" | "accounting" | "tasks" | "charging" | "shop" | "duxus", boolean>>;
-  viewClientBranchIds?: string[];
+  /** the only module there is; a branch manager reaches his own expense screen without it */
+  perms?: Partial<Record<"accounting", boolean>>;
 }
 
 /** collection: n_fixed_expenses */

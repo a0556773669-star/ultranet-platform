@@ -1,240 +1,111 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
-import { Laptop as LaptopIcon, Users, FolderOpen, AlertCircle, Package, CheckCircle2, AlertTriangle, ArrowLeft } from "lucide-react";
+import {
+  ArrowLeft,
+  BarChart3,
+  Boxes,
+  ClipboardCheck,
+  PackageMinus,
+  Receipt,
+  Scale,
+  ShieldCheck,
+} from "lucide-react";
 import { authOptions } from "@/lib/auth";
-import { getAdminFirestore } from "@/lib/firebase-admin";
-import type { PermKey } from "@/lib/perms";
-import { NAV_ITEMS, visibleFor, type NavItem } from "@/lib/nav-items";
-import HomeClock from "./home-clock";
-import { getInventorySnapshotAction } from "./(computer-rooms)/inventory/actions";
-import type { Laptop, Rental } from "@ultranet/shared-types";
-import type { BranchKey, InventoryItem } from "@/lib/legacy-inventory";
 import { loadTransactionModel } from "@/lib/tx-data";
-import { flowSnapshot } from "@/lib/business-ledger";
+import { loadAssets } from "@/lib/assets-data";
+import { flowSnapshot, FLOW_LABEL } from "@/lib/business-ledger";
+import { WAREHOUSE_LOCATION } from "@/lib/assets";
+import HomeClock from "./home-clock";
 
+const nf = new Intl.NumberFormat("he-IL", { maximumFractionDigits: 0 });
+const money = (n: number) => `${nf.format(Math.round(n))} ₪`;
+
+const CARD = "rounded-card border border-card-border bg-white shadow-card";
+
+/**
+ * The home screen of the accounting model.
+ *
+ * Deliberately small: five numbers and the way in. Everything else the business does now lives
+ * behind one module, so a home page that tried to summarise "everything" would just be the wall
+ * of tiles this rebuild exists to remove.
+ */
 export default async function DashboardHomePage() {
   const session = await getServerSession(authOptions);
-  if (!session) {
-    redirect("/login");
-  }
+  if (!session) redirect("/login");
 
-  const role = session.user?.role ?? "employee";
-  const perms = (session.user as { perms?: Partial<Record<PermKey, boolean>> } | undefined)?.perms;
+  const isOwner = session.user?.role === "owner";
   const name = session.user?.name ?? session.user?.email ?? "";
-  const branchId = session.user?.branchId;
-  const isOwner = role === "owner";
-  const has = (key: PermKey) => isOwner || Boolean(perms?.[key]);
 
-  const db = getAdminFirestore();
+  // A branch manager has exactly one screen: entering what he spent.
+  if (!isOwner) redirect("/dashboard/my-expenses");
 
-  let moneyStats: {
-    todayIncome: number;
-    todayExpenses: number;
-    monthIncome: number;
-    monthExpenses: number;
-  } | null = null;
+  const [model, assets] = await Promise.all([loadTransactionModel(), loadAssets()]);
+  const snap = flowSnapshot(model.transactions, new Date().toISOString().slice(0, 10));
+  const inBranches = [...assets.investmentByLocation.entries()]
+    .filter(([loc]) => loc !== WAREHOUSE_LOCATION)
+    .reduce((sum, [, inv]) => sum + inv.total, 0);
 
-  if (has("accounting")) {
-    // Derived from the unified transaction model, exactly like every accounting screen. The
-    // recurring branch expenses and the computer-room setup costs used to be added back on top
-    // here by hand; they are ordinary transactions in the model now, so there is nothing left to
-    // add and nothing that can be added differently in two places.
-    const model = await loadTransactionModel();
-    moneyStats = flowSnapshot(model.transactions, new Date().toISOString().slice(0, 10));
-  }
+  const cells = [
+    { label: `${FLOW_LABEL} — נכנס החודש`, value: money(snap.monthIncome), color: "#059669" },
+    { label: `${FLOW_LABEL} — יצא החודש`, value: money(snap.monthExpenses), color: "#dc2626" },
+    {
+      label: "מאזן החודש",
+      value: money(snap.monthIncome - snap.monthExpenses),
+      color: snap.monthIncome - snap.monthExpenses >= 0 ? "#0f6e56" : "#dc2626",
+    },
+    { label: "השקעה בציוד בסניפים", value: money(inBranches), color: "#6b46c1" },
+  ];
 
-  let rentedLaptops: { name: string; startDate: string }[] | null = null;
-  let unpaidRentals: { id: string; clientName: string; itemName: string; amount: number }[] | null = null;
-
-  if (has("rentals")) {
-    // One wave instead of two: the second pair used to wait on the first for no reason, doubling
-    // this section's latency. The laptop and client collections are read for names only, so they
-    // fetch just that field rather than every document in full.
-    const [laptopsSnap, rentalsSnap, clientsSnap2, unpaidSnap] = await Promise.all([
-      db.collection("n_laptops").select("name").get(),
-      db.collection("n_rentals").where("status", "==", "active").where("kind", "==", "laptop").get(),
-      db.collection("n_rental_clients").select("name").get(),
-      db.collection("n_rentals").where("status", "==", "returned").where("paid", "==", false).get(),
-    ]);
-    const laptopNames: Record<string, string> = {};
-    laptopsSnap.docs.forEach((d) => {
-      laptopNames[d.id] = (d.data() as Laptop).name;
-    });
-    rentedLaptops = rentalsSnap.docs
-      .map((d) => d.data() as Rental)
-      .filter((r) => isOwner || r.branchId === branchId)
-      .map((r) => ({ name: laptopNames[r.itemId] || "נייד", startDate: r.startDate }));
-
-    const clientNames: Record<string, string> = {};
-    clientsSnap2.docs.forEach((d) => {
-      clientNames[d.id] = (d.data() as { name: string }).name;
-    });
-    unpaidRentals = unpaidSnap.docs
-      .map((d) => ({ ...(d.data() as Omit<Rental, "id">), id: d.id }))
-      .filter((r) => isOwner || r.branchId === branchId)
-      .map((r) => ({
-        id: r.id,
-        clientName: clientNames[r.clientId] || "לקוח",
-        itemName: laptopNames[r.itemId] || "פריט",
-        amount: r.finalPrice ?? r.calcPrice,
-      }));
-  }
-
-  let inventoryItemCount = 0;
-  let lowStockItems: { name: string; qty: number; min: number }[] | null = null;
-
-  if (has("computers")) {
-    const snapshot = await getInventorySnapshotAction();
-    const branchKeys: BranchKey[] = isOwner
-      ? snapshot.branches.map((b) => b.key)
-      : snapshot.branches.filter((b) => String(b.key) === branchId).map((b) => b.key);
-    const items: { name: string; qty: number; min: number }[] = [];
-    branchKeys.forEach((key) => {
-      const branchInv: Record<string, InventoryItem> = snapshot.inventory[key] ?? {};
-      Object.entries(branchInv).forEach(([itemName, item]) => {
-        items.push({ name: itemName, qty: item.qty, min: item.min });
-      });
-    });
-    inventoryItemCount = items.length;
-    lowStockItems = items.filter((i) => i.qty <= i.min).slice(0, 6);
-  }
-
-  const categories: (NavItem)[] = NAV_ITEMS.filter(
-    (item) => item.href !== "/dashboard" && visibleFor(role, perms, item),
-  );
-  if (isOwner) {
-    categories.push({ href: "/dashboard/users", label: "משתמשים והרשאות", icon: Users });
-  }
+  const links = [
+    { href: "/dashboard/accounting/entries", label: "רישום ותנועות", note: "המסך היחיד שיוצר כסף", icon: Receipt },
+    { href: "/dashboard/accounting/overview", label: "סקירה", note: "מצב העסק לפי סניף", icon: BarChart3 },
+    { href: "/dashboard/accounting/bottom-line", label: "השורה התחתונה", note: "שורת מאזן אחת + המזכר ההוני", icon: Scale },
+    { href: "/dashboard/accounting/purchases", label: "רכש וציוד", note: "חשבוניות מהספקים", icon: Boxes },
+    { href: "/dashboard/accounting/sales", label: "יציאת ציוד", note: "מכירה, גריטה ואבדן", icon: PackageMinus },
+    { href: "/dashboard/accounting/review", label: "סקירת הזנות", note: "מה שהסניפים הזינו", icon: ClipboardCheck },
+    { href: "/dashboard/accounting/integrity", label: "בדיקת שלמות", note: "האם המספרים מסתדרים", icon: ShieldCheck },
+  ];
 
   return (
-    <div>
-      <div className="mb-4">
+    <div className="flex flex-col gap-4">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 className="text-[22px] font-extrabold text-ink">שלום {name}</h1>
+          <p className="mt-0.5 text-[12.5px] text-muted">
+            הכסף נרשם פעם אחת ברגע שהוא זז. כל מספר אחר בעסק הוא תצוגה שלו.
+          </p>
+        </div>
         <HomeClock name={name} />
       </div>
 
-        {rentedLaptops && (
-          <div className="card">
-            <div className="mb-3 flex items-center justify-between text-xs font-bold uppercase tracking-wide text-muted">
-              <span className="flex items-center gap-1.5"><LaptopIcon className="h-4 w-4" />{"ניידים מושכרים כעת"}</span>
-              <span className="rounded-full bg-[#f4f6f9] px-2.5 py-0.5 text-ink normal-case">{rentedLaptops.length}</span>
-            </div>
-            {rentedLaptops.length === 0 ? (
-              <div className="text-sm text-muted">{"אין השכרות פעילות"}</div>
-            ) : (
-              rentedLaptops.map((l, i) => (
-                <div key={i} className="flex items-center gap-2 border-b border-card-border py-2 text-[13px] last:border-b-0">
-                  <span className="h-2 w-2 rounded-full bg-teal" />
-                  <span className="flex-1 font-medium text-ink">{l.name}</span>
-                  <span className="text-[11px] text-muted">{"מאז " + l.startDate}</span>
-                </div>
-              ))
-            )}
-          </div>
-        )}
-
-      {moneyStats && (
-        <div className="mb-3 grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-4">
-          <div className="relative overflow-hidden rounded-card border border-card-border bg-white p-4 shadow-card">
-            <span className="absolute right-0 top-0 h-full w-1 bg-emerald-500" />
-            <div className="text-[11px] font-semibold uppercase tracking-wide text-muted">{"הכנסות עד היום"}</div>
-            <div className="mt-1 text-[25px] font-black text-emerald-600">{moneyStats.todayIncome.toLocaleString()} ₪</div>
-          </div>
-          <div className="relative overflow-hidden rounded-card border border-card-border bg-white p-4 shadow-card">
-            <span className="absolute right-0 top-0 h-full w-1 bg-red-500" />
-            <div className="text-[11px] font-semibold uppercase tracking-wide text-muted">{"הוצאות עד היום"}</div>
-            <div className="mt-1 text-[25px] font-black text-red-600">{moneyStats.todayExpenses.toLocaleString()} ₪</div>
-          </div>
-          <div className="relative overflow-hidden rounded-card border border-card-border bg-white p-4 shadow-card">
-            <span className="absolute right-0 top-0 h-full w-1 bg-teal" />
-            <div className="text-[11px] font-semibold uppercase tracking-wide text-muted">{"הכנסות החודש"}</div>
-            <div className="mt-1 text-[25px] font-black text-teal-dark">{moneyStats.monthIncome.toLocaleString()} ₪</div>
-          </div>
-          <div className="relative overflow-hidden rounded-card border border-card-border bg-white p-4 shadow-card">
-            <span className="absolute right-0 top-0 h-full w-1 bg-amber-500" />
-            <div className="text-[11px] font-semibold uppercase tracking-wide text-muted">{"הוצאות החודש"}</div>
-            <div className="mt-1 text-[25px] font-black text-amber-600">{moneyStats.monthExpenses.toLocaleString()} ₪</div>
-          </div>
-        </div>
-      )}
-
-      <div className="mb-2 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-muted"><FolderOpen className="h-4 w-4" />{"הקטגוריות שלי"}</div>
-      <div className="mb-4 grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-5">
-        {categories.length === 0 && (
-          <div className="col-span-full rounded-card border border-card-border bg-white p-6 text-center text-sm text-muted shadow-card">
-            {"אין קטגוריות זמינות עבורך"}
-          </div>
-        )}
-        {categories.map((c) => (
-          <Link
-            key={c.href}
-            href={c.href}
-            className="flex flex-col items-center gap-1 rounded-card border border-card-border bg-white p-4 text-center shadow-card transition hover:-translate-y-0.5 hover:border-teal hover:shadow-primary"
-          >
-            <c.icon className="h-6 w-6 text-teal-dark" />
-            <span className="text-[13px] font-bold text-ink">{c.label}</span>
-          </Link>
+      <div className="grid grid-cols-2 gap-2.5 lg:grid-cols-4">
+        {cells.map((c) => (
+          <article key={c.label} className={`${CARD} relative overflow-hidden py-2.5 pl-3.5 pr-3`}>
+            <span className="absolute right-0 top-0 h-full w-[3px]" style={{ background: c.color }} />
+            <p className="text-[11px] font-extrabold text-muted">{c.label}</p>
+            <p className="mt-px text-[21px] font-black leading-tight tabular-nums" style={{ color: c.color }}>
+              {c.value}
+            </p>
+          </article>
         ))}
       </div>
 
-      <div className="mb-3 grid grid-cols-1 gap-3 lg:grid-cols-2">
-        {unpaidRentals && unpaidRentals.length > 0 && (
-        <div className="card border-red-300 bg-red-50">
-          <div className="mb-3 flex items-center justify-between text-xs font-bold uppercase tracking-wide text-red-700">
-            <span className="flex items-center gap-1.5"><AlertCircle className="h-4 w-4" />{"חובות השכרות"}</span>
-            <span className="rounded-full bg-red-100 px-2.5 py-0.5 text-red-700 normal-case">{unpaidRentals.length}</span>
-          </div>
-          {unpaidRentals.map((u) => (
-            <div key={u.id} className="flex items-center gap-2 border-b border-red-100 py-2 text-[13px] last:border-b-0">
-              <span className="h-2 w-2 rounded-full bg-red-500" />
-              <span className="flex-1 font-medium text-ink">{u.clientName} – {u.itemName}</span>
-              <span className="text-[11px] font-bold text-red-700">{u.amount} ₪</span>
-            </div>
-          ))}
-          <Link href="/dashboard/rentals/manage" className="mt-2 inline-flex items-center gap-1 text-[11px] font-bold text-red-700 hover:underline">
-            {"למעבר לאיחוד השכרות"}
-            <ArrowLeft className="h-3 w-3" />
+      <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
+        {links.map((l) => (
+          <Link
+            key={l.href}
+            href={l.href}
+            className={`${CARD} flex items-center gap-3 px-4 py-3 transition hover:border-teal`}
+          >
+            <l.icon className="h-5 w-5 shrink-0 text-teal" />
+            <span className="min-w-0 flex-1">
+              <span className="block text-[14px] font-extrabold text-ink">{l.label}</span>
+              <span className="block text-[11.5px] text-muted">{l.note}</span>
+            </span>
+            <ArrowLeft className="h-4 w-4 shrink-0 text-muted" />
           </Link>
-        </div>
-      )}
-
-      {lowStockItems && (
-          <div className="card">
-            <div className="mb-3 flex items-center justify-between text-xs font-bold uppercase tracking-wide text-muted">
-              <span className="flex items-center gap-1.5"><Package className="h-4 w-4" />{"מלאי - פריטים בחוסר"}</span>
-              <span className="rounded-full bg-[#f4f6f9] px-2.5 py-0.5 text-ink normal-case">{inventoryItemCount}</span>
-            </div>
-            {lowStockItems.length === 0 ? (
-              <div className="text-sm text-muted">{"אין פריטים בחוסר במלאי"}</div>
-            ) : (
-              lowStockItems.map((it, i) => (
-                <div key={i} className="flex items-center gap-2 border-b border-card-border py-2 text-[13px] last:border-b-0">
-                  <span className="h-2 w-2 rounded-full bg-amber-500" />
-                  <span className="flex-1 font-medium text-ink">{it.name}</span>
-                  <span className="text-[11px] text-muted">
-                    {it.qty}
-                    {" " + "מתוך" + " "}
-                    {it.min}
-                  </span>
-                </div>
-              ))
-            )}
-          </div>
-        )}
-      </div>
-      <div className="card">
-        <div className="mb-3 flex items-center justify-between text-xs font-bold uppercase tracking-wide text-muted">
-          <span className="flex items-center gap-1.5"><CheckCircle2 className="h-4 w-4" />{"משימות לטיפול"}</span>
-          <span className="rounded-full bg-[#f4f6f9] px-2.5 py-0.5 text-ink normal-case">0</span>
-        </div>
-        <div className="text-sm text-muted">{"ריכוז משימות ייבנה לכל אורך הפיתוח, לפי קטגוריה וצבע"}</div>
-      </div>
-      <div className="card">
-        <div className="mb-3 flex items-center justify-between text-xs font-bold uppercase tracking-wide text-muted">
-          <span className="flex items-center gap-1.5"><AlertTriangle className="h-4 w-4" />{"התראות"}</span>
-          <span className="rounded-full bg-[#f4f6f9] px-2.5 py-0.5 text-ink normal-case">0</span>
-        </div>
-        <div className="text-sm text-muted">{"התראות יופיעו כאן בהמשך הפיתוח"}</div>
+        ))}
       </div>
     </div>
   );
