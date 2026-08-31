@@ -19,8 +19,6 @@ import { loadMovements, type MovementsData } from "@/lib/accounting-entries-data
 import { loadBranchCard } from "@/lib/business-ledger";
 import { AccountingTabs } from "../../accounting-tabs";
 import { EntryList } from "../../entry-list";
-import { AddBranchExpense } from "../add-branch-expense";
-import { AddBranchIncome } from "../add-branch-income";
 import {
   BranchMiniCards,
   BranchPaybackCard,
@@ -460,22 +458,16 @@ export default async function BranchAccountingOverviewPage({
             modeTabs={<ModeTabs cum={cum} monthlyHref={selfHref(month)} cumHref={selfHref(month, "cum")} />}
           />
 
-          <AddBranchIncome
-            branchId={branch.id}
-            branchName={branch.name}
-            ownerName={ownerName}
-            partnerName={partnerName}
-            hasPartner={hasPartner}
-            restricted={restricted}
-          />
-
-          <AddBranchExpense
-            branch={branch}
-            ownerName={ownerName}
-            partnerName={partnerName}
-            hasPartner={hasPartner}
-            restricted={restricted}
-          />
+          {!restricted && (
+            <section className={`${CARD} px-4 py-3.5 text-[12.5px] leading-relaxed text-muted`}>
+              <b className="text-ink">להוספת הכנסה או הוצאה לסניף הזה</b> — מסך{" "}
+              <Link href="/dashboard/accounting/entries" className="font-bold text-teal underline">
+                רישום ותנועות
+              </Link>
+              , ובוחרים את הסניף כצומת. יש בדיוק מסך אחד במערכת שיוצר כסף (כלל 1); כל מסך אחר —
+              הזה בכללם — מסווג, מפצל ומציג.
+            </section>
+          )}
 
           {!restricted && (
             <section className={`${CARD} px-4 py-3.5`}>
