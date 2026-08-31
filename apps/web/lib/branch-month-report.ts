@@ -1,6 +1,6 @@
 /**
  * The monthly partner statement (דו"ח חודשי) for a single rentals branch: the same numbers the
- * owner sees in the unified table on /dashboard/settlement, itemised and rendered as a
+ * owner sees in the unified table on /dashboard/rentals/accounting, itemised and rendered as a
  * standalone HTML document that can be previewed in the browser or emailed to the branch's
  * partner.
  *

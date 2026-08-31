@@ -26,6 +26,6 @@ export async function saveBranchPolicyAction(branchId: string, formData: FormDat
   await getAdminFirestore().collection("n_branches").doc(branchId).set({ expensePolicy: policy }, { merge: true });
 
   revalidatePath("/dashboard/accounting/policies");
-  revalidatePath("/dashboard/my-expenses");
+  revalidatePath("/dashboard/rentals/my-expenses");
   revalidatePath(`/dashboard/accounting/overview/${branchId}`);
 }

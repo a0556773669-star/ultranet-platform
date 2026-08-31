@@ -42,7 +42,8 @@ function revalidateEverywhere(branchIds: (string | undefined)[] = []) {
   revalidatePath("/dashboard/accounting/overview");
   revalidatePath("/dashboard/accounting/attribute");
   revalidatePath("/dashboard/expenses");
-  revalidatePath("/dashboard/settlement");
+  revalidatePath("/dashboard/rentals/expenses");
+  revalidatePath("/dashboard/rentals/accounting");
   for (const id of branchIds) {
     if (id) revalidatePath(`/dashboard/accounting/overview/${id}`);
   }

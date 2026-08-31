@@ -17,8 +17,8 @@
  * to keep in sync, nothing to re-create on edit, and nothing that can drift.
  *
  * WHY THE FUNCTION STAYS
- * Creating is now a no-op, kept so the remaining call sites keep working untouched and simply
- * stop producing copies. Deleting stays real:
+ * Creating is now a no-op, kept so the eight call sites across the rentals, computer-rooms and
+ * import screens keep working untouched and simply stop producing copies. Deleting stays real:
  * mirrors written before this change still exist in Firestore, and an expense being deleted must
  * still take its old copy with it. The leftovers are listed on the integrity screen and can be
  * removed in one action (lib/integrity.ts: deleteLeftoverMirrors).
