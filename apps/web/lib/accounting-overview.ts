@@ -14,11 +14,10 @@
  * and stays in book 2 as branch income - the two are different questions, so adding them
  * would be meaningless, not just double counting. Every screen keeps them in separate columns.
  *
- * Inside book 2 each cost is counted from exactly one source, and there is only one source left:
- * the transaction itself. The price list (n_cost_rates) and the shared advertising areas
- * (n_ad_areas) are gone - both were separate ways of expressing "a recurring cost, split somehow",
- * which a transaction already says on its own. With no second source there is nothing to suppress,
- * which is why the whole suppression mechanism went with them.
+ * Inside book 2, each cost is counted from exactly one source: a branch expense the owner typed
+ * by hand (n_fixed_expenses / n_var_expenses) wins, and the matching price-list line
+ * (n_cost_rates) is suppressed for that branch/month and reported in `suppressed` so nothing
+ * silently disappears.
  */
 import type { QueryDocumentSnapshot } from "firebase-admin/firestore";
 import { getAdminFirestore } from "./firebase-admin";
@@ -31,6 +30,9 @@ import type {
   FixedExpense,
   VariableExpense,
   CollectionRoute,
+  CostRate,
+  BranchCostSetting,
+  AdArea,
 } from "@ultranet/shared-types";
 import {
   ownerExpenseBurden,
@@ -39,10 +41,19 @@ import {
   incomeShareToOwner,
   type RentalIncomeLine,
 } from "./branch-accounting";
+import {
+  branchCostSettingId,
+  expenseCoversRate,
+  COMPUTER_RATE_KEY,
+  GRAPHICS_RATE_KEY,
+} from "./cost-rates";
+import { loadCostRates } from "./cost-rates-data";
 import { ITEM_KIND_LABEL, investmentByLocation, type LocationInvestment } from "./assets";
 import { loadAssets } from "./assets-data";
 import { loadTransactionModel, type UnifiedTx } from "./tx-data";
 import { chargesInMonth } from "./tx";
+import { ADS_RATE_KEY, ADS_RATE_MATCH, adAreaForBranch, adAreaNote, splitAdArea } from "./ad-areas";
+import { loadAdAreas } from "./ad-areas-data";
 
 export type OwedBy = "owner" | "partner" | "shared";
 export type PaidBy = "owner" | "partner";
@@ -140,7 +151,7 @@ export interface CostLine {
   paidBy: PaidBy;
   kind: "once" | "monthly";
   /** where the number came from, so the screen can say so out loud */
-  source: "rate" | "fixed" | "variable";
+  source: "rate" | "fixed" | "variable" | "area";
   qtyNote: string;
   /** overrides the "על מי ההוצאה" pill text for splits `owedBy` can't express (e.g. 70/30) */
   owedLabel?: string;
@@ -148,6 +159,11 @@ export interface CostLine {
   partnerShare: number;
   /** positive = the partner owes this to the owner; negative = the owner owes the partner */
   netToOwner: number;
+}
+
+export interface SuppressedLine {
+  rateLabel: string;
+  reason: string;
 }
 
 /**
@@ -213,6 +229,7 @@ export interface BranchMonth {
    *  can answer "the 300 ₪ - based on what?" without opening the full cost table */
   transferDrivers: string[];
   lines: CostLine[];
+  suppressed: SuppressedLine[];
 }
 
 export interface OverviewMonthRow {
@@ -227,6 +244,9 @@ export interface OverviewMonthRow {
 export interface OverviewData {
   months: string[];
   branches: Branch[];
+  rates: CostRate[];
+  usingDefaultRates: boolean;
+  adAreas: AdArea[];
   myByMonth: Map<string, MyMonth>;
   branchMonths: Map<string, BranchMonth>;
   /** branchId -> when its book opens and whether it has started taking money in */
@@ -235,6 +255,9 @@ export interface OverviewData {
   investmentByBranch: Map<string, CostLine[]>;
   /** false while no purchase has been entered yet - the screens then ask for one */
   hasAssetLayer: boolean;
+  /** branchId -> rateKey -> the quantity the system derives on its own, before any manual
+   *  override; the per-branch settings form shows it as the placeholder */
+  autoQtyByBranch: Map<string, Map<string, number>>;
   rows: OverviewMonthRow[];
 }
 
@@ -273,6 +296,10 @@ interface RawData {
   routesById: Map<string, CollectionRoute>;
   /** the unified transaction model - the flow book is derived from it, never stored */
   transactions: UnifiedTx[];
+  rates: CostRate[];
+  usingDefaultRates: boolean;
+  settings: Map<string, BranchCostSetting>;
+  adAreas: AdArea[];
   /** שכבה 2: real per-branch investment, from where the items physically are */
   investmentByBranch: Map<string, LocationInvestment>;
   /** true once at least one real purchase exists - before that, there is nothing to show */
@@ -301,6 +328,8 @@ async function loadRaw(): Promise<RawData> {
     variableSnap,
     routesSnap,
     model,
+    ratesData,
+    adAreas,
     assets,
   ] = await Promise.all([
     db.collection("n_branches").get(),
@@ -312,6 +341,8 @@ async function loadRaw(): Promise<RawData> {
     db.collection("n_var_expenses").get(),
     db.collection("n_collection_routes").get(),
     loadTransactionModel(),
+    loadCostRates(),
+    loadAdAreas(),
     loadAssets(),
   ]);
 
@@ -330,6 +361,10 @@ async function loadRaw(): Promise<RawData> {
     variableByBranch: groupBy(variableSnap.docs.map((d) => doc<VariableExpense>(d))),
     routesById,
     transactions: model.transactions,
+    rates: ratesData.rates,
+    usingDefaultRates: ratesData.usingDefaults,
+    settings: ratesData.settingsByBranchRate,
+    adAreas,
     investmentByBranch: investmentByLocation(assets.items),
     hasAssetLayer: assets.items.length > 0,
   };
@@ -514,6 +549,7 @@ function emptyBranchMonth(branchId: string, month: string, status: BranchMonthSt
     transferIncomePart: 0,
     transferDrivers: [],
     lines: [],
+    suppressed: [],
   };
 }
 
@@ -536,6 +572,89 @@ function branchIncomeLines(b: Branch, raw: RawData, month: string): RentalIncome
     lines.push({ amount: i.amount || 0, collectedByOwner: i.collectedByOwner ?? false });
   }
   return lines;
+}
+
+/** Text of every hand-entered expense of this branch in this month, for duplicate detection. */
+function manualExpenseTexts(b: Branch, raw: RawData, month: string): string[] {
+  const texts: string[] = [];
+  for (const e of raw.fixedByBranch.get(b.id) ?? []) {
+    if (!e.startDate || e.startDate.slice(0, 7) > month) continue;
+    if (e.endDate && e.endDate.slice(0, 7) < month) continue;
+    texts.push(`${e.name ?? ""} ${e.category ?? ""}`);
+  }
+  for (const e of raw.variableByBranch.get(b.id) ?? []) {
+    if (monthOf(e) !== month) continue;
+    texts.push(`${e.desc ?? ""} ${e.category ?? ""}`);
+  }
+  return texts;
+}
+
+function resolveQty(
+  rate: CostRate,
+  b: Branch,
+  raw: RawData,
+  setting: BranchCostSetting | undefined,
+): { qty: number; note: string } {
+  if (setting?.qty != null) return { qty: setting.qty, note: "כמות שהוגדרה ידנית לסניף" };
+  const laptops = raw.laptopsByBranch.get(b.id) ?? [];
+  const sticks = raw.sticksByBranch.get(b.id) ?? [];
+  switch (rate.qtySource) {
+    case "laptops": {
+      // Graphics machines are counted by hand for this branch, and they sit inside the same
+      // n_laptops list - so the plain-computer line has to leave them out or the fleet gets
+      // charged twice. Bags stay on the full count: a graphics machine gets a bag too.
+      const graphics = raw.settings.get(branchCostSettingId(b.id, GRAPHICS_RATE_KEY))?.qty ?? 0;
+      if (rate.key === COMPUTER_RATE_KEY && graphics > 0) {
+        return {
+          qty: Math.max(0, laptops.length - graphics),
+          note: `לפי מספר המחשבים בסניף (${laptops.length}) פחות ${graphics} מחשבי גרפיקה`,
+        };
+      }
+      return { qty: laptops.length, note: "לפי מספר המחשבים הרשומים בסניף" };
+    }
+    case "sticks":
+      return { qty: sticks.length, note: "לפי מספר הסטיקים הרשומים בסניף" };
+    case "sims": {
+      const fromLaptops = laptops.filter((l) => l.simNumber?.trim()).length;
+      const fromSticks = sticks.filter((s) => s.sim?.trim()).length;
+      return { qty: fromLaptops + fromSticks, note: "לפי מספר הסימים (מחשבים + סטיקים)" };
+    }
+    case "one":
+      return { qty: 1, note: "קבוע לחודש" };
+    default:
+      return { qty: 0, note: "כמות ידנית - לא הוגדרה" };
+  }
+}
+
+function resolveRateLine(
+  rate: CostRate,
+  b: Branch,
+  raw: RawData,
+  qty: number,
+  qtyNote: string,
+  kind: "once" | "monthly",
+  label: string,
+): CostLine | null {
+  if (qty <= 0) return null;
+  const setting = raw.settings.get(branchCostSettingId(b.id, rate.key));
+  if (setting?.enabled === false) return null;
+  const unitCost = setting?.unitCost ?? rate.unitCost;
+  if (!unitCost) return null;
+  const hasPartner = branchHasPartner(b);
+  const owedBy: OwedBy = hasPartner ? setting?.owedBy ?? rate.owedBy : "owner";
+  const paidBy: PaidBy = hasPartner ? setting?.paidBy ?? "owner" : "owner";
+  return makeLine({
+    key: rate.key,
+    label,
+    qty,
+    unitCost,
+    total: qty * unitCost,
+    owedBy,
+    paidBy,
+    kind,
+    source: "rate",
+    qtyNote,
+  });
 }
 
 /**
@@ -618,12 +737,13 @@ function preOpenBranchMonth(b: Branch, raw: RawData, month: string, status: Bran
 
 function computeBranchMonth(b: Branch, raw: RawData, activity: BranchActivity, month: string): BranchMonth {
   const status = monthStatus(activity, month);
-  // Not running yet (or already closed): real costs still count, the transfer does not.
+  // Not running yet: real costs still count, the recurring price list and the transfer do not.
   if (status !== "active") return preOpenBranchMonth(b, raw, month, status);
 
   const hasPartner = branchHasPartner(b);
   const ownerPct = branchOwnerPct(b);
   const lines: CostLine[] = [];
+  const suppressed: SuppressedLine[] = [];
 
   // --- hand-entered branch expenses: always counted, they are the source of truth ---
   for (const e of raw.fixedByBranch.get(b.id) ?? []) {
@@ -666,6 +786,61 @@ function computeBranchMonth(b: Branch, raw: RawData, activity: BranchActivity, m
     );
   }
 
+  const texts = manualExpenseTexts(b, raw, month);
+
+  // --- shared advertising campaign: one campaign for a whole city, split between its branches.
+  // The only automatic advertising line there is - advertising left the price list because the
+  // amount changes every month. A branch that already typed an advertising expense of its own
+  // keeps that one, and the campaign line is dropped so it is never counted twice. ---
+  const area = adAreaForBranch(raw.adAreas, b.id, month);
+  const manualAds = texts.some((t) => expenseCoversRate(t, ADS_RATE_MATCH));
+  const adsFromArea = Boolean(area) && !manualAds;
+  if (area && adsFromArea) {
+    const split = splitAdArea(area);
+    if (split.perBranchLineTotal > 0) {
+      lines.push(
+        makeLine(
+          {
+            key: ADS_RATE_KEY,
+            label: `פרסום — ${area.name}`,
+            qty: 1,
+            unitCost: split.perBranchLineTotal,
+            total: split.perBranchLineTotal,
+            owedBy: hasPartner ? "shared" : "owner",
+            paidBy: hasPartner ? area.paidBy ?? "owner" : "owner",
+            kind: "monthly",
+            source: "area",
+            qtyNote: adAreaNote(area, split),
+            owedLabel: hasPartner ? `${split.ownerPct}% / ${100 - split.ownerPct}%` : undefined,
+          },
+          hasPartner ? split.perBranchOwnerShare : split.perBranchLineTotal,
+        ),
+      );
+    }
+  }
+
+  // --- price-list lines, but only where nothing hand-entered already covers them ---
+  for (const rate of raw.rates) {
+    const covering = texts.find((t) => expenseCoversRate(t, rate));
+    if (covering) {
+      suppressed.push({
+        rateLabel: rate.label,
+        reason: `כבר קיימת הוצאה ידנית בסניף: "${covering.trim()}"`,
+      });
+      continue;
+    }
+    // Only recurring charges can reach a branch's operating book at all. The price list no
+    // longer holds one-time equipment rates (see isRetiredRate): equipment is capital, it is
+    // valued from the real invoices in the asset layer, and it never enters this book (כלל 7).
+    // The old "מחשב (נרכש החודש)" line - a flat estimate charged in whichever month a machine
+    // happened to be added - is gone with them.
+    if (rate.kind !== "monthly") continue;
+    const setting = raw.settings.get(branchCostSettingId(b.id, rate.key));
+    const { qty, note } = resolveQty(rate, b, raw, setting);
+    const line = resolveRateLine(rate, b, raw, qty, note, "monthly", rate.label);
+    if (line) lines.push(line);
+  }
+
   const incomeLines = branchIncomeLines(b, raw, month);
   const income = incomeLines.reduce((s, l) => s + l.amount, 0);
   const expense = lines.reduce((s, l) => s + l.total, 0);
@@ -694,6 +869,7 @@ function computeBranchMonth(b: Branch, raw: RawData, activity: BranchActivity, m
     transferIncomePart,
     transferDrivers,
     lines,
+    suppressed,
   };
 }
 
@@ -761,8 +937,13 @@ export async function loadAccountingOverview(endMonth: string, monthCount = 12):
   }
 
   const investmentByBranch = new Map<string, CostLine[]>();
+  const autoQtyByBranch = new Map<string, Map<string, number>>();
   for (const b of branches) {
     investmentByBranch.set(b.id, computeInvestment(b, raw));
+    const perRate = new Map<string, number>();
+    // deliberately passing no setting: this is the derived value the override would replace
+    for (const rate of raw.rates) perRate.set(rate.key, resolveQty(rate, b, raw, undefined).qty);
+    autoQtyByBranch.set(b.id, perRate);
   }
 
   const rows: OverviewMonthRow[] = months.map((m) => {
@@ -797,10 +978,14 @@ export async function loadAccountingOverview(endMonth: string, monthCount = 12):
     months,
     branches,
     hasAssetLayer: raw.hasAssetLayer,
+    rates: raw.rates,
+    usingDefaultRates: raw.usingDefaultRates,
+    adAreas: raw.adAreas,
     myByMonth,
     branchMonths,
     activityByBranch,
     investmentByBranch,
+    autoQtyByBranch,
     rows,
   };
 }

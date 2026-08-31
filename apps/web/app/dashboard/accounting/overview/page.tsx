@@ -172,6 +172,15 @@ export default async function AccountingOverviewPage({
         />
       </div>
 
+      {data.usingDefaultRates && (
+        <div className="mb-3 rounded-card border border-[#f0dcb8] bg-[#fdf3e3] px-4 py-3 text-[12.5px] font-bold text-[#7a4a12]">
+          התעריפון עדיין לא נשמר במערכת — כרגע בשימוש ערכי ברירת המחדל (מחשב 1,200 ₪ · תיק 50 ₪ · סטיק 120 ₪ ·
+          סינון וגלישה 70 ₪ · פרסום 600 ₪ · הדפסות 20 ₪).{" "}
+          <Link href="/dashboard/accounting/rates" className="underline">
+            לפתיחת התעריפון ועריכתו
+          </Link>
+        </div>
+      )}
 
       {/* The per-month "תזרים" cards used to sit here. They duplicated the personal ledger card
           further down and read 0 whenever nothing had been entered that month, so the screen

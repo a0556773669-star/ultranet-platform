@@ -10,6 +10,7 @@ type SyncedUserFields = {
   role?: string;
   branchId?: string;
   perms?: unknown;
+  viewClientBranchIds?: unknown;
 };
 
 /**
@@ -153,6 +154,7 @@ export const authOptions: NextAuthOptions = {
         token.role = (user as { role?: string }).role;
         token.branchId = (user as { branchId?: string }).branchId;
         token.perms = (user as { perms?: unknown }).perms ?? null;
+        token.viewClientBranchIds = (user as { viewClientBranchIds?: unknown }).viewClientBranchIds ?? [];
         (token as { branchSyncedAt?: number }).branchSyncedAt = Date.now();
         return token;
       }
@@ -167,6 +169,7 @@ export const authOptions: NextAuthOptions = {
             token.role = data.role;
             token.branchId = data.branchId;
             token.perms = data.perms ?? null;
+            token.viewClientBranchIds = data.viewClientBranchIds ?? [];
           }
         } catch {
           // ignore transient Firestore errors; keep existing cached token values
@@ -180,6 +183,7 @@ export const authOptions: NextAuthOptions = {
                             (session.user as { role?: unknown }).role = token.role;
                             (session.user as { branchId?: unknown }).branchId = token.branchId;
                             (session.user as { perms?: unknown }).perms = token.perms ?? null;
+        (session.user as { viewClientBranchIds?: unknown }).viewClientBranchIds = token.viewClientBranchIds ?? [];
                   }
                   return session;
           },
