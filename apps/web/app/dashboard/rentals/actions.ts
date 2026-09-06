@@ -6,7 +6,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { getAdminFirestore } from "@/lib/firebase-admin";
 import { FieldValue } from "firebase-admin/firestore";
-import { resolveEzcountCreds, createEzcountReceipt } from "@/lib/ezcount";
+import { resolveEzcountCreds, createEzcountReceipt, EZCOUNT_DOC_TYPES } from "@/lib/ezcount";
 import type { RentalClient, Laptop, Stick, Rental, Branch } from "@ultranet/shared-types";
 import { parseClientsWorkbook } from "@/lib/client-excel";
 import {
@@ -326,6 +326,8 @@ export async function issueCashReceiptAction(rentalId: string) {
   }
 
   const amount = roundPrice(rental.finalPrice ?? rental.calcPrice);
+  // רק לתשלום שלא עבר דרך נדרים: עסקה שנסלקה שם כבר קיבלה חשבונית מס קבלה משם,
+  // והפקה נוספת כאן הייתה מייצרת מסמך שני על אותו תשלום.
   const result = await createEzcountReceipt({
     creds,
     amount,
@@ -334,6 +336,7 @@ export async function issueCashReceiptAction(rentalId: string) {
     clientIdNum: client.idNum,
     desc: "תשלום השכרה - מזומן/העברה",
     paymentType: 1,
+    docType: EZCOUNT_DOC_TYPES.taxInvoiceReceipt,
   });
   if (!result.ok) {
     return { ok: false as const, message: result.message };

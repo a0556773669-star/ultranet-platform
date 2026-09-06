@@ -1,9 +1,14 @@
 "use server";
 
 /**
- * הפקת קבלה על הכנסת ניידים, ישירות מהספר הראשי.
+ * הפקת חשבונית מס קבלה על הכנסת ניידים, ישירות מהספר הראשי.
  *
- * הקבלה מופקת ב-EZcount ונשלחת ללקוח במייל באותה קריאה: EZcount מקים את הלקוח אצלו
+ * **ידני בלבד, לעולם לא אוטומטי.** הגבייה עוברת דרך נדרים פלוס, ושם מוגדר שכל עסקה
+ * מפיקה חשבונית מס קבלה בעצמה. הפקה אוטומטית גם מכאן הייתה מייצרת מסמך שני על אותו
+ * תשלום - וזה כבר קרה. לכן הפעולה הזו נקראת רק מלחיצה מפורשת על שורה ספציפית, ורק
+ * לתשלום שלא נסלק דרך נדרים (מזומן, העברה בנקאית, העברה מסניף).
+ *
+ * המסמך מופק ב-EZcount ונשלח ללקוח במייל באותה קריאה: EZcount מקים את הלקוח אצלו
  * לפי השם והמייל שנשלחים כאן (`customer_name` / `customer_email`), ואם יש מייל הוא
  * שולח את המסמך אליו בעצמו - לכן אין כאן שליחת מייל נפרדת, ואין רשימת לקוחות שצריך
  * לתחזק במקביל.
@@ -19,7 +24,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { getAdminFirestore } from "@/lib/firebase-admin";
 import type { AccountingIncome } from "@ultranet/shared-types";
-import { resolveEzcountCreds, createEzcountReceipt } from "@/lib/ezcount";
+import { resolveEzcountCreds, createEzcountReceipt, EZCOUNT_DOC_TYPES, type EzcountDocType } from "@/lib/ezcount";
 
 async function requireOwner() {
   const session = await getServerSession(authOptions);
@@ -49,7 +54,12 @@ export async function issueIncomeReceiptAction(
   const clientIdNum = String(formData.get("clientIdNum") ?? "").trim();
   const paymentTypeRaw = String(formData.get("paymentType") ?? "4");
   const paymentType = paymentTypeRaw === "1" ? 1 : paymentTypeRaw === "3" ? 3 : 4;
-  if (!clientName) return { ok: false, message: "חובה להזין שם לקוח לקבלה" };
+  // ברירת המחדל היא חשבונית מס קבלה; "קבלה בלבד" נבחרת במפורש, למקרה שכבר קיימת חשבונית.
+  const docType: EzcountDocType =
+    String(formData.get("docType") ?? "") === String(EZCOUNT_DOC_TYPES.receiptOnly)
+      ? EZCOUNT_DOC_TYPES.receiptOnly
+      : EZCOUNT_DOC_TYPES.taxInvoiceReceipt;
+  if (!clientName) return { ok: false, message: "חובה להזין שם לקוח למסמך" };
 
   const creds = await resolveEzcountCreds(income.branchId ?? null);
   if (!creds) {
@@ -68,6 +78,7 @@ export async function issueIncomeReceiptAction(
     clientIdNum: clientIdNum || undefined,
     desc: income.desc,
     paymentType,
+    docType,
   });
   if (!result.ok) return { ok: false, message: result.message };
 

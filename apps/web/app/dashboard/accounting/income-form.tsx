@@ -17,7 +17,7 @@ type IncomeType = "credit" | "cash" | "laptops" | "sale";
 const TYPES: { key: IncomeType; label: string; icon: typeof CreditCard; hint: string }[] = [
   { key: "credit", label: "אשראי", icon: CreditCard, hint: "סליקת האשראי של העסק — תאריך וסכום, זה הכל." },
   { key: "cash", label: "מזומן", icon: Banknote, hint: "מזומן שנמשך מקופה של חדר מחשבים — בחר מאיזו קופה." },
-  { key: "laptops", label: "ניידים", icon: Laptop, hint: "כסף שהתקבל מסניף ניידים — בחר סניף וסמן אם הוצאה קבלה." },
+  { key: "laptops", label: "ניידים", icon: Laptop, hint: "כסף שהתקבל מסניף ניידים — בחר סניף וסמן אם כבר יצא מסמך." },
   { key: "sale", label: "מכירת מחשבים", icon: PackageOpen, hint: "מכירת ציוד — אפשר לרשום למי נמכר." },
 ];
 
@@ -128,10 +128,16 @@ export function AddIncomeForm({
         </div>
 
         {type === "laptops" && (
-          <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-card-border bg-[#f8fafc] px-3 py-2 sm:col-span-2">
-            <input type="checkbox" name="receiptIssued" className="h-4 w-4 accent-teal" />
-            <span className="text-xs font-bold text-ink">הוצאנו קבלה</span>
-            <span className="text-[11px] text-muted">— אפשר גם להפיק קבלה מהמערכת אחרי השמירה, מתוך הרשימה למטה.</span>
+          <label className="flex cursor-pointer items-start gap-2 rounded-lg border border-card-border bg-[#f8fafc] px-3 py-2 sm:col-span-2">
+            <input type="checkbox" name="receiptIssued" className="mt-0.5 h-4 w-4 shrink-0 accent-teal" />
+            <span>
+              <span className="block text-xs font-bold text-ink">כבר יצא מסמך</span>
+              <span className="mt-0.5 block text-[11px] leading-snug text-muted">
+                סימון בלבד — לא מפיק כלום. זו האפשרות הנכונה לתשלום שנסלק דרך נדרים פלוס, שכבר
+                הפיק עליו חשבונית מס קבלה. לתשלום שלא עבר דרכו אפשר להפיק מסמך מהרשימה למטה,
+                בלחיצה מפורשת.
+              </span>
+            </span>
           </label>
         )}
       </div>

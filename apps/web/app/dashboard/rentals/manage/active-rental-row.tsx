@@ -172,10 +172,10 @@ export function ActiveRentalRow({
           setPaid(true);
           setPaymentMethod("cash");
         } else {
-          setActionError(result.message ?? "הפקת הקבלה נכשלה");
+          setActionError(result.message ?? "הפקת חשבונית המס קבלה נכשלה");
         }
       } catch (e) {
-        setActionError(e instanceof Error ? e.message : "הפקת הקבלה נכשלה");
+        setActionError(e instanceof Error ? e.message : "הפקת חשבונית המס קבלה נכשלה");
       } finally {
         setIssuingReceipt(false);
       }
@@ -201,8 +201,13 @@ export function ActiveRentalRow({
   function handleChargeSuccess(receiptPdfLink?: string, receiptError?: string) {
     // הכסף כבר חויב בפועל אצל נדרים פלוס בשלב הזה - אסור לעצור כאן גם אם חסר
     // נימוק למחיר ידני; ממשיכים לסמן שולם ולסגור, ורק מציגים שגיאה אם הסגירה עצמה נכשלת.
+    //
+    // `receiptPdfLink`/`receiptError` מגיעים ריקים תמיד, ובכוונה: `/api/rentals/charge` לא
+    // מפיק שום מסמך. נדרים פלוס מוגדר להפיק חשבונית מס קבלה בעצמו על כל עסקה שעוברת דרכו,
+    // והפקה נוספת כאן הייתה מייצרת מסמך שני על אותו תשלום. הפרמטרים נשארו כדי לשאת קישור
+    // למסמך שנדרים יחזיר בעתיד - לא כדי שמישהו יחווט לכאן הפקה משלנו.
     setActionError(
-      receiptError ? `החיוב בוצע בהצלחה, אך הפקת הקבלה נכשלה: ${receiptError}` : null
+      receiptError ? `החיוב בוצע בהצלחה, אך הפקת המסמך נכשלה: ${receiptError}` : null
     );
     setPaid(true);
     setPaymentMethod("nedarim");
@@ -412,7 +417,7 @@ export function ActiveRentalRow({
                         onClick={handleIssueCashReceipt}
                         className={`${BTN} bg-[#f4f6f9] text-ink hover:bg-[#e9edf3]`}
                       >
-                        {issuingReceipt ? "מפיק קבלה..." : "קבלה (מזומן/העברה)"}
+                        {issuingReceipt ? "מפיק מסמך..." : "חשבונית מס קבלה (מזומן/העברה)"}
                       </button>
                     )}
                     {hasRoute && (
@@ -422,7 +427,7 @@ export function ActiveRentalRow({
                         onClick={() => handleMarkPaid("route")}
                         className={`${BTN} bg-[#f4f6f9] text-ink hover:bg-[#e9edf3]`}
                       >
-                        גבייה + קבלה דרך מסלול
+                        סמן כשולם (מסלול גבייה)
                       </button>
                     )}
                     {canCharge && canChargeNow && (

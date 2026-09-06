@@ -46,6 +46,23 @@ export async function resolveEzcountCreds(branchId?: string | null): Promise<Ezc
 
 const EZCOUNT_API = "https://api.ezcount.co.il/api/createDoc";
 
+/**
+ * סוג המסמך שמופק ב-EZcount.
+ *
+ * 320 = **חשבונית מס קבלה** — מסמך אחד שגם מחייב וגם מאשר תשלום. זה מה שהעסק מפיק בפועל,
+ * וזה גם מה שנדרים פלוס מפיק אוטומטית על כל עסקה שעוברת דרכו.
+ * 400 = **קבלה** בלבד — אישור תשלום ללא חיוב, לשימוש במקרה שכבר קיימת חשבונית נפרדת.
+ *
+ * ברירת המחדל היא 320 בכוונה: מסמך מסוג 400 על תשלום שכבר קיבל חשבונית מס קבלה מנדרים
+ * יוצר **שני מסמכים על אותו תשלום** — וזה בדיוק מה שקרה בעבר.
+ */
+export const EZCOUNT_DOC_TYPES = {
+  taxInvoiceReceipt: 320,
+  receiptOnly: 400,
+} as const;
+
+export type EzcountDocType = (typeof EZCOUNT_DOC_TYPES)[keyof typeof EZCOUNT_DOC_TYPES];
+
 export type EzcountReceiptParams = {
   creds: EzcountCreds;
   amount: number;
@@ -56,15 +73,24 @@ export type EzcountReceiptParams = {
   /** 1 cash, 3 credit card, 4 bank transfer - per EZcount payment_type table */
   paymentType: 1 | 3 | 4;
   cardLast4?: string;
+  /** ברירת מחדל: חשבונית מס קבלה (320). ראה `EZCOUNT_DOC_TYPES`. */
+  docType?: EzcountDocType;
 };
 
 export type EzcountReceiptResult =
   | { ok: true; docUuid: string; docNumber: string; pdfLink: string; sentMails: string[] }
   | { ok: false; message: string };
 
-/** Creates a plain receipt (doc type 400, no VAT) via EZcount and emails it to the client if an email is on file. */
+/**
+ * מפיק מסמך ב-EZcount ושולח אותו ללקוח במייל אם יש כתובת.
+ *
+ * **לעולם לא נקרא אוטומטית.** כל שלושת מקומות הקריאה הם לחיצת כפתור מפורשת, וזו לא
+ * מקריות: הגבייה עוברת דרך נדרים פלוס, ושם מוגדר שכל עסקה מפיקה חשבונית מס קבלה בעצמה.
+ * הפקה אוטומטית גם מכאן הייתה יוצרת מסמך שני על אותו תשלום.
+ */
 export async function createEzcountReceipt(params: EzcountReceiptParams): Promise<EzcountReceiptResult> {
   const { creds, amount, clientName, clientEmail, clientIdNum, desc, paymentType, cardLast4 } = params;
+  const docType: EzcountDocType = params.docType ?? EZCOUNT_DOC_TYPES.taxInvoiceReceipt;
 
   const payment: Record<string, unknown> = {
     payment_type: paymentType,
@@ -85,7 +111,7 @@ export async function createEzcountReceipt(params: EzcountReceiptParams): Promis
     // for a single-business account (not proxying other EZcount users) this is
     // just the account's own api_key.
     created_by_api_key: creds.apiKey,
-    type: 400,
+    type: docType,
     customer_name: clientName,
     customer_email: clientEmail || undefined,
     customer_crn: clientIdNum || undefined,

@@ -12,11 +12,13 @@ const FIELD =
 const LABEL = "mb-1 block text-xs font-semibold text-muted";
 
 /**
- * הפקת קבלה על שורת הכנסת ניידים.
+ * הפקת חשבונית מס קבלה על שורת הכנסת ניידים.
  *
- * שני מסלולים שונים בכוונה: הכפתור הראשי מפיק קבלה אמיתית ב-EZcount ושולח אותה במייל
- * ללקוח, והתיבה שלצידו רק מסמנת "כבר הוצאתי קבלה" - כי לפעמים הקבלה כבר יצאה במקום אחר,
- * ואילוץ להפיק אחת נוספת רק כדי לסמן וי היה יוצר מסמך כפול בספרים.
+ * שני מסלולים שונים בכוונה, וההבחנה ביניהם היא כל הפואנטה: הכפתור מפיק מסמך אמיתי
+ * ב-EZcount ושולח אותו במייל ללקוח, והתיבה שלצידו **רק מסמנת** "כבר יצא מסמך" בלי להפיק
+ * דבר. רוב התשלומים כאן נסלקו דרך נדרים פלוס, שמפיק חשבונית מס קבלה בעצמו על כל עסקה —
+ * ולכן עליהם מסמנים את התיבה. הפקה כאן היא לתשלומים שלא עברו דרכו: מזומן, העברה בנקאית,
+ * או העברה חודשית מסניף.
  */
 export function IssueReceiptButton({
   incomeId,
@@ -44,8 +46,8 @@ export function IssueReceiptButton({
         router.refresh();
         showSuccess(
           res.sentTo.length > 0
-            ? `קבלה ${res.docNumber} הופקה ונשלחה ל-${res.sentTo.join(", ")}`
-            : `קבלה ${res.docNumber} הופקה (לא נשלח מייל — לא הוזנה כתובת)`,
+            ? `מסמך ${res.docNumber} הופק ונשלח ל-${res.sentTo.join(", ")}`
+            : `מסמך ${res.docNumber} הופק (לא נשלח מייל — לא הוזנה כתובת)`,
         );
       } else {
         showError(res.message);
@@ -70,11 +72,14 @@ export function IssueReceiptButton({
         {receiptDocNumber ? (
           <span className="flex items-center gap-1 rounded-full bg-teal-bg px-2 py-0.5 text-[10px] font-extrabold text-teal-dark">
             <Check className="h-3 w-3" />
-            קבלה {receiptDocNumber}
+            מסמך {receiptDocNumber}
           </span>
         ) : (
           <>
-            <label className="flex cursor-pointer items-center gap-1 text-[10.5px] font-bold text-muted">
+            <label
+              className="flex cursor-pointer items-center gap-1 text-[10.5px] font-bold text-muted"
+              title="סימון בלבד — לא מפיק שום מסמך. זו האפשרות הנכונה לתשלום שנסלק דרך נדרים פלוס, שכבר הפיק עליו חשבונית מס קבלה."
+            >
               <input
                 type="checkbox"
                 checked={receiptIssued}
@@ -82,15 +87,16 @@ export function IssueReceiptButton({
                 onChange={(e) => toggleManual(e.target.checked)}
                 className="h-3.5 w-3.5 accent-teal"
               />
-              קבלה
+              יצא מסמך
             </label>
             <button
               type="button"
               onClick={() => setOpen(true)}
+              title="מפיק מסמך אמיתי ב-EZcount. רק לתשלום שלא נסלק דרך נדרים פלוס."
               className="flex items-center gap-1 rounded-lg border border-card-border bg-white px-2 py-0.5 text-[10.5px] font-bold text-ink transition hover:border-teal hover:text-teal"
             >
               <Receipt className="h-3 w-3" />
-              הפק ושלח
+              הפק מסמך
             </button>
           </>
         )}
@@ -102,13 +108,25 @@ export function IssueReceiptButton({
             <div className="mb-3 flex items-center justify-between">
               <h2 className="flex items-center gap-1.5 text-base font-extrabold text-ink">
                 <Receipt className="h-4 w-4" />
-                הפקת קבלה על {Math.round(amount).toLocaleString("he-IL")} ₪
+                הפקת מסמך על {Math.round(amount).toLocaleString("he-IL")} ₪
               </h2>
               <button type="button" onClick={() => setOpen(false)} className="text-muted transition hover:text-ink">
                 <X className="h-4 w-4" />
               </button>
             </div>
             <form action={handleIssue} className="flex flex-col gap-2.5">
+              <p className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-[11.5px] leading-relaxed text-amber-900">
+                <b>רק לתשלום שלא נסלק דרך נדרים פלוס.</b> נדרים מפיק חשבונית מס קבלה בעצמו על
+                כל עסקה שעוברת דרכו — הפקה נוספת כאן תיצור מסמך שני על אותו תשלום. לתשלום כזה
+                סמן את התיבה &quot;יצא מסמך&quot; במקום.
+              </p>
+              <div>
+                <label className={LABEL}>סוג המסמך</label>
+                <select name="docType" defaultValue="320" className={FIELD}>
+                  <option value="320">חשבונית מס קבלה</option>
+                  <option value="400">קבלה בלבד (כשכבר קיימת חשבונית)</option>
+                </select>
+              </div>
               <div>
                 <label className={LABEL}>שם הלקוח (יוקם אוטומטית ב-EZcount)</label>
                 <input name="clientName" defaultValue={defaultClientName ?? ""} required className={FIELD} />
