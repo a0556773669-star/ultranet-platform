@@ -78,7 +78,11 @@ export async function sendMonthlyReports(params: {
   skipAlreadySent: boolean;
 }): Promise<BranchSendOutcome[]> {
   const raw = await loadBranchAccountingRawData();
-  const branches = raw.branches.filter((b) => b.branchType === "rentals" && !b.deleted && !b.notStarted);
+  // A branch of mine gets no statement and no transfer instructions: there is nobody on the other
+  // side to instruct. Sending one would tell me to transfer money to myself.
+  const branches = raw.branches.filter(
+    (b) => b.branchType === "rentals" && !b.deleted && !b.notStarted && b.isMine === false,
+  );
 
   const [logoUrl, ownerName, recipients] = await Promise.all([
     loadReportLogoUrl(),

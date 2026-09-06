@@ -1,6 +1,5 @@
 "use client";
 import { useState } from "react";
-import Link from "next/link";
 import type { Branch, BranchRentalPricing, Laptop, Stick } from "@ultranet/shared-types";
 
 const FIELD = "w-full rounded-lg border border-card-border bg-[#f4f6f9] px-3 py-2 text-sm focus:border-teal focus:bg-white focus:outline-none";
@@ -65,11 +64,8 @@ export function LaptopForm({
       <div className="rounded-lg border border-card-border bg-[#f9fafb] p-3">
         <p className="mb-1 text-xs font-bold text-ink">מחיר מיוחד למחשב הזה (₪) — רשות</p>
         <p className="mb-2 text-[11px] text-muted">
-          כל שדה שנשאר ריק מתומחר לפי{" "}
-          <Link href="/dashboard/rentals/pricing" className="font-bold text-teal-dark hover:underline">
-            מחירון הסניף
-          </Link>
-          . למלא כאן רק אם למחשב הזה יש מחיר שונה משאר המחשבים בסניף.
+          כל שדה שנשאר ריק מתומחר לפי מחירון ברירת המחדל של הסניף. למלא כאן רק אם למחשב הזה יש
+          מחיר שונה משאר המחשבים בסניף.
         </p>
         <div className="grid grid-cols-[auto_1fr_1fr] items-center gap-x-3 gap-y-2">
           <span />

@@ -201,6 +201,10 @@ export interface BranchFinancials {
   ownerInvestedToDate: number;
   ownerEarnedToDate: number;
   ownerBalanceToDate: number;
+  /** מה שיצא לי מהכיס בפועל בסניף הזה עד היום - כל שורת הוצאה שאני שילמתי, במלוא הסכום,
+   *  בלי קשר לשאלה על מי החוב. `ownerInvestedToDate` היא השאלה השנייה (החלק שלי בעלות);
+   *  שתיהן נחוצות, כי "כמה הוצאתי" ו"כמה מזה באמת שלי" הם שני מספרים שונים. */
+  ownerPaidCashToDate: number;
   computerProfitTrend: ComputerProfitMonth[];
   /** This month's expense lines the owner paid, valued at the partner's share of them (what the partner owes back). */
   myExpenseThisMonth: number;
@@ -438,6 +442,9 @@ export function computeBranchFinancials(branch: Branch, raw: BranchAccountingRaw
     ownerBalanceToDate:
       incomeLines.reduce((sum, i) => sum + (i.amount * ownerPct) / 100, 0) -
       expenseLines.reduce((sum, e) => sum + e.ownerShare, 0),
+    ownerPaidCashToDate: expenseLines
+      .filter((e) => e.paidBy !== "partner")
+      .reduce((sum, e) => sum + e.amount, 0),
     computerProfitTrend,
     myExpenseThisMonth,
     hisExpenseThisMonth,

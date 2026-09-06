@@ -3,6 +3,7 @@ import { requireModuleAccess } from "@/lib/perms";
 import { getAdminFirestore } from "@/lib/firebase-admin";
 import type { CoworkingStation, Branch } from "@ultranet/shared-types";
 import { createStationAction } from "../actions";
+import { CoworkingTabs } from "../coworking-tabs";
 
 const FIELD = "w-full rounded-lg border border-card-border bg-[#f4f6f9] px-3 py-2 text-sm focus:border-teal focus:bg-white focus:outline-none";
 const LABEL = "mb-1 block text-xs font-semibold text-muted";
@@ -26,6 +27,7 @@ export default async function StationsPage() {
 
   return (
     <div>
+      <CoworkingTabs active="/dashboard/coworking/stations" />
       <h1 className="mb-4 flex items-center gap-1.5 text-[21px] font-extrabold text-ink"><Armchair className="h-5 w-5" />עמדות משרד שיתופי</h1>
 
       <form

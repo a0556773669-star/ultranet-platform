@@ -23,7 +23,9 @@ export default async function ReportPreviewPage({
 }) {
   const session = await requireOwner();
   const raw = await loadBranchAccountingRawData();
-  const branches = raw.branches.filter((b) => b.branchType === "rentals" && !b.deleted);
+  // Same list the monthly run actually mails (lib/branch-report-send.ts): my own branches get no
+  // statement, so previewing one would show a report that will never be sent.
+  const branches = raw.branches.filter((b) => b.branchType === "rentals" && !b.deleted && b.isMine === false);
 
   const month = /^\d{4}-\d{2}$/.test(searchParams?.month ?? "") ? (searchParams!.month as string) : currentMonth();
   const branch = searchParams?.branchId ? branches.find((b) => b.id === searchParams.branchId) : branches[0];

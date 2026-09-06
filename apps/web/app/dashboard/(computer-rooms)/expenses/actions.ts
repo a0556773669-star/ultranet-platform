@@ -7,6 +7,7 @@ import { FieldValue } from "firebase-admin/firestore";
 import type { Branch, FixedExpense, VariableExpense } from "@ultranet/shared-types";
 import { SHARED_EXPENSE_BRANCH_ID } from "@/lib/computer-room-accounting";
 import { createLinkedOwnerLedgerExpense, deleteLinkedOwnerLedgerExpense } from "@/lib/branch-expense-ledger";
+import { countsToMainFromForm } from "@/lib/counts-to-main";
 
 async function requireBranchAccess(branchId: string) {
   const session = await getServerSession(authOptions);
@@ -52,10 +53,11 @@ export async function createFixedExpenseAction(branchId: string, formData: FormD
   const category = String(formData.get("category") ?? "").trim() || undefined;
   const paidBy = String(formData.get("paidBy") ?? "owner").trim() || "owner";
   const owedBy = String(formData.get("owedBy") ?? "owner").trim() || "owner";
+  const countsToMain = countsToMainFromForm(formData);
   if (!name || !startDate) {
     throw new Error("חובה למלא שם ותאריך התחלה");
   }
-  const data: Omit<FixedExpense, "id"> = { branchId, name, amount, startDate, category, paidBy, owedBy };
+  const data: Omit<FixedExpense, "id"> = { branchId, name, amount, startDate, category, paidBy, owedBy, countsToMain };
   await getAdminFirestore().collection("n_fixed_expenses").add(stripUndefined(data));
   revalidatePath(`/dashboard/expenses/${branchId}`);
   revalidatePath("/dashboard/accounting");
@@ -99,7 +101,15 @@ export async function updateFixedExpenseAction(id: string, branchId: string, for
   if (!name || !startDate) {
     throw new Error("חובה למלא שם ותאריך התחלה");
   }
-  const data = { name, amount, startDate, category: category ?? FieldValue.delete(), paidBy, owedBy };
+  const data = {
+    name,
+    amount,
+    startDate,
+    category: category ?? FieldValue.delete(),
+    paidBy,
+    owedBy,
+    countsToMain: countsToMainFromForm(formData),
+  };
   await ref.set(data, { merge: true });
   revalidatePath(`/dashboard/expenses/${branchId}`);
   revalidatePath("/dashboard/accounting");
@@ -145,6 +155,7 @@ export async function createVariableExpenseAction(branchId: string, formData: Fo
     category,
     paidBy,
     owedBy,
+    countsToMain: countsToMainFromForm(formData),
     linkedAhExpenseId,
   };
   await db.collection("n_var_expenses").add(stripUndefined(data));
@@ -194,6 +205,7 @@ export async function updateVariableExpenseAction(id: string, branchId: string, 
     category: category ?? FieldValue.delete(),
     paidBy,
     owedBy,
+    countsToMain: countsToMainFromForm(formData),
     linkedAhExpenseId: linkedAhExpenseId ?? FieldValue.delete(),
   };
   await ref.set(data, { merge: true });

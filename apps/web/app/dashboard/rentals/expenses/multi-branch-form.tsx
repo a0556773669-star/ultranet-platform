@@ -3,10 +3,11 @@
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Layers } from "lucide-react";
-import type { Branch } from "@ultranet/shared-types";
+import type { Branch, MultiBranchExpense } from "@ultranet/shared-types";
 import { useToast } from "@/lib/toast";
 import { DEFAULT_MULTI_BRANCH_OWNER_PCT, splitMultiBranchExpense } from "@/lib/multi-branch-expense";
 import { createMultiBranchExpenseAction } from "./multi-branch-actions";
+import { CountsToMainField } from "@/components/counts-to-main-field";
 
 const FIELD =
   "rounded-lg border border-card-border bg-[#f4f6f9] px-3 py-2 text-sm focus:border-teal focus:bg-white focus:outline-none";
@@ -20,7 +21,13 @@ function money(n: number) {
  * Live preview of the split as you type - imports the same pure splitMultiBranchExpense() the
  * server action and the accounting calc use, so what you see here is exactly what gets charged.
  */
-export function MultiBranchExpenseForm({ branches }: { branches: Branch[] }) {
+export function MultiBranchExpenseForm({
+  branches,
+  module = "rentals",
+}: {
+  branches: Branch[];
+  module?: MultiBranchExpense["module"];
+}) {
   const [amount, setAmount] = useState("");
   const [ownerPct, setOwnerPct] = useState(String(DEFAULT_MULTI_BRANCH_OWNER_PCT));
   const [selected, setSelected] = useState<string[]>([]);
@@ -44,7 +51,7 @@ export function MultiBranchExpenseForm({ branches }: { branches: Branch[] }) {
     }
     startTransition(async () => {
       try {
-        await createMultiBranchExpenseAction(formData);
+        await createMultiBranchExpenseAction(module, formData);
         setAmount("");
         setSelected([]);
         router.refresh();
@@ -108,7 +115,7 @@ export function MultiBranchExpenseForm({ branches }: { branches: Branch[] }) {
       <div className="flex flex-col gap-1.5">
         <span className="text-[11px] font-bold text-muted">על אילו סניפים ({selected.length} נבחרו)</span>
         <div className="flex flex-wrap gap-1.5 rounded-lg border border-card-border bg-[#f8fafc] p-2">
-          {branches.length === 0 && <span className="text-xs text-muted">אין סניפי השכרות פעילים</span>}
+          {branches.length === 0 && <span className="text-xs text-muted">אין סניפים פעילים במודול הזה</span>}
           {branches.map((b) => {
             const on = selected.includes(b.id);
             return (
@@ -140,6 +147,8 @@ export function MultiBranchExpenseForm({ branches }: { branches: Branch[] }) {
           <span className="font-bold">{money(split.perBranch)} לכל סניף</span> ({split.branchCount} סניפים)
         </div>
       )}
+
+      <CountsToMainField />
 
       <button
         type="submit"

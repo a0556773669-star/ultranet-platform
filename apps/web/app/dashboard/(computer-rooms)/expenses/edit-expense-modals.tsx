@@ -6,6 +6,7 @@ import { Pencil, X } from "lucide-react";
 import type { FixedExpense, VariableExpense } from "@ultranet/shared-types";
 import { updateFixedExpenseAction, updateVariableExpenseAction } from "./actions";
 import { useToast } from "@/lib/toast";
+import { CountsToMainField } from "@/components/counts-to-main-field";
 
 const CATEGORIES = ["שכירות", "חשמל ומים", "משכורות", "ציוד ותחזוקה", "שיווק ופרסום", "הדפסות ותקנונים", "ביטוח", "אחר"];
 
@@ -128,6 +129,9 @@ export function EditFixedExpenseModal({
               <PayerFields paidBy={expense.paidBy} owedBy={expense.owedBy} ownerName={ownerName} partnerName={partnerName} />
             )}
             <div className="col-span-2">
+              <CountsToMainField defaultChecked={expense.countsToMain === true} />
+            </div>
+            <div className="col-span-2">
               <button
                 type="submit"
                 disabled={isPending}
@@ -208,6 +212,9 @@ export function EditVariableExpenseModal({
             {isPartner && (
               <PayerFields paidBy={expense.paidBy} owedBy={expense.owedBy} ownerName={ownerName} partnerName={partnerName} />
             )}
+            <div className="col-span-2">
+              <CountsToMainField defaultChecked={expense.countsToMain === true} />
+            </div>
             <div className="col-span-2">
               <button
                 type="submit"

@@ -7,6 +7,8 @@ import type { Branch, FixedExpense, VariableExpense } from "@ultranet/shared-typ
 import { SHARED_EXPENSE_BRANCH_ID } from "@/lib/computer-room-accounting";
 import { getOwnerName, resolveSharedPartnerName, branchPartnerName } from "@/lib/owner-name";
 import { BranchExpenses } from "../branch-expenses";
+import { RecurringExpensesCard } from "@/components/recurring-expenses/recurring-expenses-card";
+import { loadRecurringVariableExpenses } from "@/lib/recurring-expenses";
 
 export default async function ComputerRoomBranchExpensesPage({ params }: { params: { id: string } }) {
   const session = await requireModuleAccess("computers");
@@ -36,9 +38,10 @@ export default async function ComputerRoomBranchExpensesPage({ params }: { param
     partnerName = resolved.partnerName;
   }
 
-  const [fixedSnap, variableSnap] = await Promise.all([
+  const [fixedSnap, variableSnap, recurring] = await Promise.all([
     db.collection("n_fixed_expenses").where("branchId", "==", params.id).get(),
     db.collection("n_var_expenses").where("branchId", "==", params.id).get(),
+    loadRecurringVariableExpenses({ scope: "computers", branchId: params.id }),
   ]);
   const fixedExpenses = fixedSnap.docs
     .map((d) => ({ ...(d.data() as Omit<FixedExpense, "id">), id: d.id }) as FixedExpense)
@@ -73,6 +76,12 @@ export default async function ComputerRoomBranchExpensesPage({ params }: { param
         canAdd={isOwner || isPartner}
         fixedExpenses={visibleFixed}
         variableExpenses={visibleVariable}
+      />
+      <RecurringExpensesCard
+        scope="computers"
+        branchId={params.id}
+        expenses={recurring}
+        canManage={isOwner || isPartner}
       />
     </div>
   );

@@ -1,33 +1,27 @@
 import Link from "next/link";
 
 /**
- * ניווט ההנה"ח — שש לשוניות, לפי סדר שלוש השכבות.
+ * ניווט ההנה"ח הראשית — חמישה מסכים.
  *
- * היו כאן חמש-עשרה, ורובן היו דרכים שונות להזין את אותו שקל: תעריפון, פרסום משותף, שיוך
- * לסניפים וייבוא מאקסל. זו בדיוק הבעיה שמודל שלוש השכבות פתר, ומשנפתרה הן נמחקו.
+ * הגרסה הקודמת החזיקה חמש-עשרה לשוניות, ורובן היו דרכים שונות להזין או להסיק את אותו
+ * שקל: מודל תנועות, ספר תזרים, מזכר הוני, בדיקת שלמות, מדיניות, רכש ומלאי. כולן ניסו
+ * לענות על שאלה אחת - האם הסכום הזה שייך לספר הראשי - וכל אחת ענתה עליה אחרת.
  *
- * מה שנשאר עונה על שאלה אחת כל אחד: איפה הכסף (שכבה 1), מה יש לי (שכבה 2), כמה הרווחתי
- * (שכבה 3), ומי מוודא שהכל מסתדר.
+ * עכשיו התשובה היא דגל שמישהו סימן (`countsToMain`), והמסכים שנשארו הם רק המקומות
+ * שבהם באמת קורה משהו: הספר עצמו, המעקב אחרי הניידים, ההעברות, ההוצאות שלי, ומסך
+ * חד-פעמי לעדכן את מה שכבר היה כאן לפני שהדגל נולד.
  */
 const TABS = [
-  { href: "/dashboard/accounting/entries", label: "רישום ותנועות" },
-  { href: "/dashboard/accounting/overview", label: "סקירה" },
-  { href: "/dashboard/accounting/bottom-line", label: "השורה התחתונה" },
-  { href: "/dashboard/accounting/assets", label: "ציוד" },
-  { href: "/dashboard/accounting/branches", label: "סניפים" },
-  { href: "/dashboard/accounting/integrity", label: "בדיקת שלמות" },
+  { href: "/dashboard/accounting", label: "הספר הראשי" },
+  { href: "/dashboard/accounting/laptop-branches", label: "מעקב סניפים ניידים" },
+  { href: "/dashboard/accounting/transfers", label: "העברות חודשיות" },
+  { href: "/dashboard/accounting/extra-expenses", label: "הוצאות נוספות" },
+  { href: "/dashboard/accounting/legacy", label: "עדכון רטרואקטיבי" },
 ];
 
-const ENTRIES_HREF = "/dashboard/accounting/entries";
-
-/** מסך-בן מדליק את הלשונית של הקבוצה שלו, כך שתמיד ברור איפה נמצאים. */
+/** מסך-בן מדליק את הלשונית של הקבוצה שלו. */
 const TAB_OF: Record<string, string> = {
-  "/dashboard/accounting/purchases": "/dashboard/accounting/assets",
-  "/dashboard/accounting/inventory": "/dashboard/accounting/assets",
-  "/dashboard/accounting/sales": "/dashboard/accounting/assets",
-  "/dashboard/accounting/policies": "/dashboard/accounting/branches",
-  "/dashboard/accounting/review": "/dashboard/accounting/branches",
-  "/dashboard/accounting/routes": "/dashboard/accounting/branches",
+  "/dashboard/accounting/routes": "/dashboard/accounting/extra-expenses",
 };
 
 export function AccountingTabs({ active }: { active: string }) {
@@ -49,14 +43,13 @@ export function AccountingTabs({ active }: { active: string }) {
           </Link>
         ))}
       </div>
-      {current !== ENTRIES_HREF && (
-        <Link
-          href={ENTRIES_HREF}
-          className="whitespace-nowrap rounded-[10px] bg-gradient-to-br from-teal to-teal-light px-4 py-2 text-[13px] font-bold text-white shadow-primary transition hover:opacity-90"
-        >
-          + תנועה חדשה
-        </Link>
-      )}
+      <Link
+        href="/dashboard/accounting/routes"
+        className="whitespace-nowrap rounded-lg border border-card-border bg-white px-3 py-1.5 text-[12px] font-bold text-muted transition hover:border-teal hover:text-teal"
+        title="הגדרות ספקי הסליקה והקבלות"
+      >
+        הגדרות גבייה
+      </Link>
     </div>
   );
 }

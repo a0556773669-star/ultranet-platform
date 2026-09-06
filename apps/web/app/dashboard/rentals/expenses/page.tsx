@@ -1,12 +1,16 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { Banknote, Building2, Layers, ArrowRight } from "lucide-react";
+import { Banknote, Layers } from "lucide-react";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { getAdminFirestore } from "@/lib/firebase-admin";
-import type { Branch, MultiBranchExpense } from "@ultranet/shared-types";
+import type { Branch, FixedExpense, MultiBranchExpense, VariableExpense } from "@ultranet/shared-types";
 import { SHARED_RENTALS_BRANCH_ID } from "@/lib/expense-shared-scope";
 import { MULTI_BRANCH_EXPENSES_COLLECTION, splitOf, multiBranchExpenseNote } from "@/lib/multi-branch-expense";
+import { countsToMain } from "@/lib/counts-to-main";
+import { currentMonth, fixedExpenseAccrued } from "@/lib/main-ledger";
+import { BranchExpenseTable, type BranchExpenseRow } from "@/components/expenses/branch-expense-table";
+import { CountsToMainBadge } from "@/components/counts-to-main-field";
 import { DeleteEntryButton } from "../../accounting/delete-entry-button";
 import { MultiBranchExpenseForm } from "./multi-branch-form";
 import { deleteMultiBranchExpenseAction } from "./multi-branch-actions";
@@ -25,14 +29,40 @@ export default async function ExpensesHomePage() {
   }
 
   const db = getAdminFirestore();
-  const [snap, multiSnap] = await Promise.all([
+  const [snap, fixedSnap, variableSnap, multiSnap] = await Promise.all([
     db.collection("n_branches").where("branchType", "==", "rentals").get(),
+    db.collection("n_fixed_expenses").get(),
+    db.collection("n_var_expenses").get(),
     db.collection(MULTI_BRANCH_EXPENSES_COLLECTION).get(),
   ]);
   const branches = snap.docs
     .map((d) => ({ ...(d.data() as Omit<Branch, "id">), id: d.id }) as Branch)
-    .filter((b) => !b.deleted);
+    .filter((b) => !b.deleted)
+    .sort((a, b) => a.name.localeCompare(b.name, "he", { numeric: true }));
   const branchNameById = new Map(branches.map((b) => [b.id, b.name]));
+
+  const allFixed = fixedSnap.docs.map((d) => ({ ...(d.data() as Omit<FixedExpense, "id">), id: d.id }) as FixedExpense);
+  const allVariable = variableSnap.docs.map(
+    (d) => ({ ...(d.data() as Omit<VariableExpense, "id">), id: d.id }) as VariableExpense,
+  );
+  const upto = currentMonth();
+
+  const rows: BranchExpenseRow[] = branches.map((branch) => {
+    const fixed = allFixed.filter((e) => e.branchId === branch.id);
+    const variable = allVariable.filter((e) => e.branchId === branch.id);
+    let total = 0;
+    let toMain = 0;
+    for (const e of fixed) {
+      const accrued = fixedExpenseAccrued(e, upto);
+      total += accrued;
+      if (countsToMain(e)) toMain += accrued;
+    }
+    for (const e of variable) {
+      total += e.amount || 0;
+      if (countsToMain(e)) toMain += e.amount || 0;
+    }
+    return { branch, fixedCount: fixed.length, variableCount: variable.length, total, toMain };
+  });
 
   const multiExpenses = multiSnap.docs
     .map((d) => ({ ...(d.data() as Omit<MultiBranchExpense, "id">), id: d.id }) as MultiBranchExpense)
@@ -42,47 +72,28 @@ export default async function ExpensesHomePage() {
   return (
     <div className="flex flex-col gap-5">
       <div>
-        <h1 className="mb-4 flex items-center gap-1.5 text-[21px] font-extrabold text-ink">
-          <Banknote className="h-5 w-5" />
-          הוצאות — בחר סניף
-        </h1>
-        <div className="flex flex-col gap-2">
+        <div className="mb-2.5 flex flex-wrap items-center justify-between gap-2">
+          <h1 className="flex items-center gap-1.5 text-[21px] font-extrabold text-ink">
+            <Banknote className="h-5 w-5" />
+            הוצאות — השכרות
+          </h1>
           <Link
             href={`/dashboard/rentals/expenses/${SHARED_RENTALS_BRANCH_ID}`}
-            className="flex items-center justify-between rounded-card border border-dashed border-card-border bg-[#f8fafc] p-4 shadow-card transition hover:bg-[#f1f5f9]"
+            className="flex items-center gap-1.5 text-xs font-bold text-teal hover:underline"
           >
-            <span className="flex items-center gap-1.5 font-bold text-ink">
-              <Layers className="h-4 w-4" />
-              הוצאות משותפות (כל הסניפים)
-            </span>
-            <ArrowRight className="h-4 w-4 text-muted" />
+            <Layers className="h-4 w-4" />
+            הוצאות על כל הסניפים יחד
           </Link>
-          {branches.length === 0 && (
-            <div className="rounded-card border border-card-border bg-white p-5 text-center text-sm text-muted shadow-card">
-              אין עדיין סניפים
-            </div>
-          )}
-          {branches.map((b) => (
-            <Link
-              key={b.id}
-              href={`/dashboard/rentals/expenses/${b.id}`}
-              className="flex items-center justify-between rounded-card border border-card-border bg-white p-4 shadow-card transition hover:bg-[#f8fafc]"
-            >
-              <span className="flex items-center gap-1.5 font-bold text-ink">
-                <Building2 className="h-4 w-4" />
-                {b.name}
-              </span>
-              <span className="flex items-center gap-1.5 text-xs text-muted">
-                {b.isMine === false ? "שותפות" : "קלאסי"}
-                <ArrowRight className="h-4 w-4" />
-              </span>
-            </Link>
-          ))}
         </div>
+        <BranchExpenseTable rows={rows} hrefFor={(id) => `/dashboard/rentals/expenses/${id}`} />
+        <p className="mt-1.5 px-1 text-[11.5px] leading-relaxed text-muted">
+          עמודת <b>&quot;מזה לראשי&quot;</b> היא מה שנספר בהנה&quot;ח הראשית. הוצאה שלא סומנה נשארת בספר של
+          הסניף בלבד ולא נכנסת לשורה התחתונה של העסק.
+        </p>
       </div>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <MultiBranchExpenseForm branches={branches} />
+        <MultiBranchExpenseForm branches={branches} module="rentals" />
 
         <div>
           <div className="mb-2 flex items-center justify-between text-xs font-bold uppercase tracking-wide text-muted">
@@ -100,9 +111,15 @@ export default async function ExpensesHomePage() {
               const split = splitOf(e);
               const bound = deleteMultiBranchExpenseAction.bind(null, e.id);
               return (
-                <div key={e.id} className="flex items-start gap-2.5 border-b border-card-border py-2.5 text-[13px] last:border-b-0">
+                <div
+                  key={e.id}
+                  className="flex items-start gap-2.5 border-b border-card-border py-2.5 text-[13px] last:border-b-0"
+                >
                   <div className="flex-1">
-                    <div className="font-bold text-ink">{e.desc}</div>
+                    <div className="flex items-center gap-1.5 font-bold text-ink">
+                      {e.desc}
+                      <CountsToMainBadge on={countsToMain(e)} />
+                    </div>
                     <div className="mt-0.5 text-[11px] text-muted">
                       {e.date} · {multiBranchExpenseNote(split)}
                       {e.paidBy === "partner" ? " · שילם: השותף" : " · שילם: אני"}

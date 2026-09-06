@@ -3,6 +3,8 @@ import type { FixedExpense, VariableExpense, BranchIncome } from "@ultranet/shar
 import { createFixedExpenseAction, createVariableExpenseAction, addBranchIncomeAction, deleteBranchIncomeAction } from "./actions";
 import { EditFixedExpenseModal, EditVariableExpenseModal } from "./edit-expense-modals";
 import { EndFixedExpenseControl, DeleteFixedExpenseButton, DeleteVariableExpenseButton } from "./expense-action-buttons";
+import { CountsToMainField, CountsToMainBadge } from "@/components/counts-to-main-field";
+import { countsToMain } from "@/lib/counts-to-main";
 
 const CATEGORIES = ["שכירות", "חשמל ומים", "משכורות", "ציוד ותחזוקה", "שיווק ופרסום", "הדפסות ותקנונים", "ביטוח", "אחר"];
 
@@ -147,6 +149,9 @@ export function BranchExpenses({
               </div>
               {isPartner && <PayerFields ownerName={ownerName} partnerName={partnerName} />}
               <div className="col-span-2">
+                <CountsToMainField />
+              </div>
+              <div className="col-span-2">
                 <button type="submit" className={BTN}>+ הוסף הוצאה קבועה</button>
               </div>
             </form>
@@ -185,6 +190,9 @@ export function BranchExpenses({
               </div>
               {isPartner && <PayerFields ownerName={ownerName} partnerName={partnerName} />}
               <div className="col-span-2">
+                <CountsToMainField />
+              </div>
+              <div className="col-span-2">
                 <button type="submit" className={BTN}>+ הוסף הוצאה חד פעמית</button>
               </div>
             </form>
@@ -205,7 +213,7 @@ export function BranchExpenses({
             {activeFixed.map((e) => (
               <div key={e.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-card-border bg-[#f9fafb] p-3">
                 <div>
-                  <p className="text-sm font-bold text-ink">{e.name} — ₪{(e.amount || 0).toLocaleString()}/חודש</p>
+                  <p className="flex items-center gap-1.5 text-sm font-bold text-ink">{e.name} — ₪{(e.amount || 0).toLocaleString()}/חודש<CountsToMainBadge on={countsToMain(e)} /></p>
                   <p className="text-xs text-muted">{e.category || "ללא קטגוריה"} · מתחיל {e.startDate}{isPartner ? ` · ${paymentNote(e.paidBy, e.owedBy, ownerName, partnerName)}` : ""}</p>
                 </div>
                 <div className="flex items-center gap-2">
@@ -224,7 +232,7 @@ export function BranchExpenses({
                 {endedFixed.map((e) => (
                   <div key={e.id} className="flex items-center justify-between gap-2 rounded-lg border border-card-border bg-[#f4f6f9] p-3 opacity-70">
                     <div>
-                      <p className="text-sm font-bold text-ink">{e.name} — ₪{(e.amount || 0).toLocaleString()}/חודש</p>
+                      <p className="flex items-center gap-1.5 text-sm font-bold text-ink">{e.name} — ₪{(e.amount || 0).toLocaleString()}/חודש<CountsToMainBadge on={countsToMain(e)} /></p>
                       <p className="text-xs text-muted">{e.startDate} – {e.endDate}{isPartner ? ` · ${paymentNote(e.paidBy, e.owedBy, ownerName, partnerName)}` : ""}</p>
                     </div>
                     <div className="flex items-center gap-2">
@@ -248,7 +256,7 @@ export function BranchExpenses({
             {variableExpenses.map((e) => (
               <div key={e.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-card-border bg-[#f9fafb] p-3">
                 <div>
-                  <p className="text-sm font-bold text-ink">{e.desc} — ₪{(e.amount || 0).toLocaleString()}</p>
+                  <p className="flex items-center gap-1.5 text-sm font-bold text-ink">{e.desc} — ₪{(e.amount || 0).toLocaleString()}<CountsToMainBadge on={countsToMain(e)} /></p>
                   <p className="text-xs text-muted">{e.category || "ללא קטגוריה"} · {e.date}{isPartner ? ` · ${paymentNote(e.paidBy, e.owedBy, ownerName, partnerName)}` : ""}</p>
                 </div>
                 <div className="flex items-center gap-2">
