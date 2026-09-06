@@ -25,7 +25,9 @@ export default async function EditCollectionRoutePage({ params }: { params: { id
         </h1>
         <AccountingTabs active="/dashboard/accounting/routes" />
       </div>
-      <RouteForm action={boundUpdate} submitLabel="שמירת שינויים" initial={route} />
+      <div className="rounded-card border border-card-border bg-white p-5 shadow-card">
+        <RouteForm action={boundUpdate} submitLabel="שמירת שינויים" initial={route} />
+      </div>
     </div>
   );
 }

@@ -15,7 +15,7 @@ export function RouteForm({
   return (
     <form
       action={action}
-      className="mb-6 grid grid-cols-1 gap-4 rounded-card border border-card-border bg-white p-5 shadow-card sm:grid-cols-2"
+      className="grid grid-cols-1 gap-4 sm:grid-cols-2"
     >
       <div>
         <label className={LABEL}>שם המסלול</label>
