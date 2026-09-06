@@ -10,8 +10,7 @@ import HomeClock from "./home-clock";
 import { getInventorySnapshotAction } from "./(computer-rooms)/inventory/actions";
 import type { Laptop, Rental } from "@ultranet/shared-types";
 import type { BranchKey, InventoryItem } from "@/lib/legacy-inventory";
-import { loadTransactionModel } from "@/lib/tx-data";
-import { flowSnapshot } from "@/lib/business-ledger";
+import { loadMainLedger } from "@/lib/main-ledger";
 
 export default async function DashboardHomePage() {
   const session = await getServerSession(authOptions);
@@ -36,12 +35,17 @@ export default async function DashboardHomePage() {
   } | null = null;
 
   if (has("accounting")) {
-    // Derived from the unified transaction model, exactly like every accounting screen. The
-    // recurring branch expenses and the computer-room setup costs used to be added back on top
-    // here by hand; they are ordinary transactions in the model now, so there is nothing left to
-    // add and nothing that can be added differently in two places.
-    const model = await loadTransactionModel();
-    moneyStats = flowSnapshot(model.transactions, new Date().toISOString().slice(0, 10));
+    // Read from the same ledger the accounting screen shows, so the number on the home page and
+    // the number on /dashboard/accounting can never disagree: both are the sum of the rows
+    // marked countsToMain, and nothing is added back on top here.
+    const ledger = await loadMainLedger();
+    const today = new Date().toISOString().slice(0, 10);
+    moneyStats = {
+      todayIncome: ledger.income.filter((r) => r.date === today).reduce((s, r) => s + r.amount, 0),
+      todayExpenses: ledger.expenses.filter((r) => r.date === today).reduce((s, r) => s + r.amount, 0),
+      monthIncome: ledger.thisMonth.income,
+      monthExpenses: ledger.thisMonth.expense,
+    };
   }
 
   let rentedLaptops: { name: string; startDate: string }[] | null = null;

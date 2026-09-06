@@ -129,6 +129,8 @@ export interface FixedExpense {
   category?: string;
   paidBy?: string;
   owedBy?: string;
+  /** ראה `COUNTS_TO_MAIN_DOC` למטה. הוצאה קבועה נספרת מהחודש של `startDate` והלאה. */
+  countsToMain?: boolean;
 }
 
 /** collection: n_var_expenses */
@@ -143,6 +145,8 @@ export interface VariableExpense {
   owedBy?: string;
     date: string;
     month: string; // YYYY-MM
+  /** ראה `COUNTS_TO_MAIN_DOC` למטה. */
+  countsToMain?: boolean;
   /** id of the matching n_ah_expenses doc auto-created for the owner's economic burden
    *  (ownerExpenseBurden of amount/owedBy) when this expense was added; undefined if the
    *  owner's burden was 0 (e.g. owedBy === "partner"). Deleted together with this expense. */
@@ -421,8 +425,8 @@ export interface AdArea {
  */
 export interface MultiBranchExpense {
   id: string;
-  /** which module's branches this expense belongs to (rentals for now) */
-  module: "rentals";
+  /** which module's branches this expense belongs to */
+  module: "rentals" | "computers" | "coworking";
   desc: string;
   category?: string;
   /** the expense's full cost, before any split */
@@ -437,6 +441,8 @@ export interface MultiBranchExpense {
   date: string;
   /** YYYY-MM the expense is charged in (derived from `date`) */
   month: string;
+  /** ראה `COUNTS_TO_MAIN_DOC` למטה. */
+  countsToMain?: boolean;
   /** id of the matching n_ah_expenses doc auto-created for the owner's share, when the owner
    *  is the one who paid. Deleted together with this expense. */
   linkedAhExpenseId?: string;
@@ -456,6 +462,8 @@ export interface CoworkingPayment {
     date: string;
     paymentMethod?: string;
     collectionRouteId?: string | null;
+    /** ראה `COUNTS_TO_MAIN_DOC`. כשמסומן, התשלום נספר כהכנסה בהנה"ח הראשית. */
+    countsToMain?: boolean;
 }
 
 /** collection: n_cw_clients */
@@ -465,9 +473,13 @@ export interface CoworkingClient {
     name: string;
     phone?: string;
     stationId: string;
+    /** מספר העמדה כפי שהלקוח מכיר אותו. `stationId` הוא המזהה הטכני; זה מה שמוצג. */
+    stationNumber?: string;
     startDate: string;
     endDate?: string;
+    /** העלות החודשית של הלקוח. גובר על `CoworkingStation.price`. */
     customPrice?: number;
+    /** היום בחודש שבו מגיע התשלום. כשלא הוגדר - נגזר מיום ה-`startDate`. */
     payDay?: number;
     payments: CoworkingPayment[];
 }
@@ -490,13 +502,24 @@ export interface AccountingIncome {
     desc: string;
     business: "computers" | "rentals" | "coworking" | "other" | "general";
     /** "other" = a free-category manual entry added from /dashboard/accounting/overview */
-    type: "fixed" | "variable" | "cash" | "laptops" | "credit" | "other";
+    type: "fixed" | "variable" | "cash" | "laptops" | "credit" | "sale" | "other";
     date: string;
     month: string;
     /** set for type "laptops" (rentals branch) and type "cash" (computers branch / till) */
     branchId?: string;
     /** free-text category picked from ACCOUNTING_INCOME_CATEGORIES (apps/web/lib/accounting-categories.ts) */
     category?: string;
+    /** type "sale" (מכירת מחשבים) - למי נמכר */
+    soldTo?: string;
+    /** type "laptops" - האם הוצאנו קבלה על ההכנסה הזו */
+    receiptIssued?: boolean;
+    /** מספר המסמך שחזר מ-EZcount כשהקבלה הופקה דרך המערכת */
+    receiptDocNumber?: string;
+    /** קישור ל-PDF של הקבלה שהופקה */
+    receiptPdfUrl?: string;
+    /** שם ומייל הלקוח שעבורו הופקה הקבלה (נשמר כדי שאפשר יהיה לשלוח שוב) */
+    receiptClientName?: string;
+    receiptClientEmail?: string;
 }
 
 /** collection: n_ah_expenses */
@@ -509,6 +532,10 @@ export interface AccountingExpense {
     month: string;
     /** free-text category picked from ACCOUNTING_EXPENSE_CATEGORIES (apps/web/lib/accounting-categories.ts) */
     category?: string;
+    /** ראה `COUNTS_TO_MAIN_DOC`. שורות "הוצאות נוספות" נוצרות עם `true`; שורות ישנות `undefined`. */
+    countsToMain?: boolean;
+    /** "הוצאות נוספות": רכישה מלאה שתקושר בהמשך לסניפים ללא התחשבנות (רשימת שמות חופשית). */
+    linkedBranchIds?: string[];
 }
 
 /** collection: n_collection_routes */
@@ -1013,3 +1040,87 @@ export type TxFlag =
   | "no_receipt"
   /** dated into a month whose settlement with the partner has already been recorded */
   | "closed_month";
+
+/* ============================================================================
+ * הנה"ח ראשית — הכלל המרכזי
+ * ==========================================================================*/
+
+/**
+ * `COUNTS_TO_MAIN_DOC` — התיעוד של `countsToMain`, שמופיע על כל סוגי ההוצאה וההכנסה.
+ *
+ * לכל שקל בעסק יש שתי שאלות נפרדות, והן לא אותה שאלה:
+ *   1. **על מי הוא נופל בסניף** — זה `paidBy` / `owedBy` / `ownerPct`, וזה חשבון מול שותף.
+ *   2. **האם הוא נכנס לספר הראשי** — זה `countsToMain`, וזה חשבון של העסק מול עצמו.
+ *
+ * עד היום השאלה השנייה נגזרה מהראשונה בכל מסך בדרך משלו, ולכן אותו סכום יכול היה
+ * להיספר פעמיים או בכלל לא. עכשיו היא שדה אחד: הוצאה או הכנסה נכנסת לסה"כ של
+ * `/dashboard/accounting` **אם ורק אם** `countsToMain === true`. אין נוסחה, אין מראה,
+ * אין העתק — יש דגל, והמסך הראשי הוא סכום עליו.
+ *
+ * `undefined` נחשב `false` בכוונה: כל הדאטה ההיסטורי נכנס למצב "לא מתחשבן בראשי",
+ * ומסך "עדכון רטרואקטיבי" (`/dashboard/accounting/legacy`) הוא המקום להחליט עליו
+ * הוצאה-הוצאה. כך שום סכום ישן לא מופיע פתאום בשורה התחתונה בלי שמישהו אמר שהוא שייך.
+ */
+export type CountsToMain = boolean;
+
+/** באיזה מודול נרשמה הוצאה קבועה משתנה / הוצאה נוספת. */
+export type ExpenseScope = "computers" | "rentals" | "coworking" | "main";
+
+/** סכום חודשי בודד של הוצאה קבועה משתנה. */
+export interface RecurringVariableAmount {
+  /** YYYY-MM */
+  month: string;
+  amount: number;
+  /** ISO timestamp של העדכון האחרון לחודש הזה */
+  updatedAt: string;
+  note?: string;
+}
+
+/**
+ * collection: `n_recurring_var_expenses` — **הוצאה קבועה משתנה**.
+ *
+ * חשמל, משכורת מזכירה, מע"מ. זו לא הוצאה קבועה (הסכום משתנה כל חודש) ולא הוצאה שוטפת
+ * (היא חוזרת, ורוצים לראות אותה כשורה אחת לאורך שנה) — זו קטגוריה שלישית, ולכן היא
+ * קולקשן שלישי ולא דגל על אחד משני הקיימים.
+ *
+ * המבנה הוא שורה אחת + סכום לכל חודש (`amounts`). חודש בלי סכום הוא חודש שעדיין לא
+ * עודכן, וזה בדיוק מה שמסך התזכורת מחפש: `missingMonths()` ב-`lib/recurring-expenses.ts`.
+ */
+export interface RecurringVariableExpense {
+  id: string;
+  scope: ExpenseScope;
+  /** הסניף שההוצאה שייכת לו. ריק/`SHARED_*` = כלל-מודולי; לא רלוונטי ב-scope "main". */
+  branchId?: string;
+  name: string;
+  category?: string;
+  /** ההוצאה נספרת מהחודש הזה והלאה */
+  startDate: string;
+  /** הפסקה: מהחודש הזה ואילך כבר לא מבקשים עדכון */
+  endDate?: string;
+  /** סכום ברירת מחדל להצעה בעת עדכון חודש חדש */
+  defaultAmount?: number;
+  /** ראה `COUNTS_TO_MAIN_DOC` */
+  countsToMain?: boolean;
+  paidBy?: string;
+  owedBy?: string;
+  amounts: RecurringVariableAmount[];
+}
+
+/**
+ * collection: `n_partner_payouts` — תשלום שהבעלים העביר לשותף-מחשבים חיצוני
+ * (שלמה גולדשמידט וכיוצא בו), פר חודש.
+ *
+ * מזהה המסמך דטרמיניסטי: `${slug(partnerName)}_${month}`, כך שסימון "העברתי" הוא upsert
+ * ולא יכול ליצור שתי רשומות לאותו חודש. מה שלא סומן פשוט לא קיים כאן — ומצטבר,
+ * כי החישוב ב-`lib/partner-payouts.ts` מחסיר את מה שכן שולם מהמצטבר של כל החודשים.
+ */
+export interface PartnerPayout {
+  id: string;
+  partnerName: string;
+  /** YYYY-MM */
+  month: string;
+  /** כמה שולם בפועל עבור החודש הזה */
+  paidAmount: number;
+  paidAt?: string;
+  note?: string;
+}

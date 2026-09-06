@@ -63,20 +63,31 @@ export function NewCoworkingClientForm({ branches, stations, defaultBranchId, lo
         </select>
       </div>
 
+      <div>
+        <label className={LABEL}>מספר עמדה (כפי שמוצג ללקוח)</label>
+        <input name="stationNumber" className={FIELD} />
+      </div>
+
       <div className="grid grid-cols-2 gap-4">
         <div>
           <label className={LABEL}>תאריך התחלה</label>
           <input type="date" name="startDate" required className={FIELD} />
         </div>
         <div>
-          <label className={LABEL}>יום חיוב בחודש</label>
-          <input type="number" name="payDay" min={1} max={31} className={FIELD} />
+          <label className={LABEL}>תאריך סיום (רק אם כבר הפסיק)</label>
+          <input type="date" name="endDate" className={FIELD} />
         </div>
       </div>
 
-      <div>
-        <label className={LABEL}>מחיר מותאם אישי (לא חובה)</label>
-        <input type="number" name="customPrice" min={0} className={FIELD} />
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <label className={LABEL}>עלות חודשית (לא חובה — ברירת מחדל: מחיר העמדה)</label>
+          <input type="number" name="customPrice" min={0} className={FIELD} />
+        </div>
+        <div>
+          <label className={LABEL}>יום חיוב בחודש (ברירת מחדל: יום ההתחלה)</label>
+          <input type="number" name="payDay" min={1} max={31} className={FIELD} />
+        </div>
       </div>
 
       <button

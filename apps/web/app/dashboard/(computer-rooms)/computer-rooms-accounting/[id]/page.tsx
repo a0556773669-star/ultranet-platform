@@ -68,6 +68,13 @@ export default async function ComputerRoomBranchAccountingPage({ params }: { par
 
       {canAdd && (
         <form action={addIncome} className="flex flex-wrap items-end gap-2.5 rounded-card border border-card-border bg-white p-4 shadow-card">
+          {/* מכוון: אין כאן אמצעי תשלום ואין "מזומן". השורות כאן הן אינדיקציה בלבד - כמה
+              הסניף הזה מחזיר לי - ולא כסף שנספר פעם שנייה. מזומן אמיתי שנמשך מהקופה נרשם
+              פעם אחת בלבד, בהנה"ח הראשית, עם הקופה שממנה נמשך. */}
+          <p className="w-full text-[11px] leading-relaxed text-muted">
+            שורות מעקב בלבד — לא נכנסות להנה&quot;ח הראשית. מזומן שנמשך מהקופה נרשם בהנה&quot;ח
+            הראשית תחת &quot;מזומן&quot;, ושם בוחרים מאיזו קופה.
+          </p>
           <div>
             <label className="mb-1 block text-xs font-semibold text-muted">תאריך</label>
             <input type="date" name="date" defaultValue={todayStr} required className={FIELD} />

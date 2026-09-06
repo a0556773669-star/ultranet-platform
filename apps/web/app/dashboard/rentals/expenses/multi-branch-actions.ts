@@ -6,6 +6,7 @@ import { getAdminFirestore } from "@/lib/firebase-admin";
 import type { Branch, MultiBranchExpense } from "@ultranet/shared-types";
 import { createLinkedOwnerLedgerExpense, deleteLinkedOwnerLedgerExpense } from "@/lib/branch-expense-ledger";
 import { MULTI_BRANCH_EXPENSES_COLLECTION, splitMultiBranchExpense } from "@/lib/multi-branch-expense";
+import { countsToMainFromForm } from "@/lib/counts-to-main";
 
 /**
  * הוצאה חד-פעמית שמתחלקת בין כמה סניפי השכרות, עם אחוז שהבעלים לוקח על עצמו.
@@ -19,15 +20,20 @@ async function requireOwner() {
   return session;
 }
 
-function revalidate(branchIds: string[]) {
-  for (const id of branchIds) revalidatePath(`/dashboard/rentals/expenses/${id}`);
-  revalidatePath("/dashboard/rentals/expenses");
+function revalidate(module: MultiBranchExpense["module"], branchIds: string[]) {
+  const base = module === "computers" ? "/dashboard/expenses" : "/dashboard/rentals/expenses";
+  for (const id of branchIds) revalidatePath(`${base}/${id}`);
+  revalidatePath(base);
   revalidatePath("/dashboard/rentals/accounting");
+  revalidatePath("/dashboard/computer-rooms-accounting");
   revalidatePath("/dashboard/accounting");
   revalidatePath("/dashboard");
 }
 
-export async function createMultiBranchExpenseAction(formData: FormData) {
+export async function createMultiBranchExpenseAction(
+  module: MultiBranchExpense["module"],
+  formData: FormData,
+) {
   await requireOwner();
   const desc = String(formData.get("desc") ?? "").trim();
   const amount = Number(formData.get("amount")) || 0;
@@ -44,10 +50,11 @@ export async function createMultiBranchExpenseAction(formData: FormData) {
 
   // Guard against a branch id that isn't a live rentals branch - a stale checkbox would otherwise
   // create an expense line nothing can ever show or settle.
+  const expectedType = module === "computers" ? "computers" : module === "coworking" ? "coworking" : "rentals";
   const branchDocs = await db.getAll(...branchIds.map((id) => db.collection("n_branches").doc(id)));
   for (const doc of branchDocs) {
     const b = doc.data() as Omit<Branch, "id"> | undefined;
-    if (!b || b.branchType !== "rentals" || b.deleted) throw new Error("אחד הסניפים שנבחרו אינו סניף השכרות פעיל");
+    if (!b || b.branchType !== expectedType || b.deleted) throw new Error("אחד הסניפים שנבחרו אינו סניף פעיל במודול הזה");
   }
 
   // Only the owner's own share reaches the main ledger, and only when the owner fronted the cash
@@ -55,7 +62,7 @@ export async function createMultiBranchExpenseAction(formData: FormData) {
   // amount handed in is already the owner's slice, not the whole expense.
   const { ownerTotal } = splitMultiBranchExpense(amount, ownerPct, branchIds.length);
   const linkedAhExpenseId = await createLinkedOwnerLedgerExpense({
-    business: "rentals",
+    business: expectedType,
     desc: `${desc} — הוצאה משותפת ל-${branchIds.length} סניפים`,
     amount: ownerTotal,
     paidBy,
@@ -64,7 +71,7 @@ export async function createMultiBranchExpenseAction(formData: FormData) {
   });
 
   const data: Omit<MultiBranchExpense, "id"> = {
-    module: "rentals",
+    module,
     desc,
     amount,
     ownerPct,
@@ -72,11 +79,12 @@ export async function createMultiBranchExpenseAction(formData: FormData) {
     paidBy,
     date,
     month: date.slice(0, 7),
+    countsToMain: countsToMainFromForm(formData),
     ...(category ? { category } : {}),
     ...(linkedAhExpenseId ? { linkedAhExpenseId } : {}),
   };
   await db.collection(MULTI_BRANCH_EXPENSES_COLLECTION).add(data);
-  revalidate(branchIds);
+  revalidate(module, branchIds);
 }
 
 export async function deleteMultiBranchExpenseAction(id: string) {
@@ -88,5 +96,5 @@ export async function deleteMultiBranchExpenseAction(id: string) {
   if (!data) throw new Error("ההוצאה לא נמצאה");
   await deleteLinkedOwnerLedgerExpense(data.linkedAhExpenseId);
   await ref.delete();
-  revalidate(data.branchIds ?? []);
+  revalidate(data.module ?? "rentals", data.branchIds ?? []);
 }

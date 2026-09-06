@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Building2, Banknote, Coins, Laptop, Receipt, Tag, Users, ClipboardList, Briefcase, BarChart3, type LucideIcon } from "lucide-react";
+import { Building2, Banknote, Laptop, Receipt, Tag, Users, ClipboardList, Briefcase, BarChart3, type LucideIcon } from "lucide-react";
 
 type TabItem = { href: string; label: string; icon: LucideIcon; ownerOnly?: boolean; branchOnly?: boolean };
 
@@ -15,7 +15,6 @@ const TABS: TabItem[] = [
   // branch of his own and reaches every branch through the accounting module instead.
   { href: "/dashboard/rentals/my-expenses", label: "ההוצאות שלי", icon: Receipt, branchOnly: true },
   { href: "/dashboard/rentals/laptops", label: "מחשבים", icon: Laptop },
-  { href: "/dashboard/rentals/pricing", label: "מחירון", icon: Coins },
   { href: "/dashboard/rentals/labels", label: "מדבקות", icon: Tag },
   { href: "/dashboard/rentals/accounting", label: "הנה\"ח", icon: BarChart3 },
   { href: "/dashboard/rentals/branches", label: "סניפים", icon: Building2, ownerOnly: true },

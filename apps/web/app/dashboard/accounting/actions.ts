@@ -6,6 +6,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { getAdminFirestore } from "@/lib/firebase-admin";
 import { chargeViaRoute } from "@/lib/collection-charge";
+import { countsToMainFromForm } from "@/lib/counts-to-main";
 import type {
   AccountingIncome,
   AccountingExpense,
@@ -30,10 +31,27 @@ function stripUndefined<T extends Record<string, unknown>>(obj: T): T {
   return out;
 }
 
+
+function revalidateMain() {
+  revalidatePath("/dashboard/accounting");
+  revalidatePath("/dashboard/accounting/extra-expenses");
+  revalidatePath("/dashboard/accounting/legacy");
+  revalidatePath("/dashboard/rentals/accounting");
+  revalidatePath("/dashboard");
+}
+
+/**
+ * הוספת הכנסה לספר הראשי — ארבעה סוגים, שדה אחד שמבדיל ביניהם.
+ *
+ * `type` הוא לא תווית תצוגה אלא מה שקובע איזה עוד שדה חייב להגיע: "cash" חייב קופה של
+ * חדר מחשבים, "laptops" חייב סניף ניידים, "sale" מזמין את השאלה למי מכרת, ו-"credit"
+ * לא צריך כלום מלבד תאריך וסכום. לכן הבדיקה כאן היא switch על `type` ולא רשימת שדות
+ * אופציונליים - טופס שנשלח בלי הסניף שלו הוא טופס שבור, לא רשומה חסרה.
+ */
 export async function createIncomeAction(formData: FormData) {
   await requireOwner();
   const db = getAdminFirestore();
-  const type = String(formData.get("type") ?? "cash") as AccountingIncome["type"];
+  const type = String(formData.get("type") ?? "credit") as AccountingIncome["type"];
   const date = String(formData.get("date") ?? "");
   const amount = Number(formData.get("amount") ?? 0);
   if (!date || !amount) {
@@ -42,36 +60,35 @@ export async function createIncomeAction(formData: FormData) {
 
   let business: AccountingIncome["business"] = "general";
   let branchId: string | undefined;
+  let soldTo: string | undefined;
   let desc = String(formData.get("desc") ?? "").trim();
+
+  const branchName = async (id: string) =>
+    ((await db.collection("n_branches").doc(id).get()).data() as { name?: string } | undefined)?.name ?? "";
 
   if (type === "laptops") {
     branchId = String(formData.get("branchId") ?? "").trim();
-    if (!branchId) {
-      throw new Error("נא לבחור סניף ניידים");
-    }
+    if (!branchId) throw new Error("נא לבחור סניף ניידים");
     business = "rentals";
-    if (!desc) {
-      const branchDoc = await db.collection("n_branches").doc(branchId).get();
-      desc = (branchDoc.data() as { name?: string } | undefined)?.name ?? "הכנסת ניידים";
-    }
+    if (!desc) desc = (await branchName(branchId)) || "הכנסת ניידים";
   } else if (type === "cash") {
     branchId = String(formData.get("branchId") ?? "").trim();
-    if (!branchId) {
-      throw new Error("נא לבחור קופה (סניף חדר מחשבים)");
-    }
+    if (!branchId) throw new Error("נא לבחור קופה (סניף חדר מחשבים)");
     business = "computers";
     if (!desc) {
-      const branchDoc = await db.collection("n_branches").doc(branchId).get();
-      const branchName = (branchDoc.data() as { name?: string } | undefined)?.name ?? "";
-      desc = `מזומן מקופה${branchName ? ` — ${branchName}` : ""}`;
+      const name = await branchName(branchId);
+      desc = `מזומן מקופה${name ? ` — ${name}` : ""}`;
     }
-  } else if (type === "credit") {
-    business = "general";
-    if (!desc) desc = "הכנסות אשראי מהעסק";
+  } else if (type === "sale") {
+    business = "computers";
+    soldTo = String(formData.get("soldTo") ?? "").trim() || undefined;
+    if (!desc) desc = soldTo ? `מכירת מחשבים — ${soldTo}` : "מכירת מחשבים";
   } else {
-    // legacy "fixed"/"variable" types - only reachable from old data, no longer created by the UI
-    business = String(formData.get("business") ?? "general") as AccountingIncome["business"];
+    business = "general";
+    if (!desc) desc = "הכנסות אשראי";
   }
+
+  const receiptIssued = formData.get("receiptIssued") === "on";
 
   const data: Omit<AccountingIncome, "id"> = stripUndefined({
     date,
@@ -81,103 +98,60 @@ export async function createIncomeAction(formData: FormData) {
     type,
     month: date.slice(0, 7),
     branchId,
+    soldTo,
+    ...(type === "laptops" ? { receiptIssued } : {}),
   });
   await db.collection("n_ah_income").add(data);
-  revalidatePath("/dashboard/accounting");
-  revalidatePath("/dashboard/accounting/overview");
-  revalidatePath("/dashboard/rentals/accounting");
-}
-
-export async function createExpenseAction(formData: FormData) {
-  await requireOwner();
-  const date = String(formData.get("date") ?? "");
-  const amount = Number(formData.get("amount") ?? 0);
-  if (!date || !amount) {
-    throw new Error("תאריך וסכום הם שדות חובה");
-  }
-  const category = String(formData.get("category") ?? "").trim();
-  const branchId = String(formData.get("branchId") ?? "").trim();
-
-  // A branch was picked -> the expense belongs to that branch's own book (n_var_expenses),
-  // not to the owner's personal ledger. The two books are deliberately never summed together,
-  // so writing it to both would be double counting. See lib/accounting-overview.ts.
-  if (branchId) {
-    const db = getAdminFirestore();
-    const branchDoc = await db.collection("n_branches").doc(branchId).get();
-    if (!branchDoc.exists) {
-      throw new Error("הסניף שנבחר לא נמצא");
-    }
-    await db.collection("n_var_expenses").add({
-      branchId,
-      amount,
-      desc: String(formData.get("desc") ?? "").trim() || category || "הוצאה",
-      date,
-      month: date.slice(0, 7),
-      paidBy: "owner",
-      ...(category ? { category } : {}),
-    });
-    revalidatePath("/dashboard/accounting");
-    revalidatePath("/dashboard/accounting/overview");
-    revalidatePath("/dashboard/accounting/entries");
-    revalidatePath("/dashboard/expenses");
-    revalidatePath("/dashboard/rentals/expenses");
-    return;
-  }
-
-  const data: Omit<AccountingExpense, "id"> = {
-    date,
-    amount,
-    desc: String(formData.get("desc") ?? "").trim(),
-    business: String(formData.get("business") ?? "general") as AccountingExpense["business"],
-    month: date.slice(0, 7),
-    // only written when the form actually offered a category, so the edit modal (which has no
-    // category field) leaves an existing value untouched under { merge: true }
-    ...(category ? { category } : {}),
-  };
-  await getAdminFirestore().collection("n_ah_expenses").add(data);
-  revalidatePath("/dashboard/accounting");
-  revalidatePath("/dashboard/accounting/overview");
-  revalidatePath("/dashboard/rentals/accounting");
+  revalidateMain();
 }
 
 export async function deleteIncomeAction(id: string) {
   await requireOwner();
   await getAdminFirestore().collection("n_ah_income").doc(id).delete();
-  revalidatePath("/dashboard/accounting");
-  revalidatePath("/dashboard/accounting/overview");
-  revalidatePath("/dashboard/rentals/accounting");
+  revalidateMain();
 }
 
-export async function deleteExpenseAction(id: string) {
+/** סימון ידני "הוצאנו קבלה" על שורת הכנסת ניידים, בלי להפיק קבלה דרך המערכת. */
+export async function setIncomeReceiptIssuedAction(id: string, issued: boolean) {
   await requireOwner();
-  await getAdminFirestore().collection("n_ah_expenses").doc(id).delete();
-  revalidatePath("/dashboard/accounting");
-  revalidatePath("/dashboard/accounting/overview");
-  revalidatePath("/dashboard/rentals/accounting");
+  await getAdminFirestore().collection("n_ah_income").doc(id).set({ receiptIssued: issued }, { merge: true });
+  revalidateMain();
 }
 
-export async function updateExpenseAction(id: string, formData: FormData) {
+/**
+ * "הוצאות נוספות" — הוצאה של העסק עצמו, לא של סניף.
+ *
+ * נכתבת ל-`n_ah_expenses` עם `countsToMain: true` כברירת מחדל, כי זו כל הסיבה שהיא
+ * נרשמה כאן ולא במסך ההוצאות של סניף כלשהו. `linkedBranchIds` הוא רשות ולא משנה
+ * שקל: רכישה גדולה שתחולק בהמשך בין סניפים - כדי לזכור לאן היא הלכה פיזית, בלי
+ * שהיא תתחיל להתחשבן מולם.
+ */
+export async function createExtraExpenseAction(formData: FormData) {
   await requireOwner();
   const date = String(formData.get("date") ?? "");
   const amount = Number(formData.get("amount") ?? 0);
-  if (!date || !amount) {
-    throw new Error("תאריך וסכום הם שדות חובה");
-  }
+  if (!date || !amount) throw new Error("תאריך וסכום הם שדות חובה");
   const category = String(formData.get("category") ?? "").trim();
-  const data: Omit<AccountingExpense, "id"> = {
+  const linkedBranchIds = formData.getAll("linkedBranchIds").map((v) => String(v)).filter(Boolean);
+
+  const data: Omit<AccountingExpense, "id"> = stripUndefined({
     date,
     amount,
-    desc: String(formData.get("desc") ?? "").trim(),
+    desc: String(formData.get("desc") ?? "").trim() || category || "הוצאה",
     business: String(formData.get("business") ?? "general") as AccountingExpense["business"],
     month: date.slice(0, 7),
-    // only written when the form actually offered a category, so the edit modal (which has no
-    // category field) leaves an existing value untouched under { merge: true }
+    countsToMain: countsToMainFromForm(formData),
     ...(category ? { category } : {}),
-  };
-  await getAdminFirestore().collection("n_ah_expenses").doc(id).set(data, { merge: true });
-  revalidatePath("/dashboard/accounting");
-  revalidatePath("/dashboard/accounting/overview");
-  revalidatePath("/dashboard/rentals/accounting");
+    ...(linkedBranchIds.length > 0 ? { linkedBranchIds } : {}),
+  });
+  await getAdminFirestore().collection("n_ah_expenses").add(data);
+  revalidateMain();
+}
+
+export async function deleteExtraExpenseAction(id: string) {
+  await requireOwner();
+  await getAdminFirestore().collection("n_ah_expenses").doc(id).delete();
+  revalidateMain();
 }
 
 export async function createCollectionRouteAction(formData: FormData) {
@@ -274,5 +248,5 @@ export async function manualChargeAction(formData: FormData) {
   if (!result.ok) {
     throw new Error(result.message);
   }
-  revalidatePath("/dashboard/accounting");
+  revalidateMain();
 }
