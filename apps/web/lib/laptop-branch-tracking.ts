@@ -7,9 +7,14 @@
  * הם שורות, וחודש שבו הסניף עדיין לא היה קיים נשאר ריק ולא אפס: "לא היה" ו"היה ולא
  * הרוויח" הן שתי תשובות שונות, ואפס היה מוחק את ההבדל.
  *
- * החישוב עצמו נשען על מה שכבר קיים: `computeBranchFinancials` יודע את הרווח הנקי של
- * הבעלים לחודש, ו-`computersActiveInMonth` יודע כמה מחשבים היו באותו חודש (לפי
- * `addedDate` של כל מחשב) - כך שמחשב שנוסף באמצע הדרך מחלק את הרווח רק מהחודש שנוסף בו.
+ * החישוב עצמו נשען על מה שכבר קיים: `computeBranchFinancials` יודע את הרווח של הבעלים
+ * לחודש, ו-`computersActiveInMonth` יודע כמה מחשבים היו באותו חודש (לפי `addedDate` של כל
+ * מחשב) - כך שמחשב שנוסף באמצע הדרך מחלק את הרווח רק מהחודש שנוסף בו.
+ *
+ * **המונה כאן הוא `ownerOperatingProfitThisMonth` ולא `ownerNetProfitThisMonth`**: שורה
+ * שהבעלים שילם והחוב כולה עליו היא רכש, לא עלות תפעול. בלי ההוצאה הזו מהמדד, חודש שנקנו
+ * בו שני מחשבים היה נראה כמו חודש הפסד בסניף שתפקד בדיוק כרגיל - וזו בדיוק השאלה שהטבלה
+ * הזו לא רוצה לענות עליה. "כמה יצא לי מהכיס" נשאלת במקום אחר.
  */
 import type { Branch } from "@ultranet/shared-types";
 import {
@@ -27,6 +32,7 @@ export interface TrackingCell {
   month: string;
   /** null = הסניף לא היה קיים בחודש הזה - התא נשאר ריק */
   profitPerComputer: number | null;
+  /** הרווח התפעולי של הבעלים באותו חודש, בלי שורות רכש שהסניף לא לוקח בהן חלק */
   netProfit: number;
   computerCount: number;
   isHealthy: boolean;
@@ -88,7 +94,7 @@ export function buildLaptopBranchTracking(
       }
       const f = computeBranchFinancials(branch, raw, month);
       const computerCount = computersActiveInMonth(addedDates, month);
-      const netProfit = f.ownerNetProfitThisMonth;
+      const netProfit = f.ownerOperatingProfitThisMonth;
       const perComputer = computerCount > 0 ? netProfit / computerCount : 0;
       return {
         month,

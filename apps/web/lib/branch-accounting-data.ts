@@ -15,8 +15,6 @@ import {
   expenseNetToOwnerFromShares,
   isCollectedByOwner,
   monthsBetween,
-  buildComputerProfitTrend,
-  type ComputerProfitMonth,
 } from "./branch-accounting";
 import { MULTI_BRANCH_EXPENSES_COLLECTION, splitOf } from "./multi-branch-expense";
 
@@ -197,7 +195,18 @@ export interface BranchFinancials {
   expenseToDate: number;
   balanceToDate: number;
   settlementNetToOwner: number; // positive: partner should transfer to owner; negative: owner owes partner
-  ownerNetProfitThisMonth: number; // true owner profit, used for per-computer metric
+  ownerNetProfitThisMonth: number; // true owner profit, including outlays the branch has no part in
+  /**
+   * הרווח התפעולי של הבעלים מהסניף — כמו `ownerNetProfitThisMonth`, אבל **בלי שורות שהסניף
+   * לא לוקח בהן חלק בכלל** (הבעלים שילם, והחוב כולו עליו).
+   *
+   * שורה כזו היא רכש: קניתי מחשב, קניתי ציוד. היא לא עלות תפעול של החודש אלא השקעה בסניף,
+   * ולכן היא מעוותת את המדד שהיא נכנסת אליו — חודש שנקנו בו שני מחשבים היה נראה כמו חודש
+   * הפסד, בזמן שהסניף עצמו תפקד בדיוק כרגיל. זה המספר שמזין את הרווח-פר-מחשב
+   * (`lib/laptop-branch-tracking.ts`); `ownerNetProfitThisMonth` נשאר מה שהוא, כי לשאלה
+   * "כמה באמת יצא לי מהכיס" הוא התשובה הנכונה.
+   */
+  ownerOperatingProfitThisMonth: number;
   ownerInvestedToDate: number;
   ownerEarnedToDate: number;
   ownerBalanceToDate: number;
@@ -205,7 +214,6 @@ export interface BranchFinancials {
    *  בלי קשר לשאלה על מי החוב. `ownerInvestedToDate` היא השאלה השנייה (החלק שלי בעלות);
    *  שתיהן נחוצות, כי "כמה הוצאתי" ו"כמה מזה באמת שלי" הם שני מספרים שונים. */
   ownerPaidCashToDate: number;
-  computerProfitTrend: ComputerProfitMonth[];
   /** This month's expense lines the owner paid, valued at the partner's share of them (what the partner owes back). */
   myExpenseThisMonth: number;
   /** This month's expense lines the partner paid, valued at the owner's share of them (what the owner owes back). */
@@ -351,8 +359,6 @@ export function computeBranchFinancials(branch: Branch, raw: BranchAccountingRaw
   const fixed = raw.fixedByBranch.get(branch.id) ?? [];
   const variable = raw.variableByBranch.get(branch.id) ?? [];
   const rentals = raw.rentalsByBranch.get(branch.id) ?? [];
-  const laptops = raw.laptopsByBranch.get(branch.id) ?? [];
-
   const branchIncome = raw.branchIncomeByBranch.get(branch.id) ?? [];
   const multiBranch = raw.multiBranchByBranch.get(branch.id) ?? [];
 
@@ -381,35 +387,27 @@ export function computeBranchFinancials(branch: Branch, raw: BranchAccountingRaw
   }, 0);
   const settlementExpense = thisMonthExpenses.reduce((sum, e) => sum + lineNetToOwner(e), 0);
 
+  const ownerIncomeThisMonth = thisMonthIncome.reduce((sum, i) => sum + (i.amount * ownerPct) / 100, 0);
   const ownerNetProfitThisMonth =
-    thisMonthIncome.reduce((sum, i) => sum + (i.amount * ownerPct) / 100, 0) -
-    thisMonthExpenses.reduce((sum, e) => sum + e.ownerShare, 0);
+    ownerIncomeThisMonth - thisMonthExpenses.reduce((sum, e) => sum + e.ownerShare, 0);
 
-  // Build a trend of the last 12 months of owner net profit for the per-computer graph.
-  const trendMonths: string[] = [];
-  {
-    const [cy, cm] = month.split("-").map(Number);
-    let y: number = cy || new Date().getFullYear();
-    let m: number = cm || 1;
-    for (let i = 0; i < 12; i++) {
-      trendMonths.unshift(`${y}-${String(m).padStart(2, "0")}`);
-      m -= 1;
-      if (m < 1) {
-        m = 12;
-        y -= 1;
-      }
-    }
-  }
-  const monthlyNetProfits = trendMonths.map((mo) => {
-    const incLines = incomeLines.filter((i) => i.month === mo);
-    const expLines = expenseLines.filter((e) => e.month === mo);
-    const netProfit =
-      incLines.reduce((sum, i) => sum + (i.amount * ownerPct) / 100, 0) -
-      expLines.reduce((sum, e) => sum + e.ownerShare, 0);
-    return { month: mo, netProfit };
-  });
-  const addedDates = laptops.map((l) => l.addedDate);
-  const computerProfitTrend = buildComputerProfitTrend(monthlyNetProfits, addedDates);
+  /**
+   * שורה שהבעלים שילם והחוב כולה עליו היא שורה שהסניף לא לוקח בה חלק - `ownerShare === amount`
+   * ו-`paidBy` אינו השותף. אלה הרכישות, והן יוצאות מהמדד התפעולי. ההשוואה מול `amount` נעשית
+   * בסבילות של אגורה, כי `ownerShare` יכול להגיע מחלוקת אחוזים ולא מהעתקה.
+   */
+  const isOwnerOnlyOutlay = (e: (typeof thisMonthExpenses)[number]) =>
+    e.paidBy !== "partner" && Math.abs(e.ownerShare - e.amount) < 0.01;
+  const ownerOperatingProfitThisMonth =
+    ownerIncomeThisMonth -
+    thisMonthExpenses.filter((e) => !isOwnerOnlyOutlay(e)).reduce((sum, e) => sum + e.ownerShare, 0);
+
+  /*
+   * כאן חושבה `computerProfitTrend` - רצועת רווח-פר-מחשב של 12 חודשים לכל סניף. היא נמחקה
+   * יחד עם `ComputerProfitTable`: השאלה "כמה מרוויח כל מחשב" נשאלת על פני כל הסניפים יחד
+   * ולכן עברה למסך אחד (`lib/laptop-branch-tracking.ts`). להשאיר כאן חישוב מקביל, שגם ספר
+   * את הרכש בתוך הרווח, היה מייצר מספר שני לאותה שאלה - וזה בדיוק מה שהפרויקט הזה ניקה.
+   */
 
   // "My expenses" this month: lines the owner paid, valued at what the partner owes back for them
   // (0 if owedBy is the owner alone). "His expenses": lines the partner paid, valued at what the
@@ -437,6 +435,7 @@ export function computeBranchFinancials(branch: Branch, raw: BranchAccountingRaw
     balanceToDate: incomeToDate - expenseToDate,
     settlementNetToOwner: settlementIncome + settlementExpense,
     ownerNetProfitThisMonth,
+    ownerOperatingProfitThisMonth,
     ownerInvestedToDate: expenseLines.reduce((sum, e) => sum + e.ownerShare, 0),
     ownerEarnedToDate: incomeLines.reduce((sum, i) => sum + (i.amount * ownerPct) / 100, 0),
     ownerBalanceToDate:
@@ -445,7 +444,6 @@ export function computeBranchFinancials(branch: Branch, raw: BranchAccountingRaw
     ownerPaidCashToDate: expenseLines
       .filter((e) => e.paidBy !== "partner")
       .reduce((sum, e) => sum + e.amount, 0),
-    computerProfitTrend,
     myExpenseThisMonth,
     hisExpenseThisMonth,
     grossIncomeThisMonth,
