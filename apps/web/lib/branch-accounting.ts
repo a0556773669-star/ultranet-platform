@@ -124,14 +124,6 @@ export function ownerMonthlyProfit(incomeLines: RentalIncomeLine[], ownerPct: nu
   return incomeShare - expenseBurden;
 }
 
-export interface ComputerProfitMonth {
-  month: string; // YYYY-MM
-  netProfit: number;
-  computerCount: number;
-  profitPerComputer: number;
-  isHealthy: boolean;
-}
-
 /** Israel standard VAT rate, used to gross up the ₪150/computer target below. */
 export const VAT_RATE = 0.18;
 /** Target: 150 ₪ + VAT per computer per month. */
@@ -140,38 +132,20 @@ export const PROFIT_PER_COMPUTER_TARGET = Math.round(150 * (1 + VAT_RATE));
 /**
  * Computer count active in a given YYYY-MM month, based on each computer's addedDate.
  * A computer counts for a month if it was added on/before the last day of that month.
- * (No end-date handling here since computers aren't currently "removed" from a branch in the data model;
- * if that's added later, filter out here too.)
+ * (No end-date handling here since computers aren't currently "removed" from a branch in the data
+ * model; if that's added later, filter out here too.)
  */
 export function computersActiveInMonth(addedDates: (string | undefined)[], month: string): number {
   const monthEnd = `${month}-31`; // safe upper bound for string comparison of YYYY-MM-DD
   return addedDates.filter((d) => !d || d <= monthEnd).length;
 }
 
-/**
- * Builds the per-computer profit trend for a branch across a list of months, given each month's
- * owner net profit (already computed via ownerMonthlyProfit) and the computer addedDates for that branch.
+/*
+ * buildComputerProfitTrend() ו-ComputerProfitMonth חיו כאן: רצועת רווח-פר-מחשב לסניף בודד.
+ * הם נמחקו כשהשאלה עברה למסך אחד שמציג את כל הסניפים יחד (lib/laptop-branch-tracking.ts).
+ * הכלל היחיד שנשמר מהם, וחשוב: computersActiveInMonth יכולה להחזיר 0 (סניף בלי אף מחשב
+ * רשום), ואסור להחליף את זה ב-1 - זה היה באג שהראה "1 מחשב" לסניף בלי אף מחשב אמיתי.
  */
-export function buildComputerProfitTrend(
-  monthlyNetProfits: { month: string; netProfit: number }[],
-  addedDates: (string | undefined)[]
-): ComputerProfitMonth[] {
-  return monthlyNetProfits.map(({ month, netProfit }) => {
-    // Do NOT fall back to 1 when there are no registered computers yet - that fabricates a
-    // computer that doesn't exist and can show a fake "1 מחשב" / healthy status for a branch
-    // with none registered at all. With 0 computers the per-computer metric is meaningless.
-    const computerCount = computersActiveInMonth(addedDates, month);
-    const profitPerComputer = computerCount > 0 ? netProfit / computerCount : 0;
-    return {
-      month,
-      netProfit,
-      computerCount,
-      profitPerComputer,
-      isHealthy: computerCount > 0 && profitPerComputer >= PROFIT_PER_COMPUTER_TARGET,
-    };
-  });
-}
-
 
 /** The partner's true economic share of an expense's cost (mirror of ownerExpenseBurden). */
 export function partnerExpenseBurden(amount: number, owedBy?: string): number {
