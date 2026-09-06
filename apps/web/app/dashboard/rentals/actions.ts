@@ -316,6 +316,15 @@ export async function issueCashReceiptAction(rentalId: string) {
   const rental = rentalSnap.data() as Omit<Rental, "id"> | undefined;
   if (!rental) return { ok: false as const, message: "השכרה לא נמצאה" };
 
+  // השכרה שנסלקה דרך נדרים (או דרך מסלול גבייה) כבר קיבלה שם חשבונית מס קבלה. הפקה
+  // נוספת כאן הייתה מייצרת מסמך שני על אותו תשלום, ולכן היא נחסמת בשרת ולא רק ב-UI.
+  if (rental.paymentMethod === "nedarim" || rental.paymentMethod === "route") {
+    return {
+      ok: false as const,
+      message: "ההשכרה נגבתה בסליקה - נדרים פלוס כבר הפיק עליה חשבונית מס קבלה, ואין להפיק מסמך שני",
+    };
+  }
+
   const clientSnap = await db.collection("n_rental_clients").doc(rental.clientId).get();
   const client = clientSnap.data() as RentalClient | undefined;
   if (!client) return { ok: false as const, message: "לקוח לא נמצא" };

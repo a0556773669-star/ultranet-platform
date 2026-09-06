@@ -70,9 +70,14 @@ export type EzcountReceiptParams = {
   clientEmail?: string;
   clientIdNum?: string;
   desc?: string;
-  /** 1 cash, 3 credit card, 4 bank transfer - per EZcount payment_type table */
-  paymentType: 1 | 3 | 4;
-  cardLast4?: string;
+  /**
+   * 1 = מזומן, 4 = העברה בנקאית (מתוך טבלת `payment_type` של EZcount).
+   *
+   * **אשראי (3) הוסר מהטיפוס בכוונה, וזה אילוץ עסקי.** עסקת אשראי נסלקת בנדרים פלוס,
+   * שמפיק עליה חשבונית מס קבלה בעצמו — מסמך נוסף מכאן על אותה עסקה הוא כפילות בספרים.
+   * המערכת מפיקה מסמכים **רק** על כסף שלא עבר סליקה: מזומן שנמשך מקופה, והעברות.
+   */
+  paymentType: 1 | 4;
   /** ברירת מחדל: חשבונית מס קבלה (320). ראה `EZCOUNT_DOC_TYPES`. */
   docType?: EzcountDocType;
 };
@@ -89,20 +94,19 @@ export type EzcountReceiptResult =
  * הפקה אוטומטית גם מכאן הייתה יוצרת מסמך שני על אותו תשלום.
  */
 export async function createEzcountReceipt(params: EzcountReceiptParams): Promise<EzcountReceiptResult> {
-  const { creds, amount, clientName, clientEmail, clientIdNum, desc, paymentType, cardLast4 } = params;
+  const { creds, amount, clientName, clientEmail, clientIdNum, desc, paymentType } = params;
   const docType: EzcountDocType = params.docType ?? EZCOUNT_DOC_TYPES.taxInvoiceReceipt;
+
+  // חגורה מעל השלייקס: הטיפוס כבר לא מאפשר אשראי, והבדיקה הזו תופסת קריאה שהגיעה
+  // מדאטה חיצוני או מ-cast. עסקת אשראי לא מקבלת מסמך מהמערכת, נקודה.
+  if ((paymentType as number) === 3) {
+    return { ok: false, message: "המערכת לא מפיקה מסמך על עסקת אשראי - נדרים פלוס מפיק אותו בעצמו" };
+  }
 
   const payment: Record<string, unknown> = {
     payment_type: paymentType,
     payment_sum: amount,
   };
-  if (paymentType === 3) {
-    payment.cc_type = 0;
-    payment.cc_type_name = "כרטיס אשראי";
-    payment.cc_number = cardLast4 ?? "";
-    payment.cc_deal_type = 1;
-    payment.cc_num_of_payments = 1;
-  }
 
   const body = {
     api_key: creds.apiKey,

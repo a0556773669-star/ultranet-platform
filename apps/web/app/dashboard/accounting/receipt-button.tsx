@@ -144,8 +144,11 @@ export function IssueReceiptButton({
                 <select name="paymentType" defaultValue="4" className={FIELD}>
                   <option value="4">העברה בנקאית</option>
                   <option value="1">מזומן</option>
-                  <option value="3">אשראי</option>
                 </select>
+                <p className="mt-1 text-[11px] text-muted">
+                  אין כאן אשראי בכוונה — עסקת אשראי נסלקת בנדרים פלוס, שמפיק עליה חשבונית מס
+                  קבלה בעצמו.
+                </p>
               </div>
               <button
                 type="submit"

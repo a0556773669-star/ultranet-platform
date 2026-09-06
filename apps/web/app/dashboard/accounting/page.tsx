@@ -125,7 +125,11 @@ export default async function AccountingHomePage() {
                       <span>{entry.origin}</span>
                       {raw?.soldTo && <span>· נמכר ל{raw.soldTo}</span>}
                     </div>
-                    {raw?.type === "laptops" && (
+                    {/* מסמך מופק רק על כסף שלא נסלק: העברה מסניף ניידים, ומזומן שנמשך
+                        מקופה. שורת אשראי לא מקבלת כפתור בכלל - נדרים פלוס כבר הפיק עליה
+                        חשבונית מס קבלה, ומסמך שני היה כפילות. הכלל נאכף גם בשרת
+                        (`receipt-actions.ts`), כי כפתור מוסתר הוא לא אכיפה. */}
+                    {raw && (raw.type === "laptops" || raw.type === "cash") && (
                       <div className="mt-1">
                         <IssueReceiptButton
                           incomeId={entry.id}

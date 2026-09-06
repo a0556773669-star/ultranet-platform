@@ -120,10 +120,20 @@ export function RouteForm({
         </select>
       </div>
       <div>
-        <label className={LABEL}>מזהה חברה אצל ספק הקבלות</label>
-        <input name="receiptsCompanyId" dir="ltr" defaultValue={initial?.receiptsCompanyId} className={FIELD} />
+        <label className={LABEL}>
+          מייל החשבון אצל ספק הקבלות <span dir="ltr">(developer_email)</span>
+        </label>
+        <input
+          name="receiptsCompanyId"
+          type="email"
+          dir="ltr"
+          placeholder="you@example.com"
+          defaultValue={initial?.receiptsCompanyId}
+          className={FIELD}
+        />
         <p className="mt-1 text-[11px] text-muted">
-          ב-EZcount: כאן מכניסים את ה-developer_email (כתובת המייל שקושרה לחשבון ה-API שלכם).
+          ב-EZcount זו פשוט <b>כתובת המייל שאיתה נכנסים לחשבון</b> — אין שדה נפרד בשם הזה
+          במסך ה-API שלהם, הם רק קוראים לה <span dir="ltr">developer_email</span> ב-API.
         </p>
       </div>
       <div>

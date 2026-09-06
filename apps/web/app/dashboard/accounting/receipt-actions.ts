@@ -52,8 +52,18 @@ export async function issueIncomeReceiptAction(
   const clientName = String(formData.get("clientName") ?? "").trim();
   const clientEmail = String(formData.get("clientEmail") ?? "").trim();
   const clientIdNum = String(formData.get("clientIdNum") ?? "").trim();
+  // הכלל הקשיח: מסמך מופק רק על כסף שלא נסלק. שורת אשראי נחסמת כאן ולא רק ב-UI, כי
+  // כפתור מוסתר הוא לא אכיפה - והמחיר של טעות כאן הוא מסמך כפול מול רשות המסים.
+  if (income.type === "credit") {
+    return {
+      ok: false,
+      message:
+        'לא מפיקים מסמך על הכנסת אשראי - נדרים פלוס כבר הפיק עליה חשבונית מס קבלה. אם בכל זאת יצא מסמך במקום אחר, סמן "יצא מסמך".',
+    };
+  }
+
   const paymentTypeRaw = String(formData.get("paymentType") ?? "4");
-  const paymentType = paymentTypeRaw === "1" ? 1 : paymentTypeRaw === "3" ? 3 : 4;
+  const paymentType: 1 | 4 = paymentTypeRaw === "1" ? 1 : 4;
   // ברירת המחדל היא חשבונית מס קבלה; "קבלה בלבד" נבחרת במפורש, למקרה שכבר קיימת חשבונית.
   const docType: EzcountDocType =
     String(formData.get("docType") ?? "") === String(EZCOUNT_DOC_TYPES.receiptOnly)
