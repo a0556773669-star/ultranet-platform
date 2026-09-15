@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { Banknote, Layers } from "lucide-react";
+import { Banknote, Layers, Eraser } from "lucide-react";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { getAdminFirestore } from "@/lib/firebase-admin";
@@ -80,13 +80,23 @@ export default async function ExpensesHomePage() {
             <Banknote className="h-5 w-5" />
             הוצאות — השכרות
           </h1>
-          <Link
-            href={`/dashboard/rentals/expenses/${SHARED_RENTALS_BRANCH_ID}`}
-            className="flex items-center gap-1.5 text-xs font-bold text-teal hover:underline"
-          >
-            <Layers className="h-4 w-4" />
-            הוצאות על כל הסניפים יחד
-          </Link>
+          <div className="flex items-center gap-3">
+            <Link
+              href={`/dashboard/rentals/expenses/${SHARED_RENTALS_BRANCH_ID}`}
+              className="flex items-center gap-1.5 text-xs font-bold text-teal hover:underline"
+            >
+              <Layers className="h-4 w-4" />
+              הוצאות על כל הסניפים יחד
+            </Link>
+            {/* זמני: מסך ניקוי ההוצאות. למחוק יחד עם expenses/cleanup כשהניקוי יסתיים. */}
+            <Link
+              href="/dashboard/rentals/expenses/cleanup"
+              className="flex items-center gap-1.5 text-xs font-bold text-red-600 hover:underline"
+            >
+              <Eraser className="h-4 w-4" />
+              ניקוי הוצאות (זמני)
+            </Link>
+          </div>
         </div>
         <BranchExpenseTable rows={rows} hrefFor={(id) => `/dashboard/rentals/expenses/${id}`} />
         <p className="mt-1.5 px-1 text-[11.5px] leading-relaxed text-muted">
