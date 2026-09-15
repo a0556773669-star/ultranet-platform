@@ -5,11 +5,8 @@ import type { PermKey } from "@/lib/perms";
 
 const FIRST_TAB: { href: string; perm?: PermKey }[] = [
   { href: "/dashboard/branches", perm: "branches" },
-  { href: "/dashboard/inventory", perm: "computers" },
-  { href: "/dashboard/tasks", perm: "tasks" },
-  { href: "/dashboard/tickets", perm: "computers" },
-  { href: "/dashboard/news" },
-  { href: "/dashboard/orders", perm: "computers" },
+  { href: "/dashboard/operations", perm: "computers" },
+  { href: "/dashboard/expenses", perm: "computers" },
 ];
 
 export default async function ComputerRoomsPage() {

@@ -5,8 +5,13 @@ import { authOptions } from "@/lib/auth";
 import { getAdminFirestore } from "@/lib/firebase-admin";
 import { FieldValue } from "firebase-admin/firestore";
 import type { Branch, FixedExpense, VariableExpense, BranchIncome } from "@ultranet/shared-types";
-import { SHARED_RENTALS_BRANCH_ID } from "@/lib/expense-shared-scope";
+import {
+  SHARED_RENTALS_BRANCH_ID,
+  sharedExpenseBranchIdsFromForm,
+  sharedOwnerPctFromForm,
+} from "@/lib/expense-shared-scope";
 import { createLinkedOwnerLedgerExpense, deleteLinkedOwnerLedgerExpense } from "@/lib/branch-expense-ledger";
+import { resolveExpenseTypeIdFromForm } from "@/lib/recurring-purchases";
 import { countsToMainFromForm } from "@/lib/counts-to-main";
 
 async function requireOwner() {
@@ -29,6 +34,21 @@ function stripUndefined<T extends Record<string, any>>(obj: T): T {
   const out: any = {};
   for (const k in obj) if (obj[k] !== undefined) out[k] = obj[k];
   return out;
+}
+
+/**
+ * שדות הספר המשותף — רק כשההוצאה באמת נרשמת בו.
+ *
+ * `branchIds` ו-`ownerPct` הם התשובה ל"על אילו סניפים" ו"כמה מזה עליי", ומשמעותם קיימת אך
+ * ורק על הסנטינל `shared-rentals`: בהוצאה של סניף אמיתי הסניף כבר ידוע והחלוקה היא
+ * `paidBy`/`owedBy`. לכן בסניף רגיל שני השדות פשוט לא נכתבים, גם אם הטופס שלח אותם.
+ */
+function sharedSplitFieldsFor(branchId: string, formData: FormData) {
+  if (branchId !== SHARED_RENTALS_BRANCH_ID) return { branchIds: undefined, ownerPct: undefined };
+  const ownerPct = sharedOwnerPctFromForm(formData);
+  // בלי חלוקה אין משמעות לבחירת הסניפים - ההוצאה נשארת בספר המשותף בלבד.
+  if (ownerPct === undefined) return { branchIds: undefined, ownerPct: undefined };
+  return { branchIds: sharedExpenseBranchIdsFromForm(formData), ownerPct };
 }
 
 /**
@@ -64,7 +84,17 @@ export async function createFixedExpenseAction(branchId: string, formData: FormD
   if (!name || !startDate) {
     throw new Error("חובה למלא שם ותאריך התחלה");
   }
-  const data: Omit<FixedExpense, "id"> = { branchId, name, amount, startDate, category, paidBy, owedBy, countsToMain };
+  const data: Omit<FixedExpense, "id"> = {
+    branchId,
+    name,
+    amount,
+    startDate,
+    category,
+    paidBy,
+    owedBy,
+    countsToMain,
+    ...sharedSplitFieldsFor(branchId, formData),
+  };
   await getAdminFirestore().collection("n_fixed_expenses").add(stripUndefined(data));
   revalidatePath(`/dashboard/rentals/expenses/${branchId}`);
   revalidatePath("/dashboard/accounting");
@@ -105,6 +135,7 @@ export async function updateFixedExpenseAction(id: string, branchId: string, for
   if (!name || !startDate) {
     throw new Error("חובה למלא שם ותאריך התחלה");
   }
+  const shared = sharedSplitFieldsFor(branchId, formData);
   const data = {
     name,
     amount,
@@ -113,6 +144,8 @@ export async function updateFixedExpenseAction(id: string, branchId: string, for
     paidBy,
     owedBy,
     countsToMain: countsToMainFromForm(formData),
+    branchIds: shared.branchIds ?? FieldValue.delete(),
+    ownerPct: shared.ownerPct ?? FieldValue.delete(),
   };
   await ref.set(data, { merge: true });
   revalidatePath(`/dashboard/rentals/expenses/${branchId}`);
@@ -160,10 +193,13 @@ export async function createVariableExpenseAction(branchId: string, formData: Fo
     owedBy,
     countsToMain: countsToMainFromForm(formData),
     linkedAhExpenseId,
+    expenseTypeId: await resolveExpenseTypeIdFromForm(formData, "rentals"),
+    ...sharedSplitFieldsFor(branchId, formData),
   };
   await db.collection("n_var_expenses").add(stripUndefined(data));
   revalidatePath(`/dashboard/rentals/expenses/${branchId}`);
   revalidatePath("/dashboard/accounting");
+  revalidatePath("/dashboard/accounting/extra-expenses");
   revalidatePath("/dashboard/rentals/accounting");
   revalidatePath("/dashboard");
 }
@@ -199,6 +235,7 @@ export async function updateVariableExpenseAction(id: string, branchId: string, 
     date,
   });
 
+  const shared = sharedSplitFieldsFor(branchId, formData);
   const data = {
     desc,
     amount,
@@ -209,6 +246,8 @@ export async function updateVariableExpenseAction(id: string, branchId: string, 
     owedBy,
     countsToMain: countsToMainFromForm(formData),
     linkedAhExpenseId: linkedAhExpenseId ?? FieldValue.delete(),
+    branchIds: shared.branchIds ?? FieldValue.delete(),
+    ownerPct: shared.ownerPct ?? FieldValue.delete(),
   };
   await ref.set(data, { merge: true });
   revalidatePath(`/dashboard/rentals/expenses/${branchId}`);

@@ -33,8 +33,8 @@ function selectableMonths(now: string): string[] {
  *  1. **הסניפים שלי לא כאן.** סניף שאני הבעלים היחיד שלו לא "מעביר לי" כלום - הכסף כבר
  *     שלי. שורה כזו הייתה מוסיפה סכום שאף אחד לא אמור לשלם, ולכן היא מסוננת ולא מוצגת
  *     כאפס.
- *  2. **שותפי מחשבים מצטברים.** חודש שלא סימנתי שהעברתי בו לא נעלם - הוא נשאר ביתרה
- *     עד שיסומן. ראה `lib/partner-payouts.ts`.
+ *  2. **אחוזים לאנשים מצטברים.** חודש שלא סימנתי שהעברתי בו לא נעלם - הוא נשאר ביתרה
+ *     עד שיסומן. ראה `lib/partner-payouts.ts` ו-`lib/revenue-shares.ts`.
  */
 export default async function TransfersPage({
   searchParams,
@@ -104,8 +104,13 @@ export default async function TransfersPage({
       <section>
         <h2 className="mb-2 flex items-center gap-1.5 text-sm font-extrabold text-ink">
           <Users className="h-4 w-4" />
-          שותפי מחשבים — יתרה מצטברת
+          אחוזים שאני צריך להעביר — יתרה מצטברת
         </h2>
+        <p className="mb-2 px-1 text-[11.5px] leading-relaxed text-muted">
+          מי שיש לו אחוז מהברוטו של ההשכרות: אחוז ממחשבים מסוימים (מוגדר על המחשב), ואחוז מסניף
+          שלם החל מתאריך (מוגדר ב-<code>lib/revenue-shares.ts</code>). הסכומים כבר ירדו מהרווח שלי
+          בכל מקום, וכאן הם מופיעים כחוב שמצטבר עד שמסמנים שהועבר — בדיוק כמו התחשבנות מול סניף.
+        </p>
         <PartnerPayoutTable summaries={payouts} currentMonth={thisMonth} />
       </section>
     </div>

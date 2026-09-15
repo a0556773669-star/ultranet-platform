@@ -2,16 +2,20 @@
 
 import { useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { Trash2 } from "lucide-react";
 import { useToast } from "@/lib/toast";
 
 export function DeleteEntryButton({
   confirmText,
   action,
   successText = "נמחק בהצלחה",
+  compact = false,
 }: {
   confirmText: string;
   action: () => Promise<void>;
   successText?: string;
+  /** גרסת אייקון לטבלאות צפופות — אותה התנהגות בדיוק, רק בלי המילה "מחיקה" */
+  compact?: boolean;
 }) {
   const [isPending, startTransition] = useTransition();
   const router = useRouter();
@@ -28,6 +32,24 @@ export function DeleteEntryButton({
         showError(err instanceof Error ? err.message : "אירעה שגיאה במחיקה");
       }
     });
+  }
+
+  if (compact) {
+    return (
+      <>
+        <button
+          type="button"
+          disabled={isPending}
+          onClick={handleClick}
+          title="מחיקה"
+          aria-label="מחיקה"
+          className="inline-flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-lg border border-red-200 text-red-600 transition hover:bg-red-50 disabled:opacity-50"
+        >
+          <Trash2 className="h-3 w-3" />
+        </button>
+        {toastNode}
+      </>
+    );
   }
 
   return (

@@ -3,9 +3,10 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Plus } from "lucide-react";
-import type { Branch } from "@ultranet/shared-types";
+import type { Branch, RecurringPurchaseType } from "@ultranet/shared-types";
 import { useToast } from "@/lib/toast";
 import { CountsToMainField } from "@/components/counts-to-main-field";
+import { ExpenseTypeField } from "@/components/recurring-purchases/expense-type-field";
 import { createExtraExpenseAction } from "../actions";
 
 const FIELD =
@@ -18,7 +19,14 @@ const LABEL = "mb-1 block text-xs font-semibold text-muted";
  * "שיוך לסניפים" כאן הוא תיעוד ולא חישוב: קניתי משטח מחשבים, ההוצאה כולה שלי, ואני רק
  * רוצה לזכור לאילו סניפים הם הלכו. לכן הצ'יפים לא משנים אף סכום, ולכן זה כתוב על הטופס.
  */
-export function ExtraExpenseForm({ branches }: { branches: Branch[] }) {
+export function ExtraExpenseForm({
+  branches,
+  expenseTypes = [],
+}: {
+  branches: Branch[];
+  /** סוגי הרכישות החוזרות לבחירה - אותה רשימה גלובלית שמופיעה בטופס של כל סניף */
+  expenseTypes?: RecurringPurchaseType[];
+}) {
   const [selected, setSelected] = useState<string[]>([]);
   const [isPending, startTransition] = useTransition();
   const router = useRouter();
@@ -110,6 +118,8 @@ export function ExtraExpenseForm({ branches }: { branches: Branch[] }) {
           })}
         </div>
       </div>
+
+      <ExpenseTypeField types={expenseTypes} idPrefix="extra-expense-type" />
 
       <CountsToMainField defaultChecked />
 

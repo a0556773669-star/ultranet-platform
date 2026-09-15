@@ -24,13 +24,15 @@ export function RentalsTabs({ isOwner }: { isOwner: boolean }) {
   const pathname = usePathname();
   const visibleTabs = TABS.filter((tab) => (!tab.ownerOnly || isOwner) && (!tab.branchOnly || !isOwner));
 
+  // הלשונית הפעילה היא ההתאמה הארוכה ביותר, כדי שמסך-בן לא ידליק שתי לשוניות בבת אחת.
+  const activeHref = visibleTabs
+    .filter((tab) => pathname === tab.href || pathname?.startsWith(`${tab.href}/`))
+    .sort((a, b) => b.href.length - a.href.length)[0]?.href;
+
   return (
     <nav className="mb-4 flex flex-wrap items-center gap-1">
       {visibleTabs.map((tab) => {
-        const active =
-          tab.href === "/dashboard/rentals"
-            ? pathname === "/dashboard/rentals"
-            : pathname?.startsWith(tab.href);
+        const active = tab.href === activeHref;
         return (
           <Link key={tab.href} href={tab.href} className={active ? "pill-active" : "pill-inactive"}>
             <tab.icon className="ml-1 h-4 w-4" />
