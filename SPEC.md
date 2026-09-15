@@ -207,7 +207,7 @@ pnpm dev        # turbo run dev — מריץ web + api
 | `n_cw_clients` | `CoworkingClient` | לקוחות משרד שיתופי + היסטוריית תשלומים |
 | `n_recurring_var_expenses` | `RecurringVariableExpense` | **הוצאה קבועה משתנה** — חשמל, משכורת מזכירה, מע"מ: שורה אחת + מערך `amounts` של `{month, amount, updatedAt}`. חודש בלי סכום = "עוד לא עודכן" (לא אפס) וזה מה שהתזכורת החודשית מחפשת. `frequency` (`monthly`/`bimonthly`/`quarterly`/`yearly`, ברירת מחדל חודשי) קובע באילו חודשים נדרש תשלום, ו-`spread` אם לפרוס תשלום רב-חודשי על חודשי המחזור בדוחות. `scope` (`computers`/`rentals`/`coworking`/`main`) קובע באיזה מסך הכרטיס מופיע |
 | `n_expense_types` | `RecurringPurchaseType` | **סוג רכישה חוזרת** — נייר למדפסת, שקיות אשפה, פחיות. שם + `module` (תיעוד בלבד — הסוגים גלובליים) : הוא לא מחזיק סכומים ולא משנה איך ההוצאה נספרת. `expenseTypeId` על `n_var_expenses` / `n_multi_branch_expenses` / `n_ah_expenses` מחבר את כל הקניות של אותו מוצר בכל העסק, והסיכום מוצג ליד ההוצאות עצמן — אין מסך נפרד |
-| `n_partner_payouts` | `PartnerPayout` | תשלום שהועבר לשותף-מחשבים חיצוני פר חודש; מזהה דטרמיניסטי `${slug(partnerName)}_${month}` (upsert). מה שלא נרשם כאן פשוט מצטבר ביתרה — ראו `lib/partner-payouts.ts` |
+| `n_partner_payouts` | `PartnerPayout` | תשלום שהועבר פר חודש למי שיש לו אחוז מהברוטו — שותף-מחשבים חיצוני או הסדר פר-סניף (`lib/revenue-shares.ts`); מזהה דטרמיניסטי `${slug(partnerName)}_${month}` (upsert). מה שלא נרשם כאן פשוט מצטבר ביתרה — ראו `lib/partner-payouts.ts` |
 | `n_ah_income` | `AccountingIncome` | הכנסות בהנה"ח מרכזית (בעלים); 3 סוגים בלבד - `laptops`/`credit`/`cash`, ראו סעיף 8. שורת `cash` נקראת גם (לתצוגה בלבד, בלי כתיבה חזרה) לדשבורד המעקב של חדר המחשבים שמזוהה ב-`branchId` שלה |
 | `n_ah_expenses` | `AccountingExpense` | הוצאות בהנה"ח מרכזית — רכישה/הוצאה **חד-פעמית** של העסק עצמו |
 | `n_ah_fixed_expenses` | `AccountingFixedExpense` | **הוצאה קבועה של העסק עצמו** — שכירות משרד, רואה חשבון, מנוי תוכנה: אותו סכום כל חודש, שורה אחת. `name`, `amount` (הסכום ה**חודשי**), `startDate` (נספרת מהחודש הזה והלאה, החודש הראשון במלואו), `endDate` (רשות — החודש האחרון שנספר), `business`, `category`, `countsToMain`. המקבילה של `n_fixed_expenses` לספר הראשי, בלי `branchId`: ההוצאה של העסק ולא של סניף, ולכן גם לא יכולה להפוך ל"שארית" כשסניף נמחק. הצבירה ב-`apps/web/lib/main-fixed-expenses.ts`, והספר הראשי מקבל **שורה לכל חודש** |
@@ -1007,9 +1007,15 @@ pnpm dev        # turbo run dev — מריץ web + api
 הם חישבו את אותה שאלה בכלל אחר — הרכש נספר בתוך הרווח — והשארתם הייתה מייצרת מספר שני
 לאותה שאלה.
 
-מתחת לטבלה: **חלק המזכירה** — 30% מהברוטו של הסניפים שלי (`SECRETARY_PCT`,
-`computeSecretaryShare`). מוצג כאן ולא בטבלת ההעברות בכוונה: זו משכורת, לא התחשבנות מול שותף.
-המקום לרשום אותו הוא שורת "משכורת מזכירה" ב-`/extra-expenses`.
+מתחת לטבלה: **אחוזים מהברוטו של הסניף** (`lib/revenue-shares.ts`). קדם לזה חישוב אנונימי
+בשם "חלק המזכירה" (`SECRETARY_PCT`/`computeSecretaryShare`) שרץ על כל הסניפים שלי, על כל
+החודשים מאז ומעולם, בלי שם ובלי זיכרון של מה כבר הועבר — הוא **נמחק**. במקומו הסדר מפורש:
+אדם בשם, סניף אחד, **תאריך התחלה**, וחוב שמצטבר ב-`/transfers` עד שמסמנים שהועבר.
+הכרטיס כאן מציג רק את המצב לחודש הנבחר; הסכום עצמו כבר מנוכה מהרווח שבטבלה למעלה.
+הסדר שהוגדר ולא נתפס על אף סניף מקבל כאן אזהרה צהובה — אחרת הוא שקט ולא מנכה כלום.
+
+**הרווח-פר-מחשב בטבלה הוא אחרי האחוזים האלה**, כי `ownerOperatingProfitThisMonth` כבר
+מנוכה בהם.
 
 #### `/transfers` — העברות חודשיות
 
@@ -1022,12 +1028,16 @@ pnpm dev        # turbo run dev — מריץ web + api
 1. **הסניפים שלי לא מוצגים.** מסוננים ב-`isMine === false`; סניף שאני הבעלים היחיד שלו לא
    מעביר לי כלום. שורה כזו הייתה מוסיפה סכום שאף אחד לא אמור לשלם. שמות הסניפים שהושמטו
    מוצגים כהערה מתחת לטבלה.
-2. **שותפי מחשבים מצטברים** (`apps/web/lib/partner-payouts.ts`, `n_partner_payouts`). החוב
-   לשותף חיצוני (למשל 15% מהברוטו של מחשבים מסוימים) מחושב כהפרש בין מה שהצטבר לזכותו לבין
-   מה שנרשם ששולם, על פני כל החודשים — ולכן חודש שלא סומן ממשיך להופיע ביתרה עד שיסומן.
-   מזהה המסמך דטרמיניסטי (`payoutDocId`), כך שסימון הוא upsert ולא יכול ליצור שתי רשומות
-   לאותו חודש; `paidAmount` של 0 **מוחק** את הרשומה, כי "לא העברתי" הוא היעדר רשומה.
-   השותף וה-% מוגדרים על המחשב עצמו (`Laptop.hasPartner` / `partnerName` / `partnerPct`).
+2. **אחוזים שאני צריך להעביר, מצטברים** (`apps/web/lib/partner-payouts.ts`,
+   `n_partner_payouts`). החוב לכל מי שיש לו אחוז מהברוטו מחושב כהפרש בין מה שהצטבר לזכותו
+   לבין מה שנרשם ששולם, על פני כל החודשים — ולכן חודש שלא סומן ממשיך להופיע ביתרה עד
+   שיסומן. מזהה המסמך דטרמיניסטי (`payoutDocId`), כך שסימון הוא upsert ולא יכול ליצור שתי
+   רשומות לאותו חודש; `paidAmount` של 0 **מוחק** את הרשומה, כי "לא העברתי" הוא היעדר רשומה.
+   שני סוגי הסדרים נכנסים לאותה טבלה (ראו `lib/revenue-shares.ts`):
+   - **פר-מחשב** — מוגדר על המחשב עצמו (`Laptop.hasPartner` / `partnerName` / `partnerPct`,
+     ברירת מחדל 15%), **בלי תאריך התחלה**: נספר מהיום הראשון שהמחשב הושכר.
+   - **פר-סניף** — מוגדר בקוד ב-`BRANCH_REVENUE_SHARES`: אדם, אחוז, סניף ו-`startDate`.
+     התאריך נחתך **פר-השכרה ולא פר-חודש**, כך שחודש ההתחלה מתחלק ולא נלקח במלואו.
 
 **הדו"ח החודשי במייל** (`lib/branch-report-send.ts`, `/api/rentals/monthly-reports`) נשלח
 אוטומטית ב-1 לחודש על החודש שנסגר (`apps/web/vercel.json`, cron `0 6 1 * *`, מוגן ב-
@@ -1526,7 +1536,7 @@ app שרץ בדפדפן ניתן ל"התקנה" כאפליקציה עם אייק
 | `apps/web/lib/email-logo.ts` | הפיכת הלוגו השמור (data URI) ל-inline attachment עם `cid:` - כי Gmail/Outlook מסירים תמונות `data:` |
 | `apps/web/lib/branch-report-send.ts` | בניית מייל הדו"ח (מקור אמת אחד לכל הנתיבים) ושליחה חודשית לכל הסניפים, כולל דילוג על מה שכבר נשלח (`reportSentAt`) |
 | `apps/web/lib/tx.ts` | שכבה 1 — טהור: קבועי `nature`/`node`, נירמול פיצולים לשקל (`normalizeAllocations`), פריסת `recurring` בזמן קריאה, ובניית תנועה (`buildTransaction`). נצרך גם ע"י קומפוננטות לקוח |
-| `apps/web/lib/tx-data.ts` | **מודל הקריאה המאוחד**: `n_tx` + הקרנה של שש הקולקשנים הישנות לאותה צורה, בלי מיגרציה. מזהה בבואות ומוציא אותן מהמודל, ומסווג העברות מהשותף כ-`transfer` ולא כהכנסה |
+| `apps/web/lib/tx-data.ts` | **מודל הקריאה המאוחד**: `n_tx` + הקרנה של שש הקולקשנים הישנות לאותה צורה, בלי מיגרציה. מזהה בבואות ומוציא אותן מהמודל, ומסווג העברות מהשותף כ-`transfer` ולא כהכנסה. מקרין גם שורת `revenue_share` אחת לכל (אדם, סניף, חודש) — האחוזים שאני מעביר, כיציאה תפעולית, אחרת הספר הראשי היה סופר כרווח כסף שמעולם לא נשאר בכיס |
 | `apps/web/lib/assets.ts` | שכבה 2 — טהור: אילוץ החשבונית (`validatePurchase`), פריסת שורות לפריטים, השקעה לפי מיקום, פיצול תמורת מכירה לפי עלות (`splitSaleProceeds`), תוצאה הונית (`capitalResult`), **השקעה נכונה־לתאריך** (`locationsAtMonth`/`investmentAtMonth`/`investmentSeries`) ו-`paybackStatus` שהמדד הראשי שלו הוא צפי איזון בחודשים ולא אחוז. נצרך גם ע"י טופסי הלקוח |
 | `apps/web/lib/assets-data.ts` | טעינת שכבת הנכסים ו-`moveItems()` — שאין לו פרמטר סכום, בכוונה |
 | `apps/web/lib/history.ts` | היסטוריה לא נערכת, מוסיפים לה (פרק טו׳): `reviseRecurringAmount()` — סגירת תקופה ופתיחת גרסה חדשה במקום עריכת סכום · `endRecurring()` — תאריך סיום במקום מחיקה · `closeBranch()` — תאריך סגירה עסקי, עצירת ההוצאות החוזרות והחזרת הציוד למחסן, ב-batch אחד ובלי למחוק דבר · `reopenBranch()` |
@@ -1536,8 +1546,10 @@ app שרץ בדפדפן ניתן ל"התקנה" כאפליקציה עם אייק
 | `apps/web/lib/main-ledger.ts` | הספר הראשי: איסוף כל השורות שסומנו `countsToMain` מששת מקורות ההוצאה ושני מקורות ההכנסה, בתוספת עלות ההקמה של כל סניף (`setupCountsToMain`), וסכימתן. `fixedExpenseAccrued` צובר הוצאה קבועה חודש-חודש מ-`startDate` |
 | `apps/web/lib/main-fixed-expenses.ts` | הוצאה קבועה של העסק עצמו (`n_ah_fixed_expenses`): `mainFixedExpenseMonths` / `mainFixedExpenseAccrued` / `mainFixedMonthlyTotal` / `isMainFixedExpenseActive`. אותה סמנטיקה של `FixedExpense` (סכום חודשי מחודש ההתחלה ועד הסיום/היום, החודש הראשון במלואו) בלי `branchId` |
 | `apps/web/lib/recurring-expenses.ts` | הוצאות קבועות משתנות: `frequencySegments` / `dueMonths` / `missingMonths` / `buildReminders` / `lastClosedMonth` — חודש בלי סכום הוא "עוד לא עודכן", לא אפס; ההתראה נדלקת רק אחרי שהחודש נסגר; ותדירות היא קו-זמן, לא ערך יחיד |
-| `apps/web/lib/partner-payouts.ts` | היתרה המצטברת לשותף-מחשבים חיצוני: מה שהצטבר פחות מה שנרשם ששולם (`n_partner_payouts`), על פני חלון חודשים |
-| `apps/web/lib/laptop-branch-tracking.ts` | טבלת הרווח-פר-מחשב של כל סניפי הניידים יחד (חודשים כעמודות), ו-`computeSecretaryShare` — 30% מהברוטו של הסניפים שלי |
+| `apps/web/lib/partner-payouts.ts` | היתרה המצטברת לכל מי שיש לו אחוז מהברוטו: מה שהצטבר פחות מה שנרשם ששולם (`n_partner_payouts`), על פני חלון חודשים |
+| `apps/web/lib/revenue-shares.ts` | **המנוע היחיד של האחוזים שאני מעביר החוצה** — ההסדרים הפר-סניפיים (`BRANCH_REVENUE_SHARES`: אדם, אחוז, סניף, `startDate`), החישוב הפר-מחשבי, והפונקציות הטהורות ששלושת הצרכנים חולקים: `computeBranchFinancials` (ניכוי מהרווח), `partner-settlement.ts` (שורת החוב) ו-`tx-data.ts` (שורת יציאה בספר הראשי) |
+| `apps/web/lib/partner-settlement.ts` | שכבת הטעינה בלבד: מביאה מ-Firestore ומריצה את `revenue-shares.ts` — `computeRevenueShareLines(month)` |
+| `apps/web/lib/laptop-branch-tracking.ts` | טבלת הרווח-פר-מחשב של כל סניפי הניידים יחד (חודשים כעמודות). `computeSecretaryShare`/`SECRETARY_PCT` נמחקו — ראו `revenue-shares.ts` |
 | `apps/web/lib/leftovers.ts` | סורק "שאריות מהעבר": רשומות שאף מסך לא מציג (סניף מחוק/לא קיים/scope בלי מסך), עם הסיבה והשפעת הכסף. מוצג ב-`/dashboard/maintenance` |
 | `apps/web/lib/coworking.ts` | המשרד השיתופי: לוח התשלומים (`billableMonths` / `payDayOf` / `isActiveOn` / `clientStatus`) ומאזן ההוצאות-מול-הכנסות (`buildCoworkingLedger`). גם זיהוי השכרות ללא סניף פעיל (`orphan` / `orphanReason`) |
 | `apps/web/components/counts-to-main-field.tsx` | הצ'קבוקס והתגית של `countsToMain` — אותה קוביה בכל טופס הוצאה/תשלום בעסק |

@@ -1,8 +1,8 @@
 /**
- * מה שאני חייב לשותף-מחשבים חיצוני, מצטבר.
+ * מה שאני חייב למי שיש לו אחוז מהברוטו, מצטבר.
  *
- * `lib/partner-settlement.ts` כבר יודע לחשב כמה מגיע לשותף על חודש בודד (אחוז מהברוטו
- * של המחשבים שסומנו כשלו - למשל 15% על מחשבים 76-79 לשלמה גולדשמידט). מה שחסר היה
+ * `lib/partner-settlement.ts` כבר יודע לחשב כמה מגיע לכל אחד על חודש בודד - 15% על
+ * מחשבים 76-79 לשלמה גולדשמידט, 30% מהסניף הראשי לאלישבע רומנו. מה שחסר היה
  * הזיכרון: חודש שלא סימנתי שהעברתי עליו פשוט נעלם מהמסך בחודש הבא.
  *
  * כאן החוב הוא הפרש בין שני סכומים על פני כל החודשים: מה שהצטבר לזכותו, פחות מה
@@ -11,7 +11,7 @@
  */
 import { getAdminFirestore } from "./firebase-admin";
 import type { PartnerPayout } from "@ultranet/shared-types";
-import { computePartnerSettlement, type PartnerSettlementLine } from "./partner-settlement";
+import { computeRevenueShareLines, type RevenueShareLine } from "./partner-settlement";
 import { monthsBetween } from "./branch-accounting";
 
 export const PARTNER_PAYOUTS_COLLECTION = "n_partner_payouts";
@@ -24,17 +24,20 @@ export function payoutDocId(partnerName: string, month: string): string {
 
 export interface PartnerMonthRow {
   month: string;
-  /** מה שהצטבר לזכותו החודש לפי המחשבים שלו */
+  /** מה שהצטבר לזכותו החודש */
   due: number;
   /** מה שנרשם ששולם עבור החודש הזה */
   paid: number;
-  computerNames: string[];
+  /** על מה - שמות המחשבים שלו, או שם הסניף כשההסדר הוא על סניף שלם */
+  subjects: string[];
   totalRevenue: number;
   pct: number;
 }
 
 export interface PartnerPayoutSummary {
   partnerName: string;
+  /** "אחוז מסניף שלם" / "אחוז ממחשבים" / שניהם - מה שמסביר את השורות בטבלה */
+  kinds: ("branch" | "computers")[];
   rows: PartnerMonthRow[];
   totalDue: number;
   totalPaid: number;
@@ -51,7 +54,7 @@ export async function loadPartnerPayouts(months: string[]): Promise<PartnerPayou
   const db = getAdminFirestore();
   const [payoutsSnap, ...settlements] = await Promise.all([
     db.collection(PARTNER_PAYOUTS_COLLECTION).get(),
-    ...months.map((m) => computePartnerSettlement(m)),
+    ...months.map((m) => computeRevenueShareLines(m)),
   ]);
 
   const paidByKey = new Map<string, number>();
@@ -62,24 +65,28 @@ export async function loadPartnerPayouts(months: string[]): Promise<PartnerPayou
   }
 
   const byPartner = new Map<string, PartnerMonthRow[]>();
+  const kindsByPartner = new Map<string, Set<"branch" | "computers">>();
   months.forEach((month, idx) => {
-    const lines = (settlements[idx] ?? []) as PartnerSettlementLine[];
-    // A partner can hold computers in more than one branch; the debt is to the person, so the
-    // branch-level lines are merged back into one row per partner per month.
+    const lines = (settlements[idx] ?? []) as RevenueShareLine[];
+    // A person can hold computers in more than one branch; the debt is to the person, so the
+    // per-branch lines are merged back into one row per person per month.
     const merged = new Map<string, PartnerMonthRow>();
     for (const line of lines) {
-      const row = merged.get(line.partnerName) ?? {
+      const row = merged.get(line.personName) ?? {
         month,
         due: 0,
         paid: 0,
-        computerNames: [],
+        subjects: [],
         totalRevenue: 0,
         pct: line.pct,
       };
-      row.due += line.amountOwed;
-      row.totalRevenue += line.totalRevenue;
-      for (const n of line.computerNames) if (!row.computerNames.includes(n)) row.computerNames.push(n);
-      merged.set(line.partnerName, row);
+      row.due += line.amount;
+      row.totalRevenue += line.gross;
+      for (const n of line.subjects) if (!row.subjects.includes(n)) row.subjects.push(n);
+      merged.set(line.personName, row);
+      const kinds = kindsByPartner.get(line.personName) ?? new Set<"branch" | "computers">();
+      kinds.add(line.kind);
+      kindsByPartner.set(line.personName, kinds);
     }
     for (const [name, row] of merged) {
       row.paid = paidByKey.get(`${name}|${month}`) ?? 0;
@@ -96,7 +103,7 @@ export async function loadPartnerPayouts(months: string[]): Promise<PartnerPayou
     if (!months.includes(month)) continue;
     const arr = byPartner.get(name) ?? [];
     if (arr.some((r) => r.month === month)) continue;
-    arr.push({ month, due: 0, paid, computerNames: [], totalRevenue: 0, pct: 0 });
+    arr.push({ month, due: 0, paid, subjects: [], totalRevenue: 0, pct: 0 });
     byPartner.set(name, arr);
   }
 
@@ -105,7 +112,14 @@ export async function loadPartnerPayouts(months: string[]): Promise<PartnerPayou
       rows.sort((a, b) => a.month.localeCompare(b.month));
       const totalDue = rows.reduce((s, r) => s + r.due, 0);
       const totalPaid = rows.reduce((s, r) => s + r.paid, 0);
-      return { partnerName, rows, totalDue, totalPaid, outstanding: totalDue - totalPaid };
+      return {
+        partnerName,
+        kinds: [...(kindsByPartner.get(partnerName) ?? [])],
+        rows,
+        totalDue,
+        totalPaid,
+        outstanding: totalDue - totalPaid,
+      };
     })
     .sort((a, b) => b.outstanding - a.outstanding);
 }

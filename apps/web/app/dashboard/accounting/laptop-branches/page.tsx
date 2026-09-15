@@ -1,12 +1,17 @@
 import Link from "next/link";
 import { LineChart, ChevronRight, ChevronLeft, UserCog } from "lucide-react";
 import { requireOwner } from "@/lib/perms";
-import { loadBranchAccountingRawData, currentMonth } from "@/lib/branch-accounting-data";
 import {
-  buildLaptopBranchTracking,
-  computeSecretaryShare,
-  trackingWindow,
-} from "@/lib/laptop-branch-tracking";
+  loadBranchAccountingRawData,
+  branchDatedIncomeLines,
+  currentMonth,
+} from "@/lib/branch-accounting-data";
+import { buildLaptopBranchTracking, trackingWindow } from "@/lib/laptop-branch-tracking";
+import {
+  BRANCH_REVENUE_SHARES,
+  resolveBranchRevenueShares,
+  revenueShareForMonth,
+} from "@/lib/revenue-shares";
 import { AccountingTabs } from "../accounting-tabs";
 import { TrackingTable } from "./tracking-table";
 
@@ -55,7 +60,13 @@ export default async function LaptopBranchesPage({
     .sort((a, b) => a.name.localeCompare(b.name, "he", { numeric: true }));
 
   const tracking = buildLaptopBranchTracking(branches, raw, months);
-  const secretary = computeSecretaryShare(raw.branches, raw, end);
+  // ההסדרים הפר-סניפיים (30% מהסניף הראשי לאלישבע רומנו). מוצגים כאן, ליד הרווח
+  // שהם יוצאים ממנו, אבל החוב עצמו מנוהל ב-/transfers יחד עם האחוזים הפר-מחשביים.
+  const branchShares = resolveBranchRevenueShares(raw.branches).map(({ share, branch }) => ({
+    share,
+    branch,
+    ...revenueShareForMonth(branchDatedIncomeLines(branch, raw), share, end),
+  }));
 
   const prevHref = `/dashboard/accounting/laptop-branches?end=${shiftMonth(end, -12)}`;
   const nextEnd = shiftMonth(end, 12);
@@ -102,32 +113,54 @@ export default async function LaptopBranchesPage({
 
       <TrackingTable tracking={tracking} />
 
-      <div className="rounded-card border border-card-border bg-white p-4 shadow-card">
-        <h2 className="mb-1 flex items-center gap-1.5 text-sm font-extrabold text-ink">
-          <UserCog className="h-4 w-4" />
-          חלק המזכירה — {secretary.pct}% מהברוטו של הסניף הראשי
-        </h2>
-        <p className="text-[11.5px] leading-relaxed text-muted">
-          המזכירה מתפעלת את המחשבים שבסניפים שלי ומקבלת {secretary.pct}% מהברוטו שלהם כמשכורת. הסכום
-          במכוון לא מופיע בטבלת ההעברות — זו משכורת, לא התחשבנות מול שותף. הדרך לרשום אותו היא
-          שורה &quot;משכורת מזכירה&quot; ב
-          <Link href="/dashboard/accounting/extra-expenses" className="mx-1 font-bold text-teal underline">
-            הוצאות נוספות
-          </Link>
-          , שם היא נשמרת חודש-חודש עם היסטוריה.
-        </p>
-        <div className="mt-2 flex flex-wrap items-center gap-4 text-[13px]">
-          <span className="text-muted">
-            ברוטו {end}: <b className="text-ink">{money(secretary.grossIncome)}</b>
-          </span>
-          <span className="text-muted">
-            {secretary.pct}% ממנו: <b className="text-red-600">{money(secretary.amount)}</b>
-          </span>
-          <span className="text-[11px] text-muted">
-            {secretary.branchNames.length > 0 ? `סניפים: ${secretary.branchNames.join(", ")}` : "אין סניפים שלי"}
-          </span>
+      {/* הסדר שהוגדר ולא נתפס על אף סניף הוא שקט מסוכן: הוא לא מנכה כלום ולא מייצר חוב,
+          ואי אפשר לדעת את זה בלי להסתכל בקוד. לכן הוא נאמר כאן במפורש. */}
+      {branchShares.length === 0 && BRANCH_REVENUE_SHARES.length > 0 && (
+        <div className="rounded-card border border-amber-300 bg-amber-50 p-4 text-[12.5px] leading-relaxed text-ink shadow-card">
+          <b>הסדר אחוזים מוגדר אבל לא נמצא לו סניף.</b>{" "}
+          {BRANCH_REVENUE_SHARES.map((sh) => `${sh.pct}% ל${sh.personName}`).join(", ")} — ההתאמה נעשית
+          לפי שם הסניף, בין סניפי ההשכרות שלי בלבד. אף סניף לא התאים, ולכן לא מנוכה כלום ולא נוצר
+          חוב. צריך לעדכן את <code>BRANCH_REVENUE_SHARES</code> ב-<code>lib/revenue-shares.ts</code>.
         </div>
-      </div>
+      )}
+
+      {branchShares.length > 0 && (
+        <div className="rounded-card border border-card-border bg-white p-4 shadow-card">
+          <h2 className="mb-1 flex items-center gap-1.5 text-sm font-extrabold text-ink">
+            <UserCog className="h-4 w-4" />
+            אחוזים מהברוטו של הסניף
+          </h2>
+          <p className="text-[11.5px] leading-relaxed text-muted">
+            מי שמתפעל את המחשבים של הסניף מקבל אחוז מהברוטו שלו. הסכום הזה <b>כבר ירד</b> מהרווח
+            שבטבלה למעלה — הוא מעולם לא היה שלי. מה שנשאר להעביר בפועל, כולל חודשים קודמים,
+            נמצא ב
+            <Link href="/dashboard/accounting/transfers" className="mx-1 font-bold text-teal underline">
+              העברות חודשיות
+            </Link>
+            , ואין צורך לרשום אותו שוב כהוצאה.
+          </p>
+          <div className="mt-2.5 flex flex-col gap-2">
+            {branchShares.map(({ share, branch, gross, amount }) => (
+              <div
+                key={`${share.personName}|${branch.id}`}
+                className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-lg border border-card-border bg-[#f9fafb] px-3 py-2 text-[13px]"
+              >
+                <span className="font-extrabold text-ink">{share.personName}</span>
+                <span className="text-muted">
+                  {share.pct}% מ<b className="text-ink">{branch.name}</b>
+                </span>
+                <span className="text-[11px] text-muted">החל מ-{share.startDate}</span>
+                <span className="text-muted">
+                  ברוטו {end}: <b className="text-ink">{money(gross)}</b>
+                </span>
+                <span className="text-muted">
+                  מגיע לה: <b className="text-red-600">{money(amount)}</b>
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

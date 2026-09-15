@@ -14,7 +14,7 @@ function monthLabel(month: string) {
 }
 
 /**
- * יתרת שותפי המחשבים החיצוניים (למשל 15% מהברוטו של מחשבים מסוימים).
+ * היתרה של כל מי שיש לו אחוז מהברוטו של ההשכרות - 15% ממחשבים מסוימים, 30% מסניף שלם.
  *
  * מוצגים רק חודשים שיש בהם משהו - סכום שמגיע או תשלום שנרשם. חודש שקט לא מקבל שורה,
  * כי שורה של אפס לא אומרת כלום ורק מרחיקה את המספר שכן חשוב: היתרה בסוף.
@@ -29,8 +29,8 @@ export function PartnerPayoutTable({
   if (summaries.length === 0) {
     return (
       <div className="rounded-card border border-card-border bg-white p-5 text-center text-sm text-muted shadow-card">
-        אין שותפי מחשבים עם יתרה. שותף מוגדר על המחשב עצמו (עמוד &quot;מחשבים&quot;): מסמנים
-        &quot;שותפות&quot;, שם השותף ואחוז.
+        אין אף אחד עם יתרה. אחוז על מחשב מוגדר על המחשב עצמו (עמוד &quot;מחשבים&quot;): מסמנים
+        &quot;שותפות&quot;, שם ואחוז. אחוז על סניף שלם מוגדר ב-<code>lib/revenue-shares.ts</code>.
       </div>
     );
   }
@@ -42,7 +42,16 @@ export function PartnerPayoutTable({
         return (
           <div key={s.partnerName} className="overflow-hidden rounded-card border border-card-border bg-white shadow-card">
             <div className="flex flex-wrap items-center justify-between gap-2 border-b border-card-border bg-[#f4f6f9] px-4 py-2.5">
-              <span className="text-sm font-extrabold text-ink">{s.partnerName}</span>
+              <span className="flex items-center gap-1.5 text-sm font-extrabold text-ink">
+                {s.partnerName}
+                <span className="rounded-full bg-white px-1.5 py-0.5 text-[10px] font-bold text-muted">
+                  {s.kinds.includes("branch") && s.kinds.includes("computers")
+                    ? "סניף + מחשבים"
+                    : s.kinds.includes("branch")
+                      ? "אחוז מהסניף"
+                      : "אחוז ממחשבים"}
+                </span>
+              </span>
               <span className="text-[12px] text-muted">
                 הצטבר {money(s.totalDue)} · הועבר {money(s.totalPaid)} ·{" "}
                 <b className={s.outstanding > 0.5 ? "text-red-600" : "text-teal-dark"}>
@@ -55,7 +64,7 @@ export function PartnerPayoutTable({
                 <thead>
                   <tr className="border-b border-card-border">
                     <th className={TH}>חודש</th>
-                    <th className={TH}>מחשבים</th>
+                    <th className={TH}>על מה</th>
                     <th className={TH}>ברוטו</th>
                     <th className={TH}>אחוז</th>
                     <th className={TH}>מגיע לו</th>
@@ -73,7 +82,7 @@ export function PartnerPayoutTable({
                   {rows.map((r) => (
                     <tr key={r.month} className={r.month === currentMonth ? "bg-teal-bg/40" : ""}>
                       <td className={`${TD} font-bold text-ink`}>{monthLabel(r.month)}</td>
-                      <td className={`${TD} text-muted`}>{r.computerNames.join(", ") || "-"}</td>
+                      <td className={`${TD} text-muted`}>{r.subjects.join(", ") || "-"}</td>
                       <td className={`${TD} text-muted`}>{r.totalRevenue > 0 ? money(r.totalRevenue) : "-"}</td>
                       <td className={`${TD} text-muted`}>{r.pct > 0 ? `${r.pct}%` : "-"}</td>
                       <td className={`${TD} font-bold text-red-600`}>{r.due > 0 ? money(r.due) : "-"}</td>
@@ -87,7 +96,8 @@ export function PartnerPayoutTable({
             </div>
             <p className="border-t border-card-border px-4 py-2 text-[11px] leading-relaxed text-muted">
               חודש שלא סומן כמועבר נשאר ביתרה ומצטבר לחודש הבא. סימון התיבה רושם את מלוא הסכום; אפשר
-              גם להקליד סכום חלקי.
+              גם להקליד סכום חלקי. הסכומים האלה כבר ירדו מהרווח שלי בכל מסך שמציג רווח — אין צורך
+              לרשום אותם שוב כהוצאה.
             </p>
           </div>
         );
