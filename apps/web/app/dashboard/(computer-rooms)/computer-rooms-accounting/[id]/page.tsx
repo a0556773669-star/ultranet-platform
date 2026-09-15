@@ -45,6 +45,18 @@ export default async function ComputerRoomBranchAccountingPage({ params }: { par
         <div className="rounded-card border border-card-border bg-white p-4 text-center shadow-card">
           <p className="text-[11px] font-bold uppercase tracking-wide text-muted">עלות הקמה</p>
           <p className="mt-1 text-xl font-black text-ink">{money(stats.setupCost)}</p>
+          {/* הפירוט מוצג רק כשהמספר באמת הגיע ממנו - כשההשקעה נקראה משכבת הנכסים
+              (setupFromAssets) השורות כאן כבר לא מסבירות את הסכום שמעליהן. */}
+          {!stats.setupFromAssets && (stats.branch.setupItems?.length ?? 0) > 0 && (
+            <ul className="mt-2 flex flex-col gap-1 border-t border-card-border pt-2 text-right">
+              {stats.branch.setupItems!.map((item, idx) => (
+                <li key={idx} className="flex items-center justify-between gap-2 text-[11.5px]">
+                  <span className="text-muted">{item.label || "ללא תיאור"}</span>
+                  <span className="font-bold text-ink">{money(item.amount)}</span>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
         <div className="rounded-card border border-card-border bg-white p-4 text-center shadow-card">
           <p className="text-[11px] font-bold uppercase tracking-wide text-muted">הוצאות עד היום (כולל הקמה)</p>
