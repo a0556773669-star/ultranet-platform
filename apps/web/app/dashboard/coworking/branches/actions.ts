@@ -95,7 +95,7 @@ function parseCoworkingBranchForm(formData: FormData): Omit<Branch, "id"> {
 }
 
 function revalidateCoworking(id?: string) {
-  revalidatePath("/dashboard/coworking/branches");
+  revalidatePath("/dashboard/coworking");
   revalidatePath("/dashboard/coworking/expenses");
   revalidatePath("/dashboard/coworking/accounting");
   revalidatePath("/dashboard/accounting");
@@ -110,7 +110,7 @@ export async function createCoworkingBranchAction(formData: FormData) {
   }
   await getAdminFirestore().collection("n_branches").add(stripUndefined(data));
   revalidateCoworking();
-  redirect("/dashboard/coworking/branches");
+  redirect("/dashboard/coworking");
 }
 
 export async function updateCoworkingBranchAction(id: string, formData: FormData) {
@@ -118,7 +118,7 @@ export async function updateCoworkingBranchAction(id: string, formData: FormData
   const data = parseCoworkingBranchForm(formData);
   await getAdminFirestore().collection("n_branches").doc(id).set(stripUndefined(data), { merge: true });
   revalidateCoworking(id);
-  redirect("/dashboard/coworking/branches");
+  redirect("/dashboard/coworking");
 }
 
 /**
@@ -132,5 +132,5 @@ export async function deleteCoworkingBranchAction(id: string) {
     .doc(id)
     .set({ deleted: true, deletedAt: new Date().toISOString() }, { merge: true });
   revalidateCoworking(id);
-  redirect("/dashboard/coworking/branches");
+  redirect("/dashboard/coworking");
 }

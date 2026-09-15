@@ -1,6 +1,6 @@
 import { History, CheckCircle2 } from "lucide-react";
 import { rentalTotals, type CoworkingClientStatus } from "@/lib/coworking";
-import { markStationPaidAction, unmarkStationPaidAction } from "./actions";
+import { markStationPaidAction, unmarkStationPaidAction } from "./station-actions";
 
 function money(n: number) {
   return `${Math.round(n).toLocaleString("he-IL")} ₪`;

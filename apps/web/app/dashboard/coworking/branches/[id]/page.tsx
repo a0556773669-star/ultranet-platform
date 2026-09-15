@@ -22,7 +22,7 @@ export default async function CoworkingBranchDetailPage({ params }: { params: { 
 
   return (
     <div className="max-w-2xl">
-      <CoworkingTabs active="/dashboard/coworking/branches" />
+      <CoworkingTabs active="/dashboard/coworking" />
       <div className="mb-4 flex items-center justify-between">
         <h1 className="flex items-center gap-1.5 text-[21px] font-extrabold text-ink">
           <Building2 className="h-5 w-5" />

@@ -154,7 +154,7 @@ export default async function CoworkingAccountingPage() {
                 ({money(ledger.setupFromBranches)} מפירוט הסניפים · {money(ledger.setupFromExpenses)} משורות ישנות)
               </span>
             )}{" "}
-            <Link href="/dashboard/coworking/branches" className="font-bold text-teal hover:underline">
+            <Link href="/dashboard/coworking" className="font-bold text-teal hover:underline">
               נרשמת בטופס הסניף
             </Link>
           </li>
