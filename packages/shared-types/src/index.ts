@@ -607,6 +607,39 @@ export interface AccountingExpense {
     expenseTypeId?: string;
 }
 
+/**
+ * collection: `n_ah_fixed_expenses` — **הוצאה קבועה של העסק עצמו**.
+ *
+ * הוצאות נוספות נבנו לרכישה חד-פעמית (`n_ah_expenses`) ולהוצאה חוזרת שהסכום שלה משתנה
+ * (`n_recurring_var_expenses`, `scope: "main"`). מה שנפל בין השתיים הוא הדבר הפשוט
+ * מכולם: הוצאה של העסק שחוזרת כל חודש **באותו סכום** — שכירות משרד, רואה חשבון,
+ * מנוי תוכנה. בלי קולקשן משלה היא נרשמה כרכישה חד-פעמית בכל חודש מחדש (שורה חדשה
+ * לתמיד, ואי אפשר לראות אותה כשורה אחת) או כקבועה משתנה שמבקשת סכום כל חודש
+ * לנצח למרות שהסכום ידוע.
+ *
+ * זו המקבילה של `FixedExpense` לספר הראשי: אותה סמנטיקה בדיוק (סכום חודשי שנצבר
+ * מהחודש של `startDate` ועד `endDate`/היום), רק בלי `branchId` — ההוצאה היא של העסק
+ * ולא של סניף, ולכן היא לא יכולה ליפול מהמסכים כשסניף נמחק (`lib/leftovers.ts`).
+ * הצבירה עצמה ב-`lib/main-fixed-expenses.ts`, ושורה לכל חודש נכנסת לספר הראשי.
+ */
+export interface AccountingFixedExpense {
+    id: string;
+    name: string;
+    /** הסכום ה**חודשי**, לא הסכום הכולל */
+    amount: number;
+    business: "computers" | "rentals" | "coworking" | "general";
+    /** free-text category picked from ACCOUNTING_EXPENSE_CATEGORIES (apps/web/lib/accounting-categories.ts) */
+    category?: string;
+    /** YYYY-MM-DD — ההוצאה נספרת מהחודש הזה והלאה, החודש הראשון במלואו */
+    startDate: string;
+    /** YYYY-MM-DD — החודש הזה הוא האחרון שנספר; חסר = ההוצאה עדיין פעילה */
+    endDate?: string;
+    /** ראה `COUNTS_TO_MAIN_DOC`. הטופס נפתח מסומן, כי זו הוצאה של העסק עצמו. */
+    countsToMain?: boolean;
+    /** ISO timestamp, לתצוגה בלבד */
+    createdAt?: string;
+}
+
 /** collection: n_collection_routes */
 export interface CollectionRoute {
     id: string;

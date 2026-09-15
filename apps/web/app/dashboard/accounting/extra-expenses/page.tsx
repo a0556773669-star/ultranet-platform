@@ -3,6 +3,7 @@ import { requireOwner } from "@/lib/perms";
 import { getAdminFirestore } from "@/lib/firebase-admin";
 import type { AccountingExpense, Branch } from "@ultranet/shared-types";
 import { loadRecurringVariableExpenses } from "@/lib/recurring-expenses";
+import { loadMainFixedExpenses } from "@/lib/main-fixed-expenses";
 import { countsToMain } from "@/lib/counts-to-main";
 import { RecurringExpensesCard } from "@/components/recurring-expenses/recurring-expenses-card";
 import { RecurringPurchaseBadge } from "@/components/recurring-purchases/recurring-purchase-badge";
@@ -13,6 +14,7 @@ import { AccountingTabs } from "../accounting-tabs";
 import { DeleteEntryButton } from "../delete-entry-button";
 import { deleteExtraExpenseAction } from "../actions";
 import { ExtraExpenseForm } from "./extra-expense-form";
+import { MainFixedExpensesCard } from "./main-fixed-expenses-card";
 
 function money(n: number) {
   return `${Math.round(n).toLocaleString("he-IL")} ₪`;
@@ -21,9 +23,13 @@ function money(n: number) {
 /**
  * הוצאות נוספות — ההוצאות של העסק עצמו, שלא שייכות לאף סניף.
  *
- * שני חלקים, ובכוונה בסדר הזה: קודם ההוצאות שחוזרות כל חודש בסכום משתנה (משכורת
- * מזכירה, מע"מ, חשמל), כי הן אלה שדורשות ממני משהו ב-1 לחודש; ואחריהן הרכישות
- * החד-פעמיות, שנרשמות פעם אחת ונגמרות.
+ * שלושה חלקים, ובכוונה בסדר הזה: קודם ההוצאות שחוזרות כל חודש בסכום משתנה (משכורת
+ * מזכירה, מע"מ, חשמל), כי הן אלה שדורשות ממני משהו ב-1 לחודש; אחריהן ההוצאות הקבועות
+ * שחוזרות כל חודש באותו סכום (שכירות משרד, רואה חשבון) — נרשמות פעם אחת ונצברות לבד,
+ * ואינן דורשות דבר; ובסוף הרכישות החד-פעמיות, שנרשמות פעם אחת ונגמרות.
+ *
+ * שלושתן אותה שאלה בשלוש תשובות — האם ההוצאה חוזרת, והאם הסכום שלה ידוע — ולכן הן
+ * שלושה כרטיסים במסך אחד ולא שלושה מסכים.
  *
  * רכישה גדולה יכולה לסמן לאילו סניפים היא הלכה פיזית (`linkedBranchIds`) בלי שזה יפתח
  * מולם התחשבנות - ההפרדה הזו היא הסיבה שהשדה קיים: "לאן זה הלך" ו"מי משלם על זה" הן
@@ -32,8 +38,9 @@ function money(n: number) {
 export default async function ExtraExpensesPage() {
   await requireOwner();
   const db = getAdminFirestore();
-  const [recurring, expensesSnap, branchesSnap, purchaseIndex] = await Promise.all([
+  const [recurring, mainFixed, expensesSnap, branchesSnap, purchaseIndex] = await Promise.all([
     loadRecurringVariableExpenses({ scope: "main" }),
+    loadMainFixedExpenses(),
     db.collection("n_ah_expenses").get(),
     db.collection("n_branches").get(),
     loadRecurringPurchaseIndex(),
@@ -63,7 +70,9 @@ export default async function ExtraExpensesPage() {
             <Wallet className="h-5 w-5" />
             הוצאות נוספות
           </h1>
-          <p className="mt-0.5 text-[12.5px] text-muted">הוצאות של העסק עצמו — קבועות משתנות ורכישות חד-פעמיות</p>
+          <p className="mt-0.5 text-[12.5px] text-muted">
+            הוצאות של העסק עצמו — קבועות משתנות, קבועות ורכישות חד-פעמיות
+          </p>
         </div>
         <AccountingTabs active="/dashboard/accounting/extra-expenses" />
       </div>
@@ -76,6 +85,8 @@ export default async function ExtraExpensesPage() {
         title="הוצאות קבועות משתנות"
         subtitle='שורה אחת לכל הוצאה שחוזרת כל חודש בסכום אחר — משכורת מזכירה, מע"מ, חשמל. המערכת מבקשת את הסכום של כל חודש שנסגר (מ-1 לחודש שאחריו), וההיסטוריה נשמרת לכל החודשים.'
       />
+
+      <MainFixedExpensesCard expenses={mainFixed} />
 
       <div className="grid grid-cols-1 items-start gap-3.5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
         <ExtraExpenseForm branches={branches} expenseTypes={purchaseIndex.types} />

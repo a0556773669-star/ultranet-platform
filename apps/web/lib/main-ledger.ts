@@ -10,8 +10,9 @@
  * מה שמצטרף (רק כשהדגל דלוק):
  *   הוצאות — `n_fixed_expenses` (נצברת חודש-חודש מ-`startDate`), `n_var_expenses`,
  *            `n_multi_branch_expenses`, `n_recurring_var_expenses` (העלות החודשית אחרי פריסה),
- *            `n_ah_expenses` (שורות "הוצאות נוספות"), ו-`n_branches.setupCost` (עלות ההקמה
- *            של הסניף, שורה אחת לסניף בחודש הפתיחה שלו).
+ *            `n_ah_expenses` (רכישות "הוצאות נוספות"), `n_ah_fixed_expenses` (הוצאה קבועה של
+ *            העסק עצמו — שורה לכל חודש), ו-`n_branches.setupCost` (עלות ההקמה של הסניף,
+ *            שורה אחת לסניף בחודש הפתיחה שלו).
  *
  * עלות ההקמה היא היוצא מן הכלל היחיד לברירת המחדל: היא נספרת אלא אם כבו אותה במפורש
  * (`setupCostCountsToMain`), כי הבעלים ביקש שההקמה תיכנס לראשי ואין כאן "שורה ישנה"
@@ -25,6 +26,7 @@
 import { getAdminFirestore } from "./firebase-admin";
 import type {
   AccountingExpense,
+  AccountingFixedExpense,
   AccountingIncome,
   Branch,
   CoworkingClient,
@@ -37,6 +39,7 @@ import { countsToMain, setupCostCountsToMain } from "./counts-to-main";
 import { monthsBetween } from "./branch-accounting";
 import { RECURRING_VAR_EXPENSES_COLLECTION, monthlyAllocationDetailed } from "./recurring-expenses";
 import { MULTI_BRANCH_EXPENSES_COLLECTION } from "./multi-branch-expense";
+import { MAIN_FIXED_EXPENSES_COLLECTION, mainFixedExpenseMonths } from "./main-fixed-expenses";
 
 export function currentMonth(): string {
   return new Date().toISOString().slice(0, 7);
@@ -48,6 +51,7 @@ export type MainEntrySource =
   | "multi-branch"
   | "recurring"
   | "extra"
+  | "main-fixed"
   | "setup"
   | "income"
   | "coworking";
@@ -121,6 +125,7 @@ export async function loadMainLedger(upto = currentMonth()): Promise<MainLedger>
     multiSnap,
     recurringSnap,
     ahExpenseSnap,
+    ahFixedSnap,
     ahIncomeSnap,
     cwClientsSnap,
   ] = await Promise.all([
@@ -130,6 +135,7 @@ export async function loadMainLedger(upto = currentMonth()): Promise<MainLedger>
     db.collection(MULTI_BRANCH_EXPENSES_COLLECTION).get(),
     db.collection(RECURRING_VAR_EXPENSES_COLLECTION).get(),
     db.collection("n_ah_expenses").get(),
+    db.collection(MAIN_FIXED_EXPENSES_COLLECTION).get(),
     db.collection("n_ah_income").get(),
     db.collection("n_cw_clients").get(),
   ]);
@@ -226,6 +232,31 @@ export async function loadMainLedger(upto = currentMonth()): Promise<MainLedger>
       origin: "הוצאות נוספות",
       category: e.category,
     });
+  }
+
+  // הוצאה קבועה של העסק עצמו: שורה לכל חודש שהיא הייתה פעילה בו, ולא שורה אחת מצטברת
+  // בחודש שנרשמה. שכירות המשרד היא הוצאה של אוקטובר בדיוק כמו של ספטמבר, ובלי שורה
+  // לכל חודש היא הייתה נעלמת מ"כמה הוצאנו החודש" בכל חודש חוץ מהראשון.
+  for (const d of ahFixedSnap.docs) {
+    const e = { ...(d.data() as Omit<AccountingFixedExpense, "id">), id: d.id } as AccountingFixedExpense;
+    if (!countsToMain(e)) continue;
+    const amount = e.amount || 0;
+    if (amount === 0) continue;
+    const months = mainFixedExpenseMonths(e, upto);
+    for (const month of months) {
+      expenses.push({
+        id: `${e.id}|${month}`,
+        source: "main-fixed",
+        // החודש הראשון נושא את תאריך ההתחלה האמיתי, כדי שהשורה בטבלה תראה מאיזה יום
+        // ההוצאה קיימת; שאר החודשים נתלים ב-1 בחודש.
+        date: month === e.startDate.slice(0, 7) ? e.startDate : `${month}-01`,
+        month,
+        desc: `${e.name} — ${month} (קבועה)`,
+        amount,
+        origin: "הוצאות נוספות",
+        category: e.category,
+      });
+    }
   }
 
   // עלות ההקמה של כל סניף. זו לא תנועה מתוארכת בקולקשן משלה אלא שדה על הסניף, ולכן היא
