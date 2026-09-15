@@ -7,6 +7,7 @@ import { FieldValue } from "firebase-admin/firestore";
 import type { Branch, FixedExpense, VariableExpense, BranchIncome } from "@ultranet/shared-types";
 import { SHARED_RENTALS_BRANCH_ID } from "@/lib/expense-shared-scope";
 import { createLinkedOwnerLedgerExpense, deleteLinkedOwnerLedgerExpense } from "@/lib/branch-expense-ledger";
+import { resolveExpenseTypeIdFromForm } from "@/lib/recurring-purchases";
 import { countsToMainFromForm } from "@/lib/counts-to-main";
 
 async function requireOwner() {
@@ -160,10 +161,12 @@ export async function createVariableExpenseAction(branchId: string, formData: Fo
     owedBy,
     countsToMain: countsToMainFromForm(formData),
     linkedAhExpenseId,
+    expenseTypeId: await resolveExpenseTypeIdFromForm(formData, "rentals"),
   };
   await db.collection("n_var_expenses").add(stripUndefined(data));
   revalidatePath(`/dashboard/rentals/expenses/${branchId}`);
   revalidatePath("/dashboard/accounting");
+  revalidatePath("/dashboard/accounting/extra-expenses");
   revalidatePath("/dashboard/rentals/accounting");
   revalidatePath("/dashboard");
 }

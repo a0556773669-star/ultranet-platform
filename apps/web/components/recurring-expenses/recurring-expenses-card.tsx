@@ -1,15 +1,25 @@
 import { Gauge, AlertTriangle } from "lucide-react";
 import type { ExpenseScope, RecurringVariableExpense } from "@ultranet/shared-types";
 import {
+  RECURRING_FREQUENCY_LABELS,
   buildReminders,
   currentMonth,
-  expectedMonths,
+  coveredMonths,
+  dueMonths,
+  cycleMonths,
+  frequencyOf,
+  frequencySegments,
+  isSpread,
   amountForMonth,
+  lastClosedMonth,
   missingMonths,
+  monthlyAllocation,
   totalToDate,
 } from "@/lib/recurring-expenses";
 import { countsToMain } from "@/lib/counts-to-main";
 import { CountsToMainField, CountsToMainBadge } from "@/components/counts-to-main-field";
+import { RecurringHistoryPanel } from "./recurring-history-panel";
+import { RecurringStopControl } from "./recurring-stop-control";
 import {
   createRecurringVariableExpenseAction,
   setRecurringMonthAmountAction,
@@ -32,11 +42,36 @@ function monthLabel(month: string) {
 }
 
 /**
+ * תיאור התדירות בשורה. כל עוד היא אחת — מילה אחת ("חודשי"). מהרגע שהיא השתנתה, קו-הזמן
+ * המלא: "דו-חודשי 01/25–05/26 · חודשי מ-06/26". בלי זה אי אפשר להבין למה אותה שורה מבקשת
+ * סכום כל חודשיים בהתחלה וכל חודש בסוף.
+ */
+function frequencyNote(expense: RecurringVariableExpense, upto: string): string {
+  const segments = frequencySegments(expense, upto);
+  if (segments.length <= 1) return RECURRING_FREQUENCY_LABELS[frequencyOf(expense, upto)];
+  return segments
+    .map((seg, i) => {
+      const label = RECURRING_FREQUENCY_LABELS[seg.frequency];
+      if (i === segments.length - 1) return `${label} מ-${monthLabel(seg.from)}`;
+      return `${label} ${monthLabel(seg.from)}–${monthLabel(seg.to)}`;
+    })
+    .join(" · ");
+}
+
+/**
  * "הוצאות קבועות משתנות" — שורה אחת לכל הוצאה, ועמודה לכל חודש.
  *
  * התא הריק הוא הפיצ'ר: הוא לא אומר "אפס", הוא אומר "עוד לא עדכנת", והוא הדבר היחיד
  * שהמסך הזה באמת צריך לעשות — לעמוד מול הבעלים ב-1 לחודש ולשאול כמה היה החשמל.
  * הטופס הקטן בכל תא חסר הוא התשובה במקום, בלי לפתוח מסך אחר.
+ *
+ * החודש הרץ הוא היוצא מן הכלל: אפשר להזין אותו מוקדם, אבל הוא לא נצבע ולא נכנס
+ * ל"צריך עדכון" — חודש נחשב חסר רק אחרי שנסגר (`lastClosedMonth`), כי עד אז החשבון
+ * עצמו עוד לא הגיע.
+ *
+ * הטבלה מציגה חלון של החודשים האחרונים בלבד, כי זו העבודה השוטפת. כל מה שמחוצה לו —
+ * הוצאה שקיימת שנה ונרשמה רק עכשיו, טעות הקלדה מלפני חצי שנה — נפתח ב-`RecurringHistoryPanel`
+ * שמתחת לטבלה, ושם כל החודשים מיום ההתחלה זמינים לעריכה.
  */
 export function RecurringExpensesCard({
   scope,
@@ -45,7 +80,7 @@ export function RecurringExpensesCard({
   canManage,
   monthsBack = 6,
   title = "הוצאות קבועות משתנות",
-  subtitle = 'הוצאה שחוזרת כל חודש אבל הסכום שלה משתנה — חשמל, משכורת, מע"מ. המערכת מזכירה בכל חודש שלא עודכן.',
+  subtitle = 'הוצאה שחוזרת כל חודש אבל הסכום שלה משתנה — חשמל, משכורת, מע"מ. התזכורת על חודש מגיעה ב-1 לחודש שאחריו, כשהחודש כבר נסגר.',
 }: {
   scope: ExpenseScope;
   branchId?: string;
@@ -57,11 +92,15 @@ export function RecurringExpensesCard({
 }) {
   const now = currentMonth();
   const reminders = buildReminders(expenses, now);
+  // חודש שעדיין רץ אינו "בפיגור": הוא נשאר פתוח להזנה אבל לא נצבע ולא נספר בהתראה.
+  const dueUpto = lastClosedMonth(now);
+  const today = new Date().toISOString().slice(0, 10);
 
   // The visible window is the last `monthsBack` months of the widest expense, so a single
-  // late row doesn't force the whole table wide.
+  // late row doesn't force the whole table wide. Months a spread payment lands on count too:
+  // a yearly bill paid in January is still a cost in June, and the June column must show it.
   const allMonths = new Set<string>();
-  for (const e of expenses) for (const m of expectedMonths(e, now)) allMonths.add(m);
+  for (const e of expenses) for (const m of coveredMonths(e, now)) allMonths.add(m);
   const months = [...allMonths].sort().slice(-monthsBack);
 
   const create = createRecurringVariableExpenseAction.bind(null, scope, branchId);
@@ -88,6 +127,11 @@ export function RecurringExpensesCard({
               </li>
             ))}
           </ul>
+          {canManage && (
+            <p className="mt-1.5 text-[11px] font-semibold text-amber-800">
+              חודש שלא מופיע בטבלה נפתח ב&quot;היסטוריה מלאה והגדרות&quot; שמתחתיה, כולל מילוי מהיר של שנה שלמה.
+            </p>
+          )}
         </div>
       )}
 
@@ -110,8 +154,11 @@ export function RecurringExpensesCard({
             </thead>
             <tbody className="tabular-nums">
               {expenses.map((e) => {
-                const missing = new Set(missingMonths(e, now));
-                const expected = new Set(expectedMonths(e, now));
+                const missing = new Set(missingMonths(e, dueUpto));
+                const due = new Set(dueMonths(e, now));
+                const allocation = monthlyAllocation(e, now);
+                const spread = isSpread(e);
+                const cycle = cycleMonths(e);
                 const del = deleteRecurringVariableExpenseAction.bind(null, e.id);
                 return (
                   <tr key={e.id} className="border-b border-card-border last:border-b-0">
@@ -121,16 +168,20 @@ export function RecurringExpensesCard({
                         <CountsToMainBadge on={countsToMain(e)} />
                       </span>
                       <span className="block text-[10.5px] text-muted">
-                        {e.category || "ללא קטגוריה"} · מ-{e.startDate}
+                        {e.category || "ללא קטגוריה"} · {frequencyNote(e, now)}
+                        {spread ? ` (פרוס ל-${cycle} חודשים)` : ""} · מ-{e.startDate}
                         {e.endDate ? ` · הופסק ${e.endDate}` : ""}
                       </span>
                     </td>
                     {months.map((m) => {
                       const value = amountForMonth(e, m);
-                      if (!expected.has(m)) {
+                      const share = allocation.get(m) ?? 0;
+                      // חודש שאין בו חיוב אבל יש בו עלות פרוסה — זה מה שמאפשר להשוות חודש
+                      // לחודש: התשלום השנתי נראה גם בחודשים שלא שילמו בהם.
+                      if (!due.has(m)) {
                         return (
-                          <td key={m} className="px-2 py-1.5 text-center text-muted">
-                            —
+                          <td key={m} className="whitespace-nowrap px-2 py-1.5 text-center text-muted">
+                            {share > 0 ? `≈${money(share)}` : "—"}
                           </td>
                         );
                       }
@@ -138,12 +189,17 @@ export function RecurringExpensesCard({
                         return (
                           <td key={m} className="whitespace-nowrap px-2 py-1.5 text-center font-semibold text-ink">
                             {money(value)}
+                            {spread && (
+                              <span className="block text-[9.5px] font-medium text-muted">
+                                ≈{money(share)} לחודש
+                              </span>
+                            )}
                           </td>
                         );
                       }
                       if (!canManage) {
                         return (
-                          <td key={m} className="px-2 py-1.5 text-center text-amber-700">
+                          <td key={m} className={`px-2 py-1.5 text-center ${missing.has(m) ? "text-amber-700" : "text-muted"}`}>
                             ?
                           </td>
                         );
@@ -175,15 +231,19 @@ export function RecurringExpensesCard({
                       {money(totalToDate(e, now))}
                     </td>
                     {canManage && (
-                      <td className="px-2 py-1.5 text-center">
-                        <form action={del}>
-                          <button
-                            type="submit"
-                            className="rounded-lg border border-red-200 px-2 py-0.5 text-[10px] font-medium text-red-600 transition hover:bg-red-50"
-                          >
-                            מחיקה
-                          </button>
-                        </form>
+                      <td className="px-2 py-1.5">
+                        <div className="flex items-center justify-center gap-1.5">
+                          <RecurringStopControl expense={e} today={today} />
+                          <form action={del}>
+                            <button
+                              type="submit"
+                              title="מחיקה מוציאה את ההוצאה מכל החודשים למפרע — להפסקה השתמש ב'הפסקה'"
+                              className="rounded-lg border border-red-200 px-2 py-0.5 text-[10px] font-medium text-red-600 transition hover:bg-red-50"
+                            >
+                              מחיקה
+                            </button>
+                          </form>
+                        </div>
                       </td>
                     )}
                   </tr>
@@ -191,6 +251,14 @@ export function RecurringExpensesCard({
               })}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {canManage && expenses.length > 0 && (
+        <div className="mb-3 flex flex-col gap-1.5">
+          {expenses.map((e) => (
+            <RecurringHistoryPanel key={e.id} expense={e} upto={now} />
+          ))}
         </div>
       )}
 
@@ -205,6 +273,23 @@ export function RecurringExpensesCard({
             <input name="category" className={FIELD} />
           </div>
           <div>
+            <label className={LABEL}>תדירות</label>
+            <select name="frequency" defaultValue="monthly" className={FIELD}>
+              {Object.entries(RECURRING_FREQUENCY_LABELS).map(([value, label]) => (
+                <option key={value} value={value}>
+                  {label}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className={LABEL}>חלוקת העלות</label>
+            <select name="spread" defaultValue="true" className={FIELD}>
+              <option value="true">לפרוס על חודשי המחזור</option>
+              <option value="false">הכל בחודש התשלום</option>
+            </select>
+          </div>
+          <div>
             <label className={LABEL}>מתחיל מתאריך</label>
             <input name="startDate" type="date" defaultValue={`${now}-01`} className={FIELD} required />
           </div>
@@ -212,6 +297,10 @@ export function RecurringExpensesCard({
             <label className={LABEL}>סכום משוער (לא חובה)</label>
             <input name="defaultAmount" type="number" step="0.01" className={FIELD} />
           </div>
+          <p className="col-span-2 self-end pb-1.5 text-[11px] leading-snug text-muted md:col-span-2">
+            תדירות רב-חודשית נדרשת רק בחודשי החיוב שלה, ו&quot;לפרוס&quot; מחלק את התשלום על כל חודשי
+            המחזור — כדי שחודש עם תשלום שנתי לא ייראה חודש אסון ושאר השנה לא תיראה זולה מכפי שהיא.
+          </p>
           <div className="col-span-2 md:col-span-4">
             <CountsToMainField />
           </div>

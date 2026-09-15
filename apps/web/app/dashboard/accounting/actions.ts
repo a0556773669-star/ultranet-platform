@@ -7,6 +7,7 @@ import { authOptions } from "@/lib/auth";
 import { getAdminFirestore } from "@/lib/firebase-admin";
 import { chargeViaRoute } from "@/lib/collection-charge";
 import { countsToMainFromForm } from "@/lib/counts-to-main";
+import { resolveExpenseTypeIdFromForm } from "@/lib/recurring-purchases";
 import type {
   AccountingIncome,
   AccountingExpense,
@@ -37,6 +38,10 @@ function revalidateMain() {
   revalidatePath("/dashboard/accounting/extra-expenses");
   revalidatePath("/dashboard/accounting/legacy");
   revalidatePath("/dashboard/rentals/accounting");
+  // הכנסת מזומן נמשכת מקופה של חדר מחשבים, ומוצגת (לתצוגה בלבד) גם בדשבורד המעקב שלו -
+  // אחרת היא הייתה מופיעה שם רק בטעינה הבאה שתעקוף את המטמון.
+  revalidatePath("/dashboard/computer-rooms-accounting");
+  revalidatePath("/dashboard/computer-rooms-accounting/[id]", "page");
   revalidatePath("/dashboard");
 }
 
@@ -134,13 +139,19 @@ export async function createExtraExpenseAction(formData: FormData) {
   const category = String(formData.get("category") ?? "").trim();
   const linkedBranchIds = formData.getAll("linkedBranchIds").map((v) => String(v)).filter(Boolean);
 
+  const business = String(formData.get("business") ?? "general") as AccountingExpense["business"];
+  // סימון "רכישה חוזרת" באותו שדה בדיוק כמו בהוצאה של סניף - זה מה שמחבר קנייה של
+  // העסק עצמו לאותו מוצר שנקנה בסניף, בלי שום מודול באמצע.
+  const expenseTypeId = await resolveExpenseTypeIdFromForm(formData, business);
+
   const data: Omit<AccountingExpense, "id"> = stripUndefined({
     date,
     amount,
     desc: String(formData.get("desc") ?? "").trim() || category || "הוצאה",
-    business: String(formData.get("business") ?? "general") as AccountingExpense["business"],
+    business,
     month: date.slice(0, 7),
     countsToMain: countsToMainFromForm(formData),
+    expenseTypeId,
     ...(category ? { category } : {}),
     ...(linkedBranchIds.length > 0 ? { linkedBranchIds } : {}),
   });
