@@ -7,8 +7,10 @@ import type { Branch, FixedExpense, VariableExpense } from "@ultranet/shared-typ
 import { SHARED_EXPENSE_BRANCH_ID } from "@/lib/computer-room-accounting";
 import { getOwnerName, resolveSharedPartnerName, branchPartnerName } from "@/lib/owner-name";
 import { BranchExpenses } from "../branch-expenses";
+import { SharedExpensesForBranch } from "../shared-expenses-for-branch";
 import { RecurringExpensesCard } from "@/components/recurring-expenses/recurring-expenses-card";
 import { loadRecurringVariableExpenses } from "@/lib/recurring-expenses";
+import { loadRecurringPurchaseTypes } from "@/lib/recurring-purchases";
 
 export default async function ComputerRoomBranchExpensesPage({ params }: { params: { id: string } }) {
   const session = await requireModuleAccess("computers");
@@ -38,11 +40,32 @@ export default async function ComputerRoomBranchExpensesPage({ params }: { param
     partnerName = resolved.partnerName;
   }
 
-  const [fixedSnap, variableSnap, recurring] = await Promise.all([
+  // הסניפים נטענים תמיד: בספר המשותף הם רשימת הבחירה של "על מי ההוצאה חלה", ובמסך של סניף
+  // בודד הם המחלק שמסביר כמה הוא נושא מכל הוצאה משותפת.
+  const [fixedSnap, variableSnap, recurring, expenseTypes, branchesSnap, sharedFixedSnap, sharedVariableSnap] =
+    await Promise.all([
     db.collection("n_fixed_expenses").where("branchId", "==", params.id).get(),
     db.collection("n_var_expenses").where("branchId", "==", params.id).get(),
     loadRecurringVariableExpenses({ scope: "computers", branchId: params.id }),
-  ]);
+    loadRecurringPurchaseTypes({ module: "computers" }),
+    db.collection("n_branches").where("branchType", "==", "computers").get(),
+    isShared
+      ? Promise.resolve(null)
+      : db.collection("n_fixed_expenses").where("branchId", "==", SHARED_EXPENSE_BRANCH_ID).get(),
+    isShared
+      ? Promise.resolve(null)
+      : db.collection("n_var_expenses").where("branchId", "==", SHARED_EXPENSE_BRANCH_ID).get(),
+    ]);
+  const computerBranches = branchesSnap.docs
+    .map((d) => ({ ...(d.data() as Omit<Branch, "id">), id: d.id }) as Branch)
+    .filter((b) => !b.deleted)
+    .sort((a, b) => a.name.localeCompare(b.name, "he"));
+  const sharedFixed = (sharedFixedSnap?.docs ?? []).map(
+    (d) => ({ ...(d.data() as Omit<FixedExpense, "id">), id: d.id }) as FixedExpense,
+  );
+  const sharedVariable = (sharedVariableSnap?.docs ?? []).map(
+    (d) => ({ ...(d.data() as Omit<VariableExpense, "id">), id: d.id }) as VariableExpense,
+  );
   const fixedExpenses = fixedSnap.docs
     .map((d) => ({ ...(d.data() as Omit<FixedExpense, "id">), id: d.id }) as FixedExpense)
     .sort((a, b) => b.startDate.localeCompare(a.startDate));
@@ -69,6 +92,7 @@ export default async function ComputerRoomBranchExpensesPage({ params }: { param
       <BranchExpenses
         branchId={params.id}
         isShared={isShared}
+        branches={computerBranches.map((b) => ({ id: b.id, name: b.name }))}
         isPartner={isPartner}
         ownerName={ownerName}
         partnerName={partnerName}
@@ -76,7 +100,16 @@ export default async function ComputerRoomBranchExpensesPage({ params }: { param
         canAdd={isOwner || isPartner}
         fixedExpenses={visibleFixed}
         variableExpenses={visibleVariable}
+        expenseTypes={expenseTypes}
       />
+      {!isShared && (
+        <SharedExpensesForBranch
+          branchId={params.id}
+          branches={computerBranches}
+          sharedFixed={sharedFixed}
+          sharedVariable={sharedVariable}
+        />
+      )}
       <RecurringExpensesCard
         scope="computers"
         branchId={params.id}

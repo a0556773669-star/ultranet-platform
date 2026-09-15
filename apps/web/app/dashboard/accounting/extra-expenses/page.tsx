@@ -66,7 +66,7 @@ export default async function ExtraExpensesPage() {
         canManage
         monthsBack={8}
         title="הוצאות קבועות משתנות"
-        subtitle='שורה אחת לכל הוצאה שחוזרת כל חודש בסכום אחר — משכורת מזכירה, מע"מ, חשמל. בכל חודש שלא עודכן המערכת מבקשת את הסכום, וההיסטוריה נשמרת לכל החודשים.'
+        subtitle='שורה אחת לכל הוצאה שחוזרת כל חודש בסכום אחר — משכורת מזכירה, מע"מ, חשמל. המערכת מבקשת את הסכום של כל חודש שנסגר (מ-1 לחודש שאחריו), וההיסטוריה נשמרת לכל החודשים.'
       />
 
       <div className="grid grid-cols-1 items-start gap-3.5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">

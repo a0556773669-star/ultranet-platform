@@ -12,6 +12,7 @@ import { BranchExpenseTable, type BranchExpenseRow } from "@/components/expenses
 import { CountsToMainBadge } from "@/components/counts-to-main-field";
 import { DeleteEntryButton } from "../../accounting/delete-entry-button";
 import { MultiBranchExpenseForm } from "../../rentals/expenses/multi-branch-form";
+import { loadRecurringPurchaseTypes } from "@/lib/recurring-purchases";
 import { deleteMultiBranchExpenseAction } from "../../rentals/expenses/multi-branch-actions";
 
 export default async function ComputerRoomExpensesHomePage() {
@@ -27,11 +28,12 @@ export default async function ComputerRoomExpensesHomePage() {
   }
 
   const db = getAdminFirestore();
-  const [branchesSnap, fixedSnap, variableSnap, multiSnap] = await Promise.all([
+  const [branchesSnap, fixedSnap, variableSnap, multiSnap, expenseTypes] = await Promise.all([
     db.collection("n_branches").where("branchType", "==", "computers").get(),
     db.collection("n_fixed_expenses").get(),
     db.collection("n_var_expenses").get(),
     db.collection(MULTI_BRANCH_EXPENSES_COLLECTION).get(),
+    loadRecurringPurchaseTypes({ module: "computers" }),
   ]);
 
   const branches = branchesSnap.docs
@@ -63,6 +65,22 @@ export default async function ComputerRoomExpensesHomePage() {
     return { branch, fixedCount: fixed.length, variableCount: variable.length, total, toMain };
   });
 
+  // הספר המשותף כשורה בטבלה, עם המספרים שלו - כדי שהוצאה שנרשמה על כל הסניפים לא תהיה
+  // המספר היחיד במסך שאי אפשר לראות לפני שהוא כבר התחלק בין הסניפים.
+  const sharedFixed = allFixed.filter((e) => e.branchId === SHARED_EXPENSE_BRANCH_ID);
+  const sharedVariable = allVariable.filter((e) => e.branchId === SHARED_EXPENSE_BRANCH_ID);
+  let sharedTotal = 0;
+  let sharedToMain = 0;
+  for (const e of sharedFixed) {
+    const accrued = fixedExpenseAccrued(e, upto);
+    sharedTotal += accrued;
+    if (countsToMain(e)) sharedToMain += accrued;
+  }
+  for (const e of sharedVariable) {
+    sharedTotal += e.amount || 0;
+    if (countsToMain(e)) sharedToMain += e.amount || 0;
+  }
+
   const multiExpenses = multiSnap.docs
     .map((d) => ({ ...(d.data() as Omit<MultiBranchExpense, "id">), id: d.id }) as MultiBranchExpense)
     .filter((e) => e.module === "computers")
@@ -84,15 +102,31 @@ export default async function ComputerRoomExpensesHomePage() {
             הוצאות על כל הסניפים יחד
           </Link>
         </div>
-        <BranchExpenseTable rows={rows} hrefFor={(id) => `/dashboard/expenses/${id}`} />
+        <BranchExpenseTable
+          rows={rows}
+          hrefFor={(id) => `/dashboard/expenses/${id}`}
+          sharedRow={{
+            href: `/dashboard/expenses/${SHARED_EXPENSE_BRANCH_ID}`,
+            label: "הוצאות על כל הסניפים יחד",
+            fixedCount: sharedFixed.length,
+            variableCount: sharedVariable.length,
+            total: sharedTotal,
+            toMain: sharedToMain,
+          }}
+        />
         <p className="mt-1.5 px-1 text-[11.5px] leading-relaxed text-muted">
+          השורה העליונה היא <b>הספר המשותף</b> — הוצאות שנרשמו על כמה סניפים יחד ומתחלקות ביניהם
+          בהנה&quot;ח. אפשר לבחור לכל הוצאה כזו על אילו סניפים היא חלה, כך שסניף חדש לא יירש
+          אוטומטית הוצאה שלא קשורה אליו.
+        </p>
+        <p className="mt-1 px-1 text-[11.5px] leading-relaxed text-muted">
           עמודת <b>&quot;מזה לראשי&quot;</b> היא מה שנספר בהנה&quot;ח הראשית. הוצאה שלא סומנה נשארת בספר של
           הסניף בלבד ולא נכנסת לשורה התחתונה של העסק.
         </p>
       </div>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <MultiBranchExpenseForm branches={branches} module="computers" />
+        <MultiBranchExpenseForm branches={branches} module="computers" expenseTypes={expenseTypes} />
 
         <div>
           <div className="mb-2 flex items-center justify-between text-xs font-bold uppercase tracking-wide text-muted">

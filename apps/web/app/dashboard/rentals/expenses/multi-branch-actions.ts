@@ -6,6 +6,7 @@ import { getAdminFirestore } from "@/lib/firebase-admin";
 import type { Branch, MultiBranchExpense } from "@ultranet/shared-types";
 import { createLinkedOwnerLedgerExpense, deleteLinkedOwnerLedgerExpense } from "@/lib/branch-expense-ledger";
 import { MULTI_BRANCH_EXPENSES_COLLECTION, splitMultiBranchExpense } from "@/lib/multi-branch-expense";
+import { resolveExpenseTypeIdFromForm } from "@/lib/recurring-purchases";
 import { countsToMainFromForm } from "@/lib/counts-to-main";
 
 /**
@@ -27,6 +28,7 @@ function revalidate(module: MultiBranchExpense["module"], branchIds: string[]) {
   revalidatePath("/dashboard/rentals/accounting");
   revalidatePath("/dashboard/computer-rooms-accounting");
   revalidatePath("/dashboard/accounting");
+  revalidatePath("/dashboard/accounting/recurring-purchases");
   revalidatePath("/dashboard");
 }
 
@@ -57,6 +59,8 @@ export async function createMultiBranchExpenseAction(
     if (!b || b.branchType !== expectedType || b.deleted) throw new Error("אחד הסניפים שנבחרו אינו סניף פעיל במודול הזה");
   }
 
+  const expenseTypeId = await resolveExpenseTypeIdFromForm(formData, module);
+
   // Only the owner's own share reaches the main ledger, and only when the owner fronted the cash
   // (ownerLedgerExpenseAmount returns 0 for paidBy "partner"). owedBy is "owner" because the
   // amount handed in is already the owner's slice, not the whole expense.
@@ -82,6 +86,7 @@ export async function createMultiBranchExpenseAction(
     countsToMain: countsToMainFromForm(formData),
     ...(category ? { category } : {}),
     ...(linkedAhExpenseId ? { linkedAhExpenseId } : {}),
+    ...(expenseTypeId ? { expenseTypeId } : {}),
   };
   await db.collection(MULTI_BRANCH_EXPENSES_COLLECTION).add(data);
   revalidate(module, branchIds);

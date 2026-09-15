@@ -1,5 +1,6 @@
 import { Scale, Calendar, Receipt, Wallet } from "lucide-react";
-import type { FixedExpense, VariableExpense, BranchIncome } from "@ultranet/shared-types";
+import type { FixedExpense, RecurringPurchaseType, VariableExpense, BranchIncome } from "@ultranet/shared-types";
+import { ExpenseTypeField } from "@/components/recurring-purchases/expense-type-field";
 import { createFixedExpenseAction, createVariableExpenseAction, addBranchIncomeAction, deleteBranchIncomeAction } from "./actions";
 import { EditFixedExpenseModal, EditVariableExpenseModal } from "./edit-expense-modals";
 import { EndFixedExpenseControl, DeleteFixedExpenseButton, DeleteVariableExpenseButton } from "./expense-action-buttons";
@@ -66,6 +67,7 @@ type Props = {
   branchIncomes: BranchIncome[];
   fixedExpenses: FixedExpense[];
   variableExpenses: VariableExpense[];
+  expenseTypes?: RecurringPurchaseType[];
 };
 
 export function BranchExpenses({
@@ -80,6 +82,7 @@ export function BranchExpenses({
   branchIncomes,
   fixedExpenses,
   variableExpenses,
+  expenseTypes = [],
 }: Props) {
   const activeFixed = fixedExpenses.filter((e) => !e.endDate);
   const endedFixed = fixedExpenses.filter((e) => e.endDate);
@@ -189,6 +192,9 @@ export function BranchExpenses({
                 </select>
               </div>
               {isPartner && <PayerFields ownerName={ownerName} partnerName={partnerName} />}
+              <div className="col-span-2">
+                <ExpenseTypeField types={expenseTypes} idPrefix="rentals-new-variable-type" />
+              </div>
               <div className="col-span-2">
                 <CountsToMainField />
               </div>

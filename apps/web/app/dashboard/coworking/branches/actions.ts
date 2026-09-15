@@ -5,8 +5,16 @@ import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { getAdminFirestore } from "@/lib/firebase-admin";
-import type { Branch, SetupCostItem } from "@ultranet/shared-types";
 import { setupCostCountsToMainFromForm } from "@/lib/counts-to-main";
+import type { Branch, SetupCostItem } from "@ultranet/shared-types";
+
+/**
+ * סניפי המשרד השיתופי.
+ *
+ * עד עכשיו לא הייתה דרך להקים סניף כזה מתוך המערכת: כל מסכי המשרד השיתופי שואלים
+ * `n_branches` על `branchType == "coworking"`, אבל את המסמך עצמו היה צריך ליצור ביד
+ * ב-Firestore. אותו מודל בדיוק כמו בחדרי מחשבים - אותו קולקשן, אותם שדות, רק `branchType` אחר.
+ */
 
 async function requireOwner() {
   const session = await getServerSession(authOptions);
@@ -42,23 +50,20 @@ function parseSetupItems(raw: FormDataEntryValue | null): SetupCostItem[] | unde
   }
 }
 
-function parseBranchForm(formData: FormData): Omit<Branch, "id"> {
+function parseCoworkingBranchForm(formData: FormData): Omit<Branch, "id"> {
   const name = String(formData.get("name") ?? "").trim();
-  const branchType = "computers" as const;
   const location = String(formData.get("location") ?? "").trim() || undefined;
-  // The branch's opening date: every income/expense calculation for this branch starts here.
-  // Kept as "" and not undefined when empty, so clearing the field in the form really clears it
-  // (stripUndefined would otherwise drop it from the merge).
+  const phone = String(formData.get("phone") ?? "").trim() || undefined;
+  // נשמר כ-"" ולא כ-undefined כשריק, כדי שניקוי השדה בטופס באמת ינקה אותו (stripUndefined
+  // היה משמיט אותו מה-merge ומשאיר את הערך הישן).
   const openedAt = String(formData.get("openedAt") ?? "").trim();
-  // Always written explicitly (including false), so unchecking the box reactivates the branch.
   const notStarted = formData.get("notStarted") === "on";
   const isMine = formData.get("isMine") === "on";
   const partnerName = String(formData.get("partnerName") ?? "").trim() || undefined;
   const partnerEmail = String(formData.get("partnerEmail") ?? "").trim() || undefined;
   const myPct = Number(formData.get("myPct") ?? 100);
   const partnerPct = Number(formData.get("partnerPct") ?? 0);
-  // עלות ההקמה מגיעה מ-`SetupCostField`: פירוט השורות ב-`setupItems` והסכום המוכן ב-`setupCost`.
-  // הסכום מחושב כאן מחדש מהשורות ולא נלקח כמו שהוא, כדי ששני השדות לעולם לא יסתרו זה את זה.
+  // הסכום מחושב מהשורות ולא נלקח כמו שהוא, בדיוק כמו בחדרי מחשבים.
   const setupItems = parseSetupItems(formData.get("setupItems"));
   const setupCostRaw = formData.get("setupCost");
   const setupCost = setupItems
@@ -68,12 +73,12 @@ function parseBranchForm(formData: FormData): Omit<Branch, "id"> {
       : undefined;
   const setupCountsToMain = setupCostCountsToMainFromForm(formData);
   const notes = String(formData.get("notes") ?? "").trim() || undefined;
-  const parentBranchId = String(formData.get("parentBranchId") ?? "").trim() || null;
 
   return {
     name,
-    branchType,
+    branchType: "coworking",
     location,
+    phone,
     openedAt,
     notStarted,
     isMine,
@@ -85,33 +90,46 @@ function parseBranchForm(formData: FormData): Omit<Branch, "id"> {
     setupItems,
     setupCountsToMain,
     notes,
-    parentBranchId,
+    parentBranchId: null,
   };
 }
 
-export async function createBranchAction(formData: FormData) {
+function revalidateCoworking(id?: string) {
+  revalidatePath("/dashboard/coworking");
+  revalidatePath("/dashboard/coworking/accounting");
+  revalidatePath("/dashboard/accounting");
+  if (id) revalidatePath(`/dashboard/coworking/branches/${id}`);
+}
+
+export async function createCoworkingBranchAction(formData: FormData) {
   await requireOwner();
-  const data = parseBranchForm(formData);
+  const data = parseCoworkingBranchForm(formData);
   if (!data.name) {
     throw new Error("שם הסניף הוא שדה חובה");
   }
-  const ref = await getAdminFirestore().collection("n_branches").add(stripUndefined(data));
-  revalidatePath("/dashboard/branches");
-  redirect(`/dashboard/branches/${ref.id}`);
+  await getAdminFirestore().collection("n_branches").add(stripUndefined(data));
+  revalidateCoworking();
+  redirect("/dashboard/coworking");
 }
 
-export async function updateBranchAction(id: string, formData: FormData) {
+export async function updateCoworkingBranchAction(id: string, formData: FormData) {
   await requireOwner();
-  const data = parseBranchForm(formData);
+  const data = parseCoworkingBranchForm(formData);
   await getAdminFirestore().collection("n_branches").doc(id).set(stripUndefined(data), { merge: true });
-  revalidatePath("/dashboard/branches");
-  revalidatePath(`/dashboard/branches/${id}`);
-  redirect("/dashboard/branches");
+  revalidateCoworking(id);
+  redirect("/dashboard/coworking");
 }
 
-export async function deleteBranchAction(id: string) {
+/**
+ * מחיקה רכה בלבד, כמו בהשכרות: להוצאות, לתשלומים וללקוחות שכבר משויכים ל-`branchId`
+ * הזה יש היסטוריה, ומסמך שנמחק באמת היה הופך אותה לשורות בלי שם.
+ */
+export async function deleteCoworkingBranchAction(id: string) {
   await requireOwner();
-  await getAdminFirestore().collection("n_branches").doc(id).delete();
-  revalidatePath("/dashboard/branches");
-  redirect("/dashboard/branches");
+  await getAdminFirestore()
+    .collection("n_branches")
+    .doc(id)
+    .set({ deleted: true, deletedAt: new Date().toISOString() }, { merge: true });
+  revalidateCoworking(id);
+  redirect("/dashboard/coworking");
 }

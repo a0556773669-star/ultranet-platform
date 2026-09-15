@@ -42,6 +42,13 @@ export interface BranchRentalPricing {
   };
 }
 
+/** שורה אחת בפירוט עלות ההקמה של חדר מחשבים (מוטמעת בתוך מסמך `n_branches`). */
+export interface SetupCostItem {
+  /** תיאור ההוצאה, למשל "12 מחשבים" או "ריהוט" */
+  label: string;
+  amount: number;
+}
+
 export interface Branch {
     id: string;
     name: string;
@@ -64,7 +71,21 @@ export interface Branch {
     myPct: number;
     partnerPct: number;
   parentPct?: number;
-    setupCost?: number;
+  /** סך עלות ההקמה של החדר. כשיש `setupItems` זהו בדיוק סכום השורות שלהן - השדה נשמר כמספר
+   *  מוכן כדי שכל מי שקורא אותו היום (תחזית ההון ב-tx-data, מסך ההשקעה מול הרווח) ימשיך
+   *  לעבוד בלי לדעת על הפירוט. חדר ישן שיש לו רק מספר בלי פירוט נשאר תקף. */
+  setupCost?: number;
+  /** פירוט עלות ההקמה: שורה לכל הוצאה (מה נקנה וכמה). ריק/חסר = לא הוזן פירוט ו-`setupCost`
+   *  הוא מספר שהוזן ידנית. */
+  setupItems?: SetupCostItem[];
+  /** האם עלות ההקמה של הסניף נספרת בהנה"ח הראשית.
+   *
+   *  **ברירת המחדל כאן הפוכה מ-`countsToMain` הרגיל**: `undefined` = כן נספר. זה מכוון ולא
+   *  פליטה. הדגל הרגיל מתחיל כבוי כדי ששורות שהוזנו לפני שהוא נולד לא ייסחפו לספר הראשי
+   *  בדיעבד; לעלות הקמה אין "שורות שהוזנו" - יש שדה אחד לסניף, גלוי בטופס, והבעלים ביקש
+   *  במפורש שעלויות ההקמה ייכנסו לראשי. הכיבוי כאן הוא ההחרגה, לא ההצטרפות.
+   *  הקריאה עוברת תמיד דרך `setupCostCountsToMain()` ב-`apps/web/lib/counts-to-main.ts`. */
+  setupCountsToMain?: boolean;
     notes?: string;
     /** sub-branch model: set when this branch rolls up under a head partner's branch */
   parentBranchId?: string | null;
@@ -131,6 +152,12 @@ export interface FixedExpense {
   owedBy?: string;
   /** ראה `COUNTS_TO_MAIN_DOC` למטה. הוצאה קבועה נספרת מהחודש של `startDate` והלאה. */
   countsToMain?: boolean;
+  /**
+   * רלוונטי רק כש-`branchId` הוא סנטינל של הוצאה משותפת (`shared-computers` וכו'): רשימת
+   * הסניפים שההוצאה באמת מתחלקת ביניהם. שדה חסר (או ריק) = כל סניפי המודול, כולל סניפים
+   * שייפתחו בעתיד — זו ההתנהגות ההיסטורית וגם ברירת המחדל. ראה `lib/expense-shared-scope.ts`.
+   */
+  branchIds?: string[];
 }
 
 /** collection: n_var_expenses */
@@ -151,6 +178,10 @@ export interface VariableExpense {
    *  (ownerExpenseBurden of amount/owedBy) when this expense was added; undefined if the
    *  owner's burden was 0 (e.g. owedBy === "partner"). Deleted together with this expense. */
   linkedAhExpenseId?: string;
+  /** כמו ב-`FixedExpense`: הסניפים שהוצאה משותפת מתחלקת ביניהם. חסר = כל סניפי המודול. */
+  branchIds?: string[];
+  /** ראה `RecurringPurchaseType`: מסמן שהרכישה הזו היא עוד קנייה של אותו מוצר חוזר. */
+  expenseTypeId?: string;
 }
 
 /**
@@ -446,6 +477,39 @@ export interface MultiBranchExpense {
   /** id of the matching n_ah_expenses doc auto-created for the owner's share, when the owner
    *  is the one who paid. Deleted together with this expense. */
   linkedAhExpenseId?: string;
+  /** ראה `RecurringPurchaseType`: מסמן שהרכישה הזו היא עוד קנייה של אותו מוצר חוזר. */
+  expenseTypeId?: string;
+}
+
+/**
+ * collection: `n_expense_types` — **סוג רכישה חוזרת**.
+ *
+ * נייר למדפסת, שקיות אשפה, פחיות. כל קנייה כזו היא באמת הוצאה חד-פעמית — קונים כשנגמר,
+ * בסכום אחר ובתאריך לא צפוי — ולכן היא נשארת שורה ב-`n_var_expenses` או
+ * `n_multi_branch_expenses` בדיוק כפי שהייתה. מה שחסר הוא לא מקום אחר לרשום בו, אלא
+ * **הידיעה ששתי השורות האלה הן אותו מוצר**: שלוש קניות נייר של 300 ₪ מפוזרות על השנה
+ * נראות כלום, וביחד הן 900 ₪ שראוי לדעת עליהם.
+ *
+ * הסוג הוא רק המזהה הזה. הוא לא מחזיק סכומים, לא משנה איך ההוצאה נספרת בהנה"ח ולא מחלק
+ * כסף בפועל — **החלוקה ל-12 חודשים ובין הסניפים היא חישוב של הדוח בלבד**
+ * (`apps/web/lib/recurring-purchases.ts`). הכסף יצא בחודש שהוא יצא, וכך הוא נשאר בספר.
+ */
+export interface RecurringPurchaseType {
+  id: string;
+  /** "נייר למדפסת", "שקיות אשפה" */
+  name: string;
+  category?: string;
+  /** המודול שהרכישה שייכת לו. `general` = כל העסק, בלי שיוך למודול. */
+  module: "computers" | "rentals" | "coworking" | "general";
+  /**
+   * הסניפים שהעלות השנתית מתחלקת ביניהם **בדוח**. ריק/חסר = כל סניפי המודול, כולל
+   * סניפים שייפתחו — אותה סמנטיקה כמו `branchIds` בהוצאה משותפת.
+   */
+  branchIds?: string[];
+  /** הופסק: לא מוצע יותר בטפסים, אבל כל ההיסטוריה שלו נשארת בדוח. */
+  archived?: boolean;
+  note?: string;
+  createdAt: string;
 }
 
 /** collection: n_cw_stations */
@@ -1086,6 +1150,21 @@ export interface RecurringVariableAmount {
  * המבנה הוא שורה אחת + סכום לכל חודש (`amounts`). חודש בלי סכום הוא חודש שעדיין לא
  * עודכן, וזה בדיוק מה שמסך התזכורת מחפש: `missingMonths()` ב-`lib/recurring-expenses.ts`.
  */
+/**
+ * כל כמה זמן ההוצאה נדרשת בפועל. זה לא נתון קוסמטי — הוא קובע באילו חודשים המערכת
+ * מבקשת סכום (`dueMonths`), ולכן גם על מה היא מתריעה. ארנונה דו-חודשית שנרשמה כחודשית
+ * מייצרת התראה שקרית בכל חודש שני, וזו בדיוק הסיבה שהשדה קיים.
+ */
+export type RecurringFrequency = "monthly" | "bimonthly" | "quarterly" | "yearly";
+
+/** אורך המחזור בחודשים. `undefined` = חודשי, כדי שרשומות שנכתבו לפני השדה יישארו נכונות. */
+export const RECURRING_FREQUENCY_MONTHS: Record<RecurringFrequency, number> = {
+  monthly: 1,
+  bimonthly: 2,
+  quarterly: 3,
+  yearly: 12,
+};
+
 export interface RecurringVariableExpense {
   id: string;
   scope: ExpenseScope;
@@ -1097,6 +1176,22 @@ export interface RecurringVariableExpense {
   startDate: string;
   /** הפסקה: מהחודש הזה ואילך כבר לא מבקשים עדכון */
   endDate?: string;
+  /**
+   * תדירות החיוב. `undefined` = `monthly` (כל הרשומות שנוצרו לפני השדה). המחזור נמדד
+   * מחודש ה-`startDate`: ארנונה דו-חודשית שהתחילה ב-01/2025 נדרשת ב-01, 03, 05 וכן הלאה.
+   */
+  frequency?: RecurringFrequency;
+  /**
+   * פריסה: לחלק תשלום רב-חודשי על פני חודשי המחזור שלו בדוחות החודשיים.
+   *
+   * ביטוח שנתי של 12,000 ₪ ששולם בינואר הוא 12,000 ₪ במזומן בינואר, אבל 1,000 ₪ עלות
+   * בכל חודש. בלי פריסה ינואר נראה חודש קטסטרופלי ושאר השנה נראית זולה מכפי שהיא, ואי
+   * אפשר להשוות חודש לחודש — וזו כל הסיבה לקיומו של השדה.
+   *
+   * `undefined` = פרוס (ברירת המחדל לתדירות רב-חודשית); `false` = הכל נופל בחודש התשלום.
+   * בתדירות חודשית אין לשדה משמעות — מחזור של חודש אחד נפרס לעצמו.
+   */
+  spread?: boolean;
   /** סכום ברירת מחדל להצעה בעת עדכון חודש חדש */
   defaultAmount?: number;
   /** ראה `COUNTS_TO_MAIN_DOC` */
