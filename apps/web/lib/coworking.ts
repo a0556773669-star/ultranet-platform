@@ -201,3 +201,48 @@ export function buildCoworkingLedger(params: {
     balance: receivedToDate - paidToDate,
   };
 }
+
+/** ארבע העמדות הפיזיות במשרד. מספר העמדה הוא הזהות שלה, לא מסמך שמקימים. */
+export const STATION_NUMBERS = [1, 2, 3, 4] as const;
+
+/** התשלום שנרשם לחודש מסוים, אם נרשם. */
+export function paymentForMonth(client: CoworkingClient, month: string) {
+  return (client.payments ?? []).find((p) => p.month === month);
+}
+
+/**
+ * עמדה אחת במסך העמדות: מי יושב בה עכשיו, ומה מצב התשלום של החודש הנוכחי.
+ *
+ * "השכרה פעילה" היא לקוח שהתחיל ועדיין לא הסתיים (או שתאריך הסיום שלו עוד לא הגיע) -
+ * אותה הגדרה כמו בנייד מושכר, שממנה הועתק המסך.
+ */
+export interface StationOccupancy {
+  stationNumber: number;
+  station?: CoworkingStation;
+  /** ההשכרה הפעילה כרגע, אם יש */
+  current?: CoworkingClientStatus;
+  /** השכרות שהסתיימו על העמדה הזו, מהחדשה לישנה */
+  past: CoworkingClientStatus[];
+}
+
+export function buildStationOccupancy(
+  stationNumbers: readonly number[],
+  stations: CoworkingStation[],
+  statuses: CoworkingClientStatus[],
+  today = new Date(),
+): StationOccupancy[] {
+  const todayStr = today.toISOString().slice(0, 10);
+  const stationByNumber = new Map(stations.map((s) => [s.name?.trim(), s]));
+
+  return stationNumbers.map((n) => {
+    const station = stationByNumber.get(String(n));
+    const onThis = statuses.filter(
+      (s) => (station && s.client.stationId === station.id) || s.client.stationNumber?.trim() === String(n),
+    );
+    const current = onThis.find((s) => !s.client.endDate || s.client.endDate >= todayStr);
+    const past = onThis
+      .filter((s) => s !== current)
+      .sort((a, b) => (b.client.startDate ?? "").localeCompare(a.client.startDate ?? ""));
+    return { stationNumber: n, station, current, past };
+  });
+}

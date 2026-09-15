@@ -8,7 +8,6 @@ import { getAdminFirestore } from "@/lib/firebase-admin";
 import { FieldValue } from "firebase-admin/firestore";
 import type { CoworkingStation, CoworkingClient, FixedExpense, VariableExpense } from "@ultranet/shared-types";
 import { countsToMainFromForm } from "@/lib/counts-to-main";
-import { SETUP_CATEGORY } from "@/lib/coworking";
 
 async function requireSession() {
   const session = await getServerSession(authOptions);
@@ -30,7 +29,7 @@ function stripUndefined<T extends Record<string, unknown>>(obj: T): T {
 
 function revalidateCoworking() {
   revalidatePath("/dashboard/coworking");
-  revalidatePath("/dashboard/coworking/expenses");
+  revalidatePath("/dashboard/coworking/stations");
   revalidatePath("/dashboard/coworking/accounting");
   revalidatePath("/dashboard/accounting");
   revalidatePath("/dashboard");
@@ -127,9 +126,13 @@ export async function reopenCoworkingClientAction(clientId: string) {
 }
 
 /* ── הוצאות המשרד השיתופי ─────────────────────────────────────────────────────
- * שלושת הסוגים (הקמה / קבועות / שוטפות) יושבים באותם קולקשנים כמו בכל מודול אחר,
- * כי הם אותו דבר: `n_fixed_expenses` לקבועות, `n_var_expenses` לשתי האחרות, כשההקמה
- * מסומנת בקטגוריה `SETUP_CATEGORY`. קולקשן רביעי היה מחייב כל חישוב בעסק לדעת עליו.
+ * שני סוגים: קבועות (`n_fixed_expenses`) ושוטפות (`n_var_expenses`), באותם קולקשנים
+ * כמו בכל מודול אחר - קולקשן נפרד היה מחייב כל חישוב בעסק לדעת עליו. מנוהלות ממסך
+ * ההנה"ח של המודול; לשונית "הוצאות" הנפרדת בוטלה.
+ *
+ * **הקמה כבר לא נרשמת כאן**: היא שדה על הסניף (`Branch.setupCost` + `setupItems`),
+ * בטופס הסניף. שורות ישנות בקטגוריית `SETUP_CATEGORY` נשארות בדאטה וממשיכות להיספר
+ * ב-`buildCoworkingLedger` כ-`setupFromExpenses`, כדי ששום סכום קיים לא ייעלם.
  */
 
 export async function createCoworkingFixedExpenseAction(branchId: string, formData: FormData) {
@@ -151,18 +154,13 @@ export async function createCoworkingFixedExpenseAction(branchId: string, formDa
   revalidateCoworking();
 }
 
-export async function createCoworkingVariableExpenseAction(
-  branchId: string,
-  kind: "setup" | "variable",
-  formData: FormData,
-) {
+export async function createCoworkingVariableExpenseAction(branchId: string, formData: FormData) {
   await requireSession();
   const desc = String(formData.get("desc") ?? "").trim();
   const date = String(formData.get("date") ?? "").trim();
   const amount = Number(formData.get("amount")) || 0;
   if (!desc || !date || !amount) throw new Error("חובה למלא תיאור, סכום ותאריך");
-  const category =
-    kind === "setup" ? SETUP_CATEGORY : String(formData.get("category") ?? "").trim() || undefined;
+  const category = String(formData.get("category") ?? "").trim() || undefined;
   const data: Omit<VariableExpense, "id"> = stripUndefined({
     branchId,
     desc,

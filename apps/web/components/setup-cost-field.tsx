@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { ListPlus, Plus, Trash2, X } from "lucide-react";
 import type { SetupCostItem } from "@ultranet/shared-types";
 import { COUNTS_TO_MAIN_HINT, COUNTS_TO_MAIN_LABEL } from "@/lib/counts-to-main";
@@ -11,6 +12,17 @@ import { COUNTS_TO_MAIN_HINT, COUNTS_TO_MAIN_LABEL } from "@/lib/counts-to-main"
  * והפירוט נשמר לצידו ב-`setupItems`. הסכום לעולם לא מוקלד - הוא תמיד סכום השורות.
  *
  * משותף לחדרי מחשבים ולמשרד השיתופי: אותה שאלה בדיוק בשני המודולים, ולכן אותו רכיב.
+ *
+ * ## שתי מלכודות שאיבדו למשתמש את מה שהקליד, ולמה הן סגורות עכשיו
+ *
+ * 1. **החלון רונדר בתוך ה-`<form>` של הסניף.** לחיצה על Enter בתוך שדה סכום - הדבר הכי
+ *    טבעי בעולם כשמקלידים מספרים - גרמה ל-implicit submission של טופס הסניף כולו: הטופס
+ *    נשלח, הפעולה עשתה redirect, והשורות שהוקלדו נעלמו בלי הודעה. החלון עובר עכשיו
+ *    ב-`createPortal` ל-`document.body`, כך שהשדות שלו אינם חלק מהטופס, ובנוסף Enter
+ *    בתוך החלון נחסם במפורש.
+ * 2. **שני כפתורים בשם "שמירה".** לחיצה על זה שבחלון רק סגרה אותו, והמשתמש הבין שהנתונים
+ *    נשמרו. עכשיו השורות נכנסות למצב הטופס תוך כדי הקלדה, הכפתור בחלון נקרא "סיום",
+ *    והמשפט בתחתיתו אומר מפורשות מה עוד צריך ללחוץ.
  */
 
 const FIELD = "w-full rounded-lg border border-card-border bg-[#f4f6f9] px-3 py-2 text-sm focus:border-teal focus:bg-white focus:outline-none";
@@ -26,6 +38,9 @@ function money(n: number): string {
 }
 
 const sum = (rows: { amount: number }[]): number => rows.reduce((t, r) => t + (Number(r.amount) || 0), 0);
+
+/** שורה ריקה לגמרי היא שורה שנפתחה ולא מולאה - היא לא נשמרת. */
+const isBlank = (r: { label: string; amount: number }) => r.label.trim() === "" && !r.amount;
 
 /** שורה אחת לעריכה: תיאור + סכום + מחיקה */
 function EditableRow({
@@ -79,7 +94,7 @@ export function SetupCostField({
   /** `undefined` נחשב מסומן - ראה `setupCostCountsToMain` ב-`lib/counts-to-main.ts` */
   initialCountsToMain?: boolean;
 }) {
-  // חדר ותיק שיש בו רק מספר בלי פירוט: המספר הופך לשורה ראשונה, כדי שלא ייעלם ברגע
+  // סניף ותיק שיש בו רק מספר בלי פירוט: המספר הופך לשורה ראשונה, כדי שלא ייעלם ברגע
   // שמתחילים לפרט.
   const seed: SetupCostItem[] =
     initialItems && initialItems.length > 0
@@ -88,27 +103,112 @@ export function SetupCostField({
         ? [{ label: "עלות הקמה", amount: initialTotal }]
         : [];
 
-  const [items, setItems] = useState<SetupCostItem[]>(seed);
+  const [rows, setRows] = useState<Row[]>(() => toRows(seed));
   const [countsToMain, setCountsToMain] = useState(initialCountsToMain !== false);
   const [open, setOpen] = useState(false);
-  const [draft, setDraft] = useState<Row[]>([]);
+  /** צילום מצב מרגע פתיחת החלון, בשביל "ביטול שינויים" בלבד */
+  const [snapshot, setSnapshot] = useState<Row[]>([]);
+  const [mounted, setMounted] = useState(false);
 
+  useEffect(() => setMounted(true), []);
+
+  const kept = rows.filter((r) => !isBlank(r));
+  const items: SetupCostItem[] = kept.map((r) => ({ label: r.label.trim(), amount: Number(r.amount) || 0 }));
   const total = sum(items);
 
   function openPanel() {
-    setDraft(toRows(items.length > 0 ? items : [{ label: "", amount: 0 }]));
+    setSnapshot(rows);
+    if (rows.length === 0) setRows([{ label: "", amount: 0, key: nextKey++ }]);
     setOpen(true);
   }
 
-  function save() {
-    // שורה בלי תיאור ובלי סכום היא שורה ריקה שנשארה פתוחה - לא נשמרת.
-    setItems(
-      draft
-        .map((r) => ({ label: r.label.trim(), amount: Number(r.amount) || 0 }))
-        .filter((r) => r.label !== "" || r.amount !== 0),
-    );
-    setOpen(false);
-  }
+  const panel = (
+    <>
+      <div className="fixed inset-0 z-40 bg-black/40" onClick={() => setOpen(false)} />
+      {/* חלון צד שמאלי. מרונדר ב-portal מחוץ לטופס הסניף - ראה ההסבר בראש הקובץ. */}
+      <aside
+        className="fixed inset-y-0 left-0 z-50 flex w-full max-w-md flex-col bg-white shadow-card"
+        dir="rtl"
+        onKeyDown={(e) => {
+          if (e.key === "Enter") e.preventDefault();
+        }}
+      >
+        <div className="flex items-center justify-between border-b border-card-border px-5 py-4">
+          <h2 className="text-base font-extrabold text-ink">פירוט עלות הקמה</h2>
+          <button type="button" onClick={() => setOpen(false)} aria-label="סגירה" className="text-muted transition hover:text-ink">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto px-5 py-4">
+          <div className="flex flex-col gap-2.5">
+            {rows.map((row, idx) => (
+              <EditableRow
+                key={row.key}
+                row={row}
+                onChange={(patch) => setRows((prev) => prev.map((r, i) => (i === idx ? { ...r, ...patch } : r)))}
+                onRemove={() => setRows((prev) => prev.filter((_, i) => i !== idx))}
+              />
+            ))}
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setRows((prev) => [...prev, { label: "", amount: 0, key: nextKey++ }])}
+            className="mt-3 flex items-center gap-1.5 rounded-[10px] border border-dashed border-teal px-3 py-2 text-xs font-bold text-teal transition hover:bg-[#f4f6f9]"
+          >
+            <Plus className="h-4 w-4" />
+            הוספת שורה
+          </button>
+        </div>
+
+        <div className="border-t border-card-border px-5 py-4">
+          <label className="mb-3 flex cursor-pointer items-start gap-2 rounded-lg border border-card-border bg-[#f8fafc] px-3 py-2">
+            <input
+              type="checkbox"
+              checked={countsToMain}
+              onChange={(e) => setCountsToMain(e.target.checked)}
+              className="mt-0.5 h-4 w-4 shrink-0 accent-teal"
+            />
+            <span>
+              <span className="block text-xs font-bold text-ink">{COUNTS_TO_MAIN_LABEL}</span>
+              <span className="mt-0.5 block text-[11px] leading-snug text-muted">{COUNTS_TO_MAIN_HINT}</span>
+            </span>
+          </label>
+
+          <div className="mb-3 flex items-center justify-between">
+            <span className="text-xs font-semibold text-muted">סה&quot;כ עלות הקמה</span>
+            <span className="text-lg font-black text-ink">{money(total)}</span>
+          </div>
+
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => setOpen(false)}
+              className="rounded-[10px] bg-gradient-to-br from-teal to-teal-light px-6 py-2 text-sm font-bold text-white shadow-primary transition hover:opacity-90"
+            >
+              סיום
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setRows(snapshot);
+                setOpen(false);
+              }}
+              className="rounded-[10px] border border-card-border px-4 py-2 text-sm font-bold text-muted transition hover:text-ink"
+            >
+              ביטול שינויים
+            </button>
+          </div>
+
+          <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-[11.5px] leading-relaxed text-amber-900">
+            השורות כאן נשמרות רק כשלוחצים <b>&quot;שמירה&quot; בתחתית טופס הסניף</b>. הכפתור כאן
+            סוגר את החלון בלבד.
+          </p>
+        </div>
+      </aside>
+    </>
+  );
 
   return (
     <div>
@@ -127,7 +227,7 @@ export function SetupCostField({
           <p className="text-[11.5px] text-muted">
             {items.length > 0 ? `${items.length} שורות בפירוט` : "טרם הוזן פירוט"}
             {" · "}
-            {countsToMain ? 'נכנס להנה"ח הראשית' : 'בספר הסניף בלבד'}
+            {countsToMain ? 'נכנס להנה"ח הראשית' : "בספר הסניף בלבד"}
           </p>
         </div>
         <button
@@ -151,82 +251,7 @@ export function SetupCostField({
         </ul>
       )}
 
-      {open && (
-        <>
-          <div className="fixed inset-0 z-40 bg-black/40" onClick={() => setOpen(false)} />
-          {/* חלון צד שמאלי: נפתח לצד הטופס ולא מעליו, כך שרואים את שאר פרטי הסניף בזמן הפירוט */}
-          <aside className="fixed inset-y-0 left-0 z-50 flex w-full max-w-md flex-col bg-white shadow-card">
-            <div className="flex items-center justify-between border-b border-card-border px-5 py-4">
-              <h2 className="text-base font-extrabold text-ink">פירוט עלות הקמה</h2>
-              <button type="button" onClick={() => setOpen(false)} aria-label="סגירה" className="text-muted transition hover:text-ink">
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-
-            <div className="flex-1 overflow-y-auto px-5 py-4">
-              <div className="flex flex-col gap-2.5">
-                {draft.map((row, idx) => (
-                  <EditableRow
-                    key={row.key}
-                    row={row}
-                    onChange={(patch) =>
-                      setDraft((prev) => prev.map((r, i) => (i === idx ? { ...r, ...patch } : r)))
-                    }
-                    onRemove={() => setDraft((prev) => prev.filter((_, i) => i !== idx))}
-                  />
-                ))}
-              </div>
-
-              <button
-                type="button"
-                onClick={() => setDraft((prev) => [...prev, { label: "", amount: 0, key: nextKey++ }])}
-                className="mt-3 flex items-center gap-1.5 rounded-[10px] border border-dashed border-teal px-3 py-2 text-xs font-bold text-teal transition hover:bg-[#f4f6f9]"
-              >
-                <Plus className="h-4 w-4" />
-                הוספת שורה
-              </button>
-            </div>
-
-            <div className="border-t border-card-border px-5 py-4">
-              <label className="mb-3 flex cursor-pointer items-start gap-2 rounded-lg border border-card-border bg-[#f8fafc] px-3 py-2">
-                <input
-                  type="checkbox"
-                  checked={countsToMain}
-                  onChange={(e) => setCountsToMain(e.target.checked)}
-                  className="mt-0.5 h-4 w-4 shrink-0 accent-teal"
-                />
-                <span>
-                  <span className="block text-xs font-bold text-ink">{COUNTS_TO_MAIN_LABEL}</span>
-                  <span className="mt-0.5 block text-[11px] leading-snug text-muted">{COUNTS_TO_MAIN_HINT}</span>
-                </span>
-              </label>
-              <div className="mb-3 flex items-center justify-between">
-                <span className="text-xs font-semibold text-muted">סה&quot;כ עלות הקמה</span>
-                <span className="text-lg font-black text-ink">{money(sum(draft))}</span>
-              </div>
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={save}
-                  className="rounded-[10px] bg-gradient-to-br from-teal to-teal-light px-6 py-2 text-sm font-bold text-white shadow-primary transition hover:opacity-90"
-                >
-                  שמירה
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setOpen(false)}
-                  className="rounded-[10px] border border-card-border px-4 py-2 text-sm font-bold text-muted transition hover:text-ink"
-                >
-                  ביטול
-                </button>
-              </div>
-              <p className="mt-2 text-[11.5px] text-muted">
-                הסכום נשמר יחד עם שאר פרטי הסניף בלחיצה על &quot;שמירה&quot; בתחתית הטופס.
-              </p>
-            </div>
-          </aside>
-        </>
-      )}
+      {open && mounted && createPortal(panel, document.body)}
     </div>
   );
 }
