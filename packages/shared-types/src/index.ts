@@ -210,6 +210,13 @@ export interface BranchIncome {
     /** rentals only: true if the owner already personally holds this cash (mirrors
      *  isCollectedByOwner for real rentals) - affects the partner-settlement direction. */
     collectedByOwner?: boolean;
+    /** computer rooms only: how the row got here. Absent (=== manual) on every row typed into
+     *  the form, `import` on a row created from an uploaded monthly-income spreadsheet. The
+     *  import is idempotent per month by rewriting only its own rows, so a hand-typed row for
+     *  the same month is never touched by a re-upload - hence the marker rather than a date
+     *  match. It also lets the whole import be cleared in one action once the historical
+     *  back-fill is done. */
+    source?: "manual" | "import";
 }
 
 /** collection: n_tasks */
