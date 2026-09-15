@@ -948,6 +948,16 @@ Firestore היא 500 ופיצול שקט היה נכשל על סניף גדול.
 קודם את `expenseTypeId` מכל רכישה שהצביעה על הסוג (batch של 400): `expenseTypeId` יתום
 הוא רכישה שסומנה כחוזרת ואי אפשר לדעת של מה.
 
+**מתי ההתראה נדלקת (2026-09):** רק על חודש ש**נסגר**. `buildReminders` מקבל את החודש
+הנוכחי ובונה את ההתראות עד `lastClosedMonth()` — החודש שלפניו — ולכן חשמל ספטמבר נדרש
+ב-1 באוקטובר, לא במהלך ספטמבר. קודם ההתראה נדלקה על החודש הרץ כבר ב-1 בו, לפני שהחשבון
+בכלל הגיע, ולכן היא הייתה דולקת כל החודש ואיבדה את המשמעות. תא החודש הנוכחי נשאר פתוח
+להזנה מוקדמת — הוא פשוט לא נצבע בכתום ולא נספר ב"צריך עדכון". `missingMonths` עצמו לא
+שינה משמעות (הוא עונה "אילו חודשים חסרים עד `upto`"); מי ששואל על פיגור מעביר לו
+`lastClosedMonth()` — וכך גם `RecurringHistoryPanel` בסימון "חסר". `dueNow` בהתראה הוא
+עכשיו "החודש שנסגר זה עתה חסר", כלומר מה שצריך לעדכן היום, ו-`overdue` הוא כל מה שישן
+ממנו. עם תדירות רב-חודשית הכלל זהה: נספרים רק חודשי חיוב (`dueMonths`) שכבר נסגרו.
+
 
 ### משימות ונהלים (`/dashboard/duxus`) — perm: duxus
 
@@ -1277,7 +1287,7 @@ app שרץ בדפדפן ניתן ל"התקנה" כאפליקציה עם אייק
 | `apps/web/lib/expense-review.ts` | סימון אוטומטי של שורות חריגות שסניפים הזינו, לפי הממוצע של הסניף עצמו (`flagsForEntry`), ומיון רשימת הסקירה |
 | `apps/web/lib/counts-to-main.ts` | הכלל היחיד של ההנה"ח הראשית: קריאת `countsToMain` מרשומה ומ-`FormData`, `setupCostCountsToMain` לעלות הקמה (ברירת מחדל דלוקה), והתוויות שהצ'קבוקס מציג. מודול טהור — גם טפסי לקוח מייבאים ממנו |
 | `apps/web/lib/main-ledger.ts` | הספר הראשי: איסוף כל השורות שסומנו `countsToMain` מחמישה מקורות הוצאה ושני מקורות הכנסה, בתוספת עלות ההקמה של כל סניף (`setupCountsToMain`), וסכימתן. `fixedExpenseAccrued` צובר הוצאה קבועה חודש-חודש מ-`startDate` |
-| `apps/web/lib/recurring-expenses.ts` | הוצאות קבועות משתנות: `expectedMonths` / `missingMonths` / `buildReminders` — חודש בלי סכום הוא "עוד לא עודכן", לא אפס |
+| `apps/web/lib/recurring-expenses.ts` | הוצאות קבועות משתנות: `expectedMonths` / `missingMonths` / `buildReminders` / `lastClosedMonth` — חודש בלי סכום הוא "עוד לא עודכן", לא אפס, וההתראה עליו נדלקת רק אחרי שהחודש נסגר |
 | `apps/web/lib/partner-payouts.ts` | היתרה המצטברת לשותף-מחשבים חיצוני: מה שהצטבר פחות מה שנרשם ששולם (`n_partner_payouts`), על פני חלון חודשים |
 | `apps/web/lib/laptop-branch-tracking.ts` | טבלת הרווח-פר-מחשב של כל סניפי הניידים יחד (חודשים כעמודות), ו-`computeSecretaryShare` — 30% מהברוטו של הסניפים שלי |
 | `apps/web/lib/coworking.ts` | המשרד השיתופי: לוח התשלומים (`billableMonths` / `payDayOf` / `clientStatus`) ומאזן ההוצאות-מול-הכנסות (`buildCoworkingLedger`) |

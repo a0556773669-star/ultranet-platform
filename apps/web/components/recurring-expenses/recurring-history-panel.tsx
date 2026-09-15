@@ -9,6 +9,7 @@ import {
   dueMonths,
   frequencyOf,
   isSpread,
+  lastClosedMonth,
   missingMonths,
 } from "@/lib/recurring-expenses";
 import { CountsToMainField } from "@/components/counts-to-main-field";
@@ -48,7 +49,9 @@ export function RecurringHistoryPanel({
 }) {
   const months = coveredMonths(expense, upto);
   const due = new Set(dueMonths(expense, upto));
-  const missing = new Set(missingMonths(expense, upto));
+  // "חסר" נמדד עד החודש שנסגר בלבד - החודש הרץ ניתן להזנה מוקדמת אבל אינו פיגור,
+  // באותה הגדרה שההתראה בכרטיס עובדת לפיה (`buildReminders`).
+  const missing = new Set(missingMonths(expense, lastClosedMonth(upto)));
   const cycle = cycleMonths(expense);
   const spread = isSpread(expense);
   const firstDue = expense.startDate.slice(0, 7);

@@ -10,6 +10,7 @@ import {
   frequencyOf,
   isSpread,
   amountForMonth,
+  lastClosedMonth,
   missingMonths,
   monthlyAllocation,
   totalToDate,
@@ -45,6 +46,10 @@ function monthLabel(month: string) {
  * שהמסך הזה באמת צריך לעשות — לעמוד מול הבעלים ב-1 לחודש ולשאול כמה היה החשמל.
  * הטופס הקטן בכל תא חסר הוא התשובה במקום, בלי לפתוח מסך אחר.
  *
+ * החודש הרץ הוא היוצא מן הכלל: אפשר להזין אותו מוקדם, אבל הוא לא נצבע ולא נכנס
+ * ל"צריך עדכון" — חודש נחשב חסר רק אחרי שנסגר (`lastClosedMonth`), כי עד אז החשבון
+ * עצמו עוד לא הגיע.
+ *
  * הטבלה מציגה חלון של החודשים האחרונים בלבד, כי זו העבודה השוטפת. כל מה שמחוצה לו —
  * הוצאה שקיימת שנה ונרשמה רק עכשיו, טעות הקלדה מלפני חצי שנה — נפתח ב-`RecurringHistoryPanel`
  * שמתחת לטבלה, ושם כל החודשים מיום ההתחלה זמינים לעריכה.
@@ -56,7 +61,7 @@ export function RecurringExpensesCard({
   canManage,
   monthsBack = 6,
   title = "הוצאות קבועות משתנות",
-  subtitle = 'הוצאה שחוזרת כל חודש אבל הסכום שלה משתנה — חשמל, משכורת, מע"מ. המערכת מזכירה בכל חודש שלא עודכן.',
+  subtitle = 'הוצאה שחוזרת כל חודש אבל הסכום שלה משתנה — חשמל, משכורת, מע"מ. התזכורת על חודש מגיעה ב-1 לחודש שאחריו, כשהחודש כבר נסגר.',
 }: {
   scope: ExpenseScope;
   branchId?: string;
@@ -68,6 +73,8 @@ export function RecurringExpensesCard({
 }) {
   const now = currentMonth();
   const reminders = buildReminders(expenses, now);
+  // חודש שעדיין רץ אינו "בפיגור": הוא נשאר פתוח להזנה אבל לא נצבע ולא נספר בהתראה.
+  const dueUpto = lastClosedMonth(now);
 
   // The visible window is the last `monthsBack` months of the widest expense, so a single
   // late row doesn't force the whole table wide. Months a spread payment lands on count too:
@@ -127,7 +134,7 @@ export function RecurringExpensesCard({
             </thead>
             <tbody className="tabular-nums">
               {expenses.map((e) => {
-                const missing = new Set(missingMonths(e, now));
+                const missing = new Set(missingMonths(e, dueUpto));
                 const due = new Set(dueMonths(e, now));
                 const allocation = monthlyAllocation(e, now);
                 const spread = isSpread(e);
@@ -172,7 +179,7 @@ export function RecurringExpensesCard({
                       }
                       if (!canManage) {
                         return (
-                          <td key={m} className="px-2 py-1.5 text-center text-amber-700">
+                          <td key={m} className={`px-2 py-1.5 text-center ${missing.has(m) ? "text-amber-700" : "text-muted"}`}>
                             ?
                           </td>
                         );
