@@ -10,6 +10,7 @@ import { getOwnerName, resolveSharedPartnerName, branchPartnerName } from "@/lib
 import { BranchExpenses } from "../branch-expenses";
 import { loadRecurringPurchaseIndex } from "@/lib/recurring-purchases";
 import { RecurringPurchasesSummary } from "@/components/recurring-purchases/recurring-purchases-summary";
+import { LegacyMultiBranchExpenses } from "../legacy-multi-branch";
 
 export default async function BranchExpensesPage({ params }: { params: { id: string } }) {
   const session = await getServerSession(authOptions);
@@ -40,11 +41,19 @@ export default async function BranchExpensesPage({ params }: { params: { id: str
     partnerName = resolved.partnerName;
   }
 
-  const [fixedSnap, variableSnap, purchaseIndex] = await Promise.all([
+  const [fixedSnap, variableSnap, purchaseIndex, rentalsBranchesSnap] = await Promise.all([
     db.collection("n_fixed_expenses").where("branchId", "==", params.id).get(),
     db.collection("n_var_expenses").where("branchId", "==", params.id).get(),
     loadRecurringPurchaseIndex(),
+    // רק הספר המשותף צריך את רשימת הסניפים - שם בוחרים בין מי ההוצאה מתחלקת.
+    isShared
+      ? db.collection("n_branches").where("branchType", "==", "rentals").get()
+      : Promise.resolve(null),
   ]);
+  const rentalsBranches = (rentalsBranchesSnap?.docs ?? [])
+    .map((d) => ({ ...(d.data() as Omit<Branch, "id">), id: d.id }) as Branch)
+    .filter((b) => !b.deleted)
+    .sort((a, b) => a.name.localeCompare(b.name, "he", { numeric: true }));
   const fixedExpenses = fixedSnap.docs
     .map((d) => ({ ...(d.data() as Omit<FixedExpense, "id">), id: d.id }) as FixedExpense)
     .sort((a, b) => b.startDate.localeCompare(a.startDate));
@@ -97,7 +106,9 @@ export default async function BranchExpensesPage({ params }: { params: { id: str
         variableExpenses={visibleVariable}
         expenseTypes={purchaseIndex.types}
         purchaseByType={purchaseIndex.byType}
+        branches={rentalsBranches}
       />
+      {isShared && isOwner && <LegacyMultiBranchExpenses branchNameById={new Map(rentalsBranches.map((b) => [b.id, b.name]))} />}
       <RecurringPurchasesSummary summaries={purchaseSummaries} />
     </div>
   );

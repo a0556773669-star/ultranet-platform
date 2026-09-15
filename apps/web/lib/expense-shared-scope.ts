@@ -1,3 +1,5 @@
+import { splitMultiBranchExpense, type MultiBranchSplit } from "./multi-branch-expense";
+
 /**
  * Sentinel `branchId` values for a fixed/variable expense that applies to ALL branches of one
  * module together (e.g. shared advertising, shared software licenses) rather than to a single
@@ -74,4 +76,68 @@ export function sharedExpenseBranchIdsFromForm(formData: {
     .map((v) => String(v).trim())
     .filter(Boolean);
   return ids.length > 0 ? Array.from(new Set(ids)) : undefined;
+}
+
+/* ------------------------------------------------------------------ *
+ * החלוקה בין הבעלים לסניפים
+ * ------------------------------------------------------------------ */
+
+/**
+ * הוצאה משותפת שמתחלקת בין הסניפים — **מה שהיה `n_multi_branch_expenses`, בספר המשותף.**
+ *
+ * הספר המשותף ידע עד היום דבר אחד בלבד: שההוצאה לא שייכת לסניף מסוים. את השאלה השנייה —
+ * *מי נושא בה* — הוא לא ידע לענות בשום דרך שאינה בעלים / שותף / חצי-חצי (`owedBy`), ולכן
+ * "פרסום משותף של 1,000 ₪, חצי עליי והסניפים מתחלקים בחצי השני" נאלץ לחיות בקולקשן משלו.
+ * `ownerPct` על ההוצאה עונה על אותה שאלה באחוז חופשי, ולכן הספר המשותף הוא היום הדרך
+ * היחידה לרשום הוצאה שחלה על יותר מסניף אחד — גם קבועה וגם חד-פעמית.
+ *
+ * החשבון עצמו נשאר `splitMultiBranchExpense` (`lib/multi-branch-expense.ts`): אותה פונקציה
+ * טהורה בדיוק, כדי שהתצוגה החיה בטופס, החישוב בהנה"ח ומודל התנועה לא יוכלו להיפרד.
+ */
+
+export const DEFAULT_SHARED_OWNER_PCT = 50;
+
+/** האם ההוצאה המשותפת מתחלקת בין הסניפים. חסר `ownerPct` = ההתנהגות ההיסטורית. */
+export function sharedExpenseSplitsToBranches(expense: { ownerPct?: number }): boolean {
+  return typeof expense.ownerPct === "number" && Number.isFinite(expense.ownerPct);
+}
+
+export interface SharedExpenseDivision extends MultiBranchSplit {
+  /** הסניפים הקיימים שההוצאה באמת מתחלקת ביניהם, אחרי הצלבה מול `allBranchIds` */
+  branchIds: string[];
+}
+
+/**
+ * החלוקה בפועל של הוצאה משותפת, או `null` כשהיא לא מתחלקת (אין `ownerPct`) או כשלא נשאר
+ * אף סניף חי לחלק בו — במקרה כזה היא נשארת בספר המשותף בלבד, בדיוק כמו קודם.
+ */
+export function sharedExpenseDivision(
+  expense: { amount?: number; ownerPct?: number; branchIds?: string[] },
+  allBranchIds: readonly string[],
+): SharedExpenseDivision | null {
+  if (!sharedExpenseSplitsToBranches(expense)) return null;
+  const branchIds = sharedExpenseBranchIds(expense, allBranchIds);
+  if (branchIds.length === 0) return null;
+  return {
+    ...splitMultiBranchExpense(expense.amount || 0, expense.ownerPct ?? 0, branchIds.length),
+    branchIds,
+  };
+}
+
+/** קריאת האחוז מהטופס. מוחזר `undefined` כשהמשתמש לא סימן שההוצאה מתחלקת. */
+export function sharedOwnerPctFromForm(formData: {
+  get(name: string): unknown;
+}): number | undefined {
+  const on = formData.get("splitToBranches");
+  if (!(on === "on" || on === "true" || on === "1")) return undefined;
+  const raw = Number(formData.get("ownerPct"));
+  if (!Number.isFinite(raw)) return DEFAULT_SHARED_OWNER_PCT;
+  return Math.min(100, Math.max(0, raw));
+}
+
+/** התווית שמסבירה שורה משותפת ברשימה: איך היא מתחלקת, ובין מי. */
+export function sharedExpenseSplitNote(division: SharedExpenseDivision): string {
+  return `${division.ownerPct}% עליי (${Math.round(division.ownerTotal).toLocaleString("he-IL")} ₪) · ${
+    division.branchCount
+  } סניפים × ${Math.round(division.perBranch).toLocaleString("he-IL")} ₪`;
 }
