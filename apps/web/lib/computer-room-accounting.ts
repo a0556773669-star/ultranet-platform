@@ -144,6 +144,9 @@ export interface RoomIncomeLine {
   month: string;
   desc: string;
   amount: number;
+  /** שורה ידנית שנוצרה מייבוא קובץ ולא הוקלדה במסך. משנה רק תצוגה ואפשרות ניקוי גורף -
+   *  מבחינת החישוב היא שורת מעקב לכל דבר, בדיוק כמו שורה שהוקלדה. */
+  imported?: boolean;
 }
 
 export interface ComputerRoomBranchStats {
@@ -166,6 +169,9 @@ export interface ComputerRoomBranchStats {
   manualIncomeToDate: number;
   /** מתוך `incomeToDate`: מזומן מהקופה שנרשם בהנה"ח הראשית (`n_ah_income` מסוג `cash`) */
   cashIncomeToDate: number;
+  /** מתוך `manualIncomeToDate`: השורות שהגיעו מייבוא קובץ. קיים כדי שהמסך יוכל להציע ניקוי
+   *  של הייבוא בלבד, ולומר בכמה שורות מדובר לפני שמוחקים. */
+  importedIncomeRows: number;
   profitHeld: number;
 }
 
@@ -246,6 +252,7 @@ export async function loadComputerRoomAccounting(): Promise<ComputerRoomAccounti
       month: inc.month || date.slice(0, 7),
       desc: inc.desc || "הכנסת חודש",
       amount: inc.amount || 0,
+      imported: inc.source === "import",
     });
   }
   for (const inc of allCashIncome) {
@@ -298,6 +305,7 @@ export async function loadComputerRoomAccounting(): Promise<ComputerRoomAccounti
     const cashIncomeToDate = incomeLines
       .filter((i) => i.source === "main-cash")
       .reduce((sum, i) => sum + i.amount, 0);
+    const importedIncomeRows = incomeLines.filter((i) => i.imported).length;
     const incomeToDate = manualIncomeToDate + cashIncomeToDate;
     // Operating profit is what pays the investment back - the equipment cost itself is NOT
     // subtracted from it (כלל 7), only compared against it.
@@ -315,6 +323,7 @@ export async function loadComputerRoomAccounting(): Promise<ComputerRoomAccounti
       incomeToDate,
       manualIncomeToDate,
       cashIncomeToDate,
+      importedIncomeRows,
       profitHeld: incomeToDate - spentToDate,
     });
   }
