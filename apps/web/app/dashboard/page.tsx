@@ -233,10 +233,10 @@ export default async function DashboardHomePage() {
               </div>
             ))}
             <Link
-              href="/dashboard/coworking/stations"
+              href="/dashboard/coworking"
               className="mt-2 inline-flex items-center gap-1 text-[11px] font-bold text-teal hover:underline"
             >
-              {"לסימון תשלום במסך העמדות"}
+              {"לסימון תשלום במסך הסניפים והעמדות"}
               <ArrowLeft className="h-3 w-3" />
             </Link>
           </div>

@@ -33,7 +33,6 @@ function stripUndefined<T extends Record<string, unknown>>(obj: T): T {
 
 function revalidateAll() {
   revalidatePath("/dashboard/coworking");
-  revalidatePath("/dashboard/coworking/stations");
   revalidatePath("/dashboard/coworking/accounting");
   revalidatePath("/dashboard/accounting");
   revalidatePath("/dashboard");

@@ -11,7 +11,7 @@ export default async function NewCoworkingBranchPage() {
 
   return (
     <div className="max-w-2xl">
-      <CoworkingTabs active="/dashboard/coworking/branches" />
+      <CoworkingTabs active="/dashboard/coworking" />
       <h1 className="mb-4 flex items-center gap-1.5 text-[21px] font-extrabold text-ink">
         <Building2 className="h-5 w-5" />
         סניף משרד שיתופי חדש
