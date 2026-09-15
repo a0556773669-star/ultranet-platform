@@ -438,6 +438,42 @@ export async function loadComputerRoomAccounting(): Promise<ComputerRoomAccounti
   };
 }
 
+/** סניף אחד בטופס ההזנה החודשי, עם מה שכבר רשום לו בכל חודש. */
+export interface BranchMonthlyIncome {
+  id: string;
+  name: string;
+  /** סך שורות המעקב (`n_branch_income`) של הסניף בכל חודש - מה שהטופס ממלא מראש ומחליף */
+  manualByMonth: Record<string, number>;
+  /** מזומן מהקופה שנרשם בספר הראשי - מוצג בטופס כדי שלא יוקלד שוב, ולעולם לא נכתב מכאן */
+  cashByMonth: Record<string, number>;
+}
+
+/**
+ * הנתונים של טופס "כמה נכנס בחודש X" — שורה לכל סניף שמותר למשתמש להזין לו.
+ *
+ * שני המקורות נשארים מופרדים בכוונה: הטופס מחליף רק את שורות המעקב, והמזומן מהקופה מוצג
+ * לצידן כדי שלא יוקלד שוב - הוא כבר נספר פעם אחת בספר הראשי.
+ */
+export function branchMonthlyIncomeRows(
+  data: ComputerRoomAccountingData,
+  branchIds?: string[],
+): BranchMonthlyIncome[] {
+  const wanted = branchIds ? new Set(branchIds) : null;
+  return data.branches
+    .filter((b) => !wanted || wanted.has(b.id))
+    .map((b) => {
+      const manualByMonth: Record<string, number> = {};
+      const cashByMonth: Record<string, number> = {};
+      for (const line of data.incomeLinesByBranch.get(b.id) ?? []) {
+        const month = line.month || line.date.slice(0, 7);
+        if (!month) continue;
+        const bucket = line.source === "main-cash" ? cashByMonth : manualByMonth;
+        bucket[month] = (bucket[month] ?? 0) + line.amount;
+      }
+      return { id: b.id, name: b.name, manualByMonth, cashByMonth };
+    });
+}
+
 /*
  * loadComputerRoomSetupCostTotal() used to live here and was added on top of the main ledger's
  * expense total by hand, because setup cost is not a dated transaction. It is one now: a room's

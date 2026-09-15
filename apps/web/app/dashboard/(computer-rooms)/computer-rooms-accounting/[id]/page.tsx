@@ -2,13 +2,18 @@ import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import { BarChart3, ArrowLeft, Banknote, FileSpreadsheet, ChevronDown } from "lucide-react";
 import { requireModuleAccess } from "@/lib/perms";
-import { loadComputerRoomAccounting, SHARED_EXPENSE_BRANCH_ID, type RoomIncomeLine } from "@/lib/computer-room-accounting";
+import {
+  branchMonthlyIncomeRows,
+  loadComputerRoomAccounting,
+  SHARED_EXPENSE_BRANCH_ID,
+  type RoomIncomeLine,
+} from "@/lib/computer-room-accounting";
 import { isBranchIncomeImportEnabled, monthLabel } from "@/lib/branch-income-excel";
 import {
-  addBranchIncomeAction,
   clearImportedBranchIncomeAction,
   deleteBranchIncomeAction,
   importBranchIncomeAction,
+  saveMonthlyBranchIncomeAction,
 } from "../actions";
 import { SetupCostCard } from "./setup-cost-card";
 import { IncomeEntryPanel } from "./income-entry-panel";
@@ -85,7 +90,18 @@ export default async function ComputerRoomBranchAccountingPage({
   searchParams,
 }: {
   params: { id: string };
-  searchParams?: { importError?: string; imported?: string; replaced?: string; skipped?: string; note?: string | string[]; noteMore?: string; cleared?: string };
+  searchParams?: {
+    importError?: string;
+    imported?: string;
+    replaced?: string;
+    skipped?: string;
+    note?: string | string[];
+    noteMore?: string;
+    cleared?: string;
+    month?: string;
+    monthSaved?: string;
+    monthCleared?: string;
+  };
 }) {
   const session = await requireModuleAccess("computers");
   const isOwner = session.user?.role === "owner";
@@ -100,10 +116,12 @@ export default async function ComputerRoomBranchAccountingPage({
   // כבר ממוינות מהחדשה לישנה, ומכילות גם את המזומן שנמשך מהקופה ונרשם בהנה"ח הראשית.
   const incomes = data.incomeLinesByBranch.get(params.id) ?? [];
   const monthly = summarizeByMonth(incomes);
-  const addIncome = addBranchIncomeAction.bind(null, params.id);
   const importIncome = importBranchIncomeAction.bind(null, params.id);
   const clearImported = clearImportedBranchIncomeAction.bind(null, params.id);
-  const todayStr = new Date().toISOString().slice(0, 10);
+  const thisMonth = new Date().toISOString().slice(0, 7);
+  // owner מזין את כל הסניפים בטופס אחד; שותף רואה רק את הסניף שלו - אותה בדיקה בדיוק חוזרת
+  // ב-Server Action, כך שהרשימה כאן היא נוחות ולא ההרשאה עצמה.
+  const entryBranches = branchMonthlyIncomeRows(data, isOwner ? undefined : [params.id]);
   // הייבוא הוא כלי זמני למילוי היסטוריה; כשמכבים אותו בסביבה כל האזור נעלם מהמסך.
   const importEnabled = canAdd && isBranchIncomeImportEnabled();
   const notes = searchParams?.note ? (Array.isArray(searchParams.note) ? searchParams.note : [searchParams.note]) : [];
@@ -124,14 +142,16 @@ export default async function ComputerRoomBranchAccountingPage({
         <div className="flex items-center gap-3">
           {canAdd && (
             <IncomeEntryPanel
-              addIncome={addIncome}
+              saveMonthly={saveMonthlyBranchIncomeAction}
+              branches={entryBranches}
+              defaultMonth={thisMonth}
+              back={`/dashboard/computer-rooms-accounting/${params.id}`}
               importIncome={importIncome}
               clearImported={clearImported}
               importEnabled={importEnabled}
               importedRows={stats.importedIncomeRows}
               canClearImported={isOwner}
               templateHref={`/api/computer-rooms-accounting/${params.id}/income-template`}
-              today={todayStr}
             />
           )}
           {isOwner && (
@@ -171,6 +191,12 @@ export default async function ComputerRoomBranchAccountingPage({
       {searchParams?.cleared !== undefined && (
         <div className="rounded-card border border-card-border bg-[#f4f6f9] p-3 text-sm font-semibold text-ink">
           נמחקו {searchParams.cleared} שורות שיובאו מקובץ. שורות שהוקלדו ידנית לא נגעו.
+        </div>
+      )}
+      {searchParams?.monthSaved !== undefined && (
+        <div className="rounded-card border border-teal-200 bg-teal-50 p-3 text-sm font-semibold text-teal-700">
+          נשמרו הכנסות {searchParams.month ? monthLabel(searchParams.month) : ""} ל-{searchParams.monthSaved} סניפים
+          {Number(searchParams.monthCleared ?? 0) > 0 && `, ונוקו ${searchParams.monthCleared} סניפים`}.
         </div>
       )}
       {searchParams?.imported !== undefined && (
