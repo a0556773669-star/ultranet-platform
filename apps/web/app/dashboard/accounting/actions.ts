@@ -38,7 +38,6 @@ function stripUndefined<T extends Record<string, unknown>>(obj: T): T {
 function revalidateMain() {
   revalidatePath("/dashboard/accounting");
   revalidatePath("/dashboard/accounting/extra-expenses");
-  revalidatePath("/dashboard/accounting/legacy");
   revalidatePath("/dashboard/rentals/accounting");
   // הכנסת מזומן נמשכת מקופה של חדר מחשבים, ומוצגת (לתצוגה בלבד) גם בדשבורד המעקב שלו -
   // אחרת היא הייתה מופיעה שם רק בטעינה הבאה שתעקוף את המטמון.

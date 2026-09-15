@@ -150,7 +150,7 @@ export default async function AccountingHomePage() {
           kind="expense"
           rows={expenseRows}
           total={ledger.totals.expense}
-          emptyText={'עדיין לא סומנה אף הוצאה כמתחשבנת בראשי. אפשר לסמן הוצאות קיימות במסך "עדכון רטרואקטיבי".'}
+          emptyText={'עדיין לא סומנה אף הוצאה כמתחשבנת בראשי. מסמנים הוצאה בטופס שבו היא נרשמה.'}
         />
       </div>
 
