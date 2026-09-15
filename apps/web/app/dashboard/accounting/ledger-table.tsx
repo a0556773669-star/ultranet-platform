@@ -14,8 +14,9 @@ import { DeleteEntryButton } from "./delete-entry-button";
  * בצד הלקוח על כל השורות שכבר הגיעו מהשרת — הספר הראשי נטען ממילא במלואו כדי לחשב את
  * הסכומים למעלה, ולכן עמוד חדש לא עולה קריאה נוספת.
  *
- * הטבלה בנויה לחצי מסך, כי שתיהן יושבות זו לצד זו: העמודות צרות, שורת הסינון נשברת
- * לשתי שורות כשצריך, וגלילה אופקית היא מוצא אחרון ולא ברירת מחדל.
+ * הטבלה בנויה לחצי מסך, כי שתיהן יושבות זו לצד זו: `table-fixed` עם רוחב מפורש לכל
+ * עמודה, שורה אחת בגובה קבוע (ערך ארוך נחתך ומופיע במלואו ב-`title`), ופעולות ההכנסה
+ * כאייקונים. כך שתי הטבלאות נראות אותו דבר גם כשלאחת מהן יש עמודה נוספת.
  *
  * כשסינון פעיל מופיעה מעל הטבלה שורת סיכום, והסכום בה הוא של השורות **המסוננות** ולא
  * של העמוד, ובכוונה: מי שמסנן "חשמל" רוצה לדעת כמה יצא על חשמל, לא כמה יצא על חמישים
@@ -46,6 +47,10 @@ type SortDir = "asc" | "desc";
 
 const FIELD =
   "rounded-lg border border-card-border bg-white px-2.5 py-1.5 text-xs text-ink focus:border-teal focus:outline-none";
+/** גרסה צרה יותר לשדות שיושבים בשורת הסינון לצד עוד ארבעה: שורת הסינון צריכה להיכנס
+ *  לשורה אחת גם בטבלה הצרה מבין השתיים, אחרת השתיים נראות שונה. */
+const NARROW_FIELD =
+  "rounded-lg border border-card-border bg-white px-2 py-1 text-[11px] text-ink focus:border-teal focus:outline-none";
 
 function money(n: number) {
   return `${Math.round(n).toLocaleString("he-IL")} ₪`;
@@ -108,6 +113,12 @@ export function LedgerTable({
 }) {
   const isIncome = kind === "income";
   const amountClass = isIncome ? "text-emerald-600" : "text-red-600";
+
+  // רוחבי העמודות מפורשים כי הטבלה היא `table-fixed`: כך כל שורה יוצאת בגובה אחד, בלי
+  // שעמודה אחת שנקלעה לערך ארוך תמתח את כולן. הרוחבים זהים בשתי הטבלאות - זה מה שגורם
+  // להן להיראות כמו טבלה אחת שנחתכה לשניים - וההבדל היחיד הוא עמודת הפעולות שיש רק
+  // בהכנסות. "מקור" רחב מהשאר כי שמות סניפים מלאים ("חדר מחשבים אשדוד") יושבים בו.
+  const COL = { date: "w-[98px]", category: "w-[126px]", origin: "w-[150px]", amount: "w-[96px]" };
 
   const [q, setQ] = useState("");
   const [category, setCategory] = useState("");
@@ -191,7 +202,7 @@ export function LedgerTable({
 
       <div className="overflow-hidden rounded-card border border-card-border bg-white shadow-card">
         <div className="flex flex-wrap items-center gap-2 border-b border-card-border bg-[#f8fafc] px-3 py-2.5">
-          <div className="relative min-w-[150px] flex-1">
+          <div className="relative min-w-[140px] flex-1">
             <Search className="pointer-events-none absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted" />
             <input
               type="text"
@@ -200,18 +211,19 @@ export function LedgerTable({
                 setQ(e.target.value);
                 setPage(1);
               }}
-              placeholder="חיפוש בתיאור, במקור, בקטגוריה או בסכום..."
-              className={`${FIELD} w-full pr-8`}
+              placeholder="חיפוש בטבלה..."
+              title="חיפוש בתיאור, במקור, בקטגוריה, ב&quot;נמכר ל&quot; ובסכום"
+              className={`${NARROW_FIELD} w-full py-1.5 pr-8`}
             />
           </div>
 
           <select
+            className={`${NARROW_FIELD} w-[120px] shrink-0`}
             value={category}
             onChange={(e) => {
               setCategory(e.target.value);
               setPage(1);
             }}
-            className={FIELD}
           >
             <option value="">כל הקטגוריות</option>
             {categories.map((c) => (
@@ -222,12 +234,12 @@ export function LedgerTable({
           </select>
 
           <select
+            className={`${NARROW_FIELD} w-[120px] shrink-0`}
             value={origin}
             onChange={(e) => {
               setOrigin(e.target.value);
               setPage(1);
             }}
-            className={FIELD}
           >
             <option value="">כל המקורות</option>
             {origins.map((o) => (
@@ -237,30 +249,34 @@ export function LedgerTable({
             ))}
           </select>
 
-          <label className="flex items-center gap-1 text-[11px] font-semibold text-muted">
-            מתאריך
-            <input
-              type="date"
-              value={from}
-              onChange={(e) => {
-                setFrom(e.target.value);
-                setPage(1);
-              }}
-              className={FIELD}
-            />
-          </label>
-          <label className="flex items-center gap-1 text-[11px] font-semibold text-muted">
-            עד
-            <input
-              type="date"
-              value={to}
-              onChange={(e) => {
-                setTo(e.target.value);
-                setPage(1);
-              }}
-              className={FIELD}
-            />
-          </label>
+          {/* שני התאריכים נשברים לשורה חדשה יחד ולא אחד-אחד, כדי ששתי הטבלאות ישברו
+              באותו מקום ושורת הסינון תיראה זהה בשתיהן */}
+          <div className="flex shrink-0 items-center gap-2">
+            <label className="flex items-center gap-1 text-[11px] font-semibold text-muted">
+              מתאריך
+              <input
+                type="date"
+                value={from}
+                onChange={(e) => {
+                  setFrom(e.target.value);
+                  setPage(1);
+                }}
+                className={NARROW_FIELD}
+              />
+            </label>
+            <label className="flex items-center gap-1 text-[11px] font-semibold text-muted">
+              עד
+              <input
+                type="date"
+                value={to}
+                onChange={(e) => {
+                  setTo(e.target.value);
+                  setPage(1);
+                }}
+                className={NARROW_FIELD}
+              />
+            </label>
+          </div>
 
           {isFiltered && (
             <button
@@ -282,20 +298,20 @@ export function LedgerTable({
         )}
 
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[460px] text-[13px]">
+          <table className={`w-full table-fixed text-[13px] ${isIncome ? "min-w-[666px]" : "min-w-[582px]"}`}>
             <thead className="bg-[#f4f6f9]">
               <tr>
-                <SortHeader {...sortProps} label="תאריך" keyName="date" className="w-[92px]" />
+                <SortHeader {...sortProps} label="תאריך" keyName="date" className={COL.date} />
                 <SortHeader {...sortProps} label="תיאור" keyName="desc" />
                 <SortHeader
                   {...sortProps}
                   label={isIncome ? "סוג" : "קטגוריה"}
                   keyName="category"
-                  className="w-[104px]"
+                  className={COL.category}
                 />
-                <SortHeader {...sortProps} label="מקור" keyName="origin" className="w-[104px]" />
-                <SortHeader {...sortProps} label="סכום" keyName="amount" align="left" className="w-[96px]" />
-                {isIncome && <th className="w-[128px] px-[11px] py-[9px]" />}
+                <SortHeader {...sortProps} label="מקור" keyName="origin" className={COL.origin} />
+                <SortHeader {...sortProps} label="סכום" keyName="amount" align="left" className={COL.amount} />
+                {isIncome && <th className="w-[84px] px-[11px] py-[9px]" />}
               </tr>
             </thead>
             <tbody>
@@ -306,46 +322,58 @@ export function LedgerTable({
                   </td>
                 </tr>
               )}
-              {visible.map((r) => (
-                <tr key={r.key} className="border-t border-card-border align-top transition hover:bg-[#f8fafc]">
-                  <td className="whitespace-nowrap px-[11px] py-2 text-muted tabular-nums">{r.date}</td>
-                  <td className="px-[11px] py-2 font-semibold text-ink">
-                    {r.desc}
-                    {r.soldTo && <span className="mr-1.5 text-[11px] font-normal text-muted">· נמכר ל{r.soldTo}</span>}
-                  </td>
-                  <td className="px-[11px] py-2 text-muted">{r.category || "—"}</td>
-                  <td className="px-[11px] py-2 text-muted">{r.origin}</td>
-                  <td className={`whitespace-nowrap px-[11px] py-2 text-left font-extrabold tabular-nums ${amountClass}`}>
-                    {money(r.amount)}
-                  </td>
-                  {isIncome && (
-                    <td className="px-[11px] py-2">
-                      <div className="flex flex-wrap items-center justify-end gap-1.5">
-                        {/* מסמך מופק רק על כסף שלא נסלק: העברה מסניף ניידים, ומזומן שנמשך
-                            מקופה. שורת אשראי לא מקבלת כפתור בכלל - נדרים פלוס כבר הפיק עליה
-                            חשבונית מס קבלה, ומסמך שני היה כפילות. הכלל נאכף גם בשרת
-                            (`receipt-actions.ts`), כי כפתור מוסתר הוא לא אכיפה. */}
-                        {r.receipt && (
-                          <IssueReceiptButton
-                            incomeId={r.id}
-                            amount={r.amount}
-                            receiptIssued={r.receipt.issued}
-                            receiptDocNumber={r.receipt.docNumber}
-                            defaultClientName={r.receipt.clientName}
-                          />
-                        )}
-                        {r.deletable && deleteAction && (
-                          <DeleteEntryButton
-                            confirmText="למחוק את שורת ההכנסה?"
-                            action={() => deleteAction(r.id)}
-                            successText="ההכנסה נמחקה"
-                          />
-                        )}
-                      </div>
+              {visible.map((r) => {
+                const fullDesc = r.soldTo ? `${r.desc} · נמכר ל${r.soldTo}` : r.desc;
+                return (
+                  <tr key={r.key} className="h-9 border-t border-card-border align-middle transition hover:bg-[#f8fafc]">
+                    <td className="truncate px-[11px] py-1.5 text-muted tabular-nums">{r.date}</td>
+                    <td className="truncate px-[11px] py-1.5 font-semibold text-ink" title={fullDesc}>
+                      {r.desc}
+                      {r.soldTo && <span className="mr-1.5 text-[11px] font-normal text-muted">· נמכר ל{r.soldTo}</span>}
                     </td>
-                  )}
-                </tr>
-              ))}
+                    <td className="truncate px-[11px] py-1.5 text-muted" title={r.category}>
+                      {r.category || "—"}
+                    </td>
+                    <td className="truncate px-[11px] py-1.5 text-muted" title={r.origin}>
+                      {r.origin}
+                    </td>
+                    <td
+                      title={money(r.amount)}
+                      className={`truncate px-[11px] py-1.5 text-left font-extrabold tabular-nums ${amountClass}`}
+                    >
+                      {money(r.amount)}
+                    </td>
+                    {isIncome && (
+                      <td className="px-[11px] py-1.5">
+                        <div className="flex items-center justify-end gap-1 overflow-hidden">
+                          {/* מסמך מופק רק על כסף שלא נסלק: העברה מסניף ניידים, ומזומן שנמשך
+                              מקופה. שורת אשראי לא מקבלת כפתור בכלל - נדרים פלוס כבר הפיק עליה
+                              חשבונית מס קבלה, ומסמך שני היה כפילות. הכלל נאכף גם בשרת
+                              (`receipt-actions.ts`), כי כפתור מוסתר הוא לא אכיפה. */}
+                          {r.receipt && (
+                            <IssueReceiptButton
+                              compact
+                              incomeId={r.id}
+                              amount={r.amount}
+                              receiptIssued={r.receipt.issued}
+                              receiptDocNumber={r.receipt.docNumber}
+                              defaultClientName={r.receipt.clientName}
+                            />
+                          )}
+                          {r.deletable && deleteAction && (
+                            <DeleteEntryButton
+                              compact
+                              confirmText="למחוק את שורת ההכנסה?"
+                              action={() => deleteAction(r.id)}
+                              successText="ההכנסה נמחקה"
+                            />
+                          )}
+                        </div>
+                      </td>
+                    )}
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
