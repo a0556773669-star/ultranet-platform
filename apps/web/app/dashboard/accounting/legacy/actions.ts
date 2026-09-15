@@ -6,8 +6,9 @@ import { authOptions } from "@/lib/auth";
 import { getAdminFirestore } from "@/lib/firebase-admin";
 import { RECURRING_VAR_EXPENSES_COLLECTION } from "@/lib/recurring-expenses";
 import { MULTI_BRANCH_EXPENSES_COLLECTION } from "@/lib/multi-branch-expense";
+import { MAIN_FIXED_EXPENSES_COLLECTION } from "@/lib/main-fixed-expenses";
 
-export type LegacyCollection = "fixed" | "variable" | "multi" | "extra" | "recurring";
+export type LegacyCollection = "fixed" | "variable" | "multi" | "extra" | "recurring" | "main-fixed";
 
 const COLLECTION_OF: Record<LegacyCollection, string> = {
   fixed: "n_fixed_expenses",
@@ -15,6 +16,7 @@ const COLLECTION_OF: Record<LegacyCollection, string> = {
   multi: MULTI_BRANCH_EXPENSES_COLLECTION,
   extra: "n_ah_expenses",
   recurring: RECURRING_VAR_EXPENSES_COLLECTION,
+  "main-fixed": MAIN_FIXED_EXPENSES_COLLECTION,
 };
 
 async function requireOwner() {
