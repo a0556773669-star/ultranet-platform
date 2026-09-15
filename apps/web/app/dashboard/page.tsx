@@ -8,10 +8,20 @@ import type { PermKey } from "@/lib/perms";
 import { NAV_ITEMS, visibleFor, type NavItem } from "@/lib/nav-items";
 import HomeClock from "./home-clock";
 import { getInventorySnapshotAction } from "./(computer-rooms)/inventory/actions";
-import type { Laptop, Rental } from "@ultranet/shared-types";
+import type { ExpenseScope, Laptop, RecurringVariableExpense, Rental } from "@ultranet/shared-types";
 import type { BranchKey, InventoryItem } from "@/lib/legacy-inventory";
 import { loadMainLedger } from "@/lib/main-ledger";
 import { loadCoworkingData, paymentForMonth, currentMonth as coworkingMonth } from "@/lib/coworking";
+import { loadRecurringVariableExpenses } from "@/lib/recurring-expenses";
+import { HomeRecurringReminders } from "@/components/recurring-expenses/home-recurring-reminders";
+
+/** באיזו הרשאה מותנה כל scope של הוצאה קבועה משתנה בתזכורת שבדף הבית. */
+const RECURRING_SCOPE_PERM: Record<ExpenseScope, PermKey> = {
+  computers: "computers",
+  rentals: "rentals",
+  coworking: "coworking",
+  main: "accounting",
+};
 
 export default async function DashboardHomePage() {
   const session = await getServerSession(authOptions);
@@ -110,6 +120,22 @@ export default async function DashboardHomePage() {
     };
   }
 
+  // ההוצאות הקבועות המשתנות שהמשתמש הזה בכלל רשאי לראות. הכרטיס יושב בדף הבית מפני
+  // שתזכורת שחיה בתוך מסך ההוצאות של הסניף דורשת שכבר יזכרו להיכנס אליו — והמודול כולו
+  // קיים בדיוק בשביל מה ששוכחים.
+  const visibleScopes = new Set(
+    (Object.keys(RECURRING_SCOPE_PERM) as ExpenseScope[]).filter((scope) => has(RECURRING_SCOPE_PERM[scope])),
+  );
+  let recurringExpenses: RecurringVariableExpense[] = [];
+  if (visibleScopes.size > 0) {
+    const all = await loadRecurringVariableExpenses();
+    // עובד סניף רואה ומעדכן רק את הסניף שלו — בדיוק מה ש-`requireAccess` בפעולות מתיר,
+    // כדי שלא יוצג כאן טופס שכל שליחה שלו תיפול על "אין הרשאה".
+    recurringExpenses = all.filter(
+      (e) => visibleScopes.has(e.scope) && (isOwner || (Boolean(branchId) && e.branchId === branchId)),
+    );
+  }
+
   let inventoryItemCount = 0;
   let lowStockItems: { name: string; qty: number; min: number }[] | null = null;
 
@@ -205,6 +231,12 @@ export default async function DashboardHomePage() {
           </Link>
         ))}
       </div>
+
+      {recurringExpenses.length > 0 && (
+        <div className="mb-3">
+          <HomeRecurringReminders expenses={recurringExpenses} canManage />
+        </div>
+      )}
 
       <div className="mb-3 grid grid-cols-1 gap-3 lg:grid-cols-2">
         {coworkingDue && coworkingDue.clients.length > 0 && (

@@ -1107,6 +1107,21 @@ export interface RecurringVariableAmount {
  * המבנה הוא שורה אחת + סכום לכל חודש (`amounts`). חודש בלי סכום הוא חודש שעדיין לא
  * עודכן, וזה בדיוק מה שמסך התזכורת מחפש: `missingMonths()` ב-`lib/recurring-expenses.ts`.
  */
+/**
+ * כל כמה זמן ההוצאה נדרשת בפועל. זה לא נתון קוסמטי — הוא קובע באילו חודשים המערכת
+ * מבקשת סכום (`dueMonths`), ולכן גם על מה היא מתריעה. ארנונה דו-חודשית שנרשמה כחודשית
+ * מייצרת התראה שקרית בכל חודש שני, וזו בדיוק הסיבה שהשדה קיים.
+ */
+export type RecurringFrequency = "monthly" | "bimonthly" | "quarterly" | "yearly";
+
+/** אורך המחזור בחודשים. `undefined` = חודשי, כדי שרשומות שנכתבו לפני השדה יישארו נכונות. */
+export const RECURRING_FREQUENCY_MONTHS: Record<RecurringFrequency, number> = {
+  monthly: 1,
+  bimonthly: 2,
+  quarterly: 3,
+  yearly: 12,
+};
+
 export interface RecurringVariableExpense {
   id: string;
   scope: ExpenseScope;
@@ -1118,6 +1133,22 @@ export interface RecurringVariableExpense {
   startDate: string;
   /** הפסקה: מהחודש הזה ואילך כבר לא מבקשים עדכון */
   endDate?: string;
+  /**
+   * תדירות החיוב. `undefined` = `monthly` (כל הרשומות שנוצרו לפני השדה). המחזור נמדד
+   * מחודש ה-`startDate`: ארנונה דו-חודשית שהתחילה ב-01/2025 נדרשת ב-01, 03, 05 וכן הלאה.
+   */
+  frequency?: RecurringFrequency;
+  /**
+   * פריסה: לחלק תשלום רב-חודשי על פני חודשי המחזור שלו בדוחות החודשיים.
+   *
+   * ביטוח שנתי של 12,000 ₪ ששולם בינואר הוא 12,000 ₪ במזומן בינואר, אבל 1,000 ₪ עלות
+   * בכל חודש. בלי פריסה ינואר נראה חודש קטסטרופלי ושאר השנה נראית זולה מכפי שהיא, ואי
+   * אפשר להשוות חודש לחודש — וזו כל הסיבה לקיומו של השדה.
+   *
+   * `undefined` = פרוס (ברירת המחדל לתדירות רב-חודשית); `false` = הכל נופל בחודש התשלום.
+   * בתדירות חודשית אין לשדה משמעות — מחזור של חודש אחד נפרס לעצמו.
+   */
+  spread?: boolean;
   /** סכום ברירת מחדל להצעה בעת עדכון חודש חדש */
   defaultAmount?: number;
   /** ראה `COUNTS_TO_MAIN_DOC` */

@@ -12,9 +12,31 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { getAdminFirestore } from "@/lib/firebase-admin";
 import { FieldValue } from "firebase-admin/firestore";
-import type { ExpenseScope, RecurringVariableExpense } from "@ultranet/shared-types";
+import type { ExpenseScope, RecurringFrequency, RecurringVariableExpense } from "@ultranet/shared-types";
 import { countsToMainFromForm } from "@/lib/counts-to-main";
-import { RECURRING_VAR_EXPENSES_COLLECTION, upsertAmount } from "@/lib/recurring-expenses";
+import {
+  RECURRING_VAR_EXPENSES_COLLECTION,
+  currentMonth,
+  dueMonths,
+  upsertAmount,
+} from "@/lib/recurring-expenses";
+
+const FREQUENCIES: RecurringFrequency[] = ["monthly", "bimonthly", "quarterly", "yearly"];
+
+/** תדירות לא מוכרת (טופס ישן, בקשה מזויפת) נופלת לחודשי - ההתנהגות שהייתה לפני השדה. */
+function frequencyFromForm(formData: FormData): RecurringFrequency {
+  const raw = String(formData.get("frequency") ?? "").trim() as RecurringFrequency;
+  return FREQUENCIES.includes(raw) ? raw : "monthly";
+}
+
+/**
+ * הפריסה נשלחת תמיד מפורשות ("true"/"false") ולא כצ'קבוקס, כי `undefined` כאן כבר תפוס:
+ * הוא אומר "פרוס" ברשומות שנוצרו לפני השדה. צ'קבוקס שלא סומן לא היה מבדיל בין
+ * "אל תפרוס" לבין "טופס ישן שלא מכיר את השדה".
+ */
+function spreadFromForm(formData: FormData): boolean {
+  return String(formData.get("spread") ?? "true") !== "false";
+}
 
 async function requireAccess(branchId?: string) {
   const session = await getServerSession(authOptions);
@@ -31,6 +53,9 @@ function stripUndefined<T extends Record<string, unknown>>(obj: T): T {
 }
 
 function revalidateAll(scope: ExpenseScope, branchId?: string) {
+  // דף הבית מציג את תזכורת התשלום החודשית, ולכן הוא חייב להתרענן אחרי כל עדכון חודש -
+  // אחרת מי שמעדכן את החשמל ממסך הסניף ממשיך לראות בבית "חסר עדכון" על מה שהרגע עדכן.
+  revalidatePath("/dashboard");
   revalidatePath("/dashboard/accounting");
   revalidatePath("/dashboard/accounting/extra-expenses");
   if (scope === "computers") {
@@ -42,6 +67,7 @@ function revalidateAll(scope: ExpenseScope, branchId?: string) {
     if (branchId) revalidatePath(`/dashboard/rentals/expenses/${branchId}`);
   }
   if (scope === "coworking") {
+    revalidatePath("/dashboard/coworking/accounting");
   }
 }
 
@@ -61,6 +87,8 @@ export async function createRecurringVariableExpenseAction(
     name,
     category: String(formData.get("category") ?? "").trim() || undefined,
     startDate,
+    frequency: frequencyFromForm(formData),
+    spread: spreadFromForm(formData),
     defaultAmount: formData.get("defaultAmount") ? Number(formData.get("defaultAmount")) : undefined,
     countsToMain: countsToMainFromForm(formData),
     paidBy: String(formData.get("paidBy") ?? "").trim() || undefined,
@@ -89,6 +117,8 @@ export async function updateRecurringVariableExpenseAction(id: string, formData:
     {
       name,
       startDate,
+      frequency: frequencyFromForm(formData),
+      spread: spreadFromForm(formData),
       category: category || FieldValue.delete(),
       endDate: endDate || FieldValue.delete(),
       defaultAmount: formData.get("defaultAmount") ? Number(formData.get("defaultAmount")) : FieldValue.delete(),
@@ -124,6 +154,63 @@ export async function setRecurringMonthAmountAction(id: string, formData: FormDa
     updatedAt: new Date().toISOString(),
     ...(note ? { note } : {}),
   });
+  await ref.set({ amounts }, { merge: true });
+  revalidateAll(existing.scope, existing.branchId);
+}
+
+/**
+ * מילוי היסטוריה: אותו סכום לטווח חודשים בבת אחת.
+ *
+ * הוצאה שקיימת שנה ונרשמה במערכת רק עכשיו מגיעה עם שנים-עשר חודשים ריקים, והקלדה של
+ * שנים-עשר טפסים נפרדים היא בדיוק הסיבה שאף אחד לא משלים היסטוריה. `overwrite` כבוי
+ * כברירת מחדל: מילוי גורף ממלא רק חודשים ריקים ולא דורס חודש שכבר הוקלד נכון ביד.
+ */
+export async function fillRecurringHistoryAction(id: string, formData: FormData) {
+  const db = getAdminFirestore();
+  const ref = db.collection(RECURRING_VAR_EXPENSES_COLLECTION).doc(id);
+  const doc = await ref.get();
+  const existing = doc.data() as Omit<RecurringVariableExpense, "id"> | undefined;
+  if (!existing) throw new Error("ההוצאה לא נמצאה");
+  await requireAccess(existing.branchId);
+
+  const from = String(formData.get("from") ?? "").trim();
+  const to = String(formData.get("to") ?? "").trim();
+  if (!/^\d{4}-\d{2}$/.test(from) || !/^\d{4}-\d{2}$/.test(to)) throw new Error("חודש לא תקין");
+  if (from > to) throw new Error("חודש ההתחלה מאוחר מחודש הסיום");
+  const amount = Number(formData.get("amount"));
+  if (!Number.isFinite(amount)) throw new Error("סכום לא תקין");
+  const overwrite = String(formData.get("overwrite") ?? "") === "on";
+
+  // רק חודשים שבהם באמת מגיע תשלום: בהוצאה דו-חודשית מילוי של טווח שלם לא אמור להמציא
+  // חיוב בחודשים שאין בהם חיוב. הטווח נחתך גם בחודש הנוכחי - "היסטוריה" היא מה שכבר היה,
+  // והגבלת ה-`max` בטופס היא הצעה בדפדפן בלבד.
+  const expense = { ...existing, id } as RecurringVariableExpense;
+  const upto = currentMonth();
+  const targets = dueMonths(expense, to < upto ? to : upto).filter((m) => m >= from);
+  const have = new Set((existing.amounts ?? []).map((a) => a.month));
+  const updatedAt = new Date().toISOString();
+
+  let amounts = existing.amounts ?? [];
+  for (const month of targets) {
+    if (have.has(month) && !overwrite) continue;
+    amounts = upsertAmount(amounts, { month, amount, updatedAt });
+  }
+  await ref.set({ amounts }, { merge: true });
+  revalidateAll(existing.scope, existing.branchId);
+}
+
+/** מוחק סכום של חודש אחד ומחזיר אותו למצב "עוד לא עודכן" - הדרך לתקן הקלדה שגויה. */
+export async function clearRecurringMonthAction(id: string, formData: FormData) {
+  const db = getAdminFirestore();
+  const ref = db.collection(RECURRING_VAR_EXPENSES_COLLECTION).doc(id);
+  const doc = await ref.get();
+  const existing = doc.data() as Omit<RecurringVariableExpense, "id"> | undefined;
+  if (!existing) throw new Error("ההוצאה לא נמצאה");
+  await requireAccess(existing.branchId);
+
+  const month = String(formData.get("month") ?? "").trim();
+  if (!/^\d{4}-\d{2}$/.test(month)) throw new Error("חודש לא תקין");
+  const amounts = (existing.amounts ?? []).filter((a) => a.month !== month);
   await ref.set({ amounts }, { merge: true });
   revalidateAll(existing.scope, existing.branchId);
 }
