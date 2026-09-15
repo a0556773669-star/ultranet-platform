@@ -1,6 +1,7 @@
 import { History, CheckCircle2 } from "lucide-react";
 import { rentalTotals, type CoworkingClientStatus } from "@/lib/coworking";
-import { markStationPaidAction, unmarkStationPaidAction } from "./station-actions";
+import { markStationPaidAction, unmarkStationPaidAction, deleteRentalAction } from "./station-actions";
+import { DeleteRentalButton } from "./delete-rental-button";
 
 function money(n: number) {
   return `${Math.round(n).toLocaleString("he-IL")} ₪`;
@@ -17,7 +18,15 @@ const FIELD =
  * **כל** ההשכרות - פעילות והיסטוריות באותה רשימה - וכל שורה נפתחת ללוח חודשים מלא,
  * שבו אפשר לסמן ולבטל תשלום גם לחודש שעבר מזמן.
  */
-export function RentalHistory({ statuses, month }: { statuses: CoworkingClientStatus[]; month: string }) {
+export function RentalHistory({
+  statuses,
+  month,
+  canDelete,
+}: {
+  statuses: CoworkingClientStatus[];
+  month: string;
+  canDelete: boolean;
+}) {
   if (statuses.length === 0) {
     return (
       <section className="rounded-card border border-card-border bg-white p-4 shadow-card">
@@ -43,8 +52,8 @@ export function RentalHistory({ statuses, month }: { statuses: CoworkingClientSt
         היסטוריית השכרות
       </h2>
       <p className="mb-3 text-[11.5px] text-muted">
-        כל מי שהשכיר עמדה — פעיל והיסטורי. לחיצה על שורה פותחת את לוח החודשים ומאפשרת לסמן
-        תשלום גם בדיעבד.
+        כל מי שהשכיר עמדה — פעיל והיסטורי. לחיצה על שורה פותחת את לוח החודשים, ומאפשרת לסמן
+        תשלום בדיעבד או למחוק את ההשכרה.
       </p>
 
       <div className="flex flex-col gap-2">
@@ -95,6 +104,15 @@ export function RentalHistory({ statuses, month }: { statuses: CoworkingClientSt
                       <MonthRow key={r.month} clientId={s.client.id} row={r} isCurrent={r.month === month} />
                     ))}
                   </ul>
+                )}
+
+                {canDelete && (
+                  <form
+                    action={deleteRentalAction.bind(null, s.client.id)}
+                    className="mt-2.5 flex items-center justify-end border-t border-card-border pt-2.5"
+                  >
+                    <DeleteRentalButton name={s.client.name} paymentCount={(s.client.payments ?? []).length} />
+                  </form>
                 )}
               </div>
             </details>

@@ -42,7 +42,6 @@ function revalidateAll(scope: ExpenseScope, branchId?: string) {
     if (branchId) revalidatePath(`/dashboard/rentals/expenses/${branchId}`);
   }
   if (scope === "coworking") {
-    revalidatePath("/dashboard/coworking/expenses");
   }
 }
 

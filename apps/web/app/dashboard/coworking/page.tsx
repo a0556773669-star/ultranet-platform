@@ -115,7 +115,7 @@ export default async function CoworkingPage({ searchParams }: { searchParams?: {
       </div>
 
       <div className="mt-4">
-        <RentalHistory statuses={statuses} month={month} />
+        <RentalHistory statuses={statuses} month={month} canDelete={isOwner} />
       </div>
     </div>
   );

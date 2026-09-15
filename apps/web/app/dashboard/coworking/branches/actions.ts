@@ -96,7 +96,6 @@ function parseCoworkingBranchForm(formData: FormData): Omit<Branch, "id"> {
 
 function revalidateCoworking(id?: string) {
   revalidatePath("/dashboard/coworking");
-  revalidatePath("/dashboard/coworking/expenses");
   revalidatePath("/dashboard/coworking/accounting");
   revalidatePath("/dashboard/accounting");
   if (id) revalidatePath(`/dashboard/coworking/branches/${id}`);
