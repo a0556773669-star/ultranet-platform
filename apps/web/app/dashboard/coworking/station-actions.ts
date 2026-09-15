@@ -6,6 +6,7 @@ import { FieldValue } from "firebase-admin/firestore";
 import { authOptions } from "@/lib/auth";
 import { getAdminFirestore } from "@/lib/firebase-admin";
 import type { CoworkingClient, CoworkingStation } from "@ultranet/shared-types";
+import { STATION_NUMBERS } from "@/lib/coworking";
 
 /**
  * העמדות כמסך השכרה.
@@ -77,6 +78,56 @@ export async function rentStationAction(branchId: string, stationNumber: number,
     payments: [],
   });
   await getAdminFirestore().collection("n_cw_clients").add(data);
+  revalidateAll();
+}
+
+/**
+ * שיוך השכרה יתומה לסניף ולעמדה.
+ *
+ * השכרה שה-`branchId` שלה מצביע על סניף מחוק, על סניף מסוג אחר או על מסמך שלא קיים
+ * (בדרך כלל שריד מ-`app.html` הישן) נופלת מכל מסכי המודול, שכולם מסננים לפי סניף — אבל
+ * ממשיכה להופיע בהתראת התשלומים בדף הבית. זו הפעולה שסוגרת את הפער: היא מחזירה את
+ * הרשומה לסניף חי ולעמדה ממוספרת, וממנה והלאה היא השכרה רגילה לכל דבר.
+ *
+ * התשלומים שכבר נרשמו לא נגעים בהם — הם עובדה, והשיוך הוא תיקון של מקום, לא של כסף.
+ */
+export async function assignRentalToBranchAction(clientId: string, formData: FormData) {
+  const session = await requireSession();
+  if (session.user?.role !== "owner") {
+    throw new Error("שיוך השכרה לסניף מוגבל לבעלים בלבד");
+  }
+
+  const branchId = String(formData.get("branchId") ?? "").trim();
+  const stationNumber = Number(formData.get("stationNumber"));
+  if (!branchId) throw new Error("יש לבחור סניף");
+  if (!Number.isInteger(stationNumber) || !STATION_NUMBERS.includes(stationNumber as (typeof STATION_NUMBERS)[number])) {
+    throw new Error("יש לבחור מספר עמדה");
+  }
+
+  const db = getAdminFirestore();
+  const ref = db.collection("n_cw_clients").doc(clientId);
+  const doc = await ref.get();
+  if (!doc.exists) throw new Error("ההשכרה לא נמצאה");
+  const client = doc.data() as CoworkingClient;
+
+  // מחיר חודשי הוא שדה רשות בטופס: רשומה ישנה שהגיעה בלי מחיר מוצגת כ-0 ₪ בכל מסך, וזה
+  // הרגע הטבעי להשלים אותו. כשלא הוזן — המחיר הקיים נשאר כמו שהוא.
+  const priceRaw = String(formData.get("price") ?? "").trim();
+  const price = priceRaw === "" ? undefined : Number(priceRaw);
+  if (price !== undefined && (!Number.isFinite(price) || price < 0)) {
+    throw new Error("מחיר חודשי חייב להיות מספר חיובי");
+  }
+
+  const stationId = await resolveStationId(branchId, stationNumber, price ?? client.customPrice ?? 0);
+  await ref.set(
+    stripUndefined({
+      branchId,
+      stationId,
+      stationNumber: String(stationNumber),
+      customPrice: price,
+    }),
+    { merge: true },
+  );
   revalidateAll();
 }
 

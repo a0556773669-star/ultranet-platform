@@ -85,9 +85,19 @@ export default async function CoworkingAccountingPage() {
     .filter((b) => isOwner || b.id === myBranchId);
   const branchIds = new Set(branches.map((b) => b.id));
 
-  const clients = clientsSnap.docs
-    .map((d) => ({ ...(d.data() as Omit<CoworkingClient, "id">), id: d.id }) as CoworkingClient)
-    .filter((c) => branchIds.has(c.branchId));
+  const allClients = clientsSnap.docs.map(
+    (d) => ({ ...(d.data() as Omit<CoworkingClient, "id">), id: d.id }) as CoworkingClient,
+  );
+  const clients = allClients.filter((c) => branchIds.has(c.branchId));
+
+  // השכרות שאינן משויכות לאף סניף משרד שיתופי חי. התשלומים שלהן כבר נספרים בהנה"ח הראשית
+  // (`loadMainLedger` קורא את `n_cw_clients` בלי סינון סניף), ולכן השמטתם כאן הייתה גורמת
+  // ל"קיבלתי" של המודול להיות נמוך מהכסף שנרשם בפועל. נספרים רק אצל הבעלים, שרואה ממילא
+  // את כל הסניפים — אצל עובד סניף `branchIds` הוא סניף אחד וכל השאר היה נראה יתום.
+  const orphanClients = isOwner ? allClients.filter((c) => !branchIds.has(c.branchId)) : [];
+  const orphanReceived = orphanClients
+    .flatMap((c) => c.payments ?? [])
+    .reduce((sum, p) => sum + (p.amount || 0), 0);
   const fixed = fixedSnap.docs
     .map((d) => ({ ...(d.data() as Omit<FixedExpense, "id">), id: d.id }) as FixedExpense)
     .filter((e) => branchIds.has(e.branchId))
@@ -97,7 +107,7 @@ export default async function CoworkingAccountingPage() {
     .filter((e) => branchIds.has(e.branchId))
     .sort((a, b) => (b.date ?? "").localeCompare(a.date ?? ""));
 
-  const ledger = buildCoworkingLedger({ fixed, variable, clients, branches });
+  const ledger = buildCoworkingLedger({ fixed, variable, clients: [...clients, ...orphanClients], branches });
 
   // הסניף שההזנה נרשמת עליו. כרגע יש סניף אחד, ולכן אין בורר: הראשון הוא הסניף.
   const branch = branches[0];
@@ -138,6 +148,15 @@ export default async function CoworkingAccountingPage() {
         <article className="rounded-card border border-card-border bg-white p-4 shadow-card">
           <p className="text-[11px] font-extrabold uppercase tracking-wide text-muted">קיבלתי עד היום</p>
           <p className="mt-1 text-[26px] font-black text-emerald-600">{money(ledger.receivedToDate)}</p>
+          {orphanReceived > 0 && (
+            <p className="mt-1 text-[11px] font-bold text-amber-700">
+              כולל {money(orphanReceived)} מ{orphanClients.length === 1 ? "השכרה שאינה משויכת" : "השכרות שאינן משויכות"}{" "}
+              לסניף —{" "}
+              <Link href="/dashboard/coworking" className="underline">
+                לטיפול במסך העמדות
+              </Link>
+            </p>
+          )}
         </article>
         <article className="rounded-card border border-card-border bg-white p-4 shadow-card">
           <p className="text-[11px] font-extrabold uppercase tracking-wide text-muted">מאזן</p>

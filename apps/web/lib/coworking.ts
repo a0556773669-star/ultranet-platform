@@ -31,6 +31,18 @@ export function monthlyCost(client: CoworkingClient, station?: CoworkingStation)
   return client.customPrice ?? station?.price ?? 0;
 }
 
+/**
+ * האם ההשכרה פעילה בתאריך נתון.
+ *
+ * הגדרה אחת לכל המערכת, בכוונה: מסך העמדות שאל "אין תאריך סיום **או** שהסיום עוד לא הגיע",
+ * ודף הבית שאל רק "אין תאריך סיום" — ולכן השכרה שנרשם לה סיום עתידי הופיעה כמושכרת במסך
+ * ובלי התראת תשלום בבית, למרות שהחודש הזה עדיין נגבה. שתי השאלות הן אותה שאלה.
+ */
+export function isActiveOn(client: CoworkingClient, today = new Date()): boolean {
+  if (!client.endDate) return true;
+  return client.endDate >= today.toISOString().slice(0, 10);
+}
+
 /** היום בחודש שבו מגיע התשלום. */
 export function payDayOf(client: CoworkingClient): number {
   if (client.payDay && client.payDay >= 1 && client.payDay <= 31) return client.payDay;
@@ -54,6 +66,15 @@ export interface CoworkingClientStatus {
   cost: number;
   payDay: number;
   active: boolean;
+  /**
+   * ההשכרה לא משויכת לאף סניף משרד שיתופי חי (סניף שנמחק, סניף מסוג אחר, או `branchId`
+   * שלא קיים כלל — בדרך כלל רשומה שהגיעה מ-`app.html` הישן).
+   *
+   * השדה קיים מפני שכל מסכי המודול מסננים לפי סניף ורשומה כזו נופלת מכולם, בעוד שדף הבית
+   * סופר את כל הלקוחות: התוצאה הייתה התראת תשלום בדף הבית בלי שום מסך שמאחוריה. רשומה
+   * יתומה היא מצב לתיקון, ולכן היא מסומנת ומוצגת — לא מסוננת בשקט.
+   */
+  orphan: boolean;
   /** חודשים שהיה אמור לשלם ולא נרשם עליהם תשלום */
   unpaidMonths: string[];
   /** האם התאריך של החודש כבר עבר — כלומר האם ההתראה על החודש הנוכחי כבר רלוונטית */
@@ -68,6 +89,7 @@ export function clientStatus(
   station: CoworkingStation | undefined,
   branchName: string,
   today = new Date(),
+  options?: { orphan?: boolean },
 ): CoworkingClientStatus {
   const upto = today.toISOString().slice(0, 7);
   const cost = monthlyCost(client, station);
@@ -90,7 +112,8 @@ export function clientStatus(
     branchName,
     cost,
     payDay,
-    active: !client.endDate,
+    active: isActiveOn(client, today),
+    orphan: Boolean(options?.orphan),
     unpaidMonths,
     dueNow: today.getDate() >= payDay && !paidMonths.has(upto) && expected.includes(upto),
     paidToDate: payments.reduce((s, p) => s + (p.amount || 0), 0),
@@ -127,12 +150,35 @@ export async function loadCoworkingData(params?: { branchId?: string }): Promise
   const branchesById = new Map(allBranches.map((b) => [b.id, b]));
   const branches = allBranches.filter((b) => b.branchType === "coworking" && !b.deleted);
 
+  // סניף "חי" = סניף משרד שיתופי שלא נמחק. כל השכרה שה-`branchId` שלה אינו אחד מאלה היא
+  // יתומה: אף מסך במודול לא יציג אותה, כי כולם מסננים לפי הסניף הנבחר.
+  const liveBranchIds = new Set(branches.map((b) => b.id));
+
   const now = new Date();
   const statuses = clients
-    .map((c) => clientStatus(c, stationsById.get(c.stationId), branchesById.get(c.branchId)?.name ?? "-", now))
+    .map((c) =>
+      clientStatus(c, stationsById.get(c.stationId), branchesById.get(c.branchId)?.name ?? "-", now, {
+        orphan: !liveBranchIds.has(c.branchId),
+      }),
+    )
     .sort((a, b) => a.client.name.localeCompare(b.client.name, "he"));
 
   return { clients, stationsById, branchesById, branches, statuses };
+}
+
+/**
+ * למה השכרה מסוימת יתומה — טקסט קצר שמופיע לצידה במסך.
+ *
+ * ההבחנה חשובה כי התיקון שונה: סניף שנמחק בטעות אפשר להחזיר, סניף מסוג אחר מעיד על
+ * `branchId` שגוי ברשומה, ו-`branchId` שלא קיים בכלל הוא כמעט תמיד שריד מ-`app.html`.
+ */
+export function orphanReason(client: CoworkingClient, branchesById: Map<string, Branch>): string {
+  const branch = client.branchId ? branchesById.get(client.branchId) : undefined;
+  if (!client.branchId) return "לא נרשם סניף בהשכרה";
+  if (!branch) return "הסניף שרשום בהשכרה לא קיים יותר";
+  if (branch.deleted) return `הסניף "${branch.name}" נמחק`;
+  if (branch.branchType !== "coworking") return `הסניף "${branch.name}" אינו סניף משרד שיתופי`;
+  return "הסניף אינו סניף משרד שיתופי פעיל";
 }
 
 export interface CoworkingLedger {
