@@ -13,7 +13,7 @@
 import { getAdminFirestore } from "./firebase-admin";
 import type { Branch, FixedExpense, VariableExpense, BranchIncome } from "@ultranet/shared-types";
 import { monthsBetween } from "./branch-accounting";
-import { SHARED_COMPUTERS_BRANCH_ID } from "./expense-shared-scope";
+import { SHARED_COMPUTERS_BRANCH_ID, sharedExpenseBranchIds } from "./expense-shared-scope";
 import { loadAssets } from "./assets-data";
 import { paybackStatus, type PaybackStatus } from "./assets";
 
@@ -64,6 +64,62 @@ function sumLines(lines: ExpenseLine[]): number {
   return lines.reduce((total, l) => total + l.amount, 0);
 }
 
+/**
+ * הוצאה משותפת אחת, יחד עם הסניפים שהיא באמת מתחלקת ביניהם.
+ *
+ * עד היום כל הוצאה משותפת התחלקה בין כל הסניפים, כך שסניף שנפתח היום ירש מיד חלק בהוצאה
+ * קבועה שנרשמה שנה לפניו. מאז אפשר לבחור לכל הוצאה משותפת את הסניפים שלה (`branchIds`),
+ * וכל הוצאה מחלקת את עצמה במחלק שלה - לא במספר הסניפים הכולל.
+ */
+export interface SharedExpenseEntry {
+  id: string;
+  kind: "fixed" | "variable";
+  /** השורה כפי שהיא בספר המשותף - הסכום המלא, לפני החלוקה בין הסניפים */
+  line: ExpenseLine;
+  /** הסניפים הקיימים שההוצאה מתחלקת ביניהם */
+  branchIds: string[];
+  /** מה סניף אחד נושא מההוצאה הזו */
+  perBranch: number;
+  /** true כשההוצאה חלה על כל הסניפים (גם עתידיים) ולא על רשימה שנבחרה */
+  appliesToAll: boolean;
+}
+
+function sharedEntriesOf(
+  fixed: FixedExpense[],
+  variable: VariableExpense[],
+  branchIds: string[],
+  month: string,
+): SharedExpenseEntry[] {
+  const entries: SharedExpenseEntry[] = [];
+  for (const e of fixed.filter((x) => x.startDate)) {
+    const scope = sharedExpenseBranchIds(e, branchIds);
+    const [line] = fixedExpenseLines([e], month);
+    if (!line) continue;
+    entries.push({
+      id: e.id,
+      kind: "fixed",
+      line,
+      branchIds: scope,
+      perBranch: scope.length > 0 ? line.amount / scope.length : 0,
+      appliesToAll: !e.branchIds || e.branchIds.length === 0,
+    });
+  }
+  for (const e of variable) {
+    const scope = sharedExpenseBranchIds(e, branchIds);
+    const [line] = variableExpenseLines([e]);
+    if (!line) continue;
+    entries.push({
+      id: e.id,
+      kind: "variable",
+      line,
+      branchIds: scope,
+      perBranch: scope.length > 0 ? line.amount / scope.length : 0,
+      appliesToAll: !e.branchIds || e.branchIds.length === 0,
+    });
+  }
+  return entries;
+}
+
 export interface ComputerRoomBranchStats {
   branch: Branch;
   /** real investment from the asset layer when it exists, else the legacy `setupCost` field */
@@ -87,6 +143,8 @@ export interface ComputerRoomAccountingData {
   statsByBranch: Map<string, ComputerRoomBranchStats>;
   sharedFixed: FixedExpense[];
   sharedVariable: VariableExpense[];
+  /** כל הוצאה משותפת עם המחלק שלה - מי נושא בה וכמה */
+  sharedEntries: SharedExpenseEntry[];
   sharedExpenseTotal: number;
   incomesByBranch: Map<string, BranchIncome[]>;
 }
@@ -122,7 +180,14 @@ export async function loadComputerRoomAccounting(): Promise<ComputerRoomAccounti
   const sharedVariable = allVariable.filter((e) => e.branchId === SHARED_EXPENSE_BRANCH_ID);
   const sharedLines = [...fixedExpenseLines(sharedFixed, month), ...variableExpenseLines(sharedVariable)];
   const sharedExpenseTotal = sumLines(sharedLines);
-  const sharedExpenseShare = branches.length > 0 ? sharedExpenseTotal / branches.length : 0;
+  // כל הוצאה משותפת מתחלקת במחלק שלה, לא בכמות הסניפים הכוללת: הוצאה שהוגבלה לשני סניפים
+  // מתחלקת לשניים, וסניף שלא נבחר בה לא נושא בה כלום.
+  const sharedEntries = sharedEntriesOf(
+    sharedFixed,
+    sharedVariable,
+    branches.map((b) => b.id),
+    month,
+  );
 
   const incomesByBranch = new Map<string, BranchIncome[]>();
   for (const inc of allIncome) {
@@ -138,18 +203,22 @@ export async function loadComputerRoomAccounting(): Promise<ComputerRoomAccounti
     const variable = allVariable.filter((e) => e.branchId === b.id);
     const ownLines = [...fixedExpenseLines(fixed, month), ...variableExpenseLines(variable)];
     const ownExpensesToDate = sumLines(ownLines);
-    const expenseLines: ExpenseLine[] =
-      sharedExpenseShare > 0
-        ? [
-            ...ownLines,
-            {
-              kind: "shared",
-              label: "חלק הסניף בהוצאות המשותפות",
-              detail: `${Math.round(sharedExpenseTotal).toLocaleString("he-IL")} ₪ משותפות ÷ ${branches.length} סניפים`,
-              amount: sharedExpenseShare,
-            },
-          ]
-        : ownLines;
+    // שורה נפרדת לכל הוצאה משותפת (ולא שורת "חלק הסניף בהוצאות המשותפות" אחת): זו בדיוק
+    // השאלה ששואלים כשסניף חדש נפתח ומיד יש עליו הוצאה קבועה - איזו הוצאה, וכמה סניפים
+    // מתחלקים בה.
+    const branchSharedEntries = sharedEntries.filter((s) => s.branchIds.includes(b.id));
+    const sharedExpenseShare = branchSharedEntries.reduce((total, s) => total + s.perBranch, 0);
+    const expenseLines: ExpenseLine[] = [
+      ...ownLines,
+      ...branchSharedEntries.map((s) => ({
+        kind: "shared" as const,
+        label: `${s.line.label} (משותפת)`,
+        detail: `${Math.round(s.line.amount).toLocaleString("he-IL")} ₪ ÷ ${s.branchIds.length} סניפים${
+          s.appliesToAll ? "" : " (נבחרו ידנית)"
+        } · ${s.line.detail}`,
+        amount: s.perBranch,
+      })),
+    ];
     // Real investment wins over the estimate whenever the asset layer knows about this branch.
     const assetInvestment = assets.investmentByLocation.get(b.id)?.total ?? 0;
     const setupFromAssets = assetInvestment > 0;
@@ -174,7 +243,15 @@ export async function loadComputerRoomAccounting(): Promise<ComputerRoomAccounti
     });
   }
 
-  return { branches, statsByBranch, sharedFixed, sharedVariable, sharedExpenseTotal, incomesByBranch };
+  return {
+    branches,
+    statsByBranch,
+    sharedFixed,
+    sharedVariable,
+    sharedEntries,
+    sharedExpenseTotal,
+    incomesByBranch,
+  };
 }
 
 /*

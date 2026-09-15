@@ -4,7 +4,9 @@ import { createFixedExpenseAction, createVariableExpenseAction } from "./actions
 import { EditFixedExpenseModal, EditVariableExpenseModal } from "./edit-expense-modals";
 import { EndFixedExpenseControl, DeleteFixedExpenseButton, DeleteVariableExpenseButton } from "./expense-action-buttons";
 import { CountsToMainField, CountsToMainBadge } from "@/components/counts-to-main-field";
+import { SharedBranchScopeField } from "@/components/expenses/shared-branch-scope-field";
 import { countsToMain } from "@/lib/counts-to-main";
+import { sharedExpenseScopeLabel } from "@/lib/expense-shared-scope";
 
 const CATEGORIES = ["שכירות", "חשמל ומים", "משכורות", "ציוד ותחזוקה", "שיווק ופרסום", "הדפסות ותקנונים", "ביטוח", "אחר"];
 
@@ -57,6 +59,8 @@ function PayerFields({ ownerName, partnerName }: { ownerName: string; partnerNam
 type Props = {
   branchId: string;
   isShared?: boolean;
+  /** בספר המשותף בלבד: הסניפים שאפשר לבחור מהם למי ההוצאה שייכת */
+  branches?: { id: string; name: string }[];
   isPartner: boolean;
   ownerName: string;
   partnerName: string;
@@ -66,9 +70,12 @@ type Props = {
   variableExpenses: VariableExpense[];
 };
 
-export function BranchExpenses({ branchId, isShared, isPartner, ownerName, partnerName, canManage, canAdd, fixedExpenses, variableExpenses }: Props) {
+export function BranchExpenses({ branchId, isShared, branches = [], isPartner, ownerName, partnerName, canManage, canAdd, fixedExpenses, variableExpenses }: Props) {
   const activeFixed = fixedExpenses.filter((e) => !e.endDate);
   const endedFixed = fixedExpenses.filter((e) => e.endDate);
+  const branchNameById = new Map(branches.map((b) => [b.id, b.name]));
+  const scopeNote = (e: { branchIds?: string[] }) =>
+    isShared ? ` · חל על: ${sharedExpenseScopeLabel(e, branchNameById)}` : "";
 
   let net = 0;
   if (isPartner) {
@@ -83,7 +90,9 @@ export function BranchExpenses({ branchId, isShared, isPartner, ownerName, partn
     <div className="flex flex-col gap-4">
       {isShared && (
         <div className="rounded-card border border-card-border bg-[#f4f6f9] p-4 text-sm text-muted">
-          הוצאות משותפות לכל סניפי חדרי המחשבים - עלותן מתחלקת שווה בשווה בין הסניפים בדשבורד ההנה&quot;ח.
+          הוצאות משותפות לסניפי חדרי המחשבים — עלותן מתחלקת שווה בשווה בדשבורד ההנה&quot;ח בין הסניפים
+          שההוצאה חלה עליהם. כברירת מחדל הוצאה חלה על <b>כל</b> הסניפים, כולל סניף שייפתח מחר; אפשר
+          לבחור לכל הוצאה סניפים מסוימים בלבד.
         </div>
       )}
 
@@ -133,6 +142,11 @@ export function BranchExpenses({ branchId, isShared, isPartner, ownerName, partn
               </select>
             </div>
             {isPartner && <PayerFields ownerName={ownerName} partnerName={partnerName} />}
+            {isShared && (
+              <div className="col-span-2 md:col-span-3">
+                <SharedBranchScopeField branches={branches} idPrefix="new-fixed" />
+              </div>
+            )}
             <div className="col-span-2 md:col-span-3">
               <CountsToMainField />
             </div>
@@ -151,10 +165,10 @@ export function BranchExpenses({ branchId, isShared, isPartner, ownerName, partn
                   {e.name} — ₪{(e.amount || 0).toLocaleString()}/חודש
                   <CountsToMainBadge on={countsToMain(e)} />
                 </p>
-                <p className="text-xs text-muted">{e.category || "ללא קטגוריה"} · מתחיל {e.startDate}{isPartner ? ` · ${paymentNote(e.paidBy, e.owedBy, ownerName, partnerName)}` : ""}</p>
+                <p className="text-xs text-muted">{e.category || "ללא קטגוריה"} · מתחיל {e.startDate}{isPartner ? ` · ${paymentNote(e.paidBy, e.owedBy, ownerName, partnerName)}` : ""}{scopeNote(e)}</p>
               </div>
               <div className="flex items-center gap-2">
-                {canManage && <EditFixedExpenseModal expense={e} branchId={branchId} isPartner={isPartner} ownerName={ownerName} partnerName={partnerName} />}
+                {canManage && <EditFixedExpenseModal expense={e} branchId={branchId} isPartner={isPartner} ownerName={ownerName} partnerName={partnerName} isShared={isShared} branches={branches} />}
                 {canManage && <EndFixedExpenseControl id={e.id} branchId={branchId} />}
                 {canManage && <DeleteFixedExpenseButton id={e.id} branchId={branchId} />}
               </div>
@@ -173,7 +187,7 @@ export function BranchExpenses({ branchId, isShared, isPartner, ownerName, partn
                     <p className="text-xs text-muted">{e.startDate} – {e.endDate}{isPartner ? ` · ${paymentNote(e.paidBy, e.owedBy, ownerName, partnerName)}` : ""}</p>
                   </div>
                   <div className="flex items-center gap-2">
-                    {canManage && <EditFixedExpenseModal expense={e} branchId={branchId} isPartner={isPartner} ownerName={ownerName} partnerName={partnerName} />}
+                    {canManage && <EditFixedExpenseModal expense={e} branchId={branchId} isPartner={isPartner} ownerName={ownerName} partnerName={partnerName} isShared={isShared} branches={branches} />}
                     {canManage && <DeleteFixedExpenseButton id={e.id} branchId={branchId} />}
                   </div>
                 </div>
@@ -212,6 +226,11 @@ export function BranchExpenses({ branchId, isShared, isPartner, ownerName, partn
               </select>
             </div>
             {isPartner && <PayerFields ownerName={ownerName} partnerName={partnerName} />}
+            {isShared && (
+              <div className="col-span-2 md:col-span-3">
+                <SharedBranchScopeField branches={branches} idPrefix="new-variable" />
+              </div>
+            )}
             <div className="col-span-2 md:col-span-3">
               <CountsToMainField />
             </div>
@@ -230,10 +249,10 @@ export function BranchExpenses({ branchId, isShared, isPartner, ownerName, partn
                   {e.desc} — ₪{(e.amount || 0).toLocaleString()}
                   <CountsToMainBadge on={countsToMain(e)} />
                 </p>
-                <p className="text-xs text-muted">{e.category || "ללא קטגוריה"} · {e.date}{isPartner ? ` · ${paymentNote(e.paidBy, e.owedBy, ownerName, partnerName)}` : ""}</p>
+                <p className="text-xs text-muted">{e.category || "ללא קטגוריה"} · {e.date}{isPartner ? ` · ${paymentNote(e.paidBy, e.owedBy, ownerName, partnerName)}` : ""}{scopeNote(e)}</p>
               </div>
               <div className="flex items-center gap-2">
-                {canManage && <EditVariableExpenseModal expense={e} branchId={branchId} isPartner={isPartner} ownerName={ownerName} partnerName={partnerName} />}
+                {canManage && <EditVariableExpenseModal expense={e} branchId={branchId} isPartner={isPartner} ownerName={ownerName} partnerName={partnerName} isShared={isShared} branches={branches} />}
                 {canManage && <DeleteVariableExpenseButton id={e.id} branchId={branchId} />}
               </div>
             </div>

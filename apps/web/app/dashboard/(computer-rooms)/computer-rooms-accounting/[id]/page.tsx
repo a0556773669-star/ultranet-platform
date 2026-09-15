@@ -2,7 +2,7 @@ import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import { BarChart3, ArrowLeft, Plus } from "lucide-react";
 import { requireModuleAccess } from "@/lib/perms";
-import { loadComputerRoomAccounting } from "@/lib/computer-room-accounting";
+import { loadComputerRoomAccounting, SHARED_EXPENSE_BRANCH_ID } from "@/lib/computer-room-accounting";
 import { addBranchIncomeAction, deleteBranchIncomeAction } from "../actions";
 
 function money(n: number) {
@@ -114,6 +114,11 @@ export default async function ComputerRoomBranchAccountingPage({ params }: { par
           <Link href={`/dashboard/expenses/${stats.branch.id}`} className="font-bold text-teal hover:underline">
             לניהול ומחיקת ההוצאות של הסניף
           </Link>
+          {" · "}
+          <Link href={`/dashboard/expenses/${SHARED_EXPENSE_BRANCH_ID}`} className="font-bold text-teal hover:underline">
+            להוצאות שעל כל הסניפים
+          </Link>
+          {" — שם אפשר גם לבחור על אילו סניפים כל הוצאה משותפת חלה."}
         </p>
       </details>
 

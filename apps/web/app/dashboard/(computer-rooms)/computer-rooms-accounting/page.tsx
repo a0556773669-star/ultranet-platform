@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { BarChart3, Building2, ArrowRight, Layers } from "lucide-react";
 import { requireModuleAccess } from "@/lib/perms";
-import { loadComputerRoomAccounting } from "@/lib/computer-room-accounting";
+import { loadComputerRoomAccounting, SHARED_EXPENSE_BRANCH_ID } from "@/lib/computer-room-accounting";
 
 function money(n: number) {
   return `${Math.round(n).toLocaleString("he-IL")} ₪`;
@@ -40,7 +40,7 @@ export default async function ComputerRoomsAccountingHomePage() {
           הנה&quot;ח חדרי מחשבים — השקעה מול רווח
         </h1>
         <Link
-          href={`/dashboard/expenses/shared`}
+          href={`/dashboard/expenses/${SHARED_EXPENSE_BRANCH_ID}`}
           className="flex items-center gap-1.5 rounded-lg border border-card-border bg-white px-3 py-2 text-xs font-bold text-ink transition hover:border-teal hover:text-teal"
         >
           <Layers className="h-4 w-4" />
