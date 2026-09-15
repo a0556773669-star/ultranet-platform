@@ -1,13 +1,15 @@
-import { History, Save, Wand2 } from "lucide-react";
+import { History, Save, Wand2, Repeat, X } from "lucide-react";
 import type { RecurringVariableExpense } from "@ultranet/shared-types";
 import {
   RECURRING_FREQUENCY_LABELS,
   amountForMonth,
+  baseFrequency,
   coveredMonths,
   cycleMonths,
   currentMonth,
   dueMonths,
   frequencyOf,
+  frequencySegments,
   isSpread,
   lastClosedMonth,
   missingMonths,
@@ -16,6 +18,8 @@ import { CountsToMainField } from "@/components/counts-to-main-field";
 import {
   clearRecurringMonthAction,
   fillRecurringHistoryAction,
+  removeRecurringFrequencyChangeAction,
+  setRecurringFrequencyChangeAction,
   setRecurringMonthAmountAction,
   updateRecurringVariableExpenseAction,
 } from "./actions";
@@ -52,8 +56,8 @@ export function RecurringHistoryPanel({
   // "חסר" נמדד עד החודש שנסגר בלבד - החודש הרץ ניתן להזנה מוקדמת אבל אינו פיגור,
   // באותה הגדרה שההתראה בכרטיס עובדת לפיה (`buildReminders`).
   const missing = new Set(missingMonths(expense, lastClosedMonth(upto)));
-  const cycle = cycleMonths(expense);
-  const spread = isSpread(expense);
+  const cycle = cycleMonths(expense, upto);
+  const spread = isSpread(expense, upto);
   const firstDue = expense.startDate.slice(0, 7);
 
   const byYear = new Map<string, string[]>();
@@ -62,7 +66,10 @@ export function RecurringHistoryPanel({
     byYear.set(year, [...(byYear.get(year) ?? []), m]);
   }
 
+  const segments = frequencySegments(expense, upto);
+  const changes = [...(expense.frequencyChanges ?? [])].sort((a, b) => a.from.localeCompare(b.from));
   const update = updateRecurringVariableExpenseAction.bind(null, expense.id);
+  const setFrequencyChange = setRecurringFrequencyChangeAction.bind(null, expense.id);
   const fill = fillRecurringHistoryAction.bind(null, expense.id);
   const setAmount = setRecurringMonthAmountAction.bind(null, expense.id);
   const clear = clearRecurringMonthAction.bind(null, expense.id);
@@ -79,8 +86,9 @@ export function RecurringHistoryPanel({
             </span>
           )}
           <span className="rounded-full bg-[#f4f6f9] px-2 py-0.5 text-[10px] font-bold text-muted">
-            {RECURRING_FREQUENCY_LABELS[frequencyOf(expense)]}
+            {RECURRING_FREQUENCY_LABELS[frequencyOf(expense, upto)]}
             {spread ? ` · פרוס ל-${cycle} חודשים` : ""}
+            {changes.length > 0 ? ` · ${segments.length} תקופות` : ""}
           </span>
         </span>
       </summary>
@@ -96,8 +104,8 @@ export function RecurringHistoryPanel({
             <input name="category" defaultValue={expense.category ?? ""} className={FIELD} />
           </div>
           <div>
-            <label className={LABEL}>תדירות</label>
-            <select name="frequency" defaultValue={frequencyOf(expense)} className={FIELD}>
+            <label className={LABEL}>תדירות מההתחלה</label>
+            <select name="frequency" defaultValue={baseFrequency(expense)} className={FIELD}>
               {Object.entries(RECURRING_FREQUENCY_LABELS).map(([value, label]) => (
                 <option key={value} value={value}>
                   {label}
@@ -143,6 +151,74 @@ export function RecurringHistoryPanel({
             <CountsToMainField defaultChecked={expense.countsToMain === true} />
           </div>
         </form>
+
+        {/* קו-הזמן של התדירות. חשמל שהיה דו-חודשי ועבר לחודשי הוא אותה הוצאה, ולכן הוא
+            נשאר שורה אחת עם שתי תקופות - ולא שתי שורות ששוברות את הסיכום שלו לשניים. */}
+        <div className="rounded-lg border border-card-border bg-white p-2.5">
+          <p className="mb-1.5 flex items-center gap-1.5 text-[11.5px] font-bold text-ink">
+            <Repeat className="h-3.5 w-3.5" />
+            תדירות לאורך הזמן
+          </p>
+          <p className="mb-2 text-[11px] leading-snug text-muted">
+            השתנה הקצב? אל תפתח הוצאה חדשה — הוסף כאן שינוי מהחודש שבו הקצב החדש התחיל. כל
+            תקופה נמדדת מחדש מתחילתה, וההיסטוריה שלפני השינוי נשארת כפי שהיא.
+          </p>
+          <ul className="mb-2 flex flex-col gap-1">
+            {segments.map((seg, i) => {
+              const change = changes.find((c) => c.from === seg.from);
+              const removable = i > 0 && change;
+              const remove = change
+                ? removeRecurringFrequencyChangeAction.bind(null, expense.id, change.from)
+                : null;
+              return (
+                <li
+                  key={seg.from}
+                  className="flex items-center justify-between gap-2 rounded border border-card-border bg-[#f9fafb] px-2 py-1 text-[11px]"
+                >
+                  <span className="text-ink">
+                    <b>{RECURRING_FREQUENCY_LABELS[seg.frequency]}</b> · {monthLabel(seg.from)}
+                    {i === segments.length - 1 ? " ואילך" : ` – ${monthLabel(seg.to)}`}
+                  </span>
+                  {removable && remove && (
+                    <form action={remove}>
+                      <button
+                        type="submit"
+                        title="ביטול השינוי — התקופה הזו תתמזג עם זו שלפניה"
+                        className="flex items-center gap-1 rounded border border-card-border bg-white px-1.5 py-0.5 text-[10px] font-bold text-muted transition hover:text-red-600"
+                      >
+                        <X className="h-3 w-3" />
+                        ביטול
+                      </button>
+                    </form>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+          <form action={setFrequencyChange} className="grid grid-cols-2 items-end gap-2 md:grid-cols-3">
+            <div>
+              <label className={LABEL}>מהחודש</label>
+              <input name="from" type="month" min={firstDue} defaultValue={upto} className={FIELD} required />
+            </div>
+            <div>
+              <label className={LABEL}>התדירות החדשה</label>
+              <select name="frequency" defaultValue="monthly" className={FIELD}>
+                {Object.entries(RECURRING_FREQUENCY_LABELS).map(([value, label]) => (
+                  <option key={value} value={value}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <button
+              type="submit"
+              className="inline-flex items-center justify-center gap-1.5 rounded-[10px] border border-card-border bg-white px-3 py-2 text-xs font-bold text-ink transition hover:bg-[#f4f6f9]"
+            >
+              <Repeat className="h-3.5 w-3.5" />
+              הוספת שינוי תדירות
+            </button>
+          </form>
+        </div>
 
         <form action={fill} className="grid grid-cols-2 items-end gap-2 rounded-lg border border-teal/30 bg-teal-bg/40 p-2.5 md:grid-cols-5">
           <p className="col-span-2 text-[11px] leading-snug text-muted md:col-span-5">

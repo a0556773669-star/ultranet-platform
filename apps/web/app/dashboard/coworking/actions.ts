@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { getAdminFirestore } from "@/lib/firebase-admin";
+import { FieldValue } from "firebase-admin/firestore";
 import type { FixedExpense, VariableExpense } from "@ultranet/shared-types";
 import { resolveExpenseTypeIdFromForm } from "@/lib/recurring-purchases";
 import { countsToMainFromForm } from "@/lib/counts-to-main";
@@ -89,6 +90,30 @@ export async function createCoworkingVariableExpenseAction(branchId: string, for
     expenseTypeId: await resolveExpenseTypeIdFromForm(formData, "coworking"),
   });
   await getAdminFirestore().collection("n_var_expenses").add(data);
+  revalidateCoworking();
+}
+
+/**
+ * הפסקת הוצאה קבועה מתאריך מסוים - התשובה ל"זה נגמר", במקום מחיקה.
+ *
+ * עד כאן היה במשרד השיתופי רק "מחיקה", ולכן שכירות שהסתיימה נמחקה - ואיתה כל החודשים
+ * שהיא כן עלתה בהם, למפרע. `endDate` עוצר את הצבירה מהחודש הזה והלאה ומשאיר את העבר.
+ */
+export async function endCoworkingFixedExpenseAction(id: string, formData: FormData) {
+  await requireSession();
+  const endDate = String(formData.get("endDate") ?? "").trim() || new Date().toISOString().slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(endDate)) throw new Error("תאריך לא תקין");
+  await getAdminFirestore().collection("n_fixed_expenses").doc(id).set({ endDate }, { merge: true });
+  revalidateCoworking();
+}
+
+/** ביטול ההפסקה - ההוצאה חוזרת להיצבר מהחודש הנוכחי. */
+export async function resumeCoworkingFixedExpenseAction(id: string) {
+  await requireSession();
+  await getAdminFirestore()
+    .collection("n_fixed_expenses")
+    .doc(id)
+    .set({ endDate: FieldValue.delete() }, { merge: true });
   revalidateCoworking();
 }
 

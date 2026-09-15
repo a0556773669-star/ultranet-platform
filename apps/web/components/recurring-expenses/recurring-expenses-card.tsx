@@ -8,6 +8,7 @@ import {
   dueMonths,
   cycleMonths,
   frequencyOf,
+  frequencySegments,
   isSpread,
   amountForMonth,
   lastClosedMonth,
@@ -18,6 +19,7 @@ import {
 import { countsToMain } from "@/lib/counts-to-main";
 import { CountsToMainField, CountsToMainBadge } from "@/components/counts-to-main-field";
 import { RecurringHistoryPanel } from "./recurring-history-panel";
+import { RecurringStopControl } from "./recurring-stop-control";
 import {
   createRecurringVariableExpenseAction,
   setRecurringMonthAmountAction,
@@ -37,6 +39,23 @@ function money(n: number) {
 function monthLabel(month: string) {
   const [y, m] = month.split("-");
   return `${m}/${(y ?? "").slice(2)}`;
+}
+
+/**
+ * תיאור התדירות בשורה. כל עוד היא אחת — מילה אחת ("חודשי"). מהרגע שהיא השתנתה, קו-הזמן
+ * המלא: "דו-חודשי 01/25–05/26 · חודשי מ-06/26". בלי זה אי אפשר להבין למה אותה שורה מבקשת
+ * סכום כל חודשיים בהתחלה וכל חודש בסוף.
+ */
+function frequencyNote(expense: RecurringVariableExpense, upto: string): string {
+  const segments = frequencySegments(expense, upto);
+  if (segments.length <= 1) return RECURRING_FREQUENCY_LABELS[frequencyOf(expense, upto)];
+  return segments
+    .map((seg, i) => {
+      const label = RECURRING_FREQUENCY_LABELS[seg.frequency];
+      if (i === segments.length - 1) return `${label} מ-${monthLabel(seg.from)}`;
+      return `${label} ${monthLabel(seg.from)}–${monthLabel(seg.to)}`;
+    })
+    .join(" · ");
 }
 
 /**
@@ -75,6 +94,7 @@ export function RecurringExpensesCard({
   const reminders = buildReminders(expenses, now);
   // חודש שעדיין רץ אינו "בפיגור": הוא נשאר פתוח להזנה אבל לא נצבע ולא נספר בהתראה.
   const dueUpto = lastClosedMonth(now);
+  const today = new Date().toISOString().slice(0, 10);
 
   // The visible window is the last `monthsBack` months of the widest expense, so a single
   // late row doesn't force the whole table wide. Months a spread payment lands on count too:
@@ -148,7 +168,7 @@ export function RecurringExpensesCard({
                         <CountsToMainBadge on={countsToMain(e)} />
                       </span>
                       <span className="block text-[10.5px] text-muted">
-                        {e.category || "ללא קטגוריה"} · {RECURRING_FREQUENCY_LABELS[frequencyOf(e)]}
+                        {e.category || "ללא קטגוריה"} · {frequencyNote(e, now)}
                         {spread ? ` (פרוס ל-${cycle} חודשים)` : ""} · מ-{e.startDate}
                         {e.endDate ? ` · הופסק ${e.endDate}` : ""}
                       </span>
@@ -211,15 +231,19 @@ export function RecurringExpensesCard({
                       {money(totalToDate(e, now))}
                     </td>
                     {canManage && (
-                      <td className="px-2 py-1.5 text-center">
-                        <form action={del}>
-                          <button
-                            type="submit"
-                            className="rounded-lg border border-red-200 px-2 py-0.5 text-[10px] font-medium text-red-600 transition hover:bg-red-50"
-                          >
-                            מחיקה
-                          </button>
-                        </form>
+                      <td className="px-2 py-1.5">
+                        <div className="flex items-center justify-center gap-1.5">
+                          <RecurringStopControl expense={e} today={today} />
+                          <form action={del}>
+                            <button
+                              type="submit"
+                              title="מחיקה מוציאה את ההוצאה מכל החודשים למפרע — להפסקה השתמש ב'הפסקה'"
+                              className="rounded-lg border border-red-200 px-2 py-0.5 text-[10px] font-medium text-red-600 transition hover:bg-red-50"
+                            >
+                              מחיקה
+                            </button>
+                          </form>
+                        </div>
                       </td>
                     )}
                   </tr>

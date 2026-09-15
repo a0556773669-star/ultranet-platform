@@ -24,6 +24,7 @@ import { getAdminFirestore } from "./firebase-admin";
 import type {
   ExpenseScope,
   RecurringFrequency,
+  RecurringFrequencyChange,
   RecurringVariableExpense,
   RecurringVariableAmount,
 } from "@ultranet/shared-types";
@@ -61,22 +62,96 @@ export const RECURRING_FREQUENCY_LABELS: Record<RecurringFrequency, string> = {
   yearly: "שנתי",
 };
 
-/** רשומות שנכתבו לפני שהשדה קיים הן חודשיות - זו הייתה ההתנהגות היחידה שהייתה להן. */
-export function frequencyOf(expense: Pick<RecurringVariableExpense, "frequency">): RecurringFrequency {
+type FrequencyFields = Pick<RecurringVariableExpense, "frequency" | "frequencyChanges">;
+
+/** התדירות שאיתה ההוצאה התחילה. רשומות שנכתבו לפני השדה הן חודשיות. */
+export function baseFrequency(expense: Pick<RecurringVariableExpense, "frequency">): RecurringFrequency {
   return expense.frequency ?? "monthly";
 }
 
-/** אורך המחזור בחודשים: כל כמה חודשים מגיע תשלום, ועל פני כמה חודשים הוא נפרס. */
-export function cycleMonths(expense: Pick<RecurringVariableExpense, "frequency">): number {
-  return RECURRING_FREQUENCY_MONTHS[frequencyOf(expense)];
+/** שינויי התדירות, ממוינים ומנוקים מערכים פגומים. */
+function sortedChanges(expense: FrequencyFields): RecurringFrequencyChange[] {
+  return [...(expense.frequencyChanges ?? [])]
+    .filter((c) => /^\d{4}-\d{2}$/.test(c?.from ?? "") && RECURRING_FREQUENCY_MONTHS[c.frequency] > 0)
+    .sort((a, b) => a.from.localeCompare(b.from));
+}
+
+/** תקופה אחת של תדירות אחידה בתוך חיי ההוצאה. */
+export interface FrequencySegment {
+  from: string;
+  to: string;
+  frequency: RecurringFrequency;
+  /** אורך המחזור בחודשים בתוך התקופה הזו */
+  cycle: number;
+}
+
+/**
+ * קו-הזמן של התדירות: תקופה לכל תדירות, מ-`startDate` ועד היום/ההפסקה.
+ *
+ * חשמל שהיה דו-חודשי ועבר לחודשי הוא אותה הוצאה עם שתי תקופות, ולא שתי הוצאות. **המחזור
+ * נמדד מחדש בתחילת כל תקופה**: דו-חודשי מ-01/2025 נדרש ב-01, 03, 05..., ומהרגע שהוא חודשי
+ * ב-06/2026 הוא נדרש ב-06, 07, 08 - ולא "כל חודש שני מ-01/2025".
+ *
+ * שינוי שתאריכו לפני ההתחלה או בדיוק בה פשוט מחליף את התדירות ההתחלתית, כדי שתיקון של
+ * "בעצם זה תמיד היה דו-חודשי" לא ייצור תקופה ריקה.
+ */
+export function frequencySegments(expense: RecurringVariableExpense, upto = currentMonth()): FrequencySegment[] {
+  if (!expense.startDate) return [];
+  const start = expense.startDate.slice(0, 7);
+  const end = lastRelevantMonth(expense, upto);
+  if (end < start) return [];
+
+  let base = baseFrequency(expense);
+  const points: RecurringFrequencyChange[] = [];
+  for (const c of sortedChanges(expense)) {
+    if (c.from <= start) base = c.frequency;
+    else if (c.from <= end) points.push(c);
+  }
+
+  const boundaries: RecurringFrequencyChange[] = [{ from: start, frequency: base }, ...points];
+  const segments: FrequencySegment[] = [];
+  boundaries.forEach((b, i) => {
+    const next = boundaries[i + 1];
+    const to = next ? previousMonth(next.from) : end;
+    if (to < b.from) return;
+    segments.push({ from: b.from, to, frequency: b.frequency, cycle: RECURRING_FREQUENCY_MONTHS[b.frequency] });
+  });
+  return segments;
+}
+
+/** התדירות שתקפה בחודש מסוים (ברירת מחדל: היום). */
+export function frequencyAt(expense: RecurringVariableExpense, month: string): RecurringFrequency {
+  let freq = baseFrequency(expense);
+  const start = expense.startDate?.slice(0, 7) ?? month;
+  for (const c of sortedChanges(expense)) {
+    if (c.from <= start || c.from <= month) freq = c.frequency;
+  }
+  return freq;
+}
+
+/**
+ * התדירות **הנוכחית** של ההוצאה - זו שמוצגת בכל מקום שכתוב בו "חודשי"/"דו-חודשי".
+ * שם ההיסטורי נשמר כי כל הקריאות הקיימות התכוונו בדיוק לזה.
+ */
+export function frequencyOf(expense: RecurringVariableExpense, upto = currentMonth()): RecurringFrequency {
+  return frequencyAt(expense, upto);
+}
+
+/** אורך המחזור בחודשים כרגע: כל כמה חודשים מגיע תשלום, ועל פני כמה חודשים הוא נפרס. */
+export function cycleMonths(expense: RecurringVariableExpense, upto = currentMonth()): number {
+  return RECURRING_FREQUENCY_MONTHS[frequencyOf(expense, upto)];
 }
 
 /**
  * האם לפרוס את התשלום על פני חודשי המחזור. ברירת המחדל לתדירות רב-חודשית היא כן, כי זו
  * הסיבה היחידה שמישהו מגדיר תדירות שנתית מלכתחילה. במחזור של חודש אין מה לפרוס.
  */
-export function isSpread(expense: Pick<RecurringVariableExpense, "frequency" | "spread">): boolean {
-  return cycleMonths(expense) > 1 && expense.spread !== false;
+export function isSpread(expense: RecurringVariableExpense, upto = currentMonth()): boolean {
+  return spreadOfCycle(cycleMonths(expense, upto), expense.spread);
+}
+
+function spreadOfCycle(cycle: number, spread: boolean | undefined): boolean {
+  return cycle > 1 && spread !== false;
 }
 
 /** החודש האחרון שרלוונטי להוצאה: היום, או חודש ההפסקה אם הוא מוקדם יותר. */
@@ -86,16 +161,19 @@ function lastRelevantMonth(expense: RecurringVariableExpense, upto: string): str
 }
 
 /**
- * החודשים שבהם באמת מגיע תשלום, מחודש ההתחלה והלאה בקפיצות של `cycleMonths`.
+ * החודשים שבהם באמת מגיע תשלום: בכל תקופת תדירות, מתחילתה והלאה בקפיצות המחזור שלה.
  * זו רשימת החודשים שהמערכת מבקשת עליהם סכום - ורק עליהם.
  */
 export function dueMonths(expense: RecurringVariableExpense, upto = currentMonth()): string[] {
-  if (!expense.startDate) return [];
-  const start = expense.startDate.slice(0, 7);
-  const end = lastRelevantMonth(expense, upto);
-  if (end < start) return [];
-  const step = cycleMonths(expense);
-  return monthsBetween(start, end).filter((_, i) => i % step === 0);
+  const out: string[] = [];
+  for (const seg of frequencySegments(expense, upto)) {
+    const months = monthsBetween(seg.from, seg.to);
+    for (let i = 0; i < months.length; i += seg.cycle) {
+      const month = months[i];
+      if (month) out.push(month);
+    }
+  }
+  return out;
 }
 
 /**
@@ -146,32 +224,55 @@ function addMonths(month: string, delta: number): string {
   return `${Math.floor(total / 12)}-${String((total % 12) + 1).padStart(2, "0")}`;
 }
 
+/** אורך המחזור שתקף בחודש מסוים, לפי קו-הזמן של התדירות. */
+function cycleAtMonth(segments: FrequencySegment[], month: string): number {
+  if (segments.length === 0) return 1;
+  let cycle = segments[0]!.cycle;
+  for (const seg of segments) if (seg.from <= month) cycle = seg.cycle;
+  return cycle;
+}
+
 /**
- * העלות החודשית: לכל חודש, כמה מההוצאה הזו נופל עליו.
+ * העלות החודשית, עם סימון אילו חודשים הם חלק יחסי של תשלום רב-חודשי.
  *
  * תשלום חודשי נופל כולו על החודש שלו. תשלום רב-חודשי פרוס מתחלק שווה בשווה על חודשי
  * המחזור שהוא משלם עליהם (מחודש התשלום והלאה). חודש שעדיין לא הגיע (`> upto`) לא נספר
  * גם אם כבר שולם עליו - הכסף יצא, אבל העלות שייכת לחודש שלה.
+ *
+ * המחזור נלקח מהתקופה של **חודש התשלום עצמו**: תשלום דו-חודשי מ-2025 נשאר פרוס לחודשיים
+ * גם אחרי שההוצאה עברה לחודשית, אחרת שינוי תדירות היה משכתב למפרע את עלות העבר.
  */
-export function monthlyAllocation(
+export function monthlyAllocationDetailed(
   expense: RecurringVariableExpense,
   upto = currentMonth(),
-): Map<string, number> {
-  const out = new Map<string, number>();
-  const step = isSpread(expense) ? cycleMonths(expense) : 1;
+): Map<string, { amount: number; spread: boolean }> {
+  const out = new Map<string, { amount: number; spread: boolean }>();
+  const segments = frequencySegments(expense, upto);
   const end = lastRelevantMonth(expense, upto);
   for (const a of expense.amounts ?? []) {
     if (a.month > upto) continue;
+    const cycle = cycleAtMonth(segments, a.month);
+    const spread = spreadOfCycle(cycle, expense.spread);
+    const step = spread ? cycle : 1;
     const share = (a.amount || 0) / step;
     for (let i = 0; i < step; i += 1) {
       const month = addMonths(a.month, i);
       // חודש התשלום עצמו נספר תמיד, גם אם הוא אחרי `endDate`: כסף שיצא לא מתאדה מהספר
       // רק מפני שההוצאה כבר הופסקה. מה שנחתך הוא רק המשך הפריסה קדימה.
       if (i > 0 && month > end) break;
-      out.set(month, (out.get(month) ?? 0) + share);
+      const prev = out.get(month);
+      out.set(month, { amount: (prev?.amount ?? 0) + share, spread: (prev?.spread ?? false) || spread });
     }
   }
   return out;
+}
+
+/** אותו חישוב, רק הסכומים - הצורה שרוב הקוראים צריכים. */
+export function monthlyAllocation(
+  expense: RecurringVariableExpense,
+  upto = currentMonth(),
+): Map<string, number> {
+  return new Map([...monthlyAllocationDetailed(expense, upto)].map(([month, v]) => [month, v.amount]));
 }
 
 /** כמה מההוצאה נופל על חודש מסוים, אחרי פריסה. `0` = כלום. */

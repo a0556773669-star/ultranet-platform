@@ -1165,6 +1165,19 @@ export const RECURRING_FREQUENCY_MONTHS: Record<RecurringFrequency, number> = {
   yearly: 12,
 };
 
+/**
+ * שינוי תדירות באמצע החיים של אותה הוצאה.
+ *
+ * חשמל שהיה דו-חודשי ועבר לחודשי הוא **אותה הוצאה**, ולכן פתיחת שורה שנייה בשביל
+ * התדירות החדשה שוברת את הסיכום שבשבילו המודול קיים. במקום זה נשמר כאן קו-זמן: מהחודש
+ * `from` והלאה התדירות היא `frequency`, והמחזור נמדד מחדש מאותו חודש.
+ */
+export interface RecurringFrequencyChange {
+  /** החודש (YYYY-MM) שממנו התדירות החדשה תקפה */
+  from: string;
+  frequency: RecurringFrequency;
+}
+
 export interface RecurringVariableExpense {
   id: string;
   scope: ExpenseScope;
@@ -1192,6 +1205,12 @@ export interface RecurringVariableExpense {
    * בתדירות חודשית אין לשדה משמעות — מחזור של חודש אחד נפרס לעצמו.
    */
   spread?: boolean;
+  /**
+   * שינויי תדירות לאורך הזמן. `frequency` למעלה היא התדירות מ-`startDate`, וכל רשומה כאן
+   * מחליפה אותה מחודש מסוים והלאה (חשמל דו-חודשי שעבר לחודשי ב-06/2026). ריק/חסר = תדירות
+   * אחת לכל החיים, כפי שהיה לפני השדה. ראה `frequencySegments` ב-`lib/recurring-expenses.ts`.
+   */
+  frequencyChanges?: RecurringFrequencyChange[];
   /** סכום ברירת מחדל להצעה בעת עדכון חודש חדש */
   defaultAmount?: number;
   /** ראה `COUNTS_TO_MAIN_DOC` */
