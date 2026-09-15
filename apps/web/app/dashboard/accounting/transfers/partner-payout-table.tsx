@@ -1,3 +1,5 @@
+import Link from "next/link";
+import { AlertTriangle } from "lucide-react";
 import type { PartnerPayoutSummary } from "@/lib/partner-payouts";
 import { PayoutMarkCell } from "./payout-mark-cell";
 
@@ -40,9 +42,19 @@ export function PartnerPayoutTable({
       {summaries.map((s) => {
         const rows = s.rows.filter((r) => Math.abs(r.due) > 0.5 || Math.abs(r.paid) > 0.5);
         return (
-          <div key={s.partnerName} className="overflow-hidden rounded-card border border-card-border bg-white shadow-card">
-            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-card-border bg-[#f4f6f9] px-4 py-2.5">
+          <div
+            key={s.partnerName}
+            className={`overflow-hidden rounded-card border bg-white shadow-card ${
+              s.unnamed ? "border-amber-400" : "border-card-border"
+            }`}
+          >
+            <div
+              className={`flex flex-wrap items-center justify-between gap-2 border-b px-4 py-2.5 ${
+                s.unnamed ? "border-amber-300 bg-amber-50" : "border-card-border bg-[#f4f6f9]"
+              }`}
+            >
               <span className="flex items-center gap-1.5 text-sm font-extrabold text-ink">
+                {s.unnamed && <AlertTriangle className="h-4 w-4 text-amber-600" />}
                 {s.partnerName}
                 <span className="rounded-full bg-white px-1.5 py-0.5 text-[10px] font-bold text-muted">
                   {s.kinds.includes("branch") && s.kinds.includes("computers")
@@ -94,11 +106,24 @@ export function PartnerPayoutTable({
                 </tbody>
               </table>
             </div>
-            <p className="border-t border-card-border px-4 py-2 text-[11px] leading-relaxed text-muted">
-              חודש שלא סומן כמועבר נשאר ביתרה ומצטבר לחודש הבא. סימון התיבה רושם את מלוא הסכום; אפשר
-              גם להקליד סכום חלקי. הסכומים האלה כבר ירדו מהרווח שלי בכל מסך שמציג רווח — אין צורך
-              לרשום אותם שוב כהוצאה.
-            </p>
+            {s.unnamed ? (
+              <p className="border-t border-amber-300 bg-amber-50 px-4 py-2.5 text-[11.5px] leading-relaxed text-ink">
+                <b>אין למי להעביר את זה.</b> החוב הזה נוצר משותפות שסומנה על מחשב בלי למלא בה שם,
+                ולכן אי אפשר לדעת למי הוא שייך —{" "}
+                <b>והסכום כבר יורד לך מהרווח בכל מסך</b>. אם זה הסדר אמיתי, מלא את השם; ואם זו
+                הגדרה ישנה שנשארה על המחשב, הסר את סימון השותפות. שניהם בעריכת המחשב ב
+                <Link href="/dashboard/rentals/laptops" className="mx-1 font-bold text-teal underline">
+                  עמוד המחשבים
+                </Link>
+                ({s.rows.flatMap((r) => r.subjects).filter((v, i, a) => a.indexOf(v) === i).join(", ") || "—"}).
+              </p>
+            ) : (
+              <p className="border-t border-card-border px-4 py-2 text-[11px] leading-relaxed text-muted">
+                חודש שלא סומן כמועבר נשאר ביתרה ומצטבר לחודש הבא. סימון התיבה רושם את מלוא הסכום;
+                אפשר גם להקליד סכום חלקי. הסכומים האלה כבר ירדו מהרווח שלי בכל מסך שמציג רווח — אין
+                צורך לרשום אותם שוב כהוצאה.
+              </p>
+            )}
           </div>
         );
       })}

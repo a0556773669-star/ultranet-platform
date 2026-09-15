@@ -151,7 +151,19 @@ export interface RevenueShareLine {
   rentalCount: number;
   gross: number;
   amount: number;
+  /**
+   * שותפות פר-מחשב שסומנה בלי למלא שם.
+   *
+   * חוב בלי נושה הוא לא חוב — אי אפשר להעביר אותו לאף אחד, ואי אפשר לדעת אם הוא
+   * הסדר אמיתי שרק חסר לו שם או שריד של הגדרה ישנה שנשכחה על המחשב. עד עכשיו
+   * הוא פשוט קיבל שם מומצא ("שותף ללא שם") והתיישב בטבלת ההעברות כאילו הוא אדם.
+   * הסכום ממשיך לרדת מהרווח כמו קודם — אבל הוא מסומן, והמסך אומר את זה בקול.
+   */
+  unnamed?: boolean;
 }
+
+/** שם שמוצג לשותפות פר-מחשב שלא מילאו בה שם. משמש גם כמפתח היתרה ב-`n_partner_payouts`. */
+export const UNNAMED_PARTNER = "שותף ללא שם";
 
 /** האם ההשכרה היא כסף שמישהו באמת מחזיק: הוחזרה **וגם** שולמה. */
 export function countsAsCollected(r: Pick<Rental, "status" | "returnDate" | "paid">): boolean {
@@ -194,7 +206,8 @@ export function computerRevenueShareLines(
     if (!laptop) continue;
 
     const pct = laptop.partnerPct ?? DEFAULT_COMPUTER_PARTNER_PCT;
-    const personName = laptop.partnerName?.trim() || "שותף ללא שם";
+    const named = laptop.partnerName?.trim();
+    const personName = named || UNNAMED_PARTNER;
     const key = `${laptop.branchId}|${personName}|${pct}`;
     let line = lines.get(key);
     if (!line) {
@@ -207,6 +220,7 @@ export function computerRevenueShareLines(
         rentalCount: 0,
         gross: 0,
         amount: 0,
+        ...(named ? {} : { unnamed: true }),
       };
       lines.set(key, line);
     }

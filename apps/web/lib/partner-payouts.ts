@@ -38,6 +38,9 @@ export interface PartnerPayoutSummary {
   partnerName: string;
   /** "אחוז מסניף שלם" / "אחוז ממחשבים" / שניהם - מה שמסביר את השורות בטבלה */
   kinds: ("branch" | "computers")[];
+  /** החוב הזה נוצר משותפות פר-מחשב שלא מילאו בה שם - אין למי להעביר אותו.
+   *  ראו `RevenueShareLine.unnamed`. */
+  unnamed?: boolean;
   rows: PartnerMonthRow[];
   totalDue: number;
   totalPaid: number;
@@ -66,6 +69,7 @@ export async function loadPartnerPayouts(months: string[]): Promise<PartnerPayou
 
   const byPartner = new Map<string, PartnerMonthRow[]>();
   const kindsByPartner = new Map<string, Set<"branch" | "computers">>();
+  const unnamedPartners = new Set<string>();
   months.forEach((month, idx) => {
     const lines = (settlements[idx] ?? []) as RevenueShareLine[];
     // A person can hold computers in more than one branch; the debt is to the person, so the
@@ -87,6 +91,7 @@ export async function loadPartnerPayouts(months: string[]): Promise<PartnerPayou
       const kinds = kindsByPartner.get(line.personName) ?? new Set<"branch" | "computers">();
       kinds.add(line.kind);
       kindsByPartner.set(line.personName, kinds);
+      if (line.unnamed) unnamedPartners.add(line.personName);
     }
     for (const [name, row] of merged) {
       row.paid = paidByKey.get(`${name}|${month}`) ?? 0;
@@ -115,13 +120,16 @@ export async function loadPartnerPayouts(months: string[]): Promise<PartnerPayou
       return {
         partnerName,
         kinds: [...(kindsByPartner.get(partnerName) ?? [])],
+        ...(unnamedPartners.has(partnerName) ? { unnamed: true } : {}),
         rows,
         totalDue,
         totalPaid,
         outstanding: totalDue - totalPaid,
       };
     })
-    .sort((a, b) => b.outstanding - a.outstanding);
+    // חוב בלי נושה עולה לראש הרשימה: הוא הדבר היחיד כאן שאי אפשר לפעול לפיו בכלל,
+    // ולכן הוא לא יכול לחכות מתחת לשלושה כרטיסים תקינים.
+    .sort((a, b) => Number(!!b.unnamed) - Number(!!a.unnamed) || b.outstanding - a.outstanding);
 }
 
 /** חלון החודשים לתצוגה: `count` חודשים אחורה עד `end` (כולל). */
