@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
-import { Laptop as LaptopIcon, Users, FolderOpen, AlertCircle, Package, CheckCircle2, AlertTriangle, ArrowLeft, Armchair } from "lucide-react";
+import { Laptop as LaptopIcon, Users, FolderOpen, AlertCircle, Package, CheckCircle2, AlertTriangle, ArrowLeft, Armchair, Stethoscope } from "lucide-react";
 import { authOptions } from "@/lib/auth";
 import { getAdminFirestore } from "@/lib/firebase-admin";
 import type { PermKey } from "@/lib/perms";
@@ -187,6 +187,9 @@ export default async function DashboardHomePage() {
   );
   if (isOwner) {
     categories.push({ href: "/dashboard/users", label: "משתמשים והרשאות", icon: Users });
+    // הכניסה היחידה לרשומות שאין להן מסך. היא בדף הבית מפני ששם רואים את ההתראות שהן
+    // מייצרות, וזו השאלה שהן מעלות: "מאיפה ההתראה הזו, ואיפה מטפלים בה".
+    categories.push({ href: "/dashboard/maintenance", label: "בדיקת נתונים", icon: Stethoscope });
   }
 
   return (
