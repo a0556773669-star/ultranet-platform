@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
-import { Laptop as LaptopIcon, Users, FolderOpen, AlertCircle, Package, CheckCircle2, AlertTriangle, ArrowLeft } from "lucide-react";
+import { Laptop as LaptopIcon, Users, FolderOpen, AlertCircle, Package, CheckCircle2, AlertTriangle, ArrowLeft, Armchair } from "lucide-react";
 import { authOptions } from "@/lib/auth";
 import { getAdminFirestore } from "@/lib/firebase-admin";
 import type { PermKey } from "@/lib/perms";
@@ -11,6 +11,7 @@ import { getInventorySnapshotAction } from "./(computer-rooms)/inventory/actions
 import type { Laptop, Rental } from "@ultranet/shared-types";
 import type { BranchKey, InventoryItem } from "@/lib/legacy-inventory";
 import { loadMainLedger } from "@/lib/main-ledger";
+import { loadCoworkingData, paymentForMonth, currentMonth as coworkingMonth } from "@/lib/coworking";
 
 export default async function DashboardHomePage() {
   const session = await getServerSession(authOptions);
@@ -83,6 +84,30 @@ export default async function DashboardHomePage() {
         itemName: laptopNames[r.itemId] || "פריט",
         amount: r.finalPrice ?? r.calcPrice,
       }));
+  }
+
+  // המשרד השיתופי: מי מהשוכרים לא שילם את החודש. יום התשלום של כל עמדה הוא היום שבו
+  // התחילה השכירות שלה, ולכן בכל 1 בחודש הרשימה מתמלאת מחדש מעצמה. הסימון עצמו נעשה
+  // במסך העמדות, ששם גם נרשמת ההכנסה בראשי.
+  let coworkingDue:
+    | { clients: { id: string; name: string; station: string; cost: number; paid: boolean }[]; month: string }
+    | null = null;
+
+  if (has("coworking")) {
+    const cw = await loadCoworkingData(isOwner ? undefined : { branchId });
+    const month = coworkingMonth();
+    coworkingDue = {
+      month,
+      clients: cw.statuses
+        .filter((st) => st.active)
+        .map((st) => ({
+          id: st.client.id,
+          name: st.client.name,
+          station: st.client.stationNumber ?? st.station?.name ?? "-",
+          cost: st.cost,
+          paid: Boolean(paymentForMonth(st.client, month)),
+        })),
+    };
   }
 
   let inventoryItemCount = 0;
@@ -182,6 +207,41 @@ export default async function DashboardHomePage() {
       </div>
 
       <div className="mb-3 grid grid-cols-1 gap-3 lg:grid-cols-2">
+        {coworkingDue && coworkingDue.clients.length > 0 && (
+          <div className="card">
+            <div className="mb-3 flex items-center justify-between text-xs font-bold uppercase tracking-wide text-muted">
+              <span className="flex items-center gap-1.5">
+                <Armchair className="h-4 w-4" />
+                {`תשלומי משרד שיתופי — ${coworkingDue.month}`}
+              </span>
+              <span className="rounded-full bg-[#f4f6f9] px-2.5 py-0.5 text-ink normal-case">
+                {coworkingDue.clients.filter((c) => !c.paid).length} לא שולמו
+              </span>
+            </div>
+            {coworkingDue.clients.map((c) => (
+              <div
+                key={c.id}
+                className="flex items-center gap-2 border-b border-card-border py-2 text-[13px] last:border-b-0"
+              >
+                <span className={`h-2 w-2 rounded-full ${c.paid ? "bg-emerald-500" : "bg-red-500"}`} />
+                <span className="flex-1 font-medium text-ink">
+                  {c.name} <span className="text-[11px] text-muted">· עמדה {c.station}</span>
+                </span>
+                <span className={`text-[11px] font-bold ${c.paid ? "text-emerald-600" : "text-red-600"}`}>
+                  {c.paid ? "שולם" : `${c.cost.toLocaleString()} ₪ חסר`}
+                </span>
+              </div>
+            ))}
+            <Link
+              href="/dashboard/coworking/stations"
+              className="mt-2 inline-flex items-center gap-1 text-[11px] font-bold text-teal hover:underline"
+            >
+              {"לסימון תשלום במסך העמדות"}
+              <ArrowLeft className="h-3 w-3" />
+            </Link>
+          </div>
+        )}
+
         {unpaidRentals && unpaidRentals.length > 0 && (
         <div className="card border-red-300 bg-red-50">
           <div className="mb-3 flex items-center justify-between text-xs font-bold uppercase tracking-wide text-red-700">
