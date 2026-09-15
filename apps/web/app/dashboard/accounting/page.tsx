@@ -6,8 +6,7 @@ import type { Branch } from "@ultranet/shared-types";
 import { loadMainLedger, currentMonth, incomeTypeLabel } from "@/lib/main-ledger";
 import { AccountingTabs } from "./accounting-tabs";
 import { AddIncomeForm, type BranchOption } from "./income-form";
-import { IssueReceiptButton } from "./receipt-button";
-import { DeleteEntryButton } from "./delete-entry-button";
+import { LedgerTable, type LedgerTableRow } from "./ledger-table";
 import { deleteIncomeAction } from "./actions";
 
 function money(n: number) {
@@ -18,9 +17,12 @@ function money(n: number) {
  * הספר הראשי — שלושה מספרים ורשימה.
  *
  * "כמה הוצאנו עד היום, כמה הכנסנו עד היום, מה המאזן" הן השאלות שהמסך הזה קיים בשבילן,
- * ולכן הן בראשו ולא אחרי שלוש טבלאות. שתי הרשימות שמתחתיהן הן בדיוק מה שמרכיב את
+ * ולכן הן בראשו ולא אחרי שלוש טבלאות. שתי הטבלאות שמתחתיהן הן בדיוק מה שמרכיב את
  * המספרים - כל שורה שסומנה `countsToMain`, ורק היא - כך שאפשר תמיד ללחוץ ולראות מאיפה
  * הגיע כל שקל, בלי מסך "בדיקת שלמות" שמנסה להסביר בדיעבד למה שני מספרים לא הסתדרו.
+ *
+ * הטבלאות (`ledger-table.tsx`) פרושות אחת מתחת לשנייה ולא זו לצד זו: ספר עם אלפי שורות
+ * צריך רוחב מלא לסינון, לסידור ולעימוד, ושתי עמודות צרות לא נתנו את זה.
  */
 export default async function AccountingHomePage() {
   const session = await requireModuleAccess("accounting");
@@ -63,6 +65,42 @@ export default async function AccountingHomePage() {
     },
   ];
 
+  // השורות עוברות לטבלה כאובייקטים שטוחים: `MainLedger` מחזיק את השורה הגולמית ב-Map,
+  // וקומפוננטת לקוח לא יכולה לקבל Map. מה שהטבלה צריכה מהגולמית — מצב הקבלה ו"למי נמכר" —
+  // נשטח לכאן, והשאר נשאר בשרת.
+  const incomeRows: LedgerTableRow[] = ledger.income.map((entry) => {
+    const raw = entry.source === "income" ? ledger.incomeRows.get(entry.id) : undefined;
+    return {
+      key: `${entry.source}|${entry.id}`,
+      id: entry.id,
+      date: entry.date,
+      desc: entry.desc,
+      amount: entry.amount,
+      origin: entry.origin,
+      category: entry.category ?? incomeTypeLabel(undefined),
+      soldTo: raw?.soldTo,
+      receipt:
+        raw && (raw.type === "laptops" || raw.type === "cash")
+          ? {
+              issued: raw.receiptIssued === true,
+              docNumber: raw.receiptDocNumber,
+              clientName: raw.receiptClientName ?? entry.origin,
+            }
+          : undefined,
+      deletable: Boolean(raw),
+    };
+  });
+
+  const expenseRows: LedgerTableRow[] = ledger.expenses.map((entry) => ({
+    key: `${entry.source}|${entry.id}`,
+    id: entry.id,
+    date: entry.date,
+    desc: entry.desc,
+    amount: entry.amount,
+    origin: entry.origin,
+    category: entry.category ?? "",
+  }));
+
   return (
     <div className="flex flex-col gap-3.5">
       <div className="flex flex-wrap items-end justify-between gap-3">
@@ -97,94 +135,20 @@ export default async function AccountingHomePage() {
 
       <AddIncomeForm computerBranches={computerBranches} rentalsBranches={rentalsBranches} defaultDate={today} />
 
-      <div className="grid grid-cols-1 items-start gap-3.5 xl:grid-cols-2">
-        <section>
-          <div className="mb-2 flex items-center justify-between text-xs font-bold uppercase tracking-wide text-muted">
-            <span>הכנסות ({ledger.income.length})</span>
-            <span className="rounded-full bg-[#f4f6f9] px-2.5 py-0.5 text-emerald-700 normal-case">
-              {money(ledger.totals.income)}
-            </span>
-          </div>
-          <div className="rounded-card border border-card-border bg-white px-4 shadow-card">
-            {ledger.income.length === 0 && <p className="py-6 text-center text-sm text-muted">אין עדיין הכנסות</p>}
-            {ledger.income.map((entry) => {
-              const raw = ledger.incomeRows.get(entry.id);
-              const bound = raw && entry.source === "income" ? deleteIncomeAction.bind(null, entry.id) : null;
-              return (
-                <div
-                  key={`${entry.source}|${entry.id}`}
-                  className="flex items-start gap-2.5 border-b border-card-border py-2.5 text-[13px] last:border-b-0"
-                >
-                  <div className="flex-1">
-                    <div className="font-bold text-ink">{entry.desc}</div>
-                    <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[11px] text-muted">
-                      <span>{entry.date}</span>
-                      <span>·</span>
-                      <span>{entry.category ?? incomeTypeLabel(undefined)}</span>
-                      <span>·</span>
-                      <span>{entry.origin}</span>
-                      {raw?.soldTo && <span>· נמכר ל{raw.soldTo}</span>}
-                    </div>
-                    {/* מסמך מופק רק על כסף שלא נסלק: העברה מסניף ניידים, ומזומן שנמשך
-                        מקופה. שורת אשראי לא מקבלת כפתור בכלל - נדרים פלוס כבר הפיק עליה
-                        חשבונית מס קבלה, ומסמך שני היה כפילות. הכלל נאכף גם בשרת
-                        (`receipt-actions.ts`), כי כפתור מוסתר הוא לא אכיפה. */}
-                    {raw && (raw.type === "laptops" || raw.type === "cash") && (
-                      <div className="mt-1">
-                        <IssueReceiptButton
-                          incomeId={entry.id}
-                          amount={entry.amount}
-                          receiptIssued={raw.receiptIssued === true}
-                          receiptDocNumber={raw.receiptDocNumber}
-                          defaultClientName={raw.receiptClientName ?? entry.origin}
-                        />
-                      </div>
-                    )}
-                  </div>
-                  <div className="min-w-[80px] text-left font-extrabold text-emerald-600">{money(entry.amount)}</div>
-                  {bound && (
-                    <DeleteEntryButton
-                      confirmText="למחוק את שורת ההכנסה?"
-                      action={bound}
-                      successText="ההכנסה נמחקה"
-                    />
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </section>
-
-        <section>
-          <div className="mb-2 flex items-center justify-between text-xs font-bold uppercase tracking-wide text-muted">
-            <span>הוצאות שמתחשבנות בראשי ({ledger.expenses.length})</span>
-            <span className="rounded-full bg-[#f4f6f9] px-2.5 py-0.5 text-red-600 normal-case">
-              {money(ledger.totals.expense)}
-            </span>
-          </div>
-          <div className="rounded-card border border-card-border bg-white px-4 shadow-card">
-            {ledger.expenses.length === 0 && (
-              <p className="py-6 text-center text-sm text-muted">
-                עדיין לא סומנה אף הוצאה כמתחשבנת בראשי. אפשר לסמן הוצאות קיימות במסך &quot;עדכון רטרואקטיבי&quot;.
-              </p>
-            )}
-            {ledger.expenses.map((entry) => (
-              <div
-                key={`${entry.source}|${entry.id}`}
-                className="flex items-start gap-2.5 border-b border-card-border py-2.5 text-[13px] last:border-b-0"
-              >
-                <div className="flex-1">
-                  <div className="font-bold text-ink">{entry.desc}</div>
-                  <div className="mt-0.5 text-[11px] text-muted">
-                    {entry.date} · {entry.origin}
-                    {entry.category ? ` · ${entry.category}` : ""}
-                  </div>
-                </div>
-                <div className="min-w-[80px] text-left font-extrabold text-red-600">{money(entry.amount)}</div>
-              </div>
-            ))}
-          </div>
-        </section>
+      <div className="flex flex-col gap-3.5">
+        <LedgerTable
+          kind="income"
+          rows={incomeRows}
+          total={ledger.totals.income}
+          emptyText="אין עדיין הכנסות"
+          deleteAction={deleteIncomeAction}
+        />
+        <LedgerTable
+          kind="expense"
+          rows={expenseRows}
+          total={ledger.totals.expense}
+          emptyText={'עדיין לא סומנה אף הוצאה כמתחשבנת בראשי. אפשר לסמן הוצאות קיימות במסך "עדכון רטרואקטיבי".'}
+        />
       </div>
 
       <p className="px-1 text-[11.5px] leading-relaxed text-muted">
