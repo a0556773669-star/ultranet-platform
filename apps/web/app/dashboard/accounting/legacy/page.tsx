@@ -3,6 +3,7 @@ import { requireOwner } from "@/lib/perms";
 import { getAdminFirestore } from "@/lib/firebase-admin";
 import type {
   AccountingExpense,
+  AccountingFixedExpense,
   Branch,
   FixedExpense,
   MultiBranchExpense,
@@ -13,6 +14,11 @@ import { countsToMain } from "@/lib/counts-to-main";
 import { currentMonth, fixedExpenseAccrued } from "@/lib/main-ledger";
 import { RECURRING_VAR_EXPENSES_COLLECTION, totalToDate } from "@/lib/recurring-expenses";
 import { MULTI_BRANCH_EXPENSES_COLLECTION } from "@/lib/multi-branch-expense";
+import {
+  MAIN_FIXED_EXPENSES_COLLECTION,
+  mainFixedExpenseAccrued,
+  mainFixedExpenseMonths,
+} from "@/lib/main-fixed-expenses";
 import { AccountingTabs } from "../accounting-tabs";
 import { LegacyGroup, type LegacyRow } from "./legacy-group";
 
@@ -27,14 +33,16 @@ import { LegacyGroup, type LegacyRow } from "./legacy-group";
 export default async function LegacyCountsToMainPage() {
   await requireOwner();
   const db = getAdminFirestore();
-  const [branchesSnap, fixedSnap, variableSnap, multiSnap, extraSnap, recurringSnap] = await Promise.all([
-    db.collection("n_branches").get(),
-    db.collection("n_fixed_expenses").get(),
-    db.collection("n_var_expenses").get(),
-    db.collection(MULTI_BRANCH_EXPENSES_COLLECTION).get(),
-    db.collection("n_ah_expenses").get(),
-    db.collection(RECURRING_VAR_EXPENSES_COLLECTION).get(),
-  ]);
+  const [branchesSnap, fixedSnap, variableSnap, multiSnap, extraSnap, recurringSnap, mainFixedSnap] =
+    await Promise.all([
+      db.collection("n_branches").get(),
+      db.collection("n_fixed_expenses").get(),
+      db.collection("n_var_expenses").get(),
+      db.collection(MULTI_BRANCH_EXPENSES_COLLECTION).get(),
+      db.collection("n_ah_expenses").get(),
+      db.collection(RECURRING_VAR_EXPENSES_COLLECTION).get(),
+      db.collection(MAIN_FIXED_EXPENSES_COLLECTION).get(),
+    ]);
 
   const branchNameById = new Map(
     branchesSnap.docs.map((d) => [d.id, (d.data() as Omit<Branch, "id">).name ?? d.id]),
@@ -100,6 +108,19 @@ export default async function LegacyCountsToMainPage() {
       on: countsToMain(e),
     }));
 
+  const mainFixedRows: LegacyRow[] = mainFixedSnap.docs
+    .map((d) => ({ ...(d.data() as Omit<AccountingFixedExpense, "id">), id: d.id }) as AccountingFixedExpense)
+    .map((e) => ({
+      id: e.id,
+      title: e.name,
+      subtitle: `מ-${e.startDate}${e.endDate ? ` עד ${e.endDate}` : ""} · ${
+        mainFixedExpenseMonths(e, upto).length
+      } חודשים`,
+      amount: mainFixedExpenseAccrued(e, upto),
+      on: countsToMain(e),
+    }))
+    .sort((a, b) => b.amount - a.amount);
+
   return (
     <div className="flex flex-col gap-3.5">
       <div className="flex flex-wrap items-end justify-between gap-3">
@@ -130,6 +151,12 @@ export default async function LegacyCountsToMainPage() {
       <LegacyGroup collection="variable" title="הוצאות חד פעמיות" rows={variableRows} />
       <LegacyGroup collection="multi" title="הוצאות על כמה סניפים" rows={multiRows} />
       <LegacyGroup collection="recurring" title="הוצאות קבועות משתנות" rows={recurringRows} />
+      <LegacyGroup
+        collection="main-fixed"
+        title="הוצאות קבועות של העסק"
+        note="הסכום המוצג הוא מה שנצבר מתחילת ההוצאה ועד היום (הסכום החודשי כפול מספר החודשים)."
+        rows={mainFixedRows}
+      />
       <LegacyGroup collection="extra" title="הוצאות נוספות (הוצאות העסק)" rows={extraRows} />
     </div>
   );
