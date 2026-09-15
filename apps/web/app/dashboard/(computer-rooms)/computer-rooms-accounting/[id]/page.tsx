@@ -1,6 +1,6 @@
 import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
-import { BarChart3, ArrowLeft, Plus } from "lucide-react";
+import { BarChart3, ArrowLeft, Plus, Banknote } from "lucide-react";
 import { requireModuleAccess } from "@/lib/perms";
 import { loadComputerRoomAccounting, SHARED_EXPENSE_BRANCH_ID } from "@/lib/computer-room-accounting";
 import { addBranchIncomeAction, deleteBranchIncomeAction } from "../actions";
@@ -22,7 +22,8 @@ export default async function ComputerRoomBranchAccountingPage({ params }: { par
   if (!stats) notFound();
 
   const canAdd = isOwner || (stats.branch.isMine === false && params.id === myBranchId);
-  const incomes = (data.incomesByBranch.get(params.id) ?? []).sort((a, b) => b.date.localeCompare(a.date));
+  // כבר ממוינות מהחדשה לישנה, ומכילות גם את המזומן שנמשך מהקופה ונרשם בהנה"ח הראשית.
+  const incomes = data.incomeLinesByBranch.get(params.id) ?? [];
   const addIncome = addBranchIncomeAction.bind(null, params.id);
   const todayStr = new Date().toISOString().slice(0, 10);
 
@@ -66,6 +67,15 @@ export default async function ComputerRoomBranchAccountingPage({ params }: { par
         <div className="rounded-card border border-card-border bg-white p-4 text-center shadow-card">
           <p className="text-[11px] font-bold uppercase tracking-wide text-muted">הכנסות עד היום</p>
           <p className="mt-1 text-xl font-black text-emerald-600">{money(stats.incomeToDate)}</p>
+          {/* הפירוט מוצג רק כששני המקורות קיימים - אחרת הוא חוזר על המספר שמעליו. */}
+          {stats.cashIncomeToDate > 0 && stats.manualIncomeToDate > 0 && (
+            <p className="mt-1 text-[11px] leading-relaxed text-muted">
+              מזומן מהקופה {money(stats.cashIncomeToDate)} · מעקב ידני {money(stats.manualIncomeToDate)}
+            </p>
+          )}
+          {stats.cashIncomeToDate > 0 && stats.manualIncomeToDate === 0 && (
+            <p className="mt-1 text-[11px] text-muted">הכל מזומן מהקופה</p>
+          )}
         </div>
         <div className="rounded-card border border-card-border bg-white p-4 text-center shadow-card">
           <p className="text-[11px] font-bold uppercase tracking-wide text-muted">רווח מוחזק</p>
@@ -128,8 +138,9 @@ export default async function ComputerRoomBranchAccountingPage({ params }: { par
               הסניף הזה מחזיר לי - ולא כסף שנספר פעם שנייה. מזומן אמיתי שנמשך מהקופה נרשם
               פעם אחת בלבד, בהנה"ח הראשית, עם הקופה שממנה נמשך. */}
           <p className="w-full text-[11px] leading-relaxed text-muted">
-            שורות מעקב בלבד — לא נכנסות להנה&quot;ח הראשית. מזומן שנמשך מהקופה נרשם בהנה&quot;ח
-            הראשית תחת &quot;מזומן&quot;, ושם בוחרים מאיזו קופה.
+            שורות מעקב בלבד — לא נכנסות להנה&quot;ח הראשית. <b>אין צורך להזין כאן מזומן</b>:
+            מזומן שנמשך מהקופה נרשם פעם אחת בהנה&quot;ח הראשית תחת &quot;מזומן&quot; (שם בוחרים
+            מאיזו קופה), ומופיע כאן אוטומטית ברשימה שלמטה.
           </p>
           <div>
             <label className="mb-1 block text-xs font-semibold text-muted">תאריך</label>
@@ -152,18 +163,32 @@ export default async function ComputerRoomBranchAccountingPage({ params }: { par
 
       <div>
         <div className="mb-2 flex items-center justify-between text-xs font-bold uppercase tracking-wide text-muted">
-          <span>שורות הכנסה שנוספו</span>
+          <span>שורות הכנסה</span>
           <span className="rounded-full bg-[#f4f6f9] px-2.5 py-0.5 text-ink normal-case">{incomes.length}</span>
         </div>
         <div className="rounded-card border border-card-border bg-white px-4 shadow-card">
           {incomes.length === 0 && <p className="py-6 text-center text-sm text-muted">אין עדיין שורות הכנסה</p>}
           {incomes.map((i) => {
-            const bound = isOwner ? deleteBranchIncomeAction.bind(null, i.id, params.id) : null;
+            const fromMain = i.source === "main-cash";
+            // מוחקים כל שורה במקום שבו היא נרשמה: שורת מזומן חיה בספר הראשי, ומחיקה
+            // ממנה כאן הייתה משנה את הספר הראשי ממסך שמוגדר כמעקב בלבד.
+            const bound = isOwner && !fromMain ? deleteBranchIncomeAction.bind(null, i.id, params.id) : null;
             return (
-              <div key={i.id} className="flex items-center gap-2.5 border-b border-card-border py-2.5 text-[13px] last:border-b-0">
+              <div key={`${i.source}-${i.id}`} className="flex items-center gap-2.5 border-b border-card-border py-2.5 text-[13px] last:border-b-0">
                 <div className="flex-1">
-                  <div className="font-bold text-ink">{i.desc}</div>
-                  <div className="mt-0.5 text-[11px] text-muted">{i.date}</div>
+                  <div className="flex flex-wrap items-center gap-1.5 font-bold text-ink">
+                    {i.desc}
+                    {fromMain && (
+                      <span className="flex items-center gap-1 rounded-full bg-[#f4f6f9] px-2 py-0.5 text-[10px] font-bold text-muted">
+                        <Banknote className="h-3 w-3" />
+                        מזומן מהקופה · מההנה&quot;ח הראשית
+                      </span>
+                    )}
+                  </div>
+                  <div className="mt-0.5 text-[11px] text-muted">
+                    {i.date}
+                    {fromMain && " · נספר פעם אחת בספר הראשי, כאן לתצוגה בלבד"}
+                  </div>
                 </div>
                 <div className="min-w-[75px] text-left font-extrabold text-emerald-600">{i.amount.toLocaleString()} ₪</div>
                 {bound && (
@@ -172,6 +197,11 @@ export default async function ComputerRoomBranchAccountingPage({ params }: { par
                       מחיקה
                     </button>
                   </form>
+                )}
+                {fromMain && isOwner && (
+                  <Link href="/dashboard/accounting" className="shrink-0 text-[11px] font-bold text-teal hover:underline">
+                    לספר הראשי
+                  </Link>
                 )}
               </div>
             );

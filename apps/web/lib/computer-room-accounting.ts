@@ -4,6 +4,13 @@
  * per-branch view of money spent (beyond setup) and money in, for owner/partner visibility only.
  * It never reconciles into the main accounting totals or the home dashboard.
  *
+ * The flow is one-way: nothing here is written back to the main ledger, but cash pulled from a
+ * room's till - which is recorded once, in the main ledger, as an `n_ah_income` row of type
+ * `cash` with that room's branchId - is READ back into this screen as an income line. Otherwise
+ * the room whose whole income is cash showed 0 ₪ in and looked like it never earned anything,
+ * and the only way to fix it was to retype the same shekel as a manual tracking row - exactly
+ * the double entry the manual form refuses to offer. See `RoomIncomeLine.source`.
+ *
  * Setup cost is read from the asset layer when a real purchase exists for the branch, and only
  * falls back to the branch's `setupCost` field when it doesn't (פרק י״ב): setting up a room is
  * buying equipment, so it is a purchase with items like any other, and this screen becomes the
@@ -11,7 +18,7 @@
  * entered still shows its number.
  */
 import { getAdminFirestore } from "./firebase-admin";
-import type { Branch, FixedExpense, VariableExpense, BranchIncome } from "@ultranet/shared-types";
+import type { Branch, FixedExpense, VariableExpense, BranchIncome, AccountingIncome } from "@ultranet/shared-types";
 import { monthsBetween } from "./branch-accounting";
 import { SHARED_COMPUTERS_BRANCH_ID, sharedExpenseBranchIds } from "./expense-shared-scope";
 import { loadAssets } from "./assets-data";
@@ -120,6 +127,25 @@ function sharedEntriesOf(
   return entries;
 }
 
+/**
+ * שורת הכנסה אחת במסך המעקב של חדר מחשבים, משני מקורות שונים.
+ *
+ * `manual` - שורה ידנית שהוזנה כאן (`n_branch_income`): מעקב סטטוס, אף פעם לא כסף שנספר.
+ * `main-cash` - מזומן שנמשך מקופת הסניף ונרשם **פעם אחת בלבד** בהנה"ח הראשית
+ *   (`n_ah_income` מסוג `cash` עם ה-`branchId` של הקופה). היא נקראת לכאן ולא נכתבת: אותו
+ *   שקל ממשיך להיספר פעם אחת בספר הראשי, וכאן הוא רק *מוצג* כדי שהסניף שכל הכנסתו מזומן
+ *   לא ייראה כאילו לא הכניס כלום. לכן היא גם לא ניתנת למחיקה מכאן - מוחקים אותה במקום
+ *   שבו היא נרשמה.
+ */
+export interface RoomIncomeLine {
+  id: string;
+  source: "manual" | "main-cash";
+  date: string;
+  month: string;
+  desc: string;
+  amount: number;
+}
+
 export interface ComputerRoomBranchStats {
   branch: Branch;
   /** real investment from the asset layer when it exists, else the legacy `setupCost` field */
@@ -134,7 +160,12 @@ export interface ComputerRoomBranchStats {
   spentToDate: number;
   /** פירוט מלא של ההוצאות השוטפות (בלי ההקמה) - כל שורה והסכום שהיא תרמה */
   expenseLines: ExpenseLine[];
+  /** סך ההכנסות המוצגות כאן - שורות המעקב הידניות ועוד המזומן שנמשך מהקופה */
   incomeToDate: number;
+  /** מתוך `incomeToDate`: שורות המעקב הידניות (`n_branch_income`) */
+  manualIncomeToDate: number;
+  /** מתוך `incomeToDate`: מזומן מהקופה שנרשם בהנה"ח הראשית (`n_ah_income` מסוג `cash`) */
+  cashIncomeToDate: number;
   profitHeld: number;
 }
 
@@ -146,16 +177,20 @@ export interface ComputerRoomAccountingData {
   /** כל הוצאה משותפת עם המחלק שלה - מי נושא בה וכמה */
   sharedEntries: SharedExpenseEntry[];
   sharedExpenseTotal: number;
-  incomesByBranch: Map<string, BranchIncome[]>;
+  /** שורות ההכנסה פר-סניף, ידניות ומזומן-מהקופה יחד, ממוינות מהחדשה לישנה */
+  incomeLinesByBranch: Map<string, RoomIncomeLine[]>;
 }
 
 export async function loadComputerRoomAccounting(): Promise<ComputerRoomAccountingData> {
   const db = getAdminFirestore();
-  const [branchesSnap, fixedSnap, variableSnap, incomeSnap, assets] = await Promise.all([
+  const [branchesSnap, fixedSnap, variableSnap, incomeSnap, cashSnap, assets] = await Promise.all([
     db.collection("n_branches").where("branchType", "==", "computers").get(),
     db.collection("n_fixed_expenses").get(),
     db.collection("n_var_expenses").get(),
     db.collection("n_branch_income").get(),
+    // ההכנסות מהספר הראשי שנמשכו מקופה של חדר מחשבים. שאילתת שוויון אחת - אין צורך
+    // באינדקס מורכב.
+    db.collection("n_ah_income").where("type", "==", "cash").get(),
     loadAssets(),
   ]);
 
@@ -172,6 +207,9 @@ export async function loadComputerRoomAccounting(): Promise<ComputerRoomAccounti
     (d) => ({ ...(d.data() as Omit<VariableExpense, "id">), id: d.id }) as VariableExpense,
   );
   const allIncome = incomeSnap.docs.map((d) => ({ ...(d.data() as Omit<BranchIncome, "id">), id: d.id }) as BranchIncome);
+  const allCashIncome = cashSnap.docs.map(
+    (d) => ({ ...(d.data() as Omit<AccountingIncome, "id">), id: d.id }) as AccountingIncome,
+  );
 
   const branchIds = new Set(branches.map((b) => b.id));
   const month = currentMonth();
@@ -189,12 +227,41 @@ export async function loadComputerRoomAccounting(): Promise<ComputerRoomAccounti
     month,
   );
 
-  const incomesByBranch = new Map<string, BranchIncome[]>();
+  // שורות המעקב הידניות והמזומן מהקופה נכנסים לאותה רשימה, עם `source` שמבדיל ביניהן:
+  // מבחינת הסניף זו אותה שאלה אחת - כמה נכנס כאן עד היום - וההפרדה נחוצה רק כדי לדעת מי
+  // כבר נספר בספר הראשי ומי לא, ומאיפה מוחקים כל שורה.
+  const incomeLinesByBranch = new Map<string, RoomIncomeLine[]>();
+  const pushLine = (branchId: string, line: RoomIncomeLine) => {
+    const arr = incomeLinesByBranch.get(branchId) ?? [];
+    arr.push(line);
+    incomeLinesByBranch.set(branchId, arr);
+  };
   for (const inc of allIncome) {
     if (!branchIds.has(inc.branchId)) continue;
-    const arr = incomesByBranch.get(inc.branchId) ?? [];
-    arr.push(inc);
-    incomesByBranch.set(inc.branchId, arr);
+    const date = inc.date || "";
+    pushLine(inc.branchId, {
+      id: inc.id,
+      source: "manual",
+      date,
+      month: inc.month || date.slice(0, 7),
+      desc: inc.desc || "הכנסת חודש",
+      amount: inc.amount || 0,
+    });
+  }
+  for (const inc of allCashIncome) {
+    if (!inc.branchId || !branchIds.has(inc.branchId)) continue;
+    const date = inc.date || "";
+    pushLine(inc.branchId, {
+      id: inc.id,
+      source: "main-cash",
+      date,
+      month: inc.month || date.slice(0, 7),
+      desc: inc.desc || "מזומן מקופה",
+      amount: inc.amount || 0,
+    });
+  }
+  for (const [, lines] of incomeLinesByBranch) {
+    lines.sort((a, b) => b.date.localeCompare(a.date));
   }
 
   const statsByBranch = new Map<string, ComputerRoomBranchStats>();
@@ -224,7 +291,14 @@ export async function loadComputerRoomAccounting(): Promise<ComputerRoomAccounti
     const setupFromAssets = assetInvestment > 0;
     const setupCost = setupFromAssets ? assetInvestment : b.setupCost ?? 0;
     const spentToDate = setupCost + ownExpensesToDate + sharedExpenseShare;
-    const incomeToDate = (incomesByBranch.get(b.id) ?? []).reduce((sum, i) => sum + (i.amount || 0), 0);
+    const incomeLines = incomeLinesByBranch.get(b.id) ?? [];
+    const manualIncomeToDate = incomeLines
+      .filter((i) => i.source === "manual")
+      .reduce((sum, i) => sum + i.amount, 0);
+    const cashIncomeToDate = incomeLines
+      .filter((i) => i.source === "main-cash")
+      .reduce((sum, i) => sum + i.amount, 0);
+    const incomeToDate = manualIncomeToDate + cashIncomeToDate;
     // Operating profit is what pays the investment back - the equipment cost itself is NOT
     // subtracted from it (כלל 7), only compared against it.
     const operatingProfit = incomeToDate - ownExpensesToDate - sharedExpenseShare;
@@ -239,6 +313,8 @@ export async function loadComputerRoomAccounting(): Promise<ComputerRoomAccounti
       spentToDate,
       expenseLines,
       incomeToDate,
+      manualIncomeToDate,
+      cashIncomeToDate,
       profitHeld: incomeToDate - spentToDate,
     });
   }
@@ -250,7 +326,7 @@ export async function loadComputerRoomAccounting(): Promise<ComputerRoomAccounti
     sharedVariable,
     sharedEntries,
     sharedExpenseTotal,
-    incomesByBranch,
+    incomeLinesByBranch,
   };
 }
 
