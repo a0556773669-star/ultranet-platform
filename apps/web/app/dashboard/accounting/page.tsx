@@ -135,8 +135,9 @@ export default async function AccountingHomePage() {
 
       <AddIncomeForm computerBranches={computerBranches} rentalsBranches={rentalsBranches} defaultDate={today} />
 
-      {/* הכנסות בימין, הוצאות בשמאל - אותו פריסה שהייתה כאן תמיד. במסך צר הן נערמות
-          אחת מתחת לשנייה, כי שתי טבלאות בנות חמש עמודות לא נכנסות לרוחב של טלפון. */}
+      {/* הכנסות בימין, הוצאות בשמאל - אותה פריסה שהייתה כאן תמיד, ובשתי עמודות שוות:
+          רוחב זהה ורוחבי עמודות זהים הם מה שגורם לשתי הטבלאות להיראות כמו טבלה אחת
+          שנחתכה לשניים. במסך צר הן נערמות אחת מתחת לשנייה. */}
       <div className="grid grid-cols-1 items-start gap-3.5 xl:grid-cols-2">
         <LedgerTable
           kind="income"
