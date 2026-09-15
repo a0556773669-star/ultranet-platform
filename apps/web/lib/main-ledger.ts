@@ -35,7 +35,7 @@ import type {
 } from "@ultranet/shared-types";
 import { countsToMain, setupCostCountsToMain } from "./counts-to-main";
 import { monthsBetween } from "./branch-accounting";
-import { RECURRING_VAR_EXPENSES_COLLECTION, isSpread, monthlyAllocation } from "./recurring-expenses";
+import { RECURRING_VAR_EXPENSES_COLLECTION, monthlyAllocationDetailed } from "./recurring-expenses";
 import { MULTI_BRANCH_EXPENSES_COLLECTION } from "./multi-branch-expense";
 
 export function currentMonth(): string {
@@ -196,8 +196,9 @@ export async function loadMainLedger(upto = currentMonth()): Promise<MainLedger>
     // לא `amounts` גולמי אלא הפריסה: תשלום רב-חודשי פרוס נכנס לספר כחלק יחסי בכל אחד
     // מחודשי המחזור שלו, ולא כמכה אחת בחודש שבו יצא הכסף. בהוצאה חודשית (או בפריסה
     // שכובתה) זו בדיוק אותה שורה שהייתה כאן קודם — הסכום המלא בחודש שלו.
-    const spread = isSpread(e);
-    for (const [month, amount] of monthlyAllocation(e, upto)) {
+    // הסימון "(חלק יחסי)" נקבע פר-חודש ולא פר-הוצאה: הוצאה שהתחילה דו-חודשית ועברה
+    // לחודשית מחזיקה את שני הסוגים באותה שורה.
+    for (const [month, { amount, spread }] of monthlyAllocationDetailed(e, upto)) {
       expenses.push({
         id: `${e.id}|${month}`,
         source: "recurring",

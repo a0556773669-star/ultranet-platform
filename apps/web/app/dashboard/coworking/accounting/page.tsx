@@ -11,30 +11,53 @@ import { CountsToMainBadge } from "@/components/counts-to-main-field";
 import { CoworkingTabs } from "../coworking-tabs";
 import { CoworkingExpenseForm } from "./expense-forms";
 import { loadRecurringPurchaseTypes } from "@/lib/recurring-purchases";
-import { deleteCoworkingFixedExpenseAction, deleteCoworkingVariableExpenseAction } from "../actions";
+import {
+  deleteCoworkingFixedExpenseAction,
+  deleteCoworkingVariableExpenseAction,
+  endCoworkingFixedExpenseAction,
+  resumeCoworkingFixedExpenseAction,
+} from "../actions";
 
 function money(n: number) {
   return `${Math.round(n).toLocaleString("he-IL")} ₪`;
 }
 
+/**
+ * שורת הוצאה במשרד השיתופי.
+ *
+ * `endAction` קיים בהוצאות הקבועות בלבד, וזו לא קוסמטיקה: הוצאה קבועה נצברת מחדש בכל
+ * חודש שעובר, ועד שהייתה כאן רק "מחיקה" הדרך היחידה לעצור שכירות שהסתיימה הייתה למחוק
+ * אותה - כלומר למחוק גם את כל החודשים שהיא באמת עלתה בהם. "סיום" עוצר את הצבירה ומשאיר
+ * את ההיסטוריה.
+ */
 function ExpenseList({
   rows,
   emptyText,
   deleteAction,
+  endAction,
+  resumeAction,
+  today,
 }: {
-  rows: { id: string; title: string; subtitle: string; amount: number; on: boolean }[];
+  rows: { id: string; title: string; subtitle: string; amount: number; on: boolean; endDate?: string }[];
   emptyText: string;
   deleteAction: (id: string) => Promise<void>;
+  endAction?: (id: string, formData: FormData) => Promise<void>;
+  resumeAction?: (id: string) => Promise<void>;
+  today?: string;
 }) {
   return (
     <div className="flex flex-col gap-2">
       {rows.length === 0 && <p className="text-sm text-muted">{emptyText}</p>}
       {rows.map((r) => {
         const bound = deleteAction.bind(null, r.id);
+        const end = endAction?.bind(null, r.id);
+        const resume = resumeAction?.bind(null, r.id);
         return (
           <div
             key={r.id}
-            className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-card-border bg-[#f9fafb] p-3"
+            className={`flex flex-wrap items-center justify-between gap-2 rounded-lg border border-card-border p-3 ${
+              r.endDate ? "bg-[#f4f6f9] opacity-75" : "bg-[#f9fafb]"
+            }`}
           >
             <div>
               <p className="flex items-center gap-1.5 text-sm font-bold text-ink">
@@ -43,14 +66,44 @@ function ExpenseList({
               </p>
               <p className="text-xs text-muted">{r.subtitle}</p>
             </div>
-            <form action={bound}>
-              <button
-                type="submit"
-                className="rounded-lg border border-red-200 px-2 py-1 text-[11px] font-medium text-red-600 transition hover:bg-red-50"
-              >
-                מחיקה
-              </button>
-            </form>
+            <div className="flex flex-wrap items-center gap-1.5">
+              {end && !r.endDate && (
+                <form action={end} className="flex items-center gap-1">
+                  <input
+                    name="endDate"
+                    type="date"
+                    defaultValue={today}
+                    className="rounded-lg border border-card-border bg-white px-2 py-1 text-[11px]"
+                  />
+                  <button
+                    type="submit"
+                    title="ההיסטוריה נשמרת — רק מפסיקים לצבור מהתאריך הזה"
+                    className="rounded-lg border border-card-border bg-white px-2 py-1 text-[11px] font-bold text-ink transition hover:bg-[#f4f6f9]"
+                  >
+                    סיום
+                  </button>
+                </form>
+              )}
+              {resume && r.endDate && (
+                <form action={resume}>
+                  <button
+                    type="submit"
+                    className="rounded-lg border border-card-border bg-white px-2 py-1 text-[11px] font-bold text-ink transition hover:bg-[#f4f6f9]"
+                  >
+                    חידוש
+                  </button>
+                </form>
+              )}
+              <form action={bound}>
+                <button
+                  type="submit"
+                  title="מחיקה מוציאה את ההוצאה מכל החודשים למפרע — לסיום השתמש ב'סיום'"
+                  className="rounded-lg border border-red-200 px-2 py-1 text-[11px] font-medium text-red-600 transition hover:bg-red-50"
+                >
+                  מחיקה
+                </button>
+              </form>
+            </div>
           </div>
         );
       })}
@@ -116,12 +169,14 @@ export default async function CoworkingAccountingPage() {
     loadRecurringPurchaseTypes({ module: "coworking" }),
   ]);
 
+  const today = new Date().toISOString().slice(0, 10);
   const fixedRows = fixed.map((e) => ({
     id: e.id,
     title: `${e.name} (${money(e.amount || 0)}/חודש)`,
-    subtitle: `${e.category || "ללא קטגוריה"} · מ-${e.startDate}${e.endDate ? ` עד ${e.endDate}` : ""}`,
+    subtitle: `${e.category || "ללא קטגוריה"} · מ-${e.startDate}${e.endDate ? ` · הופסק ${e.endDate}` : ""}`,
     amount: e.amount || 0,
     on: countsToMain(e),
+    endDate: e.endDate,
   }));
   const variableRows = variable.map((e) => ({
     id: e.id,
@@ -216,7 +271,14 @@ export default async function CoworkingAccountingPage() {
               הוצאות קבועות
             </h2>
             <CoworkingExpenseForm branchId={branch.id} kind="fixed" />
-            <ExpenseList rows={fixedRows} emptyText="אין הוצאות קבועות" deleteAction={deleteCoworkingFixedExpenseAction} />
+            <ExpenseList
+              rows={fixedRows}
+              emptyText="אין הוצאות קבועות"
+              deleteAction={deleteCoworkingFixedExpenseAction}
+              endAction={endCoworkingFixedExpenseAction}
+              resumeAction={resumeCoworkingFixedExpenseAction}
+              today={today}
+            />
           </section>
 
           <section className="rounded-card border border-card-border bg-white p-4 shadow-card">
