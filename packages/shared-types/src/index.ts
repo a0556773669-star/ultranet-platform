@@ -42,6 +42,13 @@ export interface BranchRentalPricing {
   };
 }
 
+/** שורה אחת בפירוט עלות ההקמה של חדר מחשבים (מוטמעת בתוך מסמך `n_branches`). */
+export interface SetupCostItem {
+  /** תיאור ההוצאה, למשל "12 מחשבים" או "ריהוט" */
+  label: string;
+  amount: number;
+}
+
 export interface Branch {
     id: string;
     name: string;
@@ -64,7 +71,13 @@ export interface Branch {
     myPct: number;
     partnerPct: number;
   parentPct?: number;
-    setupCost?: number;
+  /** סך עלות ההקמה של החדר. כשיש `setupItems` זהו בדיוק סכום השורות שלהן - השדה נשמר כמספר
+   *  מוכן כדי שכל מי שקורא אותו היום (תחזית ההון ב-tx-data, מסך ההשקעה מול הרווח) ימשיך
+   *  לעבוד בלי לדעת על הפירוט. חדר ישן שיש לו רק מספר בלי פירוט נשאר תקף. */
+  setupCost?: number;
+  /** פירוט עלות ההקמה: שורה לכל הוצאה (מה נקנה וכמה). ריק/חסר = לא הוזן פירוט ו-`setupCost`
+   *  הוא מספר שהוזן ידנית. */
+  setupItems?: SetupCostItem[];
     notes?: string;
     /** sub-branch model: set when this branch rolls up under a head partner's branch */
   parentBranchId?: string | null;
