@@ -1,8 +1,9 @@
 import Link from "next/link";
-import { Building2, Armchair, Banknote, BarChart3 } from "lucide-react";
+import { Building2, Store, Armchair, Banknote, BarChart3 } from "lucide-react";
 
 const TABS = [
   { href: "/dashboard/coworking", label: "לקוחות ותשלומים", icon: Building2 },
+  { href: "/dashboard/coworking/branches", label: "סניפים", icon: Store },
   { href: "/dashboard/coworking/stations", label: "עמדות", icon: Armchair },
   { href: "/dashboard/coworking/expenses", label: "הוצאות", icon: Banknote },
   { href: "/dashboard/coworking/accounting", label: 'הנה"ח', icon: BarChart3 },

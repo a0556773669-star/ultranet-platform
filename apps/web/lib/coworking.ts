@@ -131,7 +131,12 @@ export async function loadCoworkingData(params?: { branchId?: string }): Promise
 export interface CoworkingLedger {
   /** מה ששילמתי עד היום — כל ההוצאות של המשרד השיתופי, בכל הסוגים */
   paidToDate: number;
+  /** סך ההקמה: שורות ההוצאה בקטגוריית "הקמה" + שדה `setupCost` של הסניפים עצמם */
   setupToDate: number;
+  /** רק החלק שהגיע משורות ההוצאה */
+  setupFromExpenses: number;
+  /** רק החלק שהגיע מפירוט עלות ההקמה שבטופס הסניף */
+  setupFromBranches: number;
   fixedToDate: number;
   variableToDate: number;
   /** מה שקיבלתי עד היום — כל תשלומי הלקוחות */
@@ -146,6 +151,8 @@ export function buildCoworkingLedger(params: {
   fixed: FixedExpense[];
   variable: VariableExpense[];
   clients: CoworkingClient[];
+  /** הסניפים עצמם - עלות ההקמה שלהם היא שדה על הסניף, לא שורת הוצאה */
+  branches?: Branch[];
   upto?: string;
 }): CoworkingLedger {
   const upto = params.upto ?? currentMonth();
@@ -161,13 +168,21 @@ export function buildCoworkingLedger(params: {
     fixedToDate += monthly * monthsBetween(start, end).length;
   }
 
-  let setupToDate = 0;
+  let setupFromExpenses = 0;
   let variableToDate = 0;
   for (const e of params.variable) {
     if (e.month > upto) continue;
-    if (e.category === SETUP_CATEGORY) setupToDate += e.amount || 0;
+    if (e.category === SETUP_CATEGORY) setupFromExpenses += e.amount || 0;
     else variableToDate += e.amount || 0;
   }
+
+  // שני מקורות להקמה, בכוונה: שורות הוצאה (הדרך הוותיקה במודול הזה) ופירוט עלות ההקמה
+  // שבטופס הסניף. הם נספרים זה לצד זה ולא במקום זה, ולכן הטופס מזהיר לא לרשום את אותה
+  // הוצאה בשניהם. השדות נשארים נפרדים ב-`CoworkingLedger` כדי שהמסך יוכל להראות מאיפה מה.
+  const setupFromBranches = (params.branches ?? [])
+    .filter((b) => !b.deleted)
+    .reduce((total, b) => total + (b.setupCost ?? 0), 0);
+  const setupToDate = setupFromExpenses + setupFromBranches;
 
   const receivedToDate = params.clients
     .flatMap((c) => c.payments ?? [])
@@ -175,5 +190,14 @@ export function buildCoworkingLedger(params: {
     .reduce((s, p) => s + (p.amount || 0), 0);
 
   const paidToDate = setupToDate + fixedToDate + variableToDate;
-  return { paidToDate, setupToDate, fixedToDate, variableToDate, receivedToDate, balance: receivedToDate - paidToDate };
+  return {
+    paidToDate,
+    setupToDate,
+    setupFromExpenses,
+    setupFromBranches,
+    fixedToDate,
+    variableToDate,
+    receivedToDate,
+    balance: receivedToDate - paidToDate,
+  };
 }

@@ -1,4 +1,5 @@
 import { Banknote, Hammer, Calendar, Receipt } from "lucide-react";
+import Link from "next/link";
 import { requireModuleAccess } from "@/lib/perms";
 import { getAdminFirestore } from "@/lib/firebase-admin";
 import type { Branch, FixedExpense, VariableExpense } from "@ultranet/shared-types";
@@ -93,7 +94,15 @@ export default async function CoworkingExpensesPage({
       <div>
         <CoworkingTabs active="/dashboard/coworking/expenses" />
         <div className="rounded-card border border-dashed border-card-border bg-white py-14 text-center text-muted">
-          אין סניף משרד שיתופי. יש להקים סניף מסוג &quot;משרד שיתופי&quot; לפני רישום הוצאות.
+          <p>אין סניף משרד שיתופי. יש להקים סניף לפני רישום הוצאות.</p>
+          {isOwner && (
+            <Link
+              href="/dashboard/coworking/branches/new"
+              className="mt-3 inline-block rounded-lg bg-gradient-to-br from-teal to-teal-light px-4 py-2 text-sm font-bold text-white shadow-primary transition hover:opacity-90"
+            >
+              + סניף משרד שיתופי
+            </Link>
+          )}
         </div>
       </div>
     );

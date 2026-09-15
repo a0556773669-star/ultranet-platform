@@ -3,11 +3,14 @@
 import { useState } from "react";
 import { ListPlus, Plus, Trash2, X } from "lucide-react";
 import type { SetupCostItem } from "@ultranet/shared-types";
+import { COUNTS_TO_MAIN_HINT, COUNTS_TO_MAIN_LABEL } from "@/lib/counts-to-main";
 
 /**
- * עלות ההקמה של חדר מחשבים היא כמעט אף פעם לא מספר אחד: מחשבים, ריהוט, חשמל, שילוט.
+ * עלות ההקמה של סניף היא כמעט אף פעם לא מספר אחד: מחשבים, ריהוט, חשמל, שילוט.
  * השדה שנשמר ב-Firestore נשאר `setupCost` (מספר) כדי שכל מי שקורא אותו היום ימשיך לעבוד,
  * והפירוט נשמר לצידו ב-`setupItems`. הסכום לעולם לא מוקלד - הוא תמיד סכום השורות.
+ *
+ * משותף לחדרי מחשבים ולמשרד השיתופי: אותה שאלה בדיוק בשני המודולים, ולכן אותו רכיב.
  */
 
 const FIELD = "w-full rounded-lg border border-card-border bg-[#f4f6f9] px-3 py-2 text-sm focus:border-teal focus:bg-white focus:outline-none";
@@ -69,9 +72,12 @@ function EditableRow({
 export function SetupCostField({
   initialItems,
   initialTotal,
+  initialCountsToMain,
 }: {
   initialItems?: SetupCostItem[];
   initialTotal?: number;
+  /** `undefined` נחשב מסומן - ראה `setupCostCountsToMain` ב-`lib/counts-to-main.ts` */
+  initialCountsToMain?: boolean;
 }) {
   // חדר ותיק שיש בו רק מספר בלי פירוט: המספר הופך לשורה ראשונה, כדי שלא ייעלם ברגע
   // שמתחילים לפרט.
@@ -83,6 +89,7 @@ export function SetupCostField({
         : [];
 
   const [items, setItems] = useState<SetupCostItem[]>(seed);
+  const [countsToMain, setCountsToMain] = useState(initialCountsToMain !== false);
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState<Row[]>([]);
 
@@ -110,12 +117,17 @@ export function SetupCostField({
       {/* מה שנשלח בפועל עם הטופס */}
       <input type="hidden" name="setupCost" value={total} />
       <input type="hidden" name="setupItems" value={JSON.stringify(items)} />
+      {/* נשלח תמיד (גם "false"), אחרת ביטול הסימון לא היה מגיע לשרת - checkbox שלא סומן
+          פשוט לא נשלח, ו-stripUndefined היה משאיר את הערך הישן */}
+      <input type="hidden" name="setupCountsToMain" value={countsToMain ? "true" : "false"} />
 
       <div className="flex items-center justify-between gap-3 rounded-lg border border-card-border bg-[#f4f6f9] px-3 py-2">
         <div>
           <p className="text-lg font-black text-ink">{money(total)}</p>
           <p className="text-[11.5px] text-muted">
             {items.length > 0 ? `${items.length} שורות בפירוט` : "טרם הוזן פירוט"}
+            {" · "}
+            {countsToMain ? 'נכנס להנה"ח הראשית' : 'בספר הסניף בלבד'}
           </p>
         </div>
         <button
@@ -176,6 +188,18 @@ export function SetupCostField({
             </div>
 
             <div className="border-t border-card-border px-5 py-4">
+              <label className="mb-3 flex cursor-pointer items-start gap-2 rounded-lg border border-card-border bg-[#f8fafc] px-3 py-2">
+                <input
+                  type="checkbox"
+                  checked={countsToMain}
+                  onChange={(e) => setCountsToMain(e.target.checked)}
+                  className="mt-0.5 h-4 w-4 shrink-0 accent-teal"
+                />
+                <span>
+                  <span className="block text-xs font-bold text-ink">{COUNTS_TO_MAIN_LABEL}</span>
+                  <span className="mt-0.5 block text-[11px] leading-snug text-muted">{COUNTS_TO_MAIN_HINT}</span>
+                </span>
+              </label>
               <div className="mb-3 flex items-center justify-between">
                 <span className="text-xs font-semibold text-muted">סה&quot;כ עלות הקמה</span>
                 <span className="text-lg font-black text-ink">{money(sum(draft))}</span>

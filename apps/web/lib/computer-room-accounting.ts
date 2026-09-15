@@ -25,18 +25,43 @@ export function currentMonth(): string {
   return new Date().toISOString().slice(0, 7);
 }
 
-function expenseTotalToDate(fixed: FixedExpense[], variable: VariableExpense[], uptoMonth: string): number {
-  let total = 0;
+/** שורה אחת בפירוט "מאיפה הסכום הזה". קיימת כדי שאפשר יהיה לפענח את המספר הגדול בלי לנחש. */
+export interface ExpenseLine {
+  kind: "fixed" | "variable" | "shared";
+  label: string;
+  /** ההסבר לסכום - בעיקר "X לחודש × N חודשים", שהוא הדבר שהכי מפתיע בהוצאה קבועה */
+  detail: string;
+  amount: number;
+}
+
+function fixedExpenseLines(fixed: FixedExpense[], uptoMonth: string): ExpenseLine[] {
+  const lines: ExpenseLine[] = [];
   for (const e of fixed) {
     if (!e.startDate) continue;
     const endMonth = e.endDate && e.endDate.slice(0, 7) < uptoMonth ? e.endDate.slice(0, 7) : uptoMonth;
-    const amount = e.variableAmount && e.lastAmount != null ? e.lastAmount : e.amount || 0;
-    total += amount * monthsBetween(e.startDate, endMonth).length;
+    const monthly = e.variableAmount && e.lastAmount != null ? e.lastAmount : e.amount || 0;
+    const months = monthsBetween(e.startDate, endMonth).length;
+    lines.push({
+      kind: "fixed",
+      label: e.name,
+      detail: `${Math.round(monthly).toLocaleString("he-IL")} ₪ לחודש × ${months} חודשים (מ-${e.startDate.slice(0, 7)}${e.endDate ? ` עד ${e.endDate.slice(0, 7)}` : ""})`,
+      amount: monthly * months,
+    });
   }
-  for (const e of variable) {
-    total += e.amount || 0;
-  }
-  return total;
+  return lines;
+}
+
+function variableExpenseLines(variable: VariableExpense[]): ExpenseLine[] {
+  return variable.map((e) => ({
+    kind: "variable" as const,
+    label: e.desc || "הוצאה חד פעמית",
+    detail: `${e.category || "ללא קטגוריה"} · ${e.date ?? ""}`,
+    amount: e.amount || 0,
+  }));
+}
+
+function sumLines(lines: ExpenseLine[]): number {
+  return lines.reduce((total, l) => total + l.amount, 0);
 }
 
 export interface ComputerRoomBranchStats {
@@ -51,6 +76,8 @@ export interface ComputerRoomBranchStats {
   sharedExpenseShare: number;
   /** total spent to date, including setup cost and this branch's share of shared expenses */
   spentToDate: number;
+  /** פירוט מלא של ההוצאות השוטפות (בלי ההקמה) - כל שורה והסכום שהיא תרמה */
+  expenseLines: ExpenseLine[];
   incomeToDate: number;
   profitHeld: number;
 }
@@ -74,8 +101,12 @@ export async function loadComputerRoomAccounting(): Promise<ComputerRoomAccounti
     loadAssets(),
   ]);
 
+  // סניף מחוק (soft-delete) לא נכנס לכאן, ובעיקר לא למחלק של ההוצאות המשותפות: מסך
+  // ההוצאות כבר סינן אותו, וכשהמסכים לא הסכימו על המחלק אותה הוצאה משותפת הוצגה בשני
+  // סכומים שונים ואי אפשר היה להבין מאיפה ההפרש.
   const branches = branchesSnap.docs
     .map((d) => ({ ...(d.data() as Omit<Branch, "id">), id: d.id }) as Branch)
+    .filter((b) => !b.deleted)
     .sort((a, b) => a.name.localeCompare(b.name, "he"));
 
   const allFixed = fixedSnap.docs.map((d) => ({ ...(d.data() as Omit<FixedExpense, "id">), id: d.id }) as FixedExpense);
@@ -89,7 +120,8 @@ export async function loadComputerRoomAccounting(): Promise<ComputerRoomAccounti
 
   const sharedFixed = allFixed.filter((e) => e.branchId === SHARED_EXPENSE_BRANCH_ID);
   const sharedVariable = allVariable.filter((e) => e.branchId === SHARED_EXPENSE_BRANCH_ID);
-  const sharedExpenseTotal = expenseTotalToDate(sharedFixed, sharedVariable, month);
+  const sharedLines = [...fixedExpenseLines(sharedFixed, month), ...variableExpenseLines(sharedVariable)];
+  const sharedExpenseTotal = sumLines(sharedLines);
   const sharedExpenseShare = branches.length > 0 ? sharedExpenseTotal / branches.length : 0;
 
   const incomesByBranch = new Map<string, BranchIncome[]>();
@@ -104,7 +136,20 @@ export async function loadComputerRoomAccounting(): Promise<ComputerRoomAccounti
   for (const b of branches) {
     const fixed = allFixed.filter((e) => e.branchId === b.id);
     const variable = allVariable.filter((e) => e.branchId === b.id);
-    const ownExpensesToDate = expenseTotalToDate(fixed, variable, month);
+    const ownLines = [...fixedExpenseLines(fixed, month), ...variableExpenseLines(variable)];
+    const ownExpensesToDate = sumLines(ownLines);
+    const expenseLines: ExpenseLine[] =
+      sharedExpenseShare > 0
+        ? [
+            ...ownLines,
+            {
+              kind: "shared",
+              label: "חלק הסניף בהוצאות המשותפות",
+              detail: `${Math.round(sharedExpenseTotal).toLocaleString("he-IL")} ₪ משותפות ÷ ${branches.length} סניפים`,
+              amount: sharedExpenseShare,
+            },
+          ]
+        : ownLines;
     // Real investment wins over the estimate whenever the asset layer knows about this branch.
     const assetInvestment = assets.investmentByLocation.get(b.id)?.total ?? 0;
     const setupFromAssets = assetInvestment > 0;
@@ -123,6 +168,7 @@ export async function loadComputerRoomAccounting(): Promise<ComputerRoomAccounti
       ownExpensesToDate,
       sharedExpenseShare,
       spentToDate,
+      expenseLines,
       incomeToDate,
       profitHeld: incomeToDate - spentToDate,
     });
