@@ -179,6 +179,7 @@ export function BranchExpenses({
                 <div className="col-span-2">
                   <SharedExpenseSplitField
                     branches={branchOptions}
+                    defaultOn
                     idPrefix="rentals-new-fixed-split"
                     amountLabel="הסכום החודשי"
                   />
@@ -230,7 +231,7 @@ export function BranchExpenses({
               </div>
               {isShared && (
                 <div className="col-span-2">
-                  <SharedExpenseSplitField branches={branchOptions} idPrefix="rentals-new-variable-split" />
+                  <SharedExpenseSplitField branches={branchOptions} defaultOn idPrefix="rentals-new-variable-split" />
                 </div>
               )}
               <div className="col-span-2">
