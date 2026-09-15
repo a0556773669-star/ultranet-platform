@@ -2,7 +2,10 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { BarChart3, ArrowLeft, Layers } from "lucide-react";
 import { requireModuleAccess } from "@/lib/perms";
-import { loadComputerRoomAccounting, SHARED_EXPENSE_BRANCH_ID } from "@/lib/computer-room-accounting";
+import { branchMonthlyIncomeRows, loadComputerRoomAccounting, SHARED_EXPENSE_BRANCH_ID } from "@/lib/computer-room-accounting";
+import { monthLabel } from "@/lib/branch-income-excel";
+import { saveMonthlyBranchIncomeAction } from "./actions";
+import { IncomeEntryPanel } from "./[id]/income-entry-panel";
 
 function money(n: number) {
   return `${Math.round(n).toLocaleString("he-IL")} ₪`;
@@ -11,7 +14,11 @@ function money(n: number) {
 const TH = "px-2.5 py-2 text-[11px] font-bold uppercase tracking-wide text-muted whitespace-nowrap";
 const TD = "px-2.5 py-2 whitespace-nowrap";
 
-export default async function ComputerRoomsAccountingHomePage() {
+export default async function ComputerRoomsAccountingHomePage({
+  searchParams,
+}: {
+  searchParams?: { month?: string; monthSaved?: string; monthCleared?: string };
+}) {
   const session = await requireModuleAccess("computers");
   const isOwner = session.user?.role === "owner";
   const myBranchId = session.user?.branchId;
@@ -43,13 +50,23 @@ export default async function ComputerRoomsAccountingHomePage() {
           <BarChart3 className="h-5 w-5" />
           הנה&quot;ח חדרי מחשבים — השקעה מול רווח
         </h1>
-        <Link
-          href={`/dashboard/expenses/${SHARED_EXPENSE_BRANCH_ID}`}
-          className="flex items-center gap-1.5 rounded-lg border border-card-border bg-white px-3 py-2 text-xs font-bold text-ink transition hover:border-teal hover:text-teal"
-        >
-          <Layers className="h-4 w-4" />
-          הוצאות משותפות
-        </Link>
+        <div className="flex items-center gap-2">
+          {/* אותו טופס חודשי בדיוק שיש בעמוד הסניף: הוא ממילא מזין את כל הסניפים יחד, ולכן
+              הוא שייך גם - ואולי בעיקר - למסך שממנו owner מתחיל. */}
+          <IncomeEntryPanel
+            saveMonthly={saveMonthlyBranchIncomeAction}
+            branches={branchMonthlyIncomeRows(data)}
+            defaultMonth={new Date().toISOString().slice(0, 7)}
+            back="/dashboard/computer-rooms-accounting"
+          />
+          <Link
+            href={`/dashboard/expenses/${SHARED_EXPENSE_BRANCH_ID}`}
+            className="flex items-center gap-1.5 rounded-lg border border-card-border bg-white px-3 py-2 text-xs font-bold text-ink transition hover:border-teal hover:text-teal"
+          >
+            <Layers className="h-4 w-4" />
+            הוצאות משותפות
+          </Link>
+        </div>
       </div>
       <p className="text-xs text-muted">
         דשבורד מעקב פר-סניף: כמה עלתה הקמת כל סניף, כמה הוצאתי עליו עד היום (כולל הקמה), כמה
@@ -60,6 +77,13 @@ export default async function ComputerRoomsAccountingHomePage() {
         הסניף ונרשם בהנה&quot;ח הראשית תחת &quot;מזומן&quot; - הוא נקרא משם לתצוגה, נספר פעם
         אחת בלבד (בספר הראשי), ואין צורך להקליד אותו כאן שוב.
       </p>
+
+      {searchParams?.monthSaved !== undefined && (
+        <div className="rounded-card border border-teal-200 bg-teal-50 p-3 text-sm font-semibold text-teal-700">
+          נשמרו הכנסות {searchParams.month ? monthLabel(searchParams.month) : ""} ל-{searchParams.monthSaved} סניפים
+          {Number(searchParams.monthCleared ?? 0) > 0 && `, ונוקו ${searchParams.monthCleared} סניפים`}.
+        </div>
+      )}
 
       <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
         <div className="rounded-card border border-card-border bg-white p-4 shadow-card">
