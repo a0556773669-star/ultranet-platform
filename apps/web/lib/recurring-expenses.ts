@@ -25,6 +25,24 @@ export function currentMonth(): string {
   return new Date().toISOString().slice(0, 10).slice(0, 7);
 }
 
+/** החודש שלפני `month` (YYYY-MM), כולל מעבר שנה. */
+export function previousMonth(month: string): string {
+  const [y, m] = month.split("-").map(Number);
+  if (!y || !m) return month;
+  return m === 1 ? `${y - 1}-12` : `${y}-${String(m - 1).padStart(2, "0")}`;
+}
+
+/**
+ * החודש האחרון ש**נסגר** - כלומר החודש שלפני החודש הנוכחי.
+ *
+ * זה הגבול של כל התראה: בחשמל של ספטמבר אין מה לעדכן ב-15 בספטמבר, כי החשבון עוד לא
+ * הגיע. החודש הופך ל"חסר" רק כשהוא עבר - ב-1 באוקטובר. תא החודש הנוכחי נשאר פתוח
+ * להזנה מוקדמת, הוא פשוט לא נצבע ולא נספר כפיגור.
+ */
+export function lastClosedMonth(today = currentMonth()): string {
+  return previousMonth(today);
+}
+
 export async function loadRecurringVariableExpenses(params?: {
   scope?: ExpenseScope;
   branchId?: string;
@@ -54,7 +72,12 @@ export function amountForMonth(expense: RecurringVariableExpense, month: string)
   return hit ? hit.amount : null;
 }
 
-/** החודשים שעדיין לא הוזן להם סכום. זו רשימת התזכורות, ולכן היא הפלט המרכזי של המודול. */
+/**
+ * החודשים שעדיין לא הוזן להם סכום, עד `upto` ועד בכלל.
+ *
+ * שים לב: זו שאלה על *נתונים חסרים*, לא על *פיגור*. מי ששואל "על מה להתריע" צריך להעביר
+ * `lastClosedMonth()` ולא את החודש הנוכחי - וזה בדיוק מה ש-`buildReminders` עושה.
+ */
 export function missingMonths(expense: RecurringVariableExpense, upto = currentMonth()): string[] {
   const have = new Set((expense.amounts ?? []).map((a) => a.month));
   return expectedMonths(expense, upto).filter((m) => !have.has(m));
@@ -76,14 +99,20 @@ export interface RecurringReminder {
 }
 
 /**
- * ההתראות שצריך להציג היום: כל הוצאה קבועה משתנה שחסר לה חודש אחד או יותר.
+ * ההתראות שצריך להציג היום: כל הוצאה קבועה משתנה שחסר לה חודש שכבר **נסגר**.
+ *
+ * `upto` הוא החודש הנוכחי (ברירת מחדל: היום), וההתראות נבנות עד החודש שלפניו בלבד: אין
+ * טעם לדרוש את חשמל ספטמבר באמצע ספטמבר - החשבון עוד לא הגיע, וההתראה הייתה דולקת כל
+ * החודש ומאבדת את המשמעות שלה. ספטמבר הופך ל"חסר" ב-1 באוקטובר.
+ *
  * הסכום המוצע הוא הסכום האחרון שנרשם, ובהיעדרו `defaultAmount` - כי בפועל אף אחד לא
  * מקליד את חשבון החשמל מאפס, הוא מתקן את של החודש שעבר.
  */
 export function buildReminders(expenses: RecurringVariableExpense[], upto = currentMonth()): RecurringReminder[] {
   const out: RecurringReminder[] = [];
+  const dueUpto = lastClosedMonth(upto);
   for (const expense of expenses) {
-    const missing = missingMonths(expense, upto);
+    const missing = missingMonths(expense, dueUpto);
     if (missing.length === 0) continue;
     const latest = (expense.amounts ?? [])
       .slice()
