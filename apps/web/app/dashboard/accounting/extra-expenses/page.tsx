@@ -5,6 +5,9 @@ import type { AccountingExpense, Branch } from "@ultranet/shared-types";
 import { loadRecurringVariableExpenses } from "@/lib/recurring-expenses";
 import { countsToMain } from "@/lib/counts-to-main";
 import { RecurringExpensesCard } from "@/components/recurring-expenses/recurring-expenses-card";
+import { RecurringPurchaseBadge } from "@/components/recurring-purchases/recurring-purchase-badge";
+import { RecurringPurchasesSummary } from "@/components/recurring-purchases/recurring-purchases-summary";
+import { loadRecurringPurchaseIndex } from "@/lib/recurring-purchases";
 import { CountsToMainBadge } from "@/components/counts-to-main-field";
 import { AccountingTabs } from "../accounting-tabs";
 import { DeleteEntryButton } from "../delete-entry-button";
@@ -29,10 +32,11 @@ function money(n: number) {
 export default async function ExtraExpensesPage() {
   await requireOwner();
   const db = getAdminFirestore();
-  const [recurring, expensesSnap, branchesSnap] = await Promise.all([
+  const [recurring, expensesSnap, branchesSnap, purchaseIndex] = await Promise.all([
     loadRecurringVariableExpenses({ scope: "main" }),
     db.collection("n_ah_expenses").get(),
     db.collection("n_branches").get(),
+    loadRecurringPurchaseIndex(),
   ]);
 
   const branches = branchesSnap.docs
@@ -44,6 +48,10 @@ export default async function ExtraExpensesPage() {
   const expenses = expensesSnap.docs
     .map((d) => ({ ...(d.data() as Omit<AccountingExpense, "id">), id: d.id }) as AccountingExpense)
     .sort((a, b) => (b.date ?? "").localeCompare(a.date ?? ""));
+
+  // כאן מוצגים כל הסוגים שיש להם רכישות - זה המסך של העסק עצמו, והשאלה "כמה הולך על
+  // נייר בכל העסק" נשאלת בו במלואה.
+  const purchaseSummaries = [...purchaseIndex.byType.values()];
 
   const totalToMain = expenses.filter((e) => countsToMain(e)).reduce((s, e) => s + (e.amount || 0), 0);
 
@@ -70,7 +78,7 @@ export default async function ExtraExpensesPage() {
       />
 
       <div className="grid grid-cols-1 items-start gap-3.5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
-        <ExtraExpenseForm branches={branches} />
+        <ExtraExpenseForm branches={branches} expenseTypes={purchaseIndex.types} />
 
         <section>
           <div className="mb-2 flex items-center justify-between text-xs font-bold uppercase tracking-wide text-muted">
@@ -92,9 +100,12 @@ export default async function ExtraExpensesPage() {
                   className="flex items-start gap-2.5 border-b border-card-border py-2.5 text-[13px] last:border-b-0"
                 >
                   <div className="flex-1">
-                    <div className="flex items-center gap-1.5 font-bold text-ink">
+                    <div className="flex flex-wrap items-center gap-1.5 font-bold text-ink">
                       {e.desc}
                       <CountsToMainBadge on={countsToMain(e)} />
+                      {e.expenseTypeId && (
+                        <RecurringPurchaseBadge summary={purchaseIndex.byType.get(e.expenseTypeId)} />
+                      )}
                     </div>
                     <div className="mt-0.5 text-[11px] text-muted">
                       {e.date}
@@ -111,6 +122,9 @@ export default async function ExtraExpensesPage() {
                 </div>
               );
             })}
+          </div>
+          <div className="mt-3">
+            <RecurringPurchasesSummary summaries={purchaseSummaries} />
           </div>
         </section>
       </div>

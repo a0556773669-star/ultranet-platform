@@ -28,7 +28,7 @@ function revalidate(module: MultiBranchExpense["module"], branchIds: string[]) {
   revalidatePath("/dashboard/rentals/accounting");
   revalidatePath("/dashboard/computer-rooms-accounting");
   revalidatePath("/dashboard/accounting");
-  revalidatePath("/dashboard/accounting/recurring-purchases");
+  revalidatePath("/dashboard/accounting/extra-expenses");
   revalidatePath("/dashboard");
 }
 

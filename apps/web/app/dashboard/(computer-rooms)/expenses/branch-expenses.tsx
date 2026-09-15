@@ -1,6 +1,8 @@
 import { Scale, Calendar, Receipt } from "lucide-react";
 import type { FixedExpense, RecurringPurchaseType, VariableExpense } from "@ultranet/shared-types";
 import { ExpenseTypeField } from "@/components/recurring-purchases/expense-type-field";
+import { RecurringPurchaseBadge } from "@/components/recurring-purchases/recurring-purchase-badge";
+import type { RecurringPurchaseTypeSummary } from "@/lib/recurring-purchases";
 import { createFixedExpenseAction, createVariableExpenseAction } from "./actions";
 import { EditFixedExpenseModal, EditVariableExpenseModal } from "./edit-expense-modals";
 import { EndFixedExpenseControl, DeleteFixedExpenseButton, DeleteVariableExpenseButton } from "./expense-action-buttons";
@@ -70,9 +72,11 @@ type Props = {
   fixedExpenses: FixedExpense[];
   variableExpenses: VariableExpense[];
   expenseTypes?: RecurringPurchaseType[];
+  /** הסיכום של כל סוג רכישה חוזרת, לפי מזהה - זה מה שמציג את החיבור ליד השורה */
+  purchaseByType?: Map<string, RecurringPurchaseTypeSummary>;
 };
 
-export function BranchExpenses({ branchId, isShared, branches = [], isPartner, ownerName, partnerName, canManage, canAdd, fixedExpenses, variableExpenses, expenseTypes = [] }: Props) {
+export function BranchExpenses({ branchId, isShared, branches = [], isPartner, ownerName, partnerName, canManage, canAdd, fixedExpenses, variableExpenses, expenseTypes = [], purchaseByType }: Props) {
   const activeFixed = fixedExpenses.filter((e) => !e.endDate);
   const endedFixed = fixedExpenses.filter((e) => e.endDate);
   const branchNameById = new Map(branches.map((b) => [b.id, b.name]));
@@ -250,9 +254,10 @@ export function BranchExpenses({ branchId, isShared, branches = [], isPartner, o
           {variableExpenses.map((e) => (
             <div key={e.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-card-border bg-[#f9fafb] p-3">
               <div>
-                <p className="flex items-center gap-1.5 text-sm font-bold text-ink">
+                <p className="flex flex-wrap items-center gap-1.5 text-sm font-bold text-ink">
                   {e.desc} — ₪{(e.amount || 0).toLocaleString()}
                   <CountsToMainBadge on={countsToMain(e)} />
+                  {e.expenseTypeId && <RecurringPurchaseBadge summary={purchaseByType?.get(e.expenseTypeId)} />}
                 </p>
                 <p className="text-xs text-muted">{e.category || "ללא קטגוריה"} · {e.date}{isPartner ? ` · ${paymentNote(e.paidBy, e.owedBy, ownerName, partnerName)}` : ""}{scopeNote(e)}</p>
               </div>
