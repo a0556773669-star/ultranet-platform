@@ -17,6 +17,7 @@ import {
   monthsBetween,
 } from "./branch-accounting";
 import { MULTI_BRANCH_EXPENSES_COLLECTION, splitOf } from "./multi-branch-expense";
+import { SHARED_RENTALS_BRANCH_ID, sharedExpenseDivision } from "./expense-shared-scope";
 
 export function currentMonth(): string {
   return new Date().toISOString().slice(0, 7);
@@ -39,8 +40,23 @@ interface DatedExpenseLine {
    * every downstream calculation reads `ownerShare` rather than re-deriving from `owedBy`.
    */
   ownerShare: number;
-  /** set only on a multi-branch expense line - the owner's percentage of it, for display. */
+  /** set only on a line whose split is a free percentage (a shared expense that divides between
+   *  the branches, or a legacy multi-branch one) - the owner's percentage of it, for display. */
   ownerPct?: number;
+}
+
+/**
+ * The owner's share of one expense line, in ₪.
+ *
+ * `ownerPct` wins when it is there: it is the free percentage of a shared expense that divides
+ * between the branches (see lib/expense-shared-scope.ts), and `owedBy`'s three buckets cannot
+ * express it. Every other line is the plain owner / partner / 50-50 rule it always was.
+ */
+function lineOwnerShare(amount: number, e: { ownerPct?: number; owedBy?: string }): number {
+  if (typeof e.ownerPct === "number" && Number.isFinite(e.ownerPct)) {
+    return (amount * Math.min(100, Math.max(0, e.ownerPct))) / 100;
+  }
+  return ownerExpenseBurden(amount, e.owedBy);
 }
 
 /** Expands recurring fixed expenses into one line per active month, plus all variable expense
@@ -64,7 +80,8 @@ function expandExpenseLines(
         month,
         desc: e.name || "הוצאה קבועה",
         recurring: true,
-        ownerShare: ownerExpenseBurden(amount, e.owedBy),
+        ownerShare: lineOwnerShare(amount, e),
+        ownerPct: e.ownerPct,
       });
     }
   }
@@ -77,7 +94,8 @@ function expandExpenseLines(
       month: e.month,
       desc: e.desc || "הוצאה חד פעמית",
       recurring: false,
-      ownerShare: ownerExpenseBurden(amount, e.owedBy),
+      ownerShare: lineOwnerShare(amount, e),
+      ownerPct: e.ownerPct,
     });
   }
   // One line per multi-branch expense: this branch's slice of it, with the owner's percentage
@@ -320,6 +338,36 @@ export async function loadBranchAccountingRawData(): Promise<BranchAccountingRaw
     const arr = branchIncomeByBranch.get(i.branchId) ?? [];
     arr.push(i);
     branchIncomeByBranch.set(i.branchId, arr);
+  }
+
+  // הספר המשותף שמתחלק: הוצאה ב-`shared-rentals` שנושאת `ownerPct` נכנסת לספר של כל סניף
+  // שהיא חלה עליו, כפרוסה שלו ממנה - בדיוק כמו הוצאה רב-סניפית, רק שהיא חיה באותו קולקשן
+  // ככל הוצאה אחרת (ולכן גם קבועה יכולה להתחלק, מה שלא היה אפשרי עד היום).
+  const liveRentalsBranchIds = branches.filter((b) => b.branchType === "rentals" && !b.deleted).map((b) => b.id);
+  for (const e of fixedByBranch.get(SHARED_RENTALS_BRANCH_ID) ?? []) {
+    const division = sharedExpenseDivision(e, liveRentalsBranchIds);
+    if (!division) continue;
+    for (const branchId of division.branchIds) {
+      const arr = fixedByBranch.get(branchId) ?? [];
+      // הסכום מוחלף בפרוסה של הסניף, ו-`ownerPct` נשאר - כך `lineOwnerShare` מגיע בדיוק
+      // ל-`perBranchOwnerShare` בלי שאף מסך יצטרך לדעת שהשורה הגיעה מהספר המשותף.
+      arr.push({
+        ...e,
+        branchId,
+        amount: division.perBranchLineTotal,
+        ...(e.lastAmount != null ? { lastAmount: e.lastAmount / division.branchCount } : {}),
+      });
+      fixedByBranch.set(branchId, arr);
+    }
+  }
+  for (const e of variableByBranch.get(SHARED_RENTALS_BRANCH_ID) ?? []) {
+    const division = sharedExpenseDivision(e, liveRentalsBranchIds);
+    if (!division) continue;
+    for (const branchId of division.branchIds) {
+      const arr = variableByBranch.get(branchId) ?? [];
+      arr.push({ ...e, branchId, amount: division.perBranchLineTotal });
+      variableByBranch.set(branchId, arr);
+    }
   }
 
   const multiBranchExpenses = multiBranchSnap.docs.map(

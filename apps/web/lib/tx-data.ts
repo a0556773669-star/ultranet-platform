@@ -37,6 +37,7 @@ import type {
   Purchase,
   Rental,
   Transaction,
+  TxAllocation,
   TxBusiness,
   VariableExpense,
 } from "@ultranet/shared-types";
@@ -44,7 +45,7 @@ import { isCollectedByOwner, ownerExpenseBurden } from "./branch-accounting";
 import { HQ_NODE_ID, SHARED_NODE_ID, TX_COLLECTION, normalizeAllocations } from "./tx";
 import { splitOf } from "./multi-branch-expense";
 import { PURCHASES_COLLECTION } from "./assets";
-import { SHARED_COMPUTERS_BRANCH_ID, SHARED_RENTALS_BRANCH_ID } from "./expense-shared-scope";
+import { SHARED_COMPUTERS_BRANCH_ID, SHARED_RENTALS_BRANCH_ID, sharedExpenseDivision } from "./expense-shared-scope";
 
 /** Which collection a row in the model came from - shown in the UI so every number is traceable. */
 export type TxSource =
@@ -129,6 +130,28 @@ function nodeFor(branchId: string, branchById: Map<string, Branch>): { business:
   return { business: businessOf(branch), branchId };
 }
 
+/**
+ * A shared-ledger expense that divides between the branches (`ownerPct`), as the transaction
+ * model sees it: the owner's part in ₪, and the per-branch split. It is the same fact the
+ * legacy `n_multi_branch_expenses` row carries - which is exactly why that collection stopped
+ * being necessary (see the header of ./tx.ts).
+ */
+function sharedSplitOf(
+  e: { branchId: string; amount?: number; ownerPct?: number; branchIds?: string[] },
+  liveRentalsBranchIds: string[],
+): { ownerShare: number; allocations: TxAllocation[] } | null {
+  if (e.branchId !== SHARED_RENTALS_BRANCH_ID) return null;
+  const division = sharedExpenseDivision(e, liveRentalsBranchIds);
+  if (!division) return null;
+  return {
+    ownerShare: division.ownerTotal,
+    allocations: normalizeAllocations(
+      e.amount || 0,
+      division.branchIds.map((branchId) => ({ branchId, amount: division.perBranchLineTotal })),
+    ),
+  };
+}
+
 function branchHasPartner(branch: Branch | undefined): boolean {
   if (!branch) return false;
   if (branch.isMine) return false;
@@ -187,6 +210,7 @@ export async function loadTransactionModel(): Promise<TransactionModel> {
 
   const branches = branchesSnap.docs.map((d) => doc<Branch>(d));
   const branchById = new Map(branches.map((b) => [b.id, b]));
+  const liveRentalsBranchIds = branches.filter((b) => b.branchType === "rentals" && !b.deleted).map((b) => b.id);
   const purchases = purchasesSnap.docs.map((d) => doc<Purchase>(d));
   const routesById = new Map(routesSnap.docs.map((d) => [d.id, doc<CollectionRoute>(d)]));
 
@@ -306,6 +330,7 @@ export async function loadTransactionModel(): Promise<TransactionModel> {
   /* --- n_var_expenses: one-off branch expenses ----------------------------- */
   for (const e of varExpenses) {
     const amount = e.amount || 0;
+    const shared = sharedSplitOf(e, liveRentalsBranchIds);
     out.push({
       id: e.id,
       source: "var_expense",
@@ -318,7 +343,8 @@ export async function loadTransactionModel(): Promise<TransactionModel> {
       desc: e.desc || "הוצאה חד פעמית",
       category: e.category,
       paidBy: e.paidBy === "partner" ? "partner" : "owner",
-      ownerShare: ownerExpenseBurden(amount, e.owedBy),
+      ownerShare: shared ? shared.ownerShare : ownerExpenseBurden(amount, e.owedBy),
+      ...(shared ? { allocations: shared.allocations } : {}),
       createdAt: 0,
     });
   }
@@ -328,6 +354,7 @@ export async function loadTransactionModel(): Promise<TransactionModel> {
     const e = doc<FixedExpense>(d);
     if (!e.startDate) continue;
     const amount = e.variableAmount && e.lastAmount != null ? e.lastAmount : e.amount || 0;
+    const shared = sharedSplitOf({ ...e, amount }, liveRentalsBranchIds);
     out.push({
       id: e.id,
       source: "fixed_expense",
@@ -340,7 +367,8 @@ export async function loadTransactionModel(): Promise<TransactionModel> {
       desc: e.name || "הוצאה קבועה",
       category: e.category,
       paidBy: e.paidBy === "partner" ? "partner" : "owner",
-      ownerShare: ownerExpenseBurden(amount, e.owedBy),
+      ownerShare: shared ? shared.ownerShare : ownerExpenseBurden(amount, e.owedBy),
+      ...(shared ? { allocations: shared.allocations } : {}),
       // The separate "fixed expenses" collection was only ever this field.
       recurring: { from: e.startDate.slice(0, 7), ...(e.endDate ? { to: e.endDate.slice(0, 7) } : {}) },
       createdAt: 0,
