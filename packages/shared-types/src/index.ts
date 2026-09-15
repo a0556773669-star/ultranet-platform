@@ -152,6 +152,12 @@ export interface FixedExpense {
   owedBy?: string;
   /** ראה `COUNTS_TO_MAIN_DOC` למטה. הוצאה קבועה נספרת מהחודש של `startDate` והלאה. */
   countsToMain?: boolean;
+  /**
+   * רלוונטי רק כש-`branchId` הוא סנטינל של הוצאה משותפת (`shared-computers` וכו'): רשימת
+   * הסניפים שההוצאה באמת מתחלקת ביניהם. שדה חסר (או ריק) = כל סניפי המודול, כולל סניפים
+   * שייפתחו בעתיד — זו ההתנהגות ההיסטורית וגם ברירת המחדל. ראה `lib/expense-shared-scope.ts`.
+   */
+  branchIds?: string[];
 }
 
 /** collection: n_var_expenses */
@@ -172,6 +178,8 @@ export interface VariableExpense {
    *  (ownerExpenseBurden of amount/owedBy) when this expense was added; undefined if the
    *  owner's burden was 0 (e.g. owedBy === "partner"). Deleted together with this expense. */
   linkedAhExpenseId?: string;
+  /** כמו ב-`FixedExpense`: הסניפים שהוצאה משותפת מתחלקת ביניהם. חסר = כל סניפי המודול. */
+  branchIds?: string[];
 }
 
 /**
