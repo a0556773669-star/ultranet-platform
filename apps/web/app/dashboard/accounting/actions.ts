@@ -37,6 +37,10 @@ function revalidateMain() {
   revalidatePath("/dashboard/accounting/extra-expenses");
   revalidatePath("/dashboard/accounting/legacy");
   revalidatePath("/dashboard/rentals/accounting");
+  // הכנסת מזומן נמשכת מקופה של חדר מחשבים, ומוצגת (לתצוגה בלבד) גם בדשבורד המעקב שלו -
+  // אחרת היא הייתה מופיעה שם רק בטעינה הבאה שתעקוף את המטמון.
+  revalidatePath("/dashboard/computer-rooms-accounting");
+  revalidatePath("/dashboard/computer-rooms-accounting/[id]", "page");
   revalidatePath("/dashboard");
 }
 
