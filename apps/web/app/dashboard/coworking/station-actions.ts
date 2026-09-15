@@ -138,3 +138,20 @@ export async function unmarkStationPaidAction(clientId: string, month: string) {
   await ref.set({ payments }, { merge: true });
   revalidateAll();
 }
+
+/**
+ * מחיקת השכרה מההיסטוריה.
+ *
+ * זו מחיקה אמיתית ולא רכה: השכרה במשרד השיתופי לא מותירה אחריה שורות בקולקשנים אחרים
+ * שיישארו יתומות (התשלומים יושבים בתוך המסמך עצמו), ולכן אין מה לשמר. **אבל** התשלומים
+ * שנמחקים איתה הם הכנסה שנספרה בהנה"ח הראשית, ולכן המחיקה גורעת משם כסף - וזו בדיוק
+ * הסיבה שהכפתור מבקש אישור שמונה כמה תשלומים ילכו. מוגבל לבעלים.
+ */
+export async function deleteRentalAction(clientId: string) {
+  const session = await requireSession();
+  if (session.user?.role !== "owner") {
+    throw new Error("מחיקת השכרה מוגבלת לבעלים בלבד");
+  }
+  await getAdminFirestore().collection("n_cw_clients").doc(clientId).delete();
+  revalidateAll();
+}
