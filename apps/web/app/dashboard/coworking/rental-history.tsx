@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { History, CheckCircle2 } from "lucide-react";
 import { rentalTotals, type CoworkingClientStatus } from "@/lib/coworking";
 import { markStationPaidAction, unmarkStationPaidAction, deleteRentalAction } from "./station-actions";
@@ -22,19 +23,37 @@ export function RentalHistory({
   statuses,
   month,
   canDelete,
+  title = "היסטוריית השכרות",
+  intro = "כל מי שהשכיר עמדה — פעיל והיסטורי. לחיצה על שורה פותחת את לוח החודשים, ומאפשרת לסמן תשלום בדיעבד או למחוק את ההשכרה.",
+  emptyText = "עדיין לא נרשמה אף השכרה בעמדות.",
+  hideWhenEmpty = false,
+  tone = "default",
+  extra,
 }: {
   statuses: CoworkingClientStatus[];
   month: string;
   canDelete: boolean;
+  title?: string;
+  intro?: string;
+  emptyText?: string;
+  /** רשימה ריקה = אין מה לספר, ולכן אין סעיף. בשימוש בסעיף ההשכרות היתומות, שקיים רק כשיש כאלה. */
+  hideWhenEmpty?: boolean;
+  tone?: "default" | "warn";
+  /** תוכן נוסף בראש הפתיחה של כל שורה — למשל טופס התיקון של השכרה יתומה. */
+  extra?: (status: CoworkingClientStatus) => ReactNode;
 }) {
+  const frame =
+    tone === "warn" ? "rounded-card border border-amber-300 bg-amber-50 p-4" : "rounded-card border border-card-border bg-white p-4 shadow-card";
+
   if (statuses.length === 0) {
+    if (hideWhenEmpty) return null;
     return (
-      <section className="rounded-card border border-card-border bg-white p-4 shadow-card">
+      <section className={frame}>
         <h2 className="mb-1 flex items-center gap-1.5 text-sm font-extrabold text-ink">
           <History className="h-4 w-4" />
-          היסטוריית השכרות
+          {title}
         </h2>
-        <p className="text-[12.5px] text-muted">עדיין לא נרשמה אף השכרה בעמדות.</p>
+        <p className="text-[12.5px] text-muted">{emptyText}</p>
       </section>
     );
   }
@@ -46,20 +65,18 @@ export function RentalHistory({
   });
 
   return (
-    <section className="rounded-card border border-card-border bg-white p-4 shadow-card">
+    <section className={frame}>
       <h2 className="mb-1 flex items-center gap-1.5 text-sm font-extrabold text-ink">
         <History className="h-4 w-4" />
-        היסטוריית השכרות
+        {title}
       </h2>
-      <p className="mb-3 text-[11.5px] text-muted">
-        כל מי שהשכיר עמדה — פעיל והיסטורי. לחיצה על שורה פותחת את לוח החודשים, ומאפשרת לסמן
-        תשלום בדיעבד או למחוק את ההשכרה.
-      </p>
+      <p className="mb-3 text-[11.5px] text-muted">{intro}</p>
 
       <div className="flex flex-col gap-2">
         {sorted.map((s) => {
           const { rows, billed, paid, debt } = rentalTotals(s);
-          const ended = Boolean(s.client.endDate);
+          // "הסתיימה" לפי אותה הגדרה שהמסך משתמש בה לעמדה: סיום עתידי הוא עדיין השכרה פעילה.
+          const ended = !s.active;
           return (
             <details key={s.client.id} className="rounded-lg border border-card-border bg-[#f9fafb]">
               <summary className="flex cursor-pointer flex-wrap items-center gap-x-3 gap-y-1 p-3">
@@ -96,6 +113,7 @@ export function RentalHistory({
               </summary>
 
               <div className="border-t border-card-border p-3">
+                {extra?.(s)}
                 {rows.length === 0 ? (
                   <p className="text-[12px] text-muted">אין עדיין חודשים לחיוב בהשכרה הזו.</p>
                 ) : (

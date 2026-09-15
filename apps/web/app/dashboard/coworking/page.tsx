@@ -1,12 +1,14 @@
 import Link from "next/link";
-import { Armchair, Building2, CheckCircle2, AlertTriangle, Pencil, Plus } from "lucide-react";
+import { Armchair, Building2, CheckCircle2, AlertTriangle, Pencil, Plus, Unlink } from "lucide-react";
 import { requireModuleAccess } from "@/lib/perms";
 import {
   loadCoworkingData,
   buildStationOccupancy,
+  orphanReason,
   paymentForMonth,
   currentMonth,
   STATION_NUMBERS,
+  type CoworkingClientStatus,
   type StationOccupancy,
 } from "@/lib/coworking";
 import { setupCostCountsToMain } from "@/lib/counts-to-main";
@@ -14,7 +16,12 @@ import { CountsToMainBadge } from "@/components/counts-to-main-field";
 import type { Branch } from "@ultranet/shared-types";
 import { CoworkingTabs } from "./coworking-tabs";
 import { RentalHistory } from "./rental-history";
-import { rentStationAction, endStationRentalAction, markStationPaidAction } from "./station-actions";
+import {
+  rentStationAction,
+  endStationRentalAction,
+  markStationPaidAction,
+  assignRentalToBranchAction,
+} from "./station-actions";
 
 function money(n: number) {
   return `${Math.round(n).toLocaleString("he-IL")} ₪`;
@@ -42,6 +49,13 @@ export default async function CoworkingPage({ searchParams }: { searchParams?: {
   const branches = isOwner ? data.branches : data.branches.filter((b) => b.id === myBranchId);
   const month = currentMonth();
 
+  // השכרות שאף סניף חי לא מכיל אותן. הן נשלפות לפני הבדיקה אם יש סניף בכלל, כי הן קיימות
+  // דווקא במצב שבו אין: רשומה מ-`app.html` שנשארה מצביעה על סניף שכבר לא קיים במערכת.
+  const orphans = data.statuses.filter((st) => st.orphan);
+  const orphanSection = (
+    <OrphanRentals orphans={orphans} branches={branches} branchesById={data.branchesById} month={month} isOwner={isOwner} />
+  );
+
   // בדרך כלל יש סניף אחד, ולכן אין בורר. הפרמטר קיים כדי שסניף שני לא ישבור את המסך.
   const branch = branches.find((b) => b.id === searchParams?.branchId) ?? branches[0];
 
@@ -60,6 +74,9 @@ export default async function CoworkingPage({ searchParams }: { searchParams?: {
             </Link>
           )}
         </div>
+        {/* גם כאן, ובמיוחד כאן: בלי זה ההשכרות היתומות היו נשארות בלי שום מסך, ורק התראת
+            התשלומים בדף הבית הייתה מעידה שהן קיימות. */}
+        <div className="mt-4">{orphanSection}</div>
       </div>
     );
   }
@@ -114,9 +131,155 @@ export default async function CoworkingPage({ searchParams }: { searchParams?: {
         ))}
       </div>
 
+      <div className="mt-4">{orphanSection}</div>
+
       <div className="mt-4">
         <RentalHistory statuses={statuses} month={month} canDelete={isOwner} />
       </div>
+    </div>
+  );
+}
+
+/**
+ * השכרות שאינן משויכות לסניף משרד שיתופי פעיל.
+ *
+ * כל מסכי המודול מסננים לפי הסניף הנבחר, אבל התראת התשלומים בדף הבית סופרת את **כל**
+ * רשומות `n_cw_clients` — ולכן השכרה שה-`branchId` שלה מצביע על סניף מחוק, על סניף מסוג
+ * אחר, או על מסמך שלא קיים (בדרך כלל שריד מ-`app.html` הישן) ייצרה התראה על תשלום בלי
+ * שום מקום שבו אפשר לראות אותה או לטפל בה. זה המקום הזה.
+ *
+ * הסעיף מוצג רק כשיש כאלה: במצב התקין הוא לא קיים, ולכן הוא לא הופך לרעש קבוע.
+ */
+function OrphanRentals({
+  orphans,
+  branches,
+  branchesById,
+  month,
+  isOwner,
+}: {
+  orphans: CoworkingClientStatus[];
+  branches: Branch[];
+  branchesById: Map<string, Branch>;
+  month: string;
+  isOwner: boolean;
+}) {
+  if (orphans.length === 0) return null;
+
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="flex items-start gap-2 rounded-card border border-amber-300 bg-amber-50 p-3">
+        <Unlink className="mt-0.5 h-4 w-4 shrink-0 text-amber-700" />
+        <div className="text-[12.5px] text-amber-900">
+          <p className="font-extrabold">
+            {orphans.length === 1
+              ? "יש השכרה אחת שאינה משויכת לסניף משרד שיתופי פעיל"
+              : `יש ${orphans.length} השכרות שאינן משויכות לסניף משרד שיתופי פעיל`}
+          </p>
+          <p className="mt-0.5">
+            הן ממשיכות להיספר בהתראת התשלומים שבדף הבית, אבל אינן מופיעות בעמדות ולא בהנה&quot;ח של
+            המודול, כי כל אלה מסוננים לפי סניף.{" "}
+            {isOwner
+              ? "שיוך לסניף ולעמדה מחזיר אותן לתמונה; מחיקה (בפתיחת השורה) מסירה אותן ואת התשלומים שנרשמו להן."
+              : "שיוך או מחיקה הם פעולות של הבעלים."}
+          </p>
+        </div>
+      </div>
+
+      <RentalHistory
+        statuses={orphans}
+        month={month}
+        canDelete={isOwner}
+        tone="warn"
+        hideWhenEmpty
+        title="השכרות ללא סניף פעיל"
+        intro="לחיצה על שורה פותחת את לוח החודשים של אותה השכרה — אפשר לסמן ולבטל תשלומים גם לפני השיוך."
+        extra={(s) => (
+          <AssignRentalForm status={s} branches={branches} branchesById={branchesById} canAssign={isOwner} />
+        )}
+      />
+    </div>
+  );
+}
+
+function AssignRentalForm({
+  status,
+  branches,
+  branchesById,
+  canAssign,
+}: {
+  status: CoworkingClientStatus;
+  branches: Branch[];
+  branchesById: Map<string, Branch>;
+  canAssign: boolean;
+}) {
+  const reason = orphanReason(status.client, branchesById);
+
+  return (
+    <div className="mb-3 rounded-lg border border-amber-300 bg-amber-50 p-3">
+      <p className="text-[12px] font-extrabold text-amber-900">למה ההשכרה הזו לא מופיעה במסך: {reason}</p>
+
+      {!canAssign ? (
+        <p className="mt-1 text-[11.5px] text-amber-900">שיוך ההשכרה לסניף הוא פעולה של הבעלים.</p>
+      ) : branches.length === 0 ? (
+        <p className="mt-1 text-[11.5px] text-amber-900">
+          אין עדיין סניף משרד שיתופי פעיל לשייך אליו —{" "}
+          <Link href="/dashboard/coworking/branches/new" className="font-bold underline">
+            צריך להקים אותו קודם
+          </Link>
+          .
+        </p>
+      ) : (
+        <form
+          action={assignRentalToBranchAction.bind(null, status.client.id)}
+          className="mt-2 flex flex-wrap items-end gap-2"
+        >
+          <div>
+            <label className={LABEL}>סניף</label>
+            <select name="branchId" defaultValue={branches[0]?.id} className={`${FIELD} w-44 bg-white`}>
+              {branches.map((b) => (
+                <option key={b.id} value={b.id}>
+                  {b.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className={LABEL}>עמדה</label>
+            <select
+              name="stationNumber"
+              defaultValue={
+                STATION_NUMBERS.find((n) => String(n) === status.client.stationNumber?.trim()) ?? STATION_NUMBERS[0]
+              }
+              className={`${FIELD} w-20 bg-white`}
+            >
+              {STATION_NUMBERS.map((n) => (
+                <option key={n} value={n}>
+                  {n}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className={LABEL}>מחיר חודשי</label>
+            <input
+              name="price"
+              type="number"
+              min={0}
+              step="0.01"
+              defaultValue={status.cost || undefined}
+              placeholder="ללא שינוי"
+              className={`${FIELD} w-28 bg-white`}
+            />
+          </div>
+          <button
+            type="submit"
+            className="rounded-[10px] bg-gradient-to-br from-teal to-teal-light px-4 py-2 text-xs font-bold text-white shadow-primary transition hover:opacity-90"
+          >
+            שיוך לסניף ולעמדה
+          </button>
+          <span className="text-[11px] text-amber-900">התשלומים שנרשמו נשארים כמו שהם.</span>
+        </form>
+      )}
     </div>
   );
 }
