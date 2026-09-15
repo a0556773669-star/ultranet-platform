@@ -13,6 +13,11 @@ import { splitMultiBranchExpense } from "@/lib/multi-branch-expense";
  * התשובה לשתיהן הייתה קיימת רק בטופס נפרד לגמרי (`n_multi_branch_expenses`) שלא ידע
  * הוצאות קבועות — כאן היא יושבת על ההוצאה עצמה, ולכן עובדת גם לקבועה וגם לחד-פעמית.
  *
+ * **בטפסי ההוספה המתג דלוק כברירת מחדל**: הוצאה שנרשמת בספר המשותף היא כמעט תמיד הוצאה
+ * שחלה על הסניפים, ולכן החלוקה היא המצב הרגיל ולא החריג. מי שרוצה שורה שנשארת בספר
+ * המשותף בלבד מכבה את המתג. בחלון העריכה ברירת המחדל נגזרת מהשורה עצמה, כדי ששורות
+ * שנרשמו לפני השינוי לא ישנו התנהגות בשקט.
+ *
  * הטופס שולח: `splitToBranches` (המתג), `branchScope` ("all"/"selected"), `branchIds`
  * ו-`ownerPct`. בצד השרת קוראים אותם `sharedExpenseBranchIdsFromForm` +
  * `sharedOwnerPctFromForm` מ-`lib/expense-shared-scope.ts`.
