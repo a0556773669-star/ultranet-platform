@@ -11,7 +11,14 @@
  * בלי לשכתב את תאריך ההתחלה, שהוא עובדה היסטורית.
  */
 import { getAdminFirestore } from "./firebase-admin";
-import type { Branch, CoworkingClient, CoworkingStation, FixedExpense, VariableExpense } from "@ultranet/shared-types";
+import type {
+  Branch,
+  CoworkingClient,
+  CoworkingPayment,
+  CoworkingStation,
+  FixedExpense,
+  VariableExpense,
+} from "@ultranet/shared-types";
 import { monthsBetween } from "./branch-accounting";
 import { countsToMain } from "./counts-to-main";
 
@@ -245,4 +252,38 @@ export function buildStationOccupancy(
       .sort((a, b) => (b.client.startDate ?? "").localeCompare(a.client.startDate ?? ""));
     return { stationNumber: n, station, current, past };
   });
+}
+
+/** חודש אחד בחיי ההשכרה: מה היה אמור להיגבות, ומה נרשם בפועל. */
+export interface RentalMonthRow {
+  month: string;
+  expected: number;
+  payment?: CoworkingPayment;
+}
+
+/**
+ * לוח החודשים המלא של השכרה אחת - הבסיס למסך ההיסטוריה.
+ *
+ * השכרה שהסתיימה היא לא "נעלמה": היא עדיין שאלה פתוחה של מי שילם ומי לא, בדיוק כמו
+ * השכרה פעילה, ולכן החישוב זהה לשתיהן ומשתמש ב-`billableMonths` שכבר יודע לעצור
+ * בחודש הסיום. חודש שיש בו תשלום אבל אינו בטווח החיוב (תשלום שנרשם בטעות, או סיום
+ * שהוזז אחורה) מצורף גם הוא - הסתרת כסף שנרשם הייתה גרועה יותר מהצגת שורה מוזרה.
+ */
+export function rentalMonths(status: CoworkingClientStatus): RentalMonthRow[] {
+  const { client, cost } = status;
+  const payments = client.payments ?? [];
+  const months = new Set(billableMonths(client, currentMonth()));
+  for (const p of payments) months.add(p.month);
+
+  return [...months]
+    .sort((a, b) => b.localeCompare(a))
+    .map((month) => ({ month, expected: cost, payment: payments.find((p) => p.month === month) }));
+}
+
+/** סיכום כספי של השכרה אחת: כמה היה אמור, כמה שולם, כמה חסר. */
+export function rentalTotals(status: CoworkingClientStatus) {
+  const rows = rentalMonths(status);
+  const billed = billableMonths(status.client, currentMonth()).length * status.cost;
+  const paid = (status.client.payments ?? []).reduce((s, p) => s + (p.amount || 0), 0);
+  return { rows, billed, paid, debt: Math.max(0, billed - paid) };
 }

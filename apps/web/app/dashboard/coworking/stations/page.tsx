@@ -11,6 +11,7 @@ import {
 } from "@/lib/coworking";
 import { CoworkingTabs } from "../coworking-tabs";
 import { rentStationAction, endStationRentalAction, markStationPaidAction } from "./actions";
+import { RentalHistory } from "./rental-history";
 
 function money(n: number) {
   return `${Math.round(n).toLocaleString("he-IL")} ₪`;
@@ -36,7 +37,10 @@ export default async function StationsPage() {
   const branch = data.branches[0];
   const month = currentMonth();
   const stations = [...data.stationsById.values()].filter((s) => !branch || s.branchId === branch.id);
-  const occupancy = buildStationOccupancy(STATION_NUMBERS, stations, data.statuses);
+  // המסך מציג סניף אחד, ולכן גם ההשכרות שלו בלבד - אחרת בעל חשבון שרואה את כל הסניפים
+  // היה מקבל בעמדה 1 גם את השוכר של הסניף השני.
+  const statuses = data.statuses.filter((st) => !branch || st.client.branchId === branch.id);
+  const occupancy = buildStationOccupancy(STATION_NUMBERS, stations, statuses);
 
   if (!branch) {
     return (
@@ -98,6 +102,10 @@ export default async function StationsPage() {
           <StationCard key={o.stationNumber} o={o} branchId={branch.id} month={month} />
         ))}
       </div>
+
+      <div className="mt-4">
+        <RentalHistory statuses={statuses} month={month} />
+      </div>
     </div>
   );
 }
@@ -129,18 +137,10 @@ function StationCard({ o, branchId, month }: { o: StationOccupancy; branchId: st
       {s ? <RentedStation status={s} month={month} /> : <RentForm branchId={branchId} stationNumber={o.stationNumber} />}
 
       {o.past.length > 0 && (
-        <details className="mt-3 border-t border-card-border pt-2">
-          <summary className="cursor-pointer text-[11.5px] font-bold text-muted">
-            השכרות קודמות בעמדה ({o.past.length})
-          </summary>
-          <ul className="mt-1.5 space-y-1 text-[11.5px] text-muted">
-            {o.past.map((p) => (
-              <li key={p.client.id}>
-                {p.client.name} · {p.client.startDate} — {p.client.endDate ?? "—"}
-              </li>
-            ))}
-          </ul>
-        </details>
+        <p className="mt-3 border-t border-card-border pt-2 text-[11.5px] text-muted">
+          {o.past.length} השכרות קודמות בעמדה הזו ({o.past.map((p) => p.client.name).join(", ")}) —
+          מצב התשלומים שלהן בהיסטוריה בתחתית המסך.
+        </p>
       )}
     </section>
   );
