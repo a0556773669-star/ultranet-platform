@@ -7,7 +7,9 @@ import {
   currentMonth as getCurrentMonth,
 } from "@/lib/branch-accounting-data";
 import { monthsBetween } from "@/lib/branch-accounting";
+import { buildBranchLedger } from "@/lib/branch-ledger";
 import { MonthPicker } from "./month-picker";
+import { PartnerAccountingView } from "./partner-view";
 import { BranchSummaryTable, type BranchSummaryRow } from "./branch-summary-table";
 
 /** The months the picker offers: the last two years up to (never past) the current month. */
@@ -58,7 +60,47 @@ export default async function RentalsAccountingPage({
   // never goes away - it is simply out of the default view, because the question this screen
   // answers is about branches that are still running.
   const isClosed = (b: (typeof allRentals)[number]) => !!b.closedAt || !!b.deleted;
-  const visible = allRentals.filter((b) => (isOwner ? true : b.id === myBranchId)).filter((b) => showClosed || !isClosed(b));
+
+  // השותף לא רואה את הטבלה הזו בכלל. הטבלה מציגה את חלקו של *הבעלים* בכל סניף
+  // (ownerInvestedToDate / ownerEarnedToDate / ownerBalanceToDate) תחת כותרות בגוף ראשון
+  // "ההוצאות שלי" / "ההכנסות שלי" - מספרים שאינם שלו, וקריאים כאילו הם כן. מה שהשותף שואל
+  // הוא שאלה אחרת, והתשובה לה היא PartnerAccountingView: שש משבצות וחשבון פתוח, וזהו.
+  if (!isOwner) {
+    const myEmail = session.user?.email?.trim().toLowerCase();
+    // הסניפים שלו: זה שהוצמד למשתמש, ובנוסף כל סניף שהמייל שלו רשום כ-partnerEmail של הסניף -
+    // כך ששותף עם כמה סניפים, או כזה שלא הוצמד לו branchId, עדיין רואה את שלו.
+    const myBranches = allRentals.filter(
+      (b) => (!!myBranchId && b.id === myBranchId) || (!!myEmail && b.partnerEmail?.trim().toLowerCase() === myEmail)
+    );
+    // יוצאים כאן תמיד, גם כשלא נמצא אף סניף, כדי שלא תהיה שום דרך ליפול לגוף העמוד.
+    // החודש הוא תמיד החודש הנוכחי: לשותף אין בורר חודשים, ו-?month= בכתובת לא מזיז לו כלום.
+    return (
+      <div className="flex max-w-3xl flex-col gap-5">
+        <h1 className="flex items-center gap-1.5 text-[21px] font-extrabold text-ink">
+          <BarChart3 className="h-5 w-5" />
+          {'הנה"ח'}
+        </h1>
+        {myBranches.length === 0 ? (
+          <p className="rounded-card border border-card-border bg-white p-4 text-sm text-muted shadow-card">
+            לא משויך אליך סניף השכרות. יש לפנות לבעלים כדי שיצמיד את המשתמש שלך לסניף.
+          </p>
+        ) : (
+          myBranches.map((b) => (
+            <PartnerAccountingView
+              key={b.id}
+              view={{
+                financials: computeBranchFinancials(b, raw, thisMonth),
+                openBalance: buildBranchLedger(b, raw).currentBalance,
+                closed: isClosed(b),
+              }}
+            />
+          ))
+        )}
+      </div>
+    );
+  }
+
+  const visible = allRentals.filter((b) => showClosed || !isClosed(b));
 
   const rows: BranchSummaryRow[] = visible
     .map((branch) => {
