@@ -8,11 +8,14 @@ import { DeleteEntryButton } from "./delete-entry-button";
 /**
  * טבלת הספר הראשי — הכנסות או הוצאות, אותה טבלה בדיוק.
  *
- * הרשימות הישנות (שתי עמודות צרות זו לצד זו) לא סבלו עומס: אלף שורות ירדו במסך אחד
- * ארוך, בלי דרך למצוא שורה מסוימת ובלי דרך לסדר. כאן זו טבלה: כותרות שאפשר ללחוץ
- * עליהן כדי לסדר, סינון למעלה (חיפוש חופשי, קטגוריה, מקור, טווח תאריכים), ו-50 שורות
- * לעמוד. הסינון והסידור קורים בצד הלקוח על כל השורות שכבר הגיעו מהשרת — הספר הראשי
- * נטען ממילא במלואו כדי לחשב את הסכומים למעלה, ולכן עמוד חדש לא עולה קריאה נוספת.
+ * הרשימות הישנות לא סבלו עומס: אלף שורות ירדו במסך אחד ארוך, בלי דרך למצוא שורה
+ * מסוימת ובלי דרך לסדר. כאן זו טבלה: כותרות שאפשר ללחוץ עליהן כדי לסדר, סינון למעלה
+ * (חיפוש חופשי, קטגוריה, מקור, טווח תאריכים), ו-50 שורות לעמוד. הסינון והסידור קורים
+ * בצד הלקוח על כל השורות שכבר הגיעו מהשרת — הספר הראשי נטען ממילא במלואו כדי לחשב את
+ * הסכומים למעלה, ולכן עמוד חדש לא עולה קריאה נוספת.
+ *
+ * הטבלה בנויה לחצי מסך, כי שתיהן יושבות זו לצד זו: העמודות צרות, שורת הסינון נשברת
+ * לשתי שורות כשצריך, וגלילה אופקית היא מוצא אחרון ולא ברירת מחדל.
  *
  * כשסינון פעיל מופיעה מעל הטבלה שורת סיכום, והסכום בה הוא של השורות **המסוננות** ולא
  * של העמוד, ובכוונה: מי שמסנן "חשמל" רוצה לדעת כמה יצא על חשמל, לא כמה יצא על חמישים
@@ -188,7 +191,7 @@ export function LedgerTable({
 
       <div className="overflow-hidden rounded-card border border-card-border bg-white shadow-card">
         <div className="flex flex-wrap items-center gap-2 border-b border-card-border bg-[#f8fafc] px-3 py-2.5">
-          <div className="relative min-w-[190px] flex-1">
+          <div className="relative min-w-[150px] flex-1">
             <Search className="pointer-events-none absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted" />
             <input
               type="text"
@@ -197,7 +200,7 @@ export function LedgerTable({
                 setQ(e.target.value);
                 setPage(1);
               }}
-              placeholder="חיפוש בתיאור, מקור, קטגוריה או סכום..."
+              placeholder="חיפוש בתיאור, במקור, בקטגוריה או בסכום..."
               className={`${FIELD} w-full pr-8`}
             />
           </div>
@@ -279,20 +282,20 @@ export function LedgerTable({
         )}
 
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[640px] text-[13px]">
+          <table className="w-full min-w-[460px] text-[13px]">
             <thead className="bg-[#f4f6f9]">
               <tr>
-                <SortHeader {...sortProps} label="תאריך" keyName="date" className="w-[104px]" />
+                <SortHeader {...sortProps} label="תאריך" keyName="date" className="w-[92px]" />
                 <SortHeader {...sortProps} label="תיאור" keyName="desc" />
                 <SortHeader
                   {...sortProps}
                   label={isIncome ? "סוג" : "קטגוריה"}
                   keyName="category"
-                  className="w-[130px]"
+                  className="w-[104px]"
                 />
-                <SortHeader {...sortProps} label="מקור" keyName="origin" className="w-[130px]" />
-                <SortHeader {...sortProps} label="סכום" keyName="amount" align="left" className="w-[110px]" />
-                {isIncome && <th className="w-[150px] px-[11px] py-[9px]" />}
+                <SortHeader {...sortProps} label="מקור" keyName="origin" className="w-[104px]" />
+                <SortHeader {...sortProps} label="סכום" keyName="amount" align="left" className="w-[96px]" />
+                {isIncome && <th className="w-[128px] px-[11px] py-[9px]" />}
               </tr>
             </thead>
             <tbody>

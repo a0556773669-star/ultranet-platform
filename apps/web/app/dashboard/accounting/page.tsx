@@ -21,8 +21,8 @@ function money(n: number) {
  * המספרים - כל שורה שסומנה `countsToMain`, ורק היא - כך שאפשר תמיד ללחוץ ולראות מאיפה
  * הגיע כל שקל, בלי מסך "בדיקת שלמות" שמנסה להסביר בדיעבד למה שני מספרים לא הסתדרו.
  *
- * הטבלאות (`ledger-table.tsx`) פרושות אחת מתחת לשנייה ולא זו לצד זו: ספר עם אלפי שורות
- * צריך רוחב מלא לסינון, לסידור ולעימוד, ושתי עמודות צרות לא נתנו את זה.
+ * שתי הרשימות הפכו לטבלאות (`ledger-table.tsx`) - עם סינון, סידור ועימוד - אבל נשארו
+ * זו לצד זו: הכנסות בימין, הוצאות בשמאל, כדי שאפשר יהיה להשוות ביניהן במבט אחד.
  */
 export default async function AccountingHomePage() {
   const session = await requireModuleAccess("accounting");
@@ -135,7 +135,9 @@ export default async function AccountingHomePage() {
 
       <AddIncomeForm computerBranches={computerBranches} rentalsBranches={rentalsBranches} defaultDate={today} />
 
-      <div className="flex flex-col gap-3.5">
+      {/* הכנסות בימין, הוצאות בשמאל - אותו פריסה שהייתה כאן תמיד. במסך צר הן נערמות
+          אחת מתחת לשנייה, כי שתי טבלאות בנות חמש עמודות לא נכנסות לרוחב של טלפון. */}
+      <div className="grid grid-cols-1 items-start gap-3.5 xl:grid-cols-2">
         <LedgerTable
           kind="income"
           rows={incomeRows}
