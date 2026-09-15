@@ -11,7 +11,14 @@
  * בלי לשכתב את תאריך ההתחלה, שהוא עובדה היסטורית.
  */
 import { getAdminFirestore } from "./firebase-admin";
-import type { Branch, CoworkingClient, CoworkingStation, FixedExpense, VariableExpense } from "@ultranet/shared-types";
+import type {
+  Branch,
+  CoworkingClient,
+  CoworkingPayment,
+  CoworkingStation,
+  FixedExpense,
+  VariableExpense,
+} from "@ultranet/shared-types";
 import { monthsBetween } from "./branch-accounting";
 import { countsToMain } from "./counts-to-main";
 
@@ -131,7 +138,12 @@ export async function loadCoworkingData(params?: { branchId?: string }): Promise
 export interface CoworkingLedger {
   /** מה ששילמתי עד היום — כל ההוצאות של המשרד השיתופי, בכל הסוגים */
   paidToDate: number;
+  /** סך ההקמה: שורות ההוצאה בקטגוריית "הקמה" + שדה `setupCost` של הסניפים עצמם */
   setupToDate: number;
+  /** רק החלק שהגיע משורות ההוצאה */
+  setupFromExpenses: number;
+  /** רק החלק שהגיע מפירוט עלות ההקמה שבטופס הסניף */
+  setupFromBranches: number;
   fixedToDate: number;
   variableToDate: number;
   /** מה שקיבלתי עד היום — כל תשלומי הלקוחות */
@@ -146,6 +158,8 @@ export function buildCoworkingLedger(params: {
   fixed: FixedExpense[];
   variable: VariableExpense[];
   clients: CoworkingClient[];
+  /** הסניפים עצמם - עלות ההקמה שלהם היא שדה על הסניף, לא שורת הוצאה */
+  branches?: Branch[];
   upto?: string;
 }): CoworkingLedger {
   const upto = params.upto ?? currentMonth();
@@ -161,13 +175,21 @@ export function buildCoworkingLedger(params: {
     fixedToDate += monthly * monthsBetween(start, end).length;
   }
 
-  let setupToDate = 0;
+  let setupFromExpenses = 0;
   let variableToDate = 0;
   for (const e of params.variable) {
     if (e.month > upto) continue;
-    if (e.category === SETUP_CATEGORY) setupToDate += e.amount || 0;
+    if (e.category === SETUP_CATEGORY) setupFromExpenses += e.amount || 0;
     else variableToDate += e.amount || 0;
   }
+
+  // שני מקורות להקמה, בכוונה: שורות הוצאה (הדרך הוותיקה במודול הזה) ופירוט עלות ההקמה
+  // שבטופס הסניף. הם נספרים זה לצד זה ולא במקום זה, ולכן הטופס מזהיר לא לרשום את אותה
+  // הוצאה בשניהם. השדות נשארים נפרדים ב-`CoworkingLedger` כדי שהמסך יוכל להראות מאיפה מה.
+  const setupFromBranches = (params.branches ?? [])
+    .filter((b) => !b.deleted)
+    .reduce((total, b) => total + (b.setupCost ?? 0), 0);
+  const setupToDate = setupFromExpenses + setupFromBranches;
 
   const receivedToDate = params.clients
     .flatMap((c) => c.payments ?? [])
@@ -175,5 +197,93 @@ export function buildCoworkingLedger(params: {
     .reduce((s, p) => s + (p.amount || 0), 0);
 
   const paidToDate = setupToDate + fixedToDate + variableToDate;
-  return { paidToDate, setupToDate, fixedToDate, variableToDate, receivedToDate, balance: receivedToDate - paidToDate };
+  return {
+    paidToDate,
+    setupToDate,
+    setupFromExpenses,
+    setupFromBranches,
+    fixedToDate,
+    variableToDate,
+    receivedToDate,
+    balance: receivedToDate - paidToDate,
+  };
+}
+
+/** ארבע העמדות הפיזיות במשרד. מספר העמדה הוא הזהות שלה, לא מסמך שמקימים. */
+export const STATION_NUMBERS = [1, 2, 3, 4] as const;
+
+/** התשלום שנרשם לחודש מסוים, אם נרשם. */
+export function paymentForMonth(client: CoworkingClient, month: string) {
+  return (client.payments ?? []).find((p) => p.month === month);
+}
+
+/**
+ * עמדה אחת במסך העמדות: מי יושב בה עכשיו, ומה מצב התשלום של החודש הנוכחי.
+ *
+ * "השכרה פעילה" היא לקוח שהתחיל ועדיין לא הסתיים (או שתאריך הסיום שלו עוד לא הגיע) -
+ * אותה הגדרה כמו בנייד מושכר, שממנה הועתק המסך.
+ */
+export interface StationOccupancy {
+  stationNumber: number;
+  station?: CoworkingStation;
+  /** ההשכרה הפעילה כרגע, אם יש */
+  current?: CoworkingClientStatus;
+  /** השכרות שהסתיימו על העמדה הזו, מהחדשה לישנה */
+  past: CoworkingClientStatus[];
+}
+
+export function buildStationOccupancy(
+  stationNumbers: readonly number[],
+  stations: CoworkingStation[],
+  statuses: CoworkingClientStatus[],
+  today = new Date(),
+): StationOccupancy[] {
+  const todayStr = today.toISOString().slice(0, 10);
+  const stationByNumber = new Map(stations.map((s) => [s.name?.trim(), s]));
+
+  return stationNumbers.map((n) => {
+    const station = stationByNumber.get(String(n));
+    const onThis = statuses.filter(
+      (s) => (station && s.client.stationId === station.id) || s.client.stationNumber?.trim() === String(n),
+    );
+    const current = onThis.find((s) => !s.client.endDate || s.client.endDate >= todayStr);
+    const past = onThis
+      .filter((s) => s !== current)
+      .sort((a, b) => (b.client.startDate ?? "").localeCompare(a.client.startDate ?? ""));
+    return { stationNumber: n, station, current, past };
+  });
+}
+
+/** חודש אחד בחיי ההשכרה: מה היה אמור להיגבות, ומה נרשם בפועל. */
+export interface RentalMonthRow {
+  month: string;
+  expected: number;
+  payment?: CoworkingPayment;
+}
+
+/**
+ * לוח החודשים המלא של השכרה אחת - הבסיס למסך ההיסטוריה.
+ *
+ * השכרה שהסתיימה היא לא "נעלמה": היא עדיין שאלה פתוחה של מי שילם ומי לא, בדיוק כמו
+ * השכרה פעילה, ולכן החישוב זהה לשתיהן ומשתמש ב-`billableMonths` שכבר יודע לעצור
+ * בחודש הסיום. חודש שיש בו תשלום אבל אינו בטווח החיוב (תשלום שנרשם בטעות, או סיום
+ * שהוזז אחורה) מצורף גם הוא - הסתרת כסף שנרשם הייתה גרועה יותר מהצגת שורה מוזרה.
+ */
+export function rentalMonths(status: CoworkingClientStatus): RentalMonthRow[] {
+  const { client, cost } = status;
+  const payments = client.payments ?? [];
+  const months = new Set(billableMonths(client, currentMonth()));
+  for (const p of payments) months.add(p.month);
+
+  return [...months]
+    .sort((a, b) => b.localeCompare(a))
+    .map((month) => ({ month, expected: cost, payment: payments.find((p) => p.month === month) }));
+}
+
+/** סיכום כספי של השכרה אחת: כמה היה אמור, כמה שולם, כמה חסר. */
+export function rentalTotals(status: CoworkingClientStatus) {
+  const rows = rentalMonths(status);
+  const billed = billableMonths(status.client, currentMonth()).length * status.cost;
+  const paid = (status.client.payments ?? []).reduce((s, p) => s + (p.amount || 0), 0);
+  return { rows, billed, paid, debt: Math.max(0, billed - paid) };
 }

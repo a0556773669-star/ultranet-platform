@@ -42,6 +42,13 @@ export interface BranchRentalPricing {
   };
 }
 
+/** שורה אחת בפירוט עלות ההקמה של חדר מחשבים (מוטמעת בתוך מסמך `n_branches`). */
+export interface SetupCostItem {
+  /** תיאור ההוצאה, למשל "12 מחשבים" או "ריהוט" */
+  label: string;
+  amount: number;
+}
+
 export interface Branch {
     id: string;
     name: string;
@@ -64,7 +71,21 @@ export interface Branch {
     myPct: number;
     partnerPct: number;
   parentPct?: number;
-    setupCost?: number;
+  /** סך עלות ההקמה של החדר. כשיש `setupItems` זהו בדיוק סכום השורות שלהן - השדה נשמר כמספר
+   *  מוכן כדי שכל מי שקורא אותו היום (תחזית ההון ב-tx-data, מסך ההשקעה מול הרווח) ימשיך
+   *  לעבוד בלי לדעת על הפירוט. חדר ישן שיש לו רק מספר בלי פירוט נשאר תקף. */
+  setupCost?: number;
+  /** פירוט עלות ההקמה: שורה לכל הוצאה (מה נקנה וכמה). ריק/חסר = לא הוזן פירוט ו-`setupCost`
+   *  הוא מספר שהוזן ידנית. */
+  setupItems?: SetupCostItem[];
+  /** האם עלות ההקמה של הסניף נספרת בהנה"ח הראשית.
+   *
+   *  **ברירת המחדל כאן הפוכה מ-`countsToMain` הרגיל**: `undefined` = כן נספר. זה מכוון ולא
+   *  פליטה. הדגל הרגיל מתחיל כבוי כדי ששורות שהוזנו לפני שהוא נולד לא ייסחפו לספר הראשי
+   *  בדיעבד; לעלות הקמה אין "שורות שהוזנו" - יש שדה אחד לסניף, גלוי בטופס, והבעלים ביקש
+   *  במפורש שעלויות ההקמה ייכנסו לראשי. הכיבוי כאן הוא ההחרגה, לא ההצטרפות.
+   *  הקריאה עוברת תמיד דרך `setupCostCountsToMain()` ב-`apps/web/lib/counts-to-main.ts`. */
+  setupCountsToMain?: boolean;
     notes?: string;
     /** sub-branch model: set when this branch rolls up under a head partner's branch */
   parentBranchId?: string | null;
@@ -1086,6 +1107,21 @@ export interface RecurringVariableAmount {
  * המבנה הוא שורה אחת + סכום לכל חודש (`amounts`). חודש בלי סכום הוא חודש שעדיין לא
  * עודכן, וזה בדיוק מה שמסך התזכורת מחפש: `missingMonths()` ב-`lib/recurring-expenses.ts`.
  */
+/**
+ * כל כמה זמן ההוצאה נדרשת בפועל. זה לא נתון קוסמטי — הוא קובע באילו חודשים המערכת
+ * מבקשת סכום (`dueMonths`), ולכן גם על מה היא מתריעה. ארנונה דו-חודשית שנרשמה כחודשית
+ * מייצרת התראה שקרית בכל חודש שני, וזו בדיוק הסיבה שהשדה קיים.
+ */
+export type RecurringFrequency = "monthly" | "bimonthly" | "quarterly" | "yearly";
+
+/** אורך המחזור בחודשים. `undefined` = חודשי, כדי שרשומות שנכתבו לפני השדה יישארו נכונות. */
+export const RECURRING_FREQUENCY_MONTHS: Record<RecurringFrequency, number> = {
+  monthly: 1,
+  bimonthly: 2,
+  quarterly: 3,
+  yearly: 12,
+};
+
 export interface RecurringVariableExpense {
   id: string;
   scope: ExpenseScope;
@@ -1097,6 +1133,22 @@ export interface RecurringVariableExpense {
   startDate: string;
   /** הפסקה: מהחודש הזה ואילך כבר לא מבקשים עדכון */
   endDate?: string;
+  /**
+   * תדירות החיוב. `undefined` = `monthly` (כל הרשומות שנוצרו לפני השדה). המחזור נמדד
+   * מחודש ה-`startDate`: ארנונה דו-חודשית שהתחילה ב-01/2025 נדרשת ב-01, 03, 05 וכן הלאה.
+   */
+  frequency?: RecurringFrequency;
+  /**
+   * פריסה: לחלק תשלום רב-חודשי על פני חודשי המחזור שלו בדוחות החודשיים.
+   *
+   * ביטוח שנתי של 12,000 ₪ ששולם בינואר הוא 12,000 ₪ במזומן בינואר, אבל 1,000 ₪ עלות
+   * בכל חודש. בלי פריסה ינואר נראה חודש קטסטרופלי ושאר השנה נראית זולה מכפי שהיא, ואי
+   * אפשר להשוות חודש לחודש — וזו כל הסיבה לקיומו של השדה.
+   *
+   * `undefined` = פרוס (ברירת המחדל לתדירות רב-חודשית); `false` = הכל נופל בחודש התשלום.
+   * בתדירות חודשית אין לשדה משמעות — מחזור של חודש אחד נפרס לעצמו.
+   */
+  spread?: boolean;
   /** סכום ברירת מחדל להצעה בעת עדכון חודש חדש */
   defaultAmount?: number;
   /** ראה `COUNTS_TO_MAIN_DOC` */

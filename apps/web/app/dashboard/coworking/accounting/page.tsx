@@ -1,20 +1,69 @@
-import { BarChart3 } from "lucide-react";
+import Link from "next/link";
+import { BarChart3, Calendar, Receipt } from "lucide-react";
 import { requireModuleAccess } from "@/lib/perms";
 import { getAdminFirestore } from "@/lib/firebase-admin";
 import type { Branch, CoworkingClient, FixedExpense, VariableExpense } from "@ultranet/shared-types";
 import { buildCoworkingLedger } from "@/lib/coworking";
+import { countsToMain } from "@/lib/counts-to-main";
+import { loadRecurringVariableExpenses } from "@/lib/recurring-expenses";
+import { RecurringExpensesCard } from "@/components/recurring-expenses/recurring-expenses-card";
+import { CountsToMainBadge } from "@/components/counts-to-main-field";
 import { CoworkingTabs } from "../coworking-tabs";
+import { CoworkingExpenseForm } from "./expense-forms";
+import { deleteCoworkingFixedExpenseAction, deleteCoworkingVariableExpenseAction } from "../actions";
 
 function money(n: number) {
   return `${Math.round(n).toLocaleString("he-IL")} ₪`;
 }
 
+function ExpenseList({
+  rows,
+  emptyText,
+  deleteAction,
+}: {
+  rows: { id: string; title: string; subtitle: string; amount: number; on: boolean }[];
+  emptyText: string;
+  deleteAction: (id: string) => Promise<void>;
+}) {
+  return (
+    <div className="flex flex-col gap-2">
+      {rows.length === 0 && <p className="text-sm text-muted">{emptyText}</p>}
+      {rows.map((r) => {
+        const bound = deleteAction.bind(null, r.id);
+        return (
+          <div
+            key={r.id}
+            className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-card-border bg-[#f9fafb] p-3"
+          >
+            <div>
+              <p className="flex items-center gap-1.5 text-sm font-bold text-ink">
+                {r.title} — {money(r.amount)}
+                <CountsToMainBadge on={r.on} />
+              </p>
+              <p className="text-xs text-muted">{r.subtitle}</p>
+            </div>
+            <form action={bound}>
+              <button
+                type="submit"
+                className="rounded-lg border border-red-200 px-2 py-1 text-[11px] font-medium text-red-600 transition hover:bg-red-50"
+              >
+                מחיקה
+              </button>
+            </form>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 /**
- * הנה"ח משרד שיתופי — שני מספרים.
+ * הנה"ח משרד שיתופי — המאזן וגם ניהול ההוצאות.
  *
- * הבעלים ביקש לראות כאן בדיוק שני דברים: כמה שילמתי עד היום וכמה קיבלתי. לכן אין כאן
- * טפסים, אין חודשים ואין פילוח לפי לקוח — כל אלה קיימים במסכים שלידם. הפירוט של
- * ההוצאות לשלושת הסוגים מוצג רק כדי שהמספר הגדול יהיה ניתן לפענוח, לא כדי לעבוד איתו.
+ * לשונית "הוצאות" הנפרדת בוטלה: היא החזיקה את אותם שני סוגים שהמסך הזה כבר סיכם,
+ * ולהחזיק את הסיכום במקום אחד ואת ההזנה במקום אחר רק חייב לקפוץ בין שני מסכים כדי
+ * להבין מספר. **הקמה כבר לא נרשמת כאן** אלא בטופס הסניף (`/branches`), ששם היא באמת
+ * תכונה של הסניף ולא אירוע חודשי.
  */
 export default async function CoworkingAccountingPage() {
   const session = await requireModuleAccess("coworking");
@@ -40,12 +89,33 @@ export default async function CoworkingAccountingPage() {
     .filter((c) => branchIds.has(c.branchId));
   const fixed = fixedSnap.docs
     .map((d) => ({ ...(d.data() as Omit<FixedExpense, "id">), id: d.id }) as FixedExpense)
-    .filter((e) => branchIds.has(e.branchId));
+    .filter((e) => branchIds.has(e.branchId))
+    .sort((a, b) => (b.startDate ?? "").localeCompare(a.startDate ?? ""));
   const variable = variableSnap.docs
     .map((d) => ({ ...(d.data() as Omit<VariableExpense, "id">), id: d.id }) as VariableExpense)
-    .filter((e) => branchIds.has(e.branchId));
+    .filter((e) => branchIds.has(e.branchId))
+    .sort((a, b) => (b.date ?? "").localeCompare(a.date ?? ""));
 
-  const ledger = buildCoworkingLedger({ fixed, variable, clients });
+  const ledger = buildCoworkingLedger({ fixed, variable, clients, branches });
+
+  // הסניף שההזנה נרשמת עליו. כרגע יש סניף אחד, ולכן אין בורר: הראשון הוא הסניף.
+  const branch = branches[0];
+  const recurring = branch ? await loadRecurringVariableExpenses({ scope: "coworking", branchId: branch.id }) : [];
+
+  const fixedRows = fixed.map((e) => ({
+    id: e.id,
+    title: `${e.name} (${money(e.amount || 0)}/חודש)`,
+    subtitle: `${e.category || "ללא קטגוריה"} · מ-${e.startDate}${e.endDate ? ` עד ${e.endDate}` : ""}`,
+    amount: e.amount || 0,
+    on: countsToMain(e),
+  }));
+  const variableRows = variable.map((e) => ({
+    id: e.id,
+    title: e.desc,
+    subtitle: `${e.category || "ללא קטגוריה"} · ${e.date}`,
+    amount: e.amount || 0,
+    on: countsToMain(e),
+  }));
 
   return (
     <div>
@@ -78,12 +148,21 @@ export default async function CoworkingAccountingPage() {
         <ul className="space-y-0.5 text-muted">
           <li>
             הקמה: <b className="text-ink">{money(ledger.setupToDate)}</b>
+            {ledger.setupFromBranches > 0 && ledger.setupFromExpenses > 0 && (
+              <span className="text-[11.5px]">
+                {" "}
+                ({money(ledger.setupFromBranches)} מפירוט הסניפים · {money(ledger.setupFromExpenses)} משורות ישנות)
+              </span>
+            )}{" "}
+            <Link href="/dashboard/coworking" className="font-bold text-teal hover:underline">
+              נרשמת בטופס הסניף
+            </Link>
           </li>
           <li>
             קבועות (נצבר מתחילת כל הוצאה עד היום): <b className="text-ink">{money(ledger.fixedToDate)}</b>
           </li>
           <li>
-            שוטפות: <b className="text-ink">{money(ledger.variableToDate)}</b>
+            משתנות: <b className="text-ink">{money(ledger.variableToDate)}</b>
           </li>
         </ul>
         <p className="mt-2 text-[11.5px] leading-relaxed text-muted">
@@ -91,6 +170,46 @@ export default async function CoworkingAccountingPage() {
           לפי הסימון &quot;לחשבן בהנה&quot;ח הראשית&quot;.
         </p>
       </div>
+
+      {!branch ? (
+        <div className="mt-4 rounded-card border border-dashed border-card-border bg-white py-12 text-center text-muted">
+          <p>אין סניף משרד שיתופי — אי אפשר לרשום הוצאות.</p>
+          {isOwner && (
+            <Link
+              href="/dashboard/coworking/branches/new"
+              className="mt-3 inline-block rounded-lg bg-gradient-to-br from-teal to-teal-light px-4 py-2 text-sm font-bold text-white shadow-primary transition hover:opacity-90"
+            >
+              + סניף משרד שיתופי
+            </Link>
+          )}
+        </div>
+      ) : (
+        <div className="mt-4 flex flex-col gap-4">
+          <RecurringExpensesCard scope="coworking" branchId={branch.id} expenses={recurring} canManage />
+
+          <section className="rounded-card border border-card-border bg-white p-4 shadow-card">
+            <h2 className="mb-3 flex items-center gap-1.5 text-sm font-bold text-ink">
+              <Calendar className="h-4 w-4" />
+              הוצאות קבועות
+            </h2>
+            <CoworkingExpenseForm branchId={branch.id} kind="fixed" />
+            <ExpenseList rows={fixedRows} emptyText="אין הוצאות קבועות" deleteAction={deleteCoworkingFixedExpenseAction} />
+          </section>
+
+          <section className="rounded-card border border-card-border bg-white p-4 shadow-card">
+            <h2 className="mb-3 flex items-center gap-1.5 text-sm font-bold text-ink">
+              <Receipt className="h-4 w-4" />
+              הוצאות משתנות
+            </h2>
+            <CoworkingExpenseForm branchId={branch.id} kind="variable" />
+            <ExpenseList
+              rows={variableRows}
+              emptyText="אין הוצאות משתנות"
+              deleteAction={deleteCoworkingVariableExpenseAction}
+            />
+          </section>
+        </div>
+      )}
     </div>
   );
 }

@@ -45,10 +45,23 @@ export default async function ComputerRoomBranchAccountingPage({ params }: { par
         <div className="rounded-card border border-card-border bg-white p-4 text-center shadow-card">
           <p className="text-[11px] font-bold uppercase tracking-wide text-muted">עלות הקמה</p>
           <p className="mt-1 text-xl font-black text-ink">{money(stats.setupCost)}</p>
+          {/* הפירוט מוצג רק כשהמספר באמת הגיע ממנו - כשההשקעה נקראה משכבת הנכסים
+              (setupFromAssets) השורות כאן כבר לא מסבירות את הסכום שמעליהן. */}
+          {!stats.setupFromAssets && (stats.branch.setupItems?.length ?? 0) > 0 && (
+            <ul className="mt-2 flex flex-col gap-1 border-t border-card-border pt-2 text-right">
+              {stats.branch.setupItems!.map((item, idx) => (
+                <li key={idx} className="flex items-center justify-between gap-2 text-[11.5px]">
+                  <span className="text-muted">{item.label || "ללא תיאור"}</span>
+                  <span className="font-bold text-ink">{money(item.amount)}</span>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
         <div className="rounded-card border border-card-border bg-white p-4 text-center shadow-card">
           <p className="text-[11px] font-bold uppercase tracking-wide text-muted">הוצאות עד היום (כולל הקמה)</p>
           <p className="mt-1 text-xl font-black text-red-600">{money(stats.spentToDate)}</p>
+          <p className="mt-1 text-[11px] text-muted">ראה פירוט מלא למטה</p>
         </div>
         <div className="rounded-card border border-card-border bg-white p-4 text-center shadow-card">
           <p className="text-[11px] font-bold uppercase tracking-wide text-muted">הכנסות עד היום</p>
@@ -60,11 +73,49 @@ export default async function ComputerRoomBranchAccountingPage({ params }: { par
         </div>
       </div>
 
-      {stats.sharedExpenseShare > 0 && (
-        <p className="text-xs text-muted">
-          מתוכן {money(stats.sharedExpenseShare)} חלק הסניף בהוצאות המשותפות לכל סניפי חדרי המחשבים.
+      {/* "מאיפה המספר הזה" - השאלה שנשאלה על המסך הזה יותר מכל שאלה אחרת. הסכום הגדול הוא
+          חישוב חי ולא נתון שמור, והשורה שהכי מפתיעה בו היא הוצאה קבועה, שמכפילה את עצמה
+          בכל חודש שעובר בלי שנוגעים בה. לכן כל שורה מציגה גם את החשבון שהביא אליה. */}
+      <details className="rounded-card border border-card-border bg-white p-4 shadow-card" open>
+        <summary className="cursor-pointer text-sm font-bold text-ink">
+          ממה מורכבות ההוצאות עד היום ({money(stats.spentToDate)})
+        </summary>
+
+        <ul className="mt-3 flex flex-col divide-y divide-card-border">
+          <li className="flex items-start justify-between gap-3 py-2">
+            <span>
+              <span className="block text-[13px] font-bold text-ink">עלות הקמה</span>
+              <span className="block text-[11.5px] text-muted">
+                {stats.setupFromAssets ? "נקרא משכבת הנכסים (רכישות אמיתיות)" : "מהשדה בטופס הסניף"}
+              </span>
+            </span>
+            <span className="shrink-0 text-[13px] font-bold text-ink">{money(stats.setupCost)}</span>
+          </li>
+
+          {stats.expenseLines.map((line, idx) => (
+            <li key={idx} className="flex items-start justify-between gap-3 py-2">
+              <span>
+                <span className="block text-[13px] font-bold text-ink">{line.label}</span>
+                <span className="block text-[11.5px] text-muted">{line.detail}</span>
+              </span>
+              <span className="shrink-0 text-[13px] font-bold text-ink">{money(line.amount)}</span>
+            </li>
+          ))}
+        </ul>
+
+        {stats.expenseLines.length === 0 && (
+          <p className="mt-2 text-xs text-muted">אין הוצאות שוטפות רשומות על הסניף — הסכום כולו הקמה.</p>
+        )}
+
+        <p className="mt-3 text-[11.5px] leading-relaxed text-muted">
+          הוצאה קבועה נצברת מחדש בכל חודש שעובר, גם בלי לגעת בה. כדי לעצור צבירה של הוצאה
+          שנגמרה השתמש ב<b>&quot;סיום&quot;</b> עם תאריך (ההיסטוריה נשמרת), ולא במחיקה — מחיקה
+          מוציאה את השורה מכל החודשים למפרע.{" "}
+          <Link href={`/dashboard/expenses/${stats.branch.id}`} className="font-bold text-teal hover:underline">
+            לניהול ומחיקת ההוצאות של הסניף
+          </Link>
         </p>
-      )}
+      </details>
 
       {canAdd && (
         <form action={addIncome} className="flex flex-wrap items-end gap-2.5 rounded-card border border-card-border bg-white p-4 shadow-card">
