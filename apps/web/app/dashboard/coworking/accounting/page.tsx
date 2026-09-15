@@ -45,7 +45,7 @@ export default async function CoworkingAccountingPage() {
     .map((d) => ({ ...(d.data() as Omit<VariableExpense, "id">), id: d.id }) as VariableExpense)
     .filter((e) => branchIds.has(e.branchId));
 
-  const ledger = buildCoworkingLedger({ fixed, variable, clients });
+  const ledger = buildCoworkingLedger({ fixed, variable, clients, branches });
 
   return (
     <div>
@@ -78,6 +78,12 @@ export default async function CoworkingAccountingPage() {
         <ul className="space-y-0.5 text-muted">
           <li>
             הקמה: <b className="text-ink">{money(ledger.setupToDate)}</b>
+            {ledger.setupFromBranches > 0 && ledger.setupFromExpenses > 0 && (
+              <span className="text-[11.5px]">
+                {" "}
+                ({money(ledger.setupFromBranches)} מפירוט הסניפים · {money(ledger.setupFromExpenses)} משורות הוצאה)
+              </span>
+            )}
           </li>
           <li>
             קבועות (נצבר מתחילת כל הוצאה עד היום): <b className="text-ink">{money(ledger.fixedToDate)}</b>

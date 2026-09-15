@@ -10,7 +10,12 @@
  * מה שמצטרף (רק כשהדגל דלוק):
  *   הוצאות — `n_fixed_expenses` (נצברת חודש-חודש מ-`startDate`), `n_var_expenses`,
  *            `n_multi_branch_expenses`, `n_recurring_var_expenses` (סכום החודשים שנרשמו),
- *            `n_ah_expenses` (שורות "הוצאות נוספות").
+ *            `n_ah_expenses` (שורות "הוצאות נוספות"), ו-`n_branches.setupCost` (עלות ההקמה
+ *            של הסניף, שורה אחת לסניף בחודש הפתיחה שלו).
+ *
+ * עלות ההקמה היא היוצא מן הכלל היחיד לברירת המחדל: היא נספרת אלא אם כבו אותה במפורש
+ * (`setupCostCountsToMain`), כי הבעלים ביקש שההקמה תיכנס לראשי ואין כאן "שורה ישנה"
+ * שעלולה להיסחף בדיעבד - יש שדה אחד לסניף שרואים בטופס.
  *   הכנסות — `n_ah_income` (כל מה שנוסף במסך הראשי: אשראי / מזומן / ניידים / מכירה),
  *            ותשלומי משרד שיתופי שסומנו.
  *
@@ -28,7 +33,7 @@ import type {
   RecurringVariableExpense,
   VariableExpense,
 } from "@ultranet/shared-types";
-import { countsToMain } from "./counts-to-main";
+import { countsToMain, setupCostCountsToMain } from "./counts-to-main";
 import { monthsBetween } from "./branch-accounting";
 import { RECURRING_VAR_EXPENSES_COLLECTION } from "./recurring-expenses";
 import { MULTI_BRANCH_EXPENSES_COLLECTION } from "./multi-branch-expense";
@@ -43,6 +48,7 @@ export type MainEntrySource =
   | "multi-branch"
   | "recurring"
   | "extra"
+  | "setup"
   | "income"
   | "coworking";
 
@@ -215,6 +221,27 @@ export async function loadMainLedger(upto = currentMonth()): Promise<MainLedger>
       amount: e.amount || 0,
       origin: "הוצאות נוספות",
       category: e.category,
+    });
+  }
+
+  // עלות ההקמה של כל סניף. זו לא תנועה מתוארכת בקולקשן משלה אלא שדה על הסניף, ולכן היא
+  // נתלית בחודש הפתיחה שלו: שם היא באמת יצאה מהכיס. סניף מחוק לא נספר - ההוצאה שלו
+  // היסטורית ולא שייכת לסה"כ החי.
+  for (const b of branches) {
+    if (b.deleted) continue;
+    if (!b.setupCost || !setupCostCountsToMain(b)) continue;
+    const date = (b.openedAt || b.founded || "2000-01-01").slice(0, 10);
+    const month = date.slice(0, 7);
+    if (month > upto) continue;
+    expenses.push({
+      id: `setup__${b.id}`,
+      source: "setup",
+      date,
+      month,
+      desc: `הקמת ${b.name}`,
+      amount: b.setupCost,
+      origin: originOf(b.id),
+      category: "הקמה",
     });
   }
 

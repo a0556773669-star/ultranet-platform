@@ -78,6 +78,14 @@ export interface Branch {
   /** פירוט עלות ההקמה: שורה לכל הוצאה (מה נקנה וכמה). ריק/חסר = לא הוזן פירוט ו-`setupCost`
    *  הוא מספר שהוזן ידנית. */
   setupItems?: SetupCostItem[];
+  /** האם עלות ההקמה של הסניף נספרת בהנה"ח הראשית.
+   *
+   *  **ברירת המחדל כאן הפוכה מ-`countsToMain` הרגיל**: `undefined` = כן נספר. זה מכוון ולא
+   *  פליטה. הדגל הרגיל מתחיל כבוי כדי ששורות שהוזנו לפני שהוא נולד לא ייסחפו לספר הראשי
+   *  בדיעבד; לעלות הקמה אין "שורות שהוזנו" - יש שדה אחד לסניף, גלוי בטופס, והבעלים ביקש
+   *  במפורש שעלויות ההקמה ייכנסו לראשי. הכיבוי כאן הוא ההחרגה, לא ההצטרפות.
+   *  הקריאה עוברת תמיד דרך `setupCostCountsToMain()` ב-`apps/web/lib/counts-to-main.ts`. */
+  setupCountsToMain?: boolean;
     notes?: string;
     /** sub-branch model: set when this branch rolls up under a head partner's branch */
   parentBranchId?: string | null;
