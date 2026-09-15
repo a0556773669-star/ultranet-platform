@@ -35,9 +35,9 @@ export interface BranchRevenueShare {
   /** ISO date (רשות) — היום האחרון שנספר, כשההסדר הסתיים. */
   endDate?: string;
   /**
-   * איזה סניף. `branchId` מנצח כשהוא מלא; אחרת מתאימים לפי שם, בין סניפי ההשכרות
-   * שלי בלבד. השם של הסניף שנתפס בפועל מוצג במסכים, כדי שטעות התאמה תיראה מיד
-   * ולא תתגלה בסוף החודש.
+   * איזה סניף. `branchId` מנצח כשהוא מלא; אחרת מתאימים לפי שם, בין סניפי ההשכרות.
+   * השם של הסניף שנתפס בפועל מוצג במסכים, כדי שטעות התאמה תיראה מיד ולא תתגלה בסוף
+   * החודש - וגם התאמה ליותר מסניף אחד מסומנת ולא נבלעת (`ambiguousRevenueShares`).
    */
   branchId?: string;
   branchNameIncludes?: string;
@@ -59,9 +59,17 @@ export const BRANCH_REVENUE_SHARES: BranchRevenueShare[] = [
   },
 ];
 
-/** האם הסניף בכלל יכול לשאת הסדר פר-סניף: סניף השכרות חי שהוא שלי. */
+/**
+ * האם הסניף בכלל יכול לשאת הסדר פר-סניף: סניף השכרות שלא נמחק.
+ *
+ * במכוון **אין כאן תנאי `isMine`**. הוא היה כאן בהתחלה, בירושה מ-"חלק המזכירה" שרץ על
+ * "הסניפים שלי", ונשאר כאן בטעות: ההסדר מוגדר במפורש על סניף בשם, ואם הסניף במקרה
+ * מסומן כסניף עם שותף - ההסדר פשוט היה מפסיק לעבוד בלי שאף אחד היה יודע. אחוז שאני
+ * חייב לאדם הוא חוב שלי מול אותו אדם בכל מקרה; הוא יורד מהרווח שלי ולא נוגע בהתחשבנות
+ * מול השותף בסניף, בדיוק כמו שהוא לא נוגע בה בסניף שכולו שלי.
+ */
 function eligible(branch: Branch): boolean {
-  return branch.branchType === "rentals" && branch.isMine !== false && !branch.deleted;
+  return branch.branchType === "rentals" && !branch.deleted;
 }
 
 /** ההסדר שחל על הסניף הזה, אם יש. */
@@ -259,4 +267,20 @@ export function branchRevenueShareLine(
     gross,
     amount,
   };
+}
+
+/**
+ * הסדרים שנתפסו על **יותר מסניף אחד**.
+ *
+ * ההתאמה לפי שם היא נוחה אבל לא ייחודית: `"ראשי"` יתפוס גם "סניף ראשי" וגם "ראשי ב'",
+ * ואז אותו אחוז נגבה פעמיים משני סניפים שונים - שקט, נכון מבחינת הקוד, ושגוי לגמרי
+ * מבחינת הכסף. כאן זה נספר, והמסך אומר את זה.
+ */
+export function ambiguousRevenueShares(
+  branches: Branch[],
+): { share: BranchRevenueShare; branches: Branch[] }[] {
+  return BRANCH_REVENUE_SHARES.map((share) => ({
+    share,
+    branches: branches.filter((b) => branchRevenueShareFor(b) === share),
+  })).filter((r) => r.branches.length > 1);
 }
