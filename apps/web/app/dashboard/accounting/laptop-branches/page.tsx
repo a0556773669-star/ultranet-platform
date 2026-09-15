@@ -9,6 +9,7 @@ import {
 import { buildLaptopBranchTracking, trackingWindow } from "@/lib/laptop-branch-tracking";
 import {
   BRANCH_REVENUE_SHARES,
+  ambiguousRevenueShares,
   resolveBranchRevenueShares,
   revenueShareForMonth,
 } from "@/lib/revenue-shares";
@@ -62,6 +63,7 @@ export default async function LaptopBranchesPage({
   const tracking = buildLaptopBranchTracking(branches, raw, months);
   // ההסדרים הפר-סניפיים (30% מהסניף הראשי לאלישבע רומנו). מוצגים כאן, ליד הרווח
   // שהם יוצאים ממנו, אבל החוב עצמו מנוהל ב-/transfers יחד עם האחוזים הפר-מחשביים.
+  const ambiguous = ambiguousRevenueShares(raw.branches);
   const branchShares = resolveBranchRevenueShares(raw.branches).map(({ share, branch }) => ({
     share,
     branch,
@@ -115,11 +117,23 @@ export default async function LaptopBranchesPage({
 
       {/* הסדר שהוגדר ולא נתפס על אף סניף הוא שקט מסוכן: הוא לא מנכה כלום ולא מייצר חוב,
           ואי אפשר לדעת את זה בלי להסתכל בקוד. לכן הוא נאמר כאן במפורש. */}
+      {ambiguous.length > 0 && (
+        <div className="rounded-card border border-red-300 bg-red-50 p-4 text-[12.5px] leading-relaxed text-ink shadow-card">
+          <b>אותו הסדר נתפס על יותר מסניף אחד — הוא נגבה פעמיים.</b>{" "}
+          {ambiguous
+            .map((a) => `${a.share.pct}% ל${a.share.personName}: ${a.branches.map((b) => b.name).join(" + ")}`)
+            .join(" · ")}
+          . ההתאמה נעשית לפי שם, ויותר מסניף אחד עונה עליו. צריך לקבע את{" "}
+          <code>branchId</code> ב-<code>BRANCH_REVENUE_SHARES</code> (
+          <code>lib/revenue-shares.ts</code>) כדי שזה יצביע על סניף אחד בלבד.
+        </div>
+      )}
+
       {branchShares.length === 0 && BRANCH_REVENUE_SHARES.length > 0 && (
         <div className="rounded-card border border-amber-300 bg-amber-50 p-4 text-[12.5px] leading-relaxed text-ink shadow-card">
           <b>הסדר אחוזים מוגדר אבל לא נמצא לו סניף.</b>{" "}
           {BRANCH_REVENUE_SHARES.map((sh) => `${sh.pct}% ל${sh.personName}`).join(", ")} — ההתאמה נעשית
-          לפי שם הסניף, בין סניפי ההשכרות שלי בלבד. אף סניף לא התאים, ולכן לא מנוכה כלום ולא נוצר
+          לפי שם הסניף, בין סניפי ההשכרות. אף סניף לא התאים, ולכן לא מנוכה כלום ולא נוצר
           חוב. צריך לעדכן את <code>BRANCH_REVENUE_SHARES</code> ב-<code>lib/revenue-shares.ts</code>.
         </div>
       )}
