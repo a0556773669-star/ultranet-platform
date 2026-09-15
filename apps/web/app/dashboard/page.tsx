@@ -7,9 +7,8 @@ import { getAdminFirestore } from "@/lib/firebase-admin";
 import type { PermKey } from "@/lib/perms";
 import { NAV_ITEMS, visibleFor, type NavItem } from "@/lib/nav-items";
 import HomeClock from "./home-clock";
-import { getInventorySnapshotAction } from "./(computer-rooms)/inventory/actions";
 import type { ExpenseScope, Laptop, RecurringVariableExpense, Rental } from "@ultranet/shared-types";
-import type { BranchKey, InventoryItem } from "@/lib/legacy-inventory";
+import { getStockSnapshotAction } from "./(computer-rooms)/operations/actions";
 import { loadMainLedger } from "@/lib/main-ledger";
 import { loadCoworkingData, paymentForMonth, currentMonth as coworkingMonth } from "@/lib/coworking";
 import { loadRecurringVariableExpenses } from "@/lib/recurring-expenses";
@@ -159,23 +158,24 @@ export default async function DashboardHomePage() {
     );
   }
 
-  let inventoryItemCount = 0;
-  let lowStockItems: { name: string; qty: number; min: number }[] | null = null;
+  // חוסרי מלאי מגיעים ממודול התפעול: מה שסניף סימן עליו X בבדיקה של החודש הנוכחי.
+  // `getStockSnapshotAction` כבר מסנן לסניפים שהמשתמש רשאי לראות, ולכן אין כאן סינון נוסף.
+  let stockPending = 0;
+  let missingStock: { name: string; branchName: string }[] | null = null;
 
   if (has("computers")) {
-    const snapshot = await getInventorySnapshotAction();
-    const branchKeys: BranchKey[] = isOwner
-      ? snapshot.branches.map((b) => b.key)
-      : snapshot.branches.filter((b) => String(b.key) === branchId).map((b) => b.key);
-    const items: { name: string; qty: number; min: number }[] = [];
-    branchKeys.forEach((key) => {
-      const branchInv: Record<string, InventoryItem> = snapshot.inventory[key] ?? {};
-      Object.entries(branchInv).forEach(([itemName, item]) => {
-        items.push({ name: itemName, qty: item.qty, min: item.min });
-      });
-    });
-    inventoryItemCount = items.length;
-    lowStockItems = items.filter((i) => i.qty <= i.min).slice(0, 6);
+    const snapshot = await getStockSnapshotAction();
+    if (snapshot.alerts) {
+      missingStock = snapshot.alerts.flatMap((a) =>
+        a.missing.map((name) => ({ name, branchName: a.branchName })),
+      );
+      stockPending = snapshot.alerts.reduce((sum, a) => sum + a.pending, 0);
+    } else {
+      const branchName = snapshot.branches[0]?.name ?? "";
+      missingStock = snapshot.rows.filter((r) => r.status === "missing").map((r) => ({ name: r.name, branchName }));
+      stockPending = snapshot.rows.filter((r) => r.status === null).length;
+    }
+    missingStock = missingStock.slice(0, 6);
   }
 
   // קבוע ולא `let`: TypeScript לא שומר צמצום טיפוס של משתנה משתנה בתוך קולבק, וכרטיס
@@ -341,27 +341,31 @@ export default async function DashboardHomePage() {
         </div>
       )}
 
-      {lowStockItems && (
+      {missingStock && (
           <div className="card">
             <div className="mb-3 flex items-center justify-between text-xs font-bold uppercase tracking-wide text-muted">
               <span className="flex items-center gap-1.5"><Package className="h-4 w-4" />{"מלאי - פריטים בחוסר"}</span>
-              <span className="rounded-full bg-[#f4f6f9] px-2.5 py-0.5 text-ink normal-case">{inventoryItemCount}</span>
+              {stockPending > 0 && (
+                <span className="rounded-full bg-amber-50 px-2.5 py-0.5 normal-case text-amber-700">
+                  {stockPending}{" "}{"טרם סומנו"}
+                </span>
+              )}
             </div>
-            {lowStockItems.length === 0 ? (
+            {missingStock.length === 0 ? (
               <div className="text-sm text-muted">{"אין פריטים בחוסר במלאי"}</div>
             ) : (
-              lowStockItems.map((it, i) => (
+              missingStock.map((it, i) => (
                 <div key={i} className="flex items-center gap-2 border-b border-card-border py-2 text-[13px] last:border-b-0">
-                  <span className="h-2 w-2 rounded-full bg-amber-500" />
+                  <span className="h-2 w-2 rounded-full bg-red-500" />
                   <span className="flex-1 font-medium text-ink">{it.name}</span>
-                  <span className="text-[11px] text-muted">
-                    {it.qty}
-                    {" " + "מתוך" + " "}
-                    {it.min}
-                  </span>
+                  <span className="text-[11px] text-muted">{it.branchName}</span>
                 </div>
               ))
             )}
+            <Link href="/dashboard/operations/stock" className="mt-2 inline-flex items-center gap-1 text-[11px] font-bold text-teal hover:underline">
+              {"לעדכון המלאי"}
+              <ArrowLeft className="h-3 w-3" />
+            </Link>
           </div>
         )}
       </div>
