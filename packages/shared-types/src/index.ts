@@ -1305,3 +1305,103 @@ export interface PartnerPayout {
   paidAt?: string;
   note?: string;
 }
+
+/* ────────────────────────────────────────────────────────────────────────────
+ * תפעול חדרי מחשבים (`/dashboard/operations`)
+ * ──────────────────────────────────────────────────────────────────────────── */
+
+/** למי הפריט/המשימה שייכים: לכל הסניפים, או לרשימת סניפים מפורשת. */
+export type OpsScope = "all" | "branches";
+
+/**
+ * collection: `n_ops_stock_items` — הגדרת פריט מלאי אחד, נקבעת בצד המנהל
+ * ("הגדרות תפעול"). הסניף לא מזין כמויות; הוא רק מסמן V/X מול ההגדרה הזו.
+ */
+export interface OpsStockItem {
+  id: string;
+  /** שם הפריט כפי שמוצג לסניף (למשל "עטים") */
+  name: string;
+  /** כמה אמורים להיות תמיד בסניף. טקסט חופשי-כמותי שמוצג ליד הפריט, לא נספר. */
+  targetQty: number;
+  /** יחידת מידה להצגה (למשל "יח'", "חבילות"). ריק = בלי יחידה. */
+  unit?: string;
+  scope: OpsScope;
+  /** רלוונטי רק כש-`scope === "branches"` */
+  branchIds: string[];
+  /** סדר הצגה ברשימה (עולה) */
+  order: number;
+  /** פריט שכבוי לא מוצג לסניפים ולא נספר, אבל ההיסטוריה שלו נשמרת */
+  active: boolean;
+  createdAt?: string;
+}
+
+/** מה הסניף סימן מול פריט מלאי: יש / חסר. */
+export type OpsStockMark = "ok" | "missing";
+
+export interface OpsStockMarkEntry {
+  status: OpsStockMark;
+  /** הערה חופשית, בעיקר כשסומן "חסר" */
+  note?: string;
+  at: string;
+  by?: string;
+}
+
+/**
+ * collection: `n_ops_stock_checks` — בדיקת המלאי של סניף אחד בחודש אחד.
+ *
+ * מזהה המסמך דטרמיניסטי: `${branchId}__${periodKey}` (`periodKey` = `YYYY-MM`).
+ * **כאן נמצא ה"איפוס בכל ראשון לחודש"**: אין job שמוחק כלום — חודש חדש הוא פשוט
+ * מסמך חדש שעוד לא קיים, ולכן כל הסימונים מתחילים ריקים.
+ */
+export interface OpsStockCheck {
+  id: string;
+  branchId: string;
+  /** YYYY-MM */
+  periodKey: string;
+  /** מפתח = `OpsStockItem.id` */
+  marks: Record<string, OpsStockMarkEntry>;
+  updatedAt?: string;
+  updatedBy?: string;
+}
+
+export type OpsTaskFreq = "weekly" | "monthly";
+
+/**
+ * collection: `n_ops_tasks` — הגדרת משימה שבועית/חודשית, נקבעת בצד המנהל.
+ * הסניף רק מסמן V על ביצוע בתקופה הנוכחית.
+ */
+export interface OpsTask {
+  id: string;
+  name: string;
+  /** פירוט/הוראות ביצוע, אופציונלי */
+  details?: string;
+  freq: OpsTaskFreq;
+  scope: OpsScope;
+  /** רלוונטי רק כש-`scope === "branches"` */
+  branchIds: string[];
+  order: number;
+  active: boolean;
+  createdAt?: string;
+}
+
+export interface OpsTaskDoneEntry {
+  at: string;
+  by?: string;
+}
+
+/**
+ * collection: `n_ops_task_checks` — ביצועי המשימות של סניף אחד בתקופה אחת.
+ *
+ * מזהה המסמך דטרמיניסטי: `${branchId}__${periodKey}`, כאשר `periodKey` הוא
+ * `YYYY-Www` למשימות שבועיות ו-`YYYY-MM` לחודשיות. לכן לסניף יש בו-זמנית מסמך
+ * שבועי ומסמך חודשי, וגם כאן האיפוס הוא מעבר תקופה ולא מחיקה.
+ */
+export interface OpsTaskCheck {
+  id: string;
+  branchId: string;
+  periodKey: string;
+  /** מפתח = `OpsTask.id` */
+  done: Record<string, OpsTaskDoneEntry>;
+  updatedAt?: string;
+  updatedBy?: string;
+}
