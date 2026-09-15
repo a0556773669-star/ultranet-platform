@@ -10,6 +10,7 @@ import { RecurringExpensesCard } from "@/components/recurring-expenses/recurring
 import { CountsToMainBadge } from "@/components/counts-to-main-field";
 import { CoworkingTabs } from "../coworking-tabs";
 import { CoworkingExpenseForm } from "./expense-forms";
+import { loadRecurringPurchaseTypes } from "@/lib/recurring-purchases";
 import { deleteCoworkingFixedExpenseAction, deleteCoworkingVariableExpenseAction } from "../actions";
 
 function money(n: number) {
@@ -100,7 +101,10 @@ export default async function CoworkingAccountingPage() {
 
   // הסניף שההזנה נרשמת עליו. כרגע יש סניף אחד, ולכן אין בורר: הראשון הוא הסניף.
   const branch = branches[0];
-  const recurring = branch ? await loadRecurringVariableExpenses({ scope: "coworking", branchId: branch.id }) : [];
+  const [recurring, expenseTypes] = await Promise.all([
+    branch ? loadRecurringVariableExpenses({ scope: "coworking", branchId: branch.id }) : Promise.resolve([]),
+    loadRecurringPurchaseTypes({ module: "coworking" }),
+  ]);
 
   const fixedRows = fixed.map((e) => ({
     id: e.id,
@@ -201,7 +205,7 @@ export default async function CoworkingAccountingPage() {
               <Receipt className="h-4 w-4" />
               הוצאות משתנות
             </h2>
-            <CoworkingExpenseForm branchId={branch.id} kind="variable" />
+            <CoworkingExpenseForm branchId={branch.id} kind="variable" expenseTypes={expenseTypes} />
             <ExpenseList
               rows={variableRows}
               emptyText="אין הוצאות משתנות"

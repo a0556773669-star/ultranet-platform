@@ -180,6 +180,8 @@ export interface VariableExpense {
   linkedAhExpenseId?: string;
   /** כמו ב-`FixedExpense`: הסניפים שהוצאה משותפת מתחלקת ביניהם. חסר = כל סניפי המודול. */
   branchIds?: string[];
+  /** ראה `RecurringPurchaseType`: מסמן שהרכישה הזו היא עוד קנייה של אותו מוצר חוזר. */
+  expenseTypeId?: string;
 }
 
 /**
@@ -475,6 +477,39 @@ export interface MultiBranchExpense {
   /** id of the matching n_ah_expenses doc auto-created for the owner's share, when the owner
    *  is the one who paid. Deleted together with this expense. */
   linkedAhExpenseId?: string;
+  /** ראה `RecurringPurchaseType`: מסמן שהרכישה הזו היא עוד קנייה של אותו מוצר חוזר. */
+  expenseTypeId?: string;
+}
+
+/**
+ * collection: `n_expense_types` — **סוג רכישה חוזרת**.
+ *
+ * נייר למדפסת, שקיות אשפה, פחיות. כל קנייה כזו היא באמת הוצאה חד-פעמית — קונים כשנגמר,
+ * בסכום אחר ובתאריך לא צפוי — ולכן היא נשארת שורה ב-`n_var_expenses` או
+ * `n_multi_branch_expenses` בדיוק כפי שהייתה. מה שחסר הוא לא מקום אחר לרשום בו, אלא
+ * **הידיעה ששתי השורות האלה הן אותו מוצר**: שלוש קניות נייר של 300 ₪ מפוזרות על השנה
+ * נראות כלום, וביחד הן 900 ₪ שראוי לדעת עליהם.
+ *
+ * הסוג הוא רק המזהה הזה. הוא לא מחזיק סכומים, לא משנה איך ההוצאה נספרת בהנה"ח ולא מחלק
+ * כסף בפועל — **החלוקה ל-12 חודשים ובין הסניפים היא חישוב של הדוח בלבד**
+ * (`apps/web/lib/recurring-purchases.ts`). הכסף יצא בחודש שהוא יצא, וכך הוא נשאר בספר.
+ */
+export interface RecurringPurchaseType {
+  id: string;
+  /** "נייר למדפסת", "שקיות אשפה" */
+  name: string;
+  category?: string;
+  /** המודול שהרכישה שייכת לו. `general` = כל העסק, בלי שיוך למודול. */
+  module: "computers" | "rentals" | "coworking" | "general";
+  /**
+   * הסניפים שהעלות השנתית מתחלקת ביניהם **בדוח**. ריק/חסר = כל סניפי המודול, כולל
+   * סניפים שייפתחו — אותה סמנטיקה כמו `branchIds` בהוצאה משותפת.
+   */
+  branchIds?: string[];
+  /** הופסק: לא מוצע יותר בטפסים, אבל כל ההיסטוריה שלו נשארת בדוח. */
+  archived?: boolean;
+  note?: string;
+  createdAt: string;
 }
 
 /** collection: n_cw_stations */

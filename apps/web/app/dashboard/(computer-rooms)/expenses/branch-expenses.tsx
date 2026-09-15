@@ -1,5 +1,6 @@
 import { Scale, Calendar, Receipt } from "lucide-react";
-import type { FixedExpense, VariableExpense } from "@ultranet/shared-types";
+import type { FixedExpense, RecurringPurchaseType, VariableExpense } from "@ultranet/shared-types";
+import { ExpenseTypeField } from "@/components/recurring-purchases/expense-type-field";
 import { createFixedExpenseAction, createVariableExpenseAction } from "./actions";
 import { EditFixedExpenseModal, EditVariableExpenseModal } from "./edit-expense-modals";
 import { EndFixedExpenseControl, DeleteFixedExpenseButton, DeleteVariableExpenseButton } from "./expense-action-buttons";
@@ -68,9 +69,10 @@ type Props = {
   canAdd: boolean;
   fixedExpenses: FixedExpense[];
   variableExpenses: VariableExpense[];
+  expenseTypes?: RecurringPurchaseType[];
 };
 
-export function BranchExpenses({ branchId, isShared, branches = [], isPartner, ownerName, partnerName, canManage, canAdd, fixedExpenses, variableExpenses }: Props) {
+export function BranchExpenses({ branchId, isShared, branches = [], isPartner, ownerName, partnerName, canManage, canAdd, fixedExpenses, variableExpenses, expenseTypes = [] }: Props) {
   const activeFixed = fixedExpenses.filter((e) => !e.endDate);
   const endedFixed = fixedExpenses.filter((e) => e.endDate);
   const branchNameById = new Map(branches.map((b) => [b.id, b.name]));
@@ -226,6 +228,9 @@ export function BranchExpenses({ branchId, isShared, branches = [], isPartner, o
               </select>
             </div>
             {isPartner && <PayerFields ownerName={ownerName} partnerName={partnerName} />}
+            <div>
+              <ExpenseTypeField types={expenseTypes} idPrefix="new-variable-type" />
+            </div>
             {isShared && (
               <div className="col-span-2 md:col-span-3">
                 <SharedBranchScopeField branches={branches} idPrefix="new-variable" />

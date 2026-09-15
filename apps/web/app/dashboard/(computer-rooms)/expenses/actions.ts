@@ -7,6 +7,7 @@ import { FieldValue } from "firebase-admin/firestore";
 import type { Branch, FixedExpense, VariableExpense } from "@ultranet/shared-types";
 import { SHARED_EXPENSE_BRANCH_ID } from "@/lib/computer-room-accounting";
 import { createLinkedOwnerLedgerExpense, deleteLinkedOwnerLedgerExpense } from "@/lib/branch-expense-ledger";
+import { resolveExpenseTypeIdFromForm } from "@/lib/recurring-purchases";
 import { countsToMainFromForm } from "@/lib/counts-to-main";
 import { sharedExpenseBranchIdsFromForm } from "@/lib/expense-shared-scope";
 
@@ -81,6 +82,7 @@ export async function createFixedExpenseAction(branchId: string, formData: FormD
   await getAdminFirestore().collection("n_fixed_expenses").add(stripUndefined(data));
   revalidatePath(`/dashboard/expenses/${branchId}`);
   revalidatePath("/dashboard/accounting");
+  revalidatePath("/dashboard/accounting/recurring-purchases");
   revalidatePath("/dashboard/computer-rooms-accounting");
   revalidatePath(`/dashboard/computer-rooms-accounting/${branchId}`);
   revalidatePath("/dashboard");
@@ -93,6 +95,7 @@ export async function endFixedExpenseAction(id: string, branchId: string, formDa
   await ref.set({ endDate }, { merge: true });
   revalidatePath(`/dashboard/expenses/${branchId}`);
   revalidatePath("/dashboard/accounting");
+  revalidatePath("/dashboard/accounting/recurring-purchases");
   revalidatePath("/dashboard/computer-rooms-accounting");
   revalidatePath(`/dashboard/computer-rooms-accounting/${branchId}`);
   revalidatePath("/dashboard");
@@ -104,6 +107,7 @@ export async function deleteFixedExpenseAction(id: string, branchId: string) {
   await ref.delete();
   revalidatePath(`/dashboard/expenses/${branchId}`);
   revalidatePath("/dashboard/accounting");
+  revalidatePath("/dashboard/accounting/recurring-purchases");
   revalidatePath("/dashboard/computer-rooms-accounting");
   revalidatePath(`/dashboard/computer-rooms-accounting/${branchId}`);
   revalidatePath("/dashboard");
@@ -137,6 +141,7 @@ export async function updateFixedExpenseAction(id: string, branchId: string, for
   await ref.set(data, { merge: true });
   revalidatePath(`/dashboard/expenses/${branchId}`);
   revalidatePath("/dashboard/accounting");
+  revalidatePath("/dashboard/accounting/recurring-purchases");
   revalidatePath("/dashboard/computer-rooms-accounting");
   revalidatePath(`/dashboard/computer-rooms-accounting/${branchId}`);
   revalidatePath("/dashboard");
@@ -182,10 +187,12 @@ export async function createVariableExpenseAction(branchId: string, formData: Fo
     countsToMain: countsToMainFromForm(formData),
     linkedAhExpenseId,
     branchIds: sharedBranchIdsFor(branchId, formData),
+    expenseTypeId: await resolveExpenseTypeIdFromForm(formData, "computers"),
   };
   await db.collection("n_var_expenses").add(stripUndefined(data));
   revalidatePath(`/dashboard/expenses/${branchId}`);
   revalidatePath("/dashboard/accounting");
+  revalidatePath("/dashboard/accounting/recurring-purchases");
   revalidatePath("/dashboard/computer-rooms-accounting");
   revalidatePath(`/dashboard/computer-rooms-accounting/${branchId}`);
   revalidatePath("/dashboard");
@@ -238,6 +245,7 @@ export async function updateVariableExpenseAction(id: string, branchId: string, 
   await ref.set(data, { merge: true });
   revalidatePath(`/dashboard/expenses/${branchId}`);
   revalidatePath("/dashboard/accounting");
+  revalidatePath("/dashboard/accounting/recurring-purchases");
   revalidatePath("/dashboard/computer-rooms-accounting");
   revalidatePath(`/dashboard/computer-rooms-accounting/${branchId}`);
   revalidatePath("/dashboard");
@@ -250,6 +258,7 @@ export async function deleteVariableExpenseAction(id: string, branchId: string) 
   await ref.delete();
   revalidatePath(`/dashboard/expenses/${branchId}`);
   revalidatePath("/dashboard/accounting");
+  revalidatePath("/dashboard/accounting/recurring-purchases");
   revalidatePath("/dashboard/computer-rooms-accounting");
   revalidatePath(`/dashboard/computer-rooms-accounting/${branchId}`);
   revalidatePath("/dashboard");

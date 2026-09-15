@@ -13,6 +13,7 @@ import { BranchExpenseTable, type BranchExpenseRow } from "@/components/expenses
 import { CountsToMainBadge } from "@/components/counts-to-main-field";
 import { DeleteEntryButton } from "../../accounting/delete-entry-button";
 import { MultiBranchExpenseForm } from "./multi-branch-form";
+import { loadRecurringPurchaseTypes } from "@/lib/recurring-purchases";
 import { deleteMultiBranchExpenseAction } from "./multi-branch-actions";
 
 export default async function ExpensesHomePage() {
@@ -29,11 +30,12 @@ export default async function ExpensesHomePage() {
   }
 
   const db = getAdminFirestore();
-  const [snap, fixedSnap, variableSnap, multiSnap] = await Promise.all([
+  const [snap, fixedSnap, variableSnap, multiSnap, expenseTypes] = await Promise.all([
     db.collection("n_branches").where("branchType", "==", "rentals").get(),
     db.collection("n_fixed_expenses").get(),
     db.collection("n_var_expenses").get(),
     db.collection(MULTI_BRANCH_EXPENSES_COLLECTION).get(),
+    loadRecurringPurchaseTypes({ module: "rentals" }),
   ]);
   const branches = snap.docs
     .map((d) => ({ ...(d.data() as Omit<Branch, "id">), id: d.id }) as Branch)
@@ -93,7 +95,7 @@ export default async function ExpensesHomePage() {
       </div>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <MultiBranchExpenseForm branches={branches} module="rentals" />
+        <MultiBranchExpenseForm branches={branches} module="rentals" expenseTypes={expenseTypes} />
 
         <div>
           <div className="mb-2 flex items-center justify-between text-xs font-bold uppercase tracking-wide text-muted">

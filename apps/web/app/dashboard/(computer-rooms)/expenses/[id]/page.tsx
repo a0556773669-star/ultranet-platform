@@ -10,6 +10,7 @@ import { BranchExpenses } from "../branch-expenses";
 import { SharedExpensesForBranch } from "../shared-expenses-for-branch";
 import { RecurringExpensesCard } from "@/components/recurring-expenses/recurring-expenses-card";
 import { loadRecurringVariableExpenses } from "@/lib/recurring-expenses";
+import { loadRecurringPurchaseTypes } from "@/lib/recurring-purchases";
 
 export default async function ComputerRoomBranchExpensesPage({ params }: { params: { id: string } }) {
   const session = await requireModuleAccess("computers");
@@ -41,10 +42,12 @@ export default async function ComputerRoomBranchExpensesPage({ params }: { param
 
   // הסניפים נטענים תמיד: בספר המשותף הם רשימת הבחירה של "על מי ההוצאה חלה", ובמסך של סניף
   // בודד הם המחלק שמסביר כמה הוא נושא מכל הוצאה משותפת.
-  const [fixedSnap, variableSnap, recurring, branchesSnap, sharedFixedSnap, sharedVariableSnap] = await Promise.all([
+  const [fixedSnap, variableSnap, recurring, expenseTypes, branchesSnap, sharedFixedSnap, sharedVariableSnap] =
+    await Promise.all([
     db.collection("n_fixed_expenses").where("branchId", "==", params.id).get(),
     db.collection("n_var_expenses").where("branchId", "==", params.id).get(),
     loadRecurringVariableExpenses({ scope: "computers", branchId: params.id }),
+    loadRecurringPurchaseTypes({ module: "computers" }),
     db.collection("n_branches").where("branchType", "==", "computers").get(),
     isShared
       ? Promise.resolve(null)
@@ -52,7 +55,7 @@ export default async function ComputerRoomBranchExpensesPage({ params }: { param
     isShared
       ? Promise.resolve(null)
       : db.collection("n_var_expenses").where("branchId", "==", SHARED_EXPENSE_BRANCH_ID).get(),
-  ]);
+    ]);
   const computerBranches = branchesSnap.docs
     .map((d) => ({ ...(d.data() as Omit<Branch, "id">), id: d.id }) as Branch)
     .filter((b) => !b.deleted)
@@ -97,6 +100,7 @@ export default async function ComputerRoomBranchExpensesPage({ params }: { param
         canAdd={isOwner || isPartner}
         fixedExpenses={visibleFixed}
         variableExpenses={visibleVariable}
+        expenseTypes={expenseTypes}
       />
       {!isShared && (
         <SharedExpensesForBranch

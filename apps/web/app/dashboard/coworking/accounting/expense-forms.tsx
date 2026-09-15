@@ -1,4 +1,6 @@
+import type { RecurringPurchaseType } from "@ultranet/shared-types";
 import { CountsToMainField } from "@/components/counts-to-main-field";
+import { ExpenseTypeField } from "@/components/recurring-purchases/expense-type-field";
 import { createCoworkingFixedExpenseAction, createCoworkingVariableExpenseAction } from "../actions";
 
 const FIELD =
@@ -8,7 +10,15 @@ const BTN =
   "rounded-[10px] bg-gradient-to-br from-teal to-teal-light px-4 py-2 text-xs font-bold text-white shadow-primary transition hover:opacity-90";
 
 /** טופס אחד לשני סוגי ההוצאה — מה שמשתנה ביניהם הוא שדה אחד ותווית הכפתור. */
-export function CoworkingExpenseForm({ branchId, kind }: { branchId: string; kind: "fixed" | "variable" }) {
+export function CoworkingExpenseForm({
+  branchId,
+  kind,
+  expenseTypes = [],
+}: {
+  branchId: string;
+  kind: "fixed" | "variable";
+  expenseTypes?: RecurringPurchaseType[];
+}) {
   if (kind === "fixed") {
     const action = createCoworkingFixedExpenseAction.bind(null, branchId);
     return (
@@ -59,6 +69,9 @@ export function CoworkingExpenseForm({ branchId, kind }: { branchId: string; kin
       <div>
         <label className={LABEL}>קטגוריה</label>
         <input name="category" className={FIELD} />
+      </div>
+      <div className="col-span-2">
+        <ExpenseTypeField types={expenseTypes} idPrefix="coworking-new-variable-type" />
       </div>
       <div className="col-span-2 md:col-span-4">
         <CountsToMainField />

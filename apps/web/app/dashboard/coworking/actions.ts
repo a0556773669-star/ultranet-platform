@@ -5,6 +5,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { getAdminFirestore } from "@/lib/firebase-admin";
 import type { FixedExpense, VariableExpense } from "@ultranet/shared-types";
+import { resolveExpenseTypeIdFromForm } from "@/lib/recurring-purchases";
 import { countsToMainFromForm } from "@/lib/counts-to-main";
 
 /**
@@ -85,6 +86,7 @@ export async function createCoworkingVariableExpenseAction(branchId: string, for
     paidBy: "owner",
     owedBy: "owner",
     countsToMain: countsToMainFromForm(formData),
+    expenseTypeId: await resolveExpenseTypeIdFromForm(formData, "coworking"),
   });
   await getAdminFirestore().collection("n_var_expenses").add(data);
   revalidateCoworking();
