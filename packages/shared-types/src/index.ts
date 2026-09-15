@@ -499,13 +499,12 @@ export interface RecurringPurchaseType {
   /** "נייר למדפסת", "שקיות אשפה" */
   name: string;
   category?: string;
-  /** המודול שהרכישה שייכת לו. `general` = כל העסק, בלי שיוך למודול. */
-  module: "computers" | "rentals" | "coworking" | "general";
   /**
-   * הסניפים שהעלות השנתית מתחלקת ביניהם **בדוח**. ריק/חסר = כל סניפי המודול, כולל
-   * סניפים שייפתחו — אותה סמנטיקה כמו `branchIds` בהוצאה משותפת.
+   * המודול שבו הסוג נוצר. **תיעוד בלבד** — הסוגים גלובליים, ואותו "נייר למדפסת" מוצע
+   * ומחובר בכל המודולים. סינון לפי השדה הזה היה יוצר סוג כפול באותו שם בכל מודול,
+   * ומפצל בדיוק את המספר שהסימון נועד לאחד.
    */
-  branchIds?: string[];
+  module: "computers" | "rentals" | "coworking" | "general";
   /** הופסק: לא מוצע יותר בטפסים, אבל כל ההיסטוריה שלו נשארת בדוח. */
   archived?: boolean;
   note?: string;
@@ -600,6 +599,12 @@ export interface AccountingExpense {
     countsToMain?: boolean;
     /** "הוצאות נוספות": רכישה מלאה שתקושר בהמשך לסניפים ללא התחשבנות (רשימת שמות חופשית). */
     linkedBranchIds?: string[];
+    /**
+     * סימון "זו רכישה חוזרת" - מפנה ל-`n_expense_types`. אותו שדה בדיוק קיים על
+     * `VariableExpense` ו-`MultiBranchExpense`, וזה מה שמחבר את אותה קנייה בכל מקום
+     * בעסק. לא משנה שום חישוב: הכסף נשאר בחודש שבו יצא.
+     */
+    expenseTypeId?: string;
 }
 
 /** collection: n_collection_routes */

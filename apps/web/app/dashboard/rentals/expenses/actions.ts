@@ -166,7 +166,7 @@ export async function createVariableExpenseAction(branchId: string, formData: Fo
   await db.collection("n_var_expenses").add(stripUndefined(data));
   revalidatePath(`/dashboard/rentals/expenses/${branchId}`);
   revalidatePath("/dashboard/accounting");
-  revalidatePath("/dashboard/accounting/recurring-purchases");
+  revalidatePath("/dashboard/accounting/extra-expenses");
   revalidatePath("/dashboard/rentals/accounting");
   revalidatePath("/dashboard");
 }

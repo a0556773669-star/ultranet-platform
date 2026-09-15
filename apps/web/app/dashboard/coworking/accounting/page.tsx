@@ -10,7 +10,9 @@ import { RecurringExpensesCard } from "@/components/recurring-expenses/recurring
 import { CountsToMainBadge } from "@/components/counts-to-main-field";
 import { CoworkingTabs } from "../coworking-tabs";
 import { CoworkingExpenseForm } from "./expense-forms";
-import { loadRecurringPurchaseTypes } from "@/lib/recurring-purchases";
+import { loadRecurringPurchaseIndex, type RecurringPurchaseTypeSummary } from "@/lib/recurring-purchases";
+import { RecurringPurchaseBadge } from "@/components/recurring-purchases/recurring-purchase-badge";
+import { RecurringPurchasesSummary } from "@/components/recurring-purchases/recurring-purchases-summary";
 import {
   deleteCoworkingFixedExpenseAction,
   deleteCoworkingVariableExpenseAction,
@@ -34,13 +36,23 @@ function ExpenseList({
   rows,
   emptyText,
   deleteAction,
+  purchaseByType,
   endAction,
   resumeAction,
   today,
 }: {
-  rows: { id: string; title: string; subtitle: string; amount: number; on: boolean; endDate?: string }[];
+  rows: {
+    id: string;
+    title: string;
+    subtitle: string;
+    amount: number;
+    on: boolean;
+    endDate?: string;
+    expenseTypeId?: string;
+  }[];
   emptyText: string;
   deleteAction: (id: string) => Promise<void>;
+  purchaseByType?: Map<string, RecurringPurchaseTypeSummary>;
   endAction?: (id: string, formData: FormData) => Promise<void>;
   resumeAction?: (id: string) => Promise<void>;
   today?: string;
@@ -60,9 +72,10 @@ function ExpenseList({
             }`}
           >
             <div>
-              <p className="flex items-center gap-1.5 text-sm font-bold text-ink">
+              <p className="flex flex-wrap items-center gap-1.5 text-sm font-bold text-ink">
                 {r.title} — {money(r.amount)}
                 <CountsToMainBadge on={r.on} />
+                {r.expenseTypeId && <RecurringPurchaseBadge summary={purchaseByType?.get(r.expenseTypeId)} />}
               </p>
               <p className="text-xs text-muted">{r.subtitle}</p>
             </div>
@@ -164,9 +177,9 @@ export default async function CoworkingAccountingPage() {
 
   // הסניף שההזנה נרשמת עליו. כרגע יש סניף אחד, ולכן אין בורר: הראשון הוא הסניף.
   const branch = branches[0];
-  const [recurring, expenseTypes] = await Promise.all([
+  const [recurring, purchaseIndex] = await Promise.all([
     branch ? loadRecurringVariableExpenses({ scope: "coworking", branchId: branch.id }) : Promise.resolve([]),
-    loadRecurringPurchaseTypes({ module: "coworking" }),
+    loadRecurringPurchaseIndex(),
   ]);
 
   const today = new Date().toISOString().slice(0, 10);
@@ -184,7 +197,14 @@ export default async function CoworkingAccountingPage() {
     subtitle: `${e.category || "ללא קטגוריה"} · ${e.date}`,
     amount: e.amount || 0,
     on: countsToMain(e),
+    expenseTypeId: e.expenseTypeId,
   }));
+  // רק הסוגים שמופיעים בהוצאות של המסך - הסכומים עצמם הם של כל העסק.
+  const purchaseSummaries = [
+    ...new Set(variable.map((e) => e.expenseTypeId).filter((id): id is string => Boolean(id))),
+  ]
+    .map((id) => purchaseIndex.byType.get(id))
+    .filter((x): x is NonNullable<typeof x> => Boolean(x));
 
   return (
     <div>
@@ -286,12 +306,16 @@ export default async function CoworkingAccountingPage() {
               <Receipt className="h-4 w-4" />
               הוצאות משתנות
             </h2>
-            <CoworkingExpenseForm branchId={branch.id} kind="variable" expenseTypes={expenseTypes} />
+            <CoworkingExpenseForm branchId={branch.id} kind="variable" expenseTypes={purchaseIndex.types} />
             <ExpenseList
               rows={variableRows}
               emptyText="אין הוצאות משתנות"
               deleteAction={deleteCoworkingVariableExpenseAction}
+              purchaseByType={purchaseIndex.byType}
             />
+            <div className="mt-3">
+              <RecurringPurchasesSummary summaries={purchaseSummaries} />
+            </div>
           </section>
         </div>
       )}
