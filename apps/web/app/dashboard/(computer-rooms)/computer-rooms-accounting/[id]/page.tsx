@@ -1,6 +1,6 @@
 import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
-import { BarChart3, ArrowLeft, Plus, Banknote, FileSpreadsheet, Upload, Download, Trash2 } from "lucide-react";
+import { BarChart3, ArrowLeft, Banknote, FileSpreadsheet, ChevronDown } from "lucide-react";
 import { requireModuleAccess } from "@/lib/perms";
 import { loadComputerRoomAccounting, SHARED_EXPENSE_BRANCH_ID, type RoomIncomeLine } from "@/lib/computer-room-accounting";
 import { isBranchIncomeImportEnabled, monthLabel } from "@/lib/branch-income-excel";
@@ -10,12 +10,16 @@ import {
   deleteBranchIncomeAction,
   importBranchIncomeAction,
 } from "../actions";
+import { SetupCostCard } from "./setup-cost-card";
+import { IncomeEntryPanel } from "./income-entry-panel";
+import { MonthlyFlowChart } from "./monthly-flow-chart";
 
 function money(n: number) {
   return `${Math.round(n).toLocaleString("he-IL")} ₪`;
 }
 
-const FIELD = "rounded-lg border border-card-border bg-[#f4f6f9] px-3 py-2 text-sm focus:border-teal focus:bg-white focus:outline-none";
+const TH = "px-2 py-1.5 text-[10.5px] font-bold uppercase tracking-wide text-muted";
+const TD = "px-2 py-1.5 align-top";
 
 /** סיכום חודש אחד - התשובה ל"כמה נכנס באוקטובר", בלי לקרוא שורה-שורה */
 interface MonthSummary {
@@ -37,6 +41,43 @@ function summarizeByMonth(lines: RoomIncomeLine[]): MonthSummary[] {
     byMonth.set(month, entry);
   }
   return [...byMonth.values()].sort((a, b) => b.month.localeCompare(a.month));
+}
+
+/** קובייה קטנה בשורת תמונת המצב. גובה אחיד לכולן, בלי פירוט בתוכן - הפירוט חי בטורים
+ *  שמתחת ובחלון של עלות ההקמה. */
+function StatCard({ label, value, tone, note }: { label: string; value: string; tone: string; note?: string }) {
+  return (
+    <div className="rounded-card border border-card-border bg-white px-3 py-2.5 text-center shadow-card">
+      <p className="text-[10.5px] font-bold uppercase tracking-wide text-muted">{label}</p>
+      <p className={`mt-0.5 text-lg font-black leading-tight ${tone}`}>{value}</p>
+      {note && <p className="mt-0.5 truncate text-[10px] text-muted">{note}</p>}
+    </div>
+  );
+}
+
+/** טור מתקפל אחד מתוך השלושה. סגור כברירת מחדל: העמוד נפתח על תמונת מצב, והפירוט נפתח
+ *  רק כשבאמת שואלים עליו - וכשנפתח הוא נשאר בתוך השליש שלו ולא דוחף את השאר. */
+function Panel({
+  title,
+  badge,
+  children,
+}: {
+  title: string;
+  badge?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <details className="group overflow-hidden rounded-card border border-card-border bg-white shadow-card">
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-3.5 py-2.5">
+        <span className="flex items-center gap-1.5 text-[13px] font-bold text-ink">
+          <ChevronDown className="h-3.5 w-3.5 text-muted transition group-open:rotate-180" />
+          {title}
+        </span>
+        {badge && <span className="rounded-full bg-[#f4f6f9] px-2 py-0.5 text-[10.5px] font-bold text-ink">{badge}</span>}
+      </summary>
+      <div className="border-t border-card-border px-3.5 py-3">{children}</div>
+    </details>
+  );
 }
 
 export default async function ComputerRoomBranchAccountingPage({
@@ -66,61 +107,53 @@ export default async function ComputerRoomBranchAccountingPage({
   // הייבוא הוא כלי זמני למילוי היסטוריה; כשמכבים אותו בסביבה כל האזור נעלם מהמסך.
   const importEnabled = canAdd && isBranchIncomeImportEnabled();
   const notes = searchParams?.note ? (Array.isArray(searchParams.note) ? searchParams.note : [searchParams.note]) : [];
+  const incomeNote =
+    stats.cashIncomeToDate > 0 && stats.manualIncomeToDate > 0
+      ? `מזומן ${money(stats.cashIncomeToDate)} · ידני ${money(stats.manualIncomeToDate)}`
+      : stats.cashIncomeToDate > 0
+        ? "הכל מזומן מהקופה"
+        : undefined;
 
   return (
-    <div className="flex flex-col gap-4">
-      <div className="flex items-center justify-between">
+    <div className="flex flex-col gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <h1 className="flex items-center gap-1.5 text-lg font-extrabold text-ink">
           <BarChart3 className="h-5 w-5" />
           הנה&quot;ח — {stats.branch.name}
         </h1>
-        {isOwner && (
-          <Link href="/dashboard/computer-rooms-accounting" className="flex items-center gap-1.5 text-xs font-bold text-teal hover:underline">
-            <ArrowLeft className="h-4 w-4" />
-            בחירת סניף אחר
-          </Link>
-        )}
+        <div className="flex items-center gap-3">
+          {canAdd && (
+            <IncomeEntryPanel
+              addIncome={addIncome}
+              importIncome={importIncome}
+              clearImported={clearImported}
+              importEnabled={importEnabled}
+              importedRows={stats.importedIncomeRows}
+              canClearImported={isOwner}
+              templateHref={`/api/computer-rooms-accounting/${params.id}/income-template`}
+              today={todayStr}
+            />
+          )}
+          {isOwner && (
+            <Link href="/dashboard/computer-rooms-accounting" className="flex items-center gap-1.5 text-xs font-bold text-teal hover:underline">
+              <ArrowLeft className="h-4 w-4" />
+              בחירת סניף אחר
+            </Link>
+          )}
+        </div>
       </div>
 
+      {/* תמונת המצב: ארבעה מספרים בגובה אחיד. הפירוט של ההקמה עבר לחלון שנפתח מהקובייה -
+          קודם הוא ישב בתוכה ומתח את כל השורה לגובה של סניף עם עשר שורות הקמה. */}
       <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
-        <div className="rounded-card border border-card-border bg-white p-4 text-center shadow-card">
-          <p className="text-[11px] font-bold uppercase tracking-wide text-muted">עלות הקמה</p>
-          <p className="mt-1 text-xl font-black text-ink">{money(stats.setupCost)}</p>
-          {/* הפירוט מוצג רק כשהמספר באמת הגיע ממנו - כשההשקעה נקראה משכבת הנכסים
-              (setupFromAssets) השורות כאן כבר לא מסבירות את הסכום שמעליהן. */}
-          {!stats.setupFromAssets && (stats.branch.setupItems?.length ?? 0) > 0 && (
-            <ul className="mt-2 flex flex-col gap-1 border-t border-card-border pt-2 text-right">
-              {stats.branch.setupItems!.map((item, idx) => (
-                <li key={idx} className="flex items-center justify-between gap-2 text-[11.5px]">
-                  <span className="text-muted">{item.label || "ללא תיאור"}</span>
-                  <span className="font-bold text-ink">{money(item.amount)}</span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-        <div className="rounded-card border border-card-border bg-white p-4 text-center shadow-card">
-          <p className="text-[11px] font-bold uppercase tracking-wide text-muted">הוצאות עד היום (כולל הקמה)</p>
-          <p className="mt-1 text-xl font-black text-red-600">{money(stats.spentToDate)}</p>
-          <p className="mt-1 text-[11px] text-muted">ראה פירוט מלא למטה</p>
-        </div>
-        <div className="rounded-card border border-card-border bg-white p-4 text-center shadow-card">
-          <p className="text-[11px] font-bold uppercase tracking-wide text-muted">הכנסות עד היום</p>
-          <p className="mt-1 text-xl font-black text-emerald-600">{money(stats.incomeToDate)}</p>
-          {/* הפירוט מוצג רק כששני המקורות קיימים - אחרת הוא חוזר על המספר שמעליו. */}
-          {stats.cashIncomeToDate > 0 && stats.manualIncomeToDate > 0 && (
-            <p className="mt-1 text-[11px] leading-relaxed text-muted">
-              מזומן מהקופה {money(stats.cashIncomeToDate)} · מעקב ידני {money(stats.manualIncomeToDate)}
-            </p>
-          )}
-          {stats.cashIncomeToDate > 0 && stats.manualIncomeToDate === 0 && (
-            <p className="mt-1 text-[11px] text-muted">הכל מזומן מהקופה</p>
-          )}
-        </div>
-        <div className="rounded-card border border-card-border bg-white p-4 text-center shadow-card">
-          <p className="text-[11px] font-bold uppercase tracking-wide text-muted">רווח מוחזק</p>
-          <p className={`mt-1 text-xl font-black ${stats.profitHeld >= 0 ? "text-teal-dark" : "text-red-600"}`}>{money(stats.profitHeld)}</p>
-        </div>
+        <SetupCostCard amount={stats.setupCost} items={stats.setupBreakdown} fromAssets={stats.setupFromAssets} />
+        <StatCard label="הוצאות עד היום" value={money(stats.spentToDate)} tone="text-red-600" note="כולל הקמה" />
+        <StatCard label="הכנסות עד היום" value={money(stats.incomeToDate)} tone="text-emerald-600" note={incomeNote} />
+        <StatCard
+          label="רווח מוחזק"
+          value={money(stats.profitHeld)}
+          tone={stats.profitHeld >= 0 ? "text-teal-dark" : "text-red-600"}
+        />
       </div>
 
       {/* הודעות הייבוא יושבות מיד מתחת למספרים: זה המקום שאליו מסתכלים אחרי העלאת קובץ,
@@ -158,218 +191,174 @@ export default async function ComputerRoomBranchAccountingPage({
         </div>
       )}
 
-      {/* "מאיפה המספר הזה" - השאלה שנשאלה על המסך הזה יותר מכל שאלה אחרת. הסכום הגדול הוא
-          חישוב חי ולא נתון שמור, והשורה שהכי מפתיעה בו היא הוצאה קבועה, שמכפילה את עצמה
-          בכל חודש שעובר בלי שנוגעים בה. לכן כל שורה מציגה גם את החשבון שהביא אליה. */}
-      <details className="rounded-card border border-card-border bg-white p-4 shadow-card" open>
-        <summary className="cursor-pointer text-sm font-bold text-ink">
-          ממה מורכבות ההוצאות עד היום ({money(stats.spentToDate)})
-        </summary>
+      <MonthlyFlowChart flow={stats.monthlyFlow} />
 
-        <ul className="mt-3 flex flex-col divide-y divide-card-border">
-          <li className="flex items-start justify-between gap-3 py-2">
-            <span>
-              <span className="block text-[13px] font-bold text-ink">עלות הקמה</span>
-              <span className="block text-[11.5px] text-muted">
-                {stats.setupFromAssets ? "נקרא משכבת הנכסים (רכישות אמיתיות)" : "מהשדה בטופס הסניף"}
-              </span>
-            </span>
-            <span className="shrink-0 text-[13px] font-bold text-ink">{money(stats.setupCost)}</span>
-          </li>
+      {/* שלושה טורים סגורים. כל אחד נפתח בתוך עצמו ולא דוחף את שכניו - את המקום שהם תפסו
+          כשישבו זה מתחת לזה, ואת ה"בלאגן" שהיה בעמוד כשכולם היו פתוחים בבת אחת. */}
+      <div className="grid grid-cols-1 items-start gap-3 lg:grid-cols-3">
+        {/* "מאיפה המספר הזה" - השאלה שנשאלה על המסך הזה יותר מכל שאלה אחרת. הסכום הגדול הוא
+            חישוב חי ולא נתון שמור, והשורה שהכי מפתיעה בו היא הוצאה קבועה, שמכפילה את עצמה
+            בכל חודש שעובר בלי שנוגעים בה. לכן כל שורה מציגה גם את החשבון שהביא אליה. */}
+        <Panel title="ממה מורכבות ההוצאות" badge={money(stats.spentToDate)}>
+          <table className="w-full border-collapse text-right text-[12.5px]">
+            <thead>
+              <tr className="border-b border-card-border">
+                <th className={`${TH} text-right`}>שורה</th>
+                <th className={`${TH} text-left`}>סכום</th>
+              </tr>
+            </thead>
+            <tbody className="tabular-nums">
+              <tr className="border-b border-card-border">
+                <td className={TD}>
+                  <span className="block font-bold text-ink">עלות הקמה</span>
+                  <span className="block text-[10.5px] leading-tight text-muted">
+                    {stats.setupFromAssets ? "נקרא משכבת הנכסים (רכישות אמיתיות)" : "מהשדה בטופס הסניף"}
+                  </span>
+                </td>
+                <td className={`${TD} text-left font-bold text-ink`}>{money(stats.setupCost)}</td>
+              </tr>
+              {stats.expenseLines.map((line, idx) => (
+                <tr key={idx} className={`border-b border-card-border last:border-b-0 ${idx % 2 === 1 ? "bg-[#fafbfc]" : ""}`}>
+                  <td className={TD}>
+                    <span className="block font-bold text-ink">{line.label}</span>
+                    <span className="block text-[10.5px] leading-tight text-muted">{line.detail}</span>
+                  </td>
+                  <td className={`${TD} text-left font-bold text-ink`}>{money(line.amount)}</td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot>
+              <tr className="border-t-2 border-card-border tabular-nums">
+                <td className={`${TD} font-black text-ink`}>סה&quot;כ</td>
+                <td className={`${TD} text-left font-black text-red-600`}>{money(stats.spentToDate)}</td>
+              </tr>
+            </tfoot>
+          </table>
 
-          {stats.expenseLines.map((line, idx) => (
-            <li key={idx} className="flex items-start justify-between gap-3 py-2">
-              <span>
-                <span className="block text-[13px] font-bold text-ink">{line.label}</span>
-                <span className="block text-[11.5px] text-muted">{line.detail}</span>
-              </span>
-              <span className="shrink-0 text-[13px] font-bold text-ink">{money(line.amount)}</span>
-            </li>
-          ))}
-        </ul>
-
-        {stats.expenseLines.length === 0 && (
-          <p className="mt-2 text-xs text-muted">אין הוצאות שוטפות רשומות על הסניף — הסכום כולו הקמה.</p>
-        )}
-
-        <p className="mt-3 text-[11.5px] leading-relaxed text-muted">
-          הוצאה קבועה נצברת מחדש בכל חודש שעובר, גם בלי לגעת בה. כדי לעצור צבירה של הוצאה
-          שנגמרה השתמש ב<b>&quot;סיום&quot;</b> עם תאריך (ההיסטוריה נשמרת), ולא במחיקה — מחיקה
-          מוציאה את השורה מכל החודשים למפרע.{" "}
-          <Link href={`/dashboard/expenses/${stats.branch.id}`} className="font-bold text-teal hover:underline">
-            לניהול ומחיקת ההוצאות של הסניף
-          </Link>
-          {" · "}
-          <Link href={`/dashboard/expenses/${SHARED_EXPENSE_BRANCH_ID}`} className="font-bold text-teal hover:underline">
-            להוצאות שעל כל הסניפים
-          </Link>
-          {" — שם אפשר גם לבחור על אילו סניפים כל הוצאה משותפת חלה."}
-        </p>
-      </details>
-
-      {/* הכנסות לפי חודש - חודש אחד בשורה אחת. זו התמונה שמחפשים כאן ("איפה הסניף אוחז"),
-          והיא זו שמילוי ההיסטוריה מהקובץ בונה. הפירוט שורה-שורה נשאר מתחת, למי שצריך אותו. */}
-      {monthly.length > 0 && (
-        <div className="rounded-card border border-card-border bg-white p-4 shadow-card">
-          <div className="mb-2 flex items-center justify-between">
-            <h2 className="text-sm font-bold text-ink">הכנסות לפי חודש</h2>
-            <span className="rounded-full bg-[#f4f6f9] px-2.5 py-0.5 text-xs font-bold text-ink">{monthly.length} חודשים</span>
-          </div>
-          <ul className="flex flex-col divide-y divide-card-border">
-            {monthly.map((m) => (
-              <li key={m.month} className="flex items-center justify-between gap-3 py-2">
-                <span className="flex flex-wrap items-center gap-1.5">
-                  <span className="text-[13px] font-bold text-ink">{monthLabel(m.month)}</span>
-                  {m.rows > 1 && <span className="text-[11px] text-muted">{m.rows} שורות</span>}
-                  {m.hasCash && (
-                    <span className="flex items-center gap-1 rounded-full bg-[#f4f6f9] px-2 py-0.5 text-[10px] font-bold text-muted">
-                      <Banknote className="h-3 w-3" />
-                      כולל מזומן מהקופה
-                    </span>
-                  )}
-                </span>
-                <span className="shrink-0 text-[13px] font-extrabold text-emerald-600">{money(m.total)}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      <div>
-        <div className="mb-2 flex items-center justify-between text-xs font-bold uppercase tracking-wide text-muted">
-          <span>שורות הכנסה</span>
-          <span className="rounded-full bg-[#f4f6f9] px-2.5 py-0.5 text-ink normal-case">{incomes.length}</span>
-        </div>
-        <div className="rounded-card border border-card-border bg-white px-4 shadow-card">
-          {incomes.length === 0 && <p className="py-6 text-center text-sm text-muted">אין עדיין שורות הכנסה</p>}
-          {incomes.map((i) => {
-            const fromMain = i.source === "main-cash";
-            // מוחקים כל שורה במקום שבו היא נרשמה: שורת מזומן חיה בספר הראשי, ומחיקה
-            // ממנה כאן הייתה משנה את הספר הראשי ממסך שמוגדר כמעקב בלבד.
-            const bound = isOwner && !fromMain ? deleteBranchIncomeAction.bind(null, i.id, params.id) : null;
-            return (
-              <div key={`${i.source}-${i.id}`} className="flex items-center gap-2.5 border-b border-card-border py-2.5 text-[13px] last:border-b-0">
-                <div className="flex-1">
-                  <div className="flex flex-wrap items-center gap-1.5 font-bold text-ink">
-                    {i.desc}
-                    {fromMain && (
-                      <span className="flex items-center gap-1 rounded-full bg-[#f4f6f9] px-2 py-0.5 text-[10px] font-bold text-muted">
-                        <Banknote className="h-3 w-3" />
-                        מזומן מהקופה · מההנה&quot;ח הראשית
-                      </span>
-                    )}
-                    {i.imported && (
-                      <span className="flex items-center gap-1 rounded-full bg-[#f4f6f9] px-2 py-0.5 text-[10px] font-bold text-muted">
-                        <FileSpreadsheet className="h-3 w-3" />
-                        מייבוא קובץ
-                      </span>
-                    )}
-                  </div>
-                  <div className="mt-0.5 text-[11px] text-muted">
-                    {i.date}
-                    {fromMain && " · נספר פעם אחת בספר הראשי, כאן לתצוגה בלבד"}
-                  </div>
-                </div>
-                <div className="min-w-[75px] text-left font-extrabold text-emerald-600">{i.amount.toLocaleString()} ₪</div>
-                {bound && (
-                  <form action={bound}>
-                    <button type="submit" className="rounded-lg border border-red-200 px-2 py-1 text-[11px] font-medium text-red-600 transition hover:bg-red-50">
-                      מחיקה
-                    </button>
-                  </form>
-                )}
-                {fromMain && isOwner && (
-                  <Link href="/dashboard/accounting" className="shrink-0 text-[11px] font-bold text-teal hover:underline">
-                    לספר הראשי
-                  </Link>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* טופס ההזנה וכלי הייבוא יושבים בסוף העמוד ומקופלים כברירת מחדל. קודם הם ישבו באמצע,
-          בין המספרים לבין הרשימה, וחצו את המסך לשניים בדיוק במקום שבו קוראים אותו - הטופס
-          הוא פעולה שעושים מדי פעם, לא מידע שמסתכלים עליו בכל כניסה. */}
-      {canAdd && (
-        <details className="rounded-card border border-card-border bg-white p-4 shadow-card">
-          <summary className="cursor-pointer text-sm font-bold text-ink">
-            הוספת הכנסה למעקב{importEnabled && " / ייבוא חודשים מאקסל"}
-          </summary>
-
-          <form action={addIncome} className="mt-3 flex flex-wrap items-end gap-2.5">
-            {/* מכוון: אין כאן אמצעי תשלום ואין "מזומן". השורות כאן הן אינדיקציה בלבד - כמה
-                הסניף הזה מחזיר לי - ולא כסף שנספר פעם שנייה. מזומן אמיתי שנמשך מהקופה נרשם
-                פעם אחת בלבד, בהנה"ח הראשית, עם הקופה שממנה נמשך. */}
-            <p className="w-full text-[11px] leading-relaxed text-muted">
-              שורות מעקב בלבד — לא נכנסות להנה&quot;ח הראשית. <b>אין צורך להזין כאן מזומן</b>:
-              מזומן שנמשך מהקופה נרשם פעם אחת בהנה&quot;ח הראשית תחת &quot;מזומן&quot; (שם בוחרים
-              מאיזו קופה), ומופיע כאן אוטומטית ברשימה שלמעלה.
-            </p>
-            <div>
-              <label className="mb-1 block text-xs font-semibold text-muted">תאריך</label>
-              <input type="date" name="date" defaultValue={todayStr} required className={FIELD} />
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-semibold text-muted">תיאור (לא חובה)</label>
-              <input name="desc" placeholder="הכנסת חודש" className={FIELD} />
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-semibold text-muted">סכום</label>
-              <input type="number" name="amount" min={0} required className={FIELD} />
-            </div>
-            <button type="submit" className="flex items-center gap-1.5 self-end rounded-[10px] bg-gradient-to-br from-teal to-teal-light px-5 py-2 text-sm font-bold text-white shadow-primary transition hover:opacity-90">
-              <Plus className="h-4 w-4" />
-              הוספת הכנסת חודש
-            </button>
-          </form>
-
-          {importEnabled && (
-            <div className="mt-4 border-t border-card-border pt-4">
-              <h3 className="flex items-center gap-1.5 text-sm font-bold text-ink">
-                <FileSpreadsheet className="h-4 w-4" />
-                ייבוא חודשים מקובץ אקסל
-              </h3>
-              <p className="mt-1 text-[11px] leading-relaxed text-muted">
-                למילוי היסטוריה בבת אחת. הורד את התבנית, מלא בעמודה הימנית את החודש בפורמט{" "}
-                <b dir="ltr">10/24</b> ולצידה את הסכום — שורה אחת לכל חודש — והעלה. כל חודש נקלט
-                כשורה נפרדת ומופיע בטבלה &quot;הכנסות לפי חודש&quot;. ייבוא חוזר של אותו חודש
-                מחליף את מה שיובא קודם ולא מכפיל אותו, ושורות שהוקלדו כאן ידנית לא נוגעים בהן.{" "}
-                <b>גם הייבוא נשאר מעקב פנימי בלבד — הוא לא נכנס להנה&quot;ח הראשית.</b>
-              </p>
-
-              <div className="mt-3 flex flex-wrap items-center gap-2">
-                <a
-                  href={`/api/computer-rooms-accounting/${params.id}/income-template`}
-                  className="flex items-center gap-1.5 rounded-[10px] border border-card-border bg-white px-3 py-1.5 text-xs font-bold text-ink transition hover:bg-[#f4f6f9]"
-                >
-                  <Download className="h-3.5 w-3.5" />
-                  הורדת תבנית לייבוא
-                </a>
-                <form action={importIncome} className="flex items-center gap-2 rounded-[10px] border border-card-border bg-white px-3 py-1.5">
-                  <input type="file" name="file" accept=".xlsx,.xls" required className="text-xs" />
-                  <button type="submit" className="flex items-center gap-1.5 text-xs font-bold text-teal hover:underline">
-                    <Upload className="h-3.5 w-3.5" />
-                    ייבוא לסניף זה
-                  </button>
-                </form>
-                {isOwner && stats.importedIncomeRows > 0 && (
-                  <form action={clearImported}>
-                    <button
-                      type="submit"
-                      className="flex items-center gap-1.5 rounded-[10px] border border-red-200 px-3 py-1.5 text-xs font-bold text-red-600 transition hover:bg-red-50"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                      מחיקת {stats.importedIncomeRows} השורות שיובאו
-                    </button>
-                  </form>
-                )}
-              </div>
-            </div>
+          {stats.expenseLines.length === 0 && (
+            <p className="mt-2 text-[11px] text-muted">אין הוצאות שוטפות רשומות על הסניף — הסכום כולו הקמה.</p>
           )}
-        </details>
-      )}
+
+          <p className="mt-3 text-[11px] leading-relaxed text-muted">
+            הוצאה קבועה נצברת מחדש בכל חודש שעובר, גם בלי לגעת בה. כדי לעצור צבירה של הוצאה
+            שנגמרה השתמש ב<b>&quot;סיום&quot;</b> עם תאריך (ההיסטוריה נשמרת), ולא במחיקה — מחיקה
+            מוציאה את השורה מכל החודשים למפרע.{" "}
+            <Link href={`/dashboard/expenses/${stats.branch.id}`} className="font-bold text-teal hover:underline">
+              לניהול ומחיקת ההוצאות של הסניף
+            </Link>
+            {" · "}
+            <Link href={`/dashboard/expenses/${SHARED_EXPENSE_BRANCH_ID}`} className="font-bold text-teal hover:underline">
+              להוצאות שעל כל הסניפים
+            </Link>
+            {" — שם אפשר גם לבחור על אילו סניפים כל הוצאה משותפת חלה."}
+          </p>
+        </Panel>
+
+        {/* הכנסות לפי חודש - חודש אחד בשורה אחת. זו התמונה שמחפשים כאן ("איפה הסניף אוחז"),
+            והיא זו שמילוי ההיסטוריה מהקובץ בונה. הפירוט שורה-שורה נשאר בטור שלצידו. */}
+        <Panel title="הכנסות לפי חודש" badge={`${monthly.length} חודשים`}>
+          {monthly.length === 0 ? (
+            <p className="py-3 text-center text-[12.5px] text-muted">אין עדיין הכנסות רשומות</p>
+          ) : (
+            <table className="w-full border-collapse text-right text-[12.5px]">
+              <thead>
+                <tr className="border-b border-card-border">
+                  <th className={`${TH} text-right`}>חודש</th>
+                  <th className={`${TH} text-left`}>סכום</th>
+                </tr>
+              </thead>
+              <tbody className="tabular-nums">
+                {monthly.map((m, idx) => (
+                  <tr key={m.month} className={`border-b border-card-border last:border-b-0 ${idx % 2 === 1 ? "bg-[#fafbfc]" : ""}`}>
+                    <td className={TD}>
+                      <span className="font-bold text-ink">{monthLabel(m.month)}</span>
+                      {m.rows > 1 && <span className="mr-1.5 text-[10.5px] text-muted">{m.rows} שורות</span>}
+                      {m.hasCash && (
+                        <span className="mt-0.5 flex items-center gap-1 text-[10px] font-bold text-muted">
+                          <Banknote className="h-3 w-3" />
+                          כולל מזומן מהקופה
+                        </span>
+                      )}
+                    </td>
+                    <td className={`${TD} text-left font-extrabold text-emerald-600`}>{money(m.total)}</td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr className="border-t-2 border-card-border tabular-nums">
+                  <td className={`${TD} font-black text-ink`}>סה&quot;כ</td>
+                  <td className={`${TD} text-left font-black text-emerald-600`}>{money(stats.incomeToDate)}</td>
+                </tr>
+              </tfoot>
+            </table>
+          )}
+        </Panel>
+
+        <Panel title="שורות הכנסה" badge={String(incomes.length)}>
+          {incomes.length === 0 ? (
+            <p className="py-3 text-center text-[12.5px] text-muted">אין עדיין שורות הכנסה</p>
+          ) : (
+            <table className="w-full border-collapse text-right text-[12.5px]">
+              <thead>
+                <tr className="border-b border-card-border">
+                  <th className={`${TH} text-right`}>שורה</th>
+                  <th className={`${TH} text-left`}>סכום</th>
+                  <th className={TH}></th>
+                </tr>
+              </thead>
+              <tbody className="tabular-nums">
+                {incomes.map((i, idx) => {
+                  const fromMain = i.source === "main-cash";
+                  // מוחקים כל שורה במקום שבו היא נרשמה: שורת מזומן חיה בספר הראשי, ומחיקה
+                  // ממנה כאן הייתה משנה את הספר הראשי ממסך שמוגדר כמעקב בלבד.
+                  const bound = isOwner && !fromMain ? deleteBranchIncomeAction.bind(null, i.id, params.id) : null;
+                  return (
+                    <tr
+                      key={`${i.source}-${i.id}`}
+                      className={`border-b border-card-border last:border-b-0 ${idx % 2 === 1 ? "bg-[#fafbfc]" : ""}`}
+                    >
+                      <td className={TD}>
+                        <span className="block font-bold text-ink">{i.desc}</span>
+                        <span className="block text-[10.5px] text-muted">{i.date}</span>
+                        {fromMain && (
+                          <span className="mt-0.5 flex items-center gap-1 text-[10px] font-bold text-muted">
+                            <Banknote className="h-3 w-3" />
+                            מזומן מהקופה · נספר בספר הראשי
+                          </span>
+                        )}
+                        {i.imported && (
+                          <span className="mt-0.5 flex items-center gap-1 text-[10px] font-bold text-muted">
+                            <FileSpreadsheet className="h-3 w-3" />
+                            מייבוא קובץ
+                          </span>
+                        )}
+                      </td>
+                      <td className={`${TD} text-left font-extrabold text-emerald-600`}>{money(i.amount)}</td>
+                      <td className={`${TD} text-left`}>
+                        {bound && (
+                          <form action={bound}>
+                            <button
+                              type="submit"
+                              className="rounded-lg border border-red-200 px-2 py-0.5 text-[10.5px] font-medium text-red-600 transition hover:bg-red-50"
+                            >
+                              מחיקה
+                            </button>
+                          </form>
+                        )}
+                        {fromMain && isOwner && (
+                          <Link href="/dashboard/accounting" className="text-[10.5px] font-bold text-teal hover:underline">
+                            לספר הראשי
+                          </Link>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          )}
+        </Panel>
+      </div>
     </div>
   );
 }

@@ -18,11 +18,18 @@
  * entered still shows its number.
  */
 import { getAdminFirestore } from "./firebase-admin";
-import type { Branch, FixedExpense, VariableExpense, BranchIncome, AccountingIncome } from "@ultranet/shared-types";
+import type {
+  Branch,
+  FixedExpense,
+  VariableExpense,
+  BranchIncome,
+  AccountingIncome,
+  SetupCostItem,
+} from "@ultranet/shared-types";
 import { monthsBetween } from "./branch-accounting";
 import { SHARED_COMPUTERS_BRANCH_ID, sharedExpenseBranchIds } from "./expense-shared-scope";
 import { loadAssets } from "./assets-data";
-import { paybackStatus, type PaybackStatus } from "./assets";
+import { ITEM_KINDS, ITEM_KIND_LABEL, paybackStatus, type PaybackStatus } from "./assets";
 
 /** Sentinel branchId for fixed/variable expenses that apply to all computer-room branches together
  *  (e.g. shared advertising, shared software) rather than to one specific branch. */
@@ -39,6 +46,14 @@ export interface ExpenseLine {
   /** ההסבר לסכום - בעיקר "X לחודש × N חודשים", שהוא הדבר שהכי מפתיע בהוצאה קבועה */
   detail: string;
   amount: number;
+}
+
+/** חודש אחד על הגרף: מה נזקף לאותו חודש בלבד — לא מצטבר, ובלי עלות ההקמה (היא נקודה
+ *  אחת בזמן ולא הוצאה חודשית, והיא הייתה מוחצת את כל שאר העמודים). */
+export interface MonthFlow {
+  month: string;
+  expense: number;
+  income: number;
 }
 
 function fixedExpenseLines(fixed: FixedExpense[], uptoMonth: string): ExpenseLine[] {
@@ -64,6 +79,55 @@ function variableExpenseLines(variable: VariableExpense[]): ExpenseLine[] {
     label: e.desc || "הוצאה חד פעמית",
     detail: `${e.category || "ללא קטגוריה"} · ${e.date ?? ""}`,
     amount: e.amount || 0,
+  }));
+}
+
+/**
+ * ההוצאות פרוסות על ציר החודשים - הבסיס לגרף של 12 החודשים האחרונים.
+ *
+ * אותו חישוב בדיוק של `fixedExpenseLines()`, רק שהוא נזקף חודש-חודש במקום להסתכם: הוצאה
+ * קבועה נזקפת לכל חודש שהייתה פעילה בו, והוצאה חד-פעמית לחודש התאריך שלה בלבד. הוצאה
+ * חד-פעמית בלי תאריך לא מקבלת חודש ולכן לא נכנסת לגרף — היא כן נספרת בסה"כ שמעליו, וזה
+ * מכוון: אין לה מקום אמיתי על הציר.
+ */
+function monthlyExpenseMap(
+  fixed: FixedExpense[],
+  variable: VariableExpense[],
+  uptoMonth: string,
+): Map<string, number> {
+  const map = new Map<string, number>();
+  const add = (month: string, amount: number) => {
+    if (!month) return;
+    map.set(month, (map.get(month) ?? 0) + amount);
+  };
+  for (const e of fixed) {
+    if (!e.startDate) continue;
+    const endMonth = e.endDate && e.endDate.slice(0, 7) < uptoMonth ? e.endDate.slice(0, 7) : uptoMonth;
+    const monthly = e.variableAmount && e.lastAmount != null ? e.lastAmount : e.amount || 0;
+    for (const m of monthsBetween(e.startDate, endMonth)) add(m, monthly);
+  }
+  for (const e of variable) add((e.date ?? "").slice(0, 7), e.amount || 0);
+  return map;
+}
+
+/**
+ * ציר זמן רציף מהחודש הראשון שיש בו נתון ועד החודש הנוכחי.
+ *
+ * גם חודש שלא קרה בו כלום מקבל שורה: בלעדיו הגרף היה מדלג על חודשים ריקים והמרווחים בו
+ * היו משקרים — שני עמודים צמודים שנראים כמו חודשים עוקבים אבל מפריד ביניהם חצי שנה.
+ */
+function buildMonthlyFlow(
+  expense: Map<string, number>,
+  income: Map<string, number>,
+  uptoMonth: string,
+): MonthFlow[] {
+  const dated = [...expense.keys(), ...income.keys()].filter((m) => m && m <= uptoMonth).sort();
+  const first = dated[0];
+  if (!first) return [];
+  return monthsBetween(first, uptoMonth).map((month) => ({
+    month,
+    expense: expense.get(month) ?? 0,
+    income: income.get(month) ?? 0,
   }));
 }
 
@@ -155,6 +219,9 @@ export interface ComputerRoomBranchStats {
   setupCost: number;
   /** true when the number above came from real purchases rather than the legacy estimate */
   setupFromAssets: boolean;
+  /** פירוט עלות ההקמה לחלון הקטן שנפתח מהקובייה: שורות הטופס, או — כשההשקעה נקראה משכבת
+   *  הנכסים — הפריטים שנקנו לפי סוג. ריק כשאין פירוט בכלל. */
+  setupBreakdown: SetupCostItem[];
   /** how much of the investment the room has already earned back (פרק ז׳) */
   payback: PaybackStatus;
   ownExpensesToDate: number;
@@ -169,6 +236,8 @@ export interface ComputerRoomBranchStats {
   manualIncomeToDate: number;
   /** מתוך `incomeToDate`: מזומן מהקופה שנרשם בהנה"ח הראשית (`n_ah_income` מסוג `cash`) */
   cashIncomeToDate: number;
+  /** ההוצאות וההכנסות חודש-חודש, מהחודש הראשון שיש בו נתון ועד היום — הגרף שמעל הפירוט */
+  monthlyFlow: MonthFlow[];
   /** מתוך `manualIncomeToDate`: השורות שהגיעו מייבוא קובץ. קיים כדי שהמסך יוכל להציע ניקוי
    *  של הייבוא בלבד, ולומר בכמה שורות מדובר לפני שמוחקים. */
   importedIncomeRows: number;
@@ -271,6 +340,11 @@ export async function loadComputerRoomAccounting(): Promise<ComputerRoomAccounti
     lines.sort((a, b) => b.date.localeCompare(a.date));
   }
 
+  // מפת החודשים של כל הוצאה משותפת מחושבת פעם אחת, וכל סניף לוקח ממנה את חלקו בלבד.
+  const sharedMonthlyById = new Map<string, Map<string, number>>();
+  for (const e of sharedFixed) sharedMonthlyById.set(`fixed:${e.id}`, monthlyExpenseMap([e], [], month));
+  for (const e of sharedVariable) sharedMonthlyById.set(`variable:${e.id}`, monthlyExpenseMap([], [e], month));
+
   const statsByBranch = new Map<string, ComputerRoomBranchStats>();
   for (const b of branches) {
     const fixed = allFixed.filter((e) => e.branchId === b.id);
@@ -294,9 +368,18 @@ export async function loadComputerRoomAccounting(): Promise<ComputerRoomAccounti
       })),
     ];
     // Real investment wins over the estimate whenever the asset layer knows about this branch.
-    const assetInvestment = assets.investmentByLocation.get(b.id)?.total ?? 0;
+    const investment = assets.investmentByLocation.get(b.id);
+    const assetInvestment = investment?.total ?? 0;
     const setupFromAssets = assetInvestment > 0;
     const setupCost = setupFromAssets ? assetInvestment : b.setupCost ?? 0;
+    // הפירוט תמיד מגיע מאותו מקום שממנו הגיע המספר עצמו: כששני המקורות מעורבבים השורות
+    // מתחת לסכום כבר לא מסבירות אותו, וזו בדיוק הטעות שהחלון הקטן נועד למנוע.
+    const setupBreakdown: SetupCostItem[] = setupFromAssets
+      ? ITEM_KINDS.filter((k) => (investment?.countByKind[k] ?? 0) > 0).map((k) => ({
+          label: `${ITEM_KIND_LABEL[k]} × ${investment!.countByKind[k]}`,
+          amount: investment!.totalByKind[k],
+        }))
+      : (b.setupItems ?? []).map((item) => ({ label: item.label || "ללא תיאור", amount: item.amount }));
     const spentToDate = setupCost + ownExpensesToDate + sharedExpenseShare;
     const incomeLines = incomeLinesByBranch.get(b.id) ?? [];
     const manualIncomeToDate = incomeLines
@@ -306,6 +389,20 @@ export async function loadComputerRoomAccounting(): Promise<ComputerRoomAccounti
       .filter((i) => i.source === "main-cash")
       .reduce((sum, i) => sum + i.amount, 0);
     const importedIncomeRows = incomeLines.filter((i) => i.imported).length;
+    const monthlyExpense = monthlyExpenseMap(fixed, variable, month);
+    for (const s of branchSharedEntries) {
+      const shared = sharedMonthlyById.get(`${s.kind}:${s.id}`);
+      if (!shared || s.branchIds.length === 0) continue;
+      for (const [m, amount] of shared) {
+        monthlyExpense.set(m, (monthlyExpense.get(m) ?? 0) + amount / s.branchIds.length);
+      }
+    }
+    const monthlyIncome = new Map<string, number>();
+    for (const line of incomeLines) {
+      const m = line.month || line.date.slice(0, 7);
+      if (!m) continue;
+      monthlyIncome.set(m, (monthlyIncome.get(m) ?? 0) + line.amount);
+    }
     const incomeToDate = manualIncomeToDate + cashIncomeToDate;
     // Operating profit is what pays the investment back - the equipment cost itself is NOT
     // subtracted from it (כלל 7), only compared against it.
@@ -315,6 +412,7 @@ export async function loadComputerRoomAccounting(): Promise<ComputerRoomAccounti
       branch: b,
       setupCost,
       setupFromAssets,
+      setupBreakdown,
       payback: paybackStatus(setupCost, operatingProfit, monthsRun > 0 ? operatingProfit / monthsRun : 0),
       ownExpensesToDate,
       sharedExpenseShare,
@@ -323,6 +421,7 @@ export async function loadComputerRoomAccounting(): Promise<ComputerRoomAccounti
       incomeToDate,
       manualIncomeToDate,
       cashIncomeToDate,
+      monthlyFlow: buildMonthlyFlow(monthlyExpense, monthlyIncome, month),
       importedIncomeRows,
       profitHeld: incomeToDate - spentToDate,
     });
