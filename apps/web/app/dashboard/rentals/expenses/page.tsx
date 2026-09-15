@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { Banknote, Layers } from "lucide-react";
+import { Banknote, Layers, Eraser } from "lucide-react";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { getAdminFirestore } from "@/lib/firebase-admin";
@@ -13,6 +13,8 @@ import { BranchExpenseTable, type BranchExpenseRow } from "@/components/expenses
 import { CountsToMainBadge } from "@/components/counts-to-main-field";
 import { DeleteEntryButton } from "../../accounting/delete-entry-button";
 import { MultiBranchExpenseForm } from "./multi-branch-form";
+import { loadRecurringPurchaseIndex } from "@/lib/recurring-purchases";
+import { RecurringPurchaseBadge } from "@/components/recurring-purchases/recurring-purchase-badge";
 import { deleteMultiBranchExpenseAction } from "./multi-branch-actions";
 
 export default async function ExpensesHomePage() {
@@ -29,11 +31,12 @@ export default async function ExpensesHomePage() {
   }
 
   const db = getAdminFirestore();
-  const [snap, fixedSnap, variableSnap, multiSnap] = await Promise.all([
+  const [snap, fixedSnap, variableSnap, multiSnap, purchaseIndex] = await Promise.all([
     db.collection("n_branches").where("branchType", "==", "rentals").get(),
     db.collection("n_fixed_expenses").get(),
     db.collection("n_var_expenses").get(),
     db.collection(MULTI_BRANCH_EXPENSES_COLLECTION).get(),
+    loadRecurringPurchaseIndex(),
   ]);
   const branches = snap.docs
     .map((d) => ({ ...(d.data() as Omit<Branch, "id">), id: d.id }) as Branch)
@@ -77,13 +80,23 @@ export default async function ExpensesHomePage() {
             <Banknote className="h-5 w-5" />
             הוצאות — השכרות
           </h1>
-          <Link
-            href={`/dashboard/rentals/expenses/${SHARED_RENTALS_BRANCH_ID}`}
-            className="flex items-center gap-1.5 text-xs font-bold text-teal hover:underline"
-          >
-            <Layers className="h-4 w-4" />
-            הוצאות על כל הסניפים יחד
-          </Link>
+          <div className="flex items-center gap-3">
+            <Link
+              href={`/dashboard/rentals/expenses/${SHARED_RENTALS_BRANCH_ID}`}
+              className="flex items-center gap-1.5 text-xs font-bold text-teal hover:underline"
+            >
+              <Layers className="h-4 w-4" />
+              הוצאות על כל הסניפים יחד
+            </Link>
+            {/* זמני: מסך ניקוי ההוצאות. למחוק יחד עם expenses/cleanup כשהניקוי יסתיים. */}
+            <Link
+              href="/dashboard/rentals/expenses/cleanup"
+              className="flex items-center gap-1.5 text-xs font-bold text-red-600 hover:underline"
+            >
+              <Eraser className="h-4 w-4" />
+              ניקוי הוצאות (זמני)
+            </Link>
+          </div>
         </div>
         <BranchExpenseTable rows={rows} hrefFor={(id) => `/dashboard/rentals/expenses/${id}`} />
         <p className="mt-1.5 px-1 text-[11.5px] leading-relaxed text-muted">
@@ -93,7 +106,7 @@ export default async function ExpensesHomePage() {
       </div>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <MultiBranchExpenseForm branches={branches} module="rentals" />
+        <MultiBranchExpenseForm branches={branches} module="rentals" expenseTypes={purchaseIndex.types} />
 
         <div>
           <div className="mb-2 flex items-center justify-between text-xs font-bold uppercase tracking-wide text-muted">
@@ -116,9 +129,12 @@ export default async function ExpensesHomePage() {
                   className="flex items-start gap-2.5 border-b border-card-border py-2.5 text-[13px] last:border-b-0"
                 >
                   <div className="flex-1">
-                    <div className="flex items-center gap-1.5 font-bold text-ink">
+                    <div className="flex flex-wrap items-center gap-1.5 font-bold text-ink">
                       {e.desc}
                       <CountsToMainBadge on={countsToMain(e)} />
+                      {e.expenseTypeId && (
+                        <RecurringPurchaseBadge summary={purchaseIndex.byType.get(e.expenseTypeId)} compact />
+                      )}
                     </div>
                     <div className="mt-0.5 text-[11px] text-muted">
                       {e.date} · {multiBranchExpenseNote(split)}

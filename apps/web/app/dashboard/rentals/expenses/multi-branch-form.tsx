@@ -3,11 +3,12 @@
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Layers } from "lucide-react";
-import type { Branch, MultiBranchExpense } from "@ultranet/shared-types";
+import type { Branch, MultiBranchExpense, RecurringPurchaseType } from "@ultranet/shared-types";
 import { useToast } from "@/lib/toast";
 import { DEFAULT_MULTI_BRANCH_OWNER_PCT, splitMultiBranchExpense } from "@/lib/multi-branch-expense";
 import { createMultiBranchExpenseAction } from "./multi-branch-actions";
 import { CountsToMainField } from "@/components/counts-to-main-field";
+import { ExpenseTypeField } from "@/components/recurring-purchases/expense-type-field";
 
 const FIELD =
   "rounded-lg border border-card-border bg-[#f4f6f9] px-3 py-2 text-sm focus:border-teal focus:bg-white focus:outline-none";
@@ -24,9 +25,11 @@ function money(n: number) {
 export function MultiBranchExpenseForm({
   branches,
   module = "rentals",
+  expenseTypes = [],
 }: {
   branches: Branch[];
   module?: MultiBranchExpense["module"];
+  expenseTypes?: RecurringPurchaseType[];
 }) {
   const [amount, setAmount] = useState("");
   const [ownerPct, setOwnerPct] = useState(String(DEFAULT_MULTI_BRANCH_OWNER_PCT));
@@ -111,6 +114,8 @@ export function MultiBranchExpenseForm({
         </label>
       </div>
       <input name="category" placeholder="קטגוריה (לא חובה)" className={FIELD} />
+
+      <ExpenseTypeField types={expenseTypes} idPrefix="multi-branch-type" />
 
       <div className="flex flex-col gap-1.5">
         <span className="text-[11px] font-bold text-muted">על אילו סניפים ({selected.length} נבחרו)</span>

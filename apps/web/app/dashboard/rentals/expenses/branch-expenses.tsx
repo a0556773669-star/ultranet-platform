@@ -1,5 +1,8 @@
 import { Scale, Calendar, Receipt, Wallet } from "lucide-react";
-import type { FixedExpense, VariableExpense, BranchIncome } from "@ultranet/shared-types";
+import type { FixedExpense, RecurringPurchaseType, VariableExpense, BranchIncome } from "@ultranet/shared-types";
+import { ExpenseTypeField } from "@/components/recurring-purchases/expense-type-field";
+import { RecurringPurchaseBadge } from "@/components/recurring-purchases/recurring-purchase-badge";
+import type { RecurringPurchaseTypeSummary } from "@/lib/recurring-purchases";
 import { createFixedExpenseAction, createVariableExpenseAction, addBranchIncomeAction, deleteBranchIncomeAction } from "./actions";
 import { EditFixedExpenseModal, EditVariableExpenseModal } from "./edit-expense-modals";
 import { EndFixedExpenseControl, DeleteFixedExpenseButton, DeleteVariableExpenseButton } from "./expense-action-buttons";
@@ -66,6 +69,9 @@ type Props = {
   branchIncomes: BranchIncome[];
   fixedExpenses: FixedExpense[];
   variableExpenses: VariableExpense[];
+  expenseTypes?: RecurringPurchaseType[];
+  /** הסיכום של כל סוג רכישה חוזרת, לפי מזהה - זה מה שמציג את החיבור ליד השורה */
+  purchaseByType?: Map<string, RecurringPurchaseTypeSummary>;
 };
 
 export function BranchExpenses({
@@ -80,6 +86,8 @@ export function BranchExpenses({
   branchIncomes,
   fixedExpenses,
   variableExpenses,
+  expenseTypes = [],
+  purchaseByType,
 }: Props) {
   const activeFixed = fixedExpenses.filter((e) => !e.endDate);
   const endedFixed = fixedExpenses.filter((e) => e.endDate);
@@ -190,6 +198,9 @@ export function BranchExpenses({
               </div>
               {isPartner && <PayerFields ownerName={ownerName} partnerName={partnerName} />}
               <div className="col-span-2">
+                <ExpenseTypeField types={expenseTypes} idPrefix="rentals-new-variable-type" />
+              </div>
+              <div className="col-span-2">
                 <CountsToMainField />
               </div>
               <div className="col-span-2">
@@ -256,7 +267,11 @@ export function BranchExpenses({
             {variableExpenses.map((e) => (
               <div key={e.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-card-border bg-[#f9fafb] p-3">
                 <div>
-                  <p className="flex items-center gap-1.5 text-sm font-bold text-ink">{e.desc} — ₪{(e.amount || 0).toLocaleString()}<CountsToMainBadge on={countsToMain(e)} /></p>
+                  <p className="flex flex-wrap items-center gap-1.5 text-sm font-bold text-ink">
+                    {e.desc} — ₪{(e.amount || 0).toLocaleString()}
+                    <CountsToMainBadge on={countsToMain(e)} />
+                    {e.expenseTypeId && <RecurringPurchaseBadge summary={purchaseByType?.get(e.expenseTypeId)} />}
+                  </p>
                   <p className="text-xs text-muted">{e.category || "ללא קטגוריה"} · {e.date}{isPartner ? ` · ${paymentNote(e.paidBy, e.owedBy, ownerName, partnerName)}` : ""}</p>
                 </div>
                 <div className="flex items-center gap-2">

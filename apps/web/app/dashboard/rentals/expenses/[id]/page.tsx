@@ -8,6 +8,8 @@ import type { Branch, FixedExpense, VariableExpense, BranchIncome } from "@ultra
 import { SHARED_RENTALS_BRANCH_ID } from "@/lib/expense-shared-scope";
 import { getOwnerName, resolveSharedPartnerName, branchPartnerName } from "@/lib/owner-name";
 import { BranchExpenses } from "../branch-expenses";
+import { loadRecurringPurchaseIndex } from "@/lib/recurring-purchases";
+import { RecurringPurchasesSummary } from "@/components/recurring-purchases/recurring-purchases-summary";
 
 export default async function BranchExpensesPage({ params }: { params: { id: string } }) {
   const session = await getServerSession(authOptions);
@@ -38,9 +40,10 @@ export default async function BranchExpensesPage({ params }: { params: { id: str
     partnerName = resolved.partnerName;
   }
 
-  const [fixedSnap, variableSnap] = await Promise.all([
+  const [fixedSnap, variableSnap, purchaseIndex] = await Promise.all([
     db.collection("n_fixed_expenses").where("branchId", "==", params.id).get(),
     db.collection("n_var_expenses").where("branchId", "==", params.id).get(),
+    loadRecurringPurchaseIndex(),
   ]);
   const fixedExpenses = fixedSnap.docs
     .map((d) => ({ ...(d.data() as Omit<FixedExpense, "id">), id: d.id }) as FixedExpense)
@@ -48,6 +51,13 @@ export default async function BranchExpensesPage({ params }: { params: { id: str
   const variableExpenses = variableSnap.docs
     .map((d) => ({ ...(d.data() as Omit<VariableExpense, "id">), id: d.id }) as VariableExpense)
     .sort((a, b) => b.date.localeCompare(a.date));
+
+  // רק הסוגים שמופיעים בהוצאות של המסך הזה - הסכומים עצמם הם של כל העסק.
+  const purchaseSummaries = [
+    ...new Set(variableExpenses.map((e) => e.expenseTypeId).filter((id): id is string => Boolean(id))),
+  ]
+    .map((id) => purchaseIndex.byType.get(id))
+    .filter((x): x is NonNullable<typeof x> => Boolean(x));
 
   const hiddenFromPartner = (e: { paidBy?: string; owedBy?: string }) => e.paidBy === "owner" && e.owedBy === "owner";
   const visibleFixed = isOwner || !isPartner ? fixedExpenses : fixedExpenses.filter((e) => !hiddenFromPartner(e));
@@ -85,7 +95,10 @@ export default async function BranchExpensesPage({ params }: { params: { id: str
         branchIncomes={branchIncomes}
         fixedExpenses={visibleFixed}
         variableExpenses={visibleVariable}
+        expenseTypes={purchaseIndex.types}
+        purchaseByType={purchaseIndex.byType}
       />
+      <RecurringPurchasesSummary summaries={purchaseSummaries} />
     </div>
   );
 }
