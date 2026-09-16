@@ -56,7 +56,7 @@ export async function recordBranchTransferAction(
     linkedAhIncomeId: linkedAhIncomeId ?? FieldValue.delete(),
   };
   await db.collection("n_branch_transfers").doc(id).set(data, { merge: true });
-  revalidatePath("/dashboard/accounting/transfers");
+  revalidatePath("/dashboard/accounting/mobile");
   revalidatePath("/dashboard/rentals/accounting");
   revalidatePath("/dashboard/accounting");
 }
@@ -68,6 +68,6 @@ export async function setBranchTransferReceiptAction(branchId: string, month: st
   const db = getAdminFirestore();
   const id = `${branchId}_${month}`;
   await db.collection("n_branch_transfers").doc(id).set({ branchId, month, receiptIssued }, { merge: true });
-  revalidatePath("/dashboard/accounting/transfers");
+  revalidatePath("/dashboard/accounting/mobile");
   revalidatePath("/dashboard/rentals/accounting");
 }

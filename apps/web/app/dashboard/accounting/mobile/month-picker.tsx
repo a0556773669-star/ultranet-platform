@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useTransition } from "react";
 import { CalendarDays } from "lucide-react";
 
@@ -15,9 +15,23 @@ function label(month: string): string {
   return `${HE_MONTHS[m - 1]} ${y}`;
 }
 
+/**
+ * בוחר החודש של טבלת ההעברות.
+ *
+ * במסך הזה יש שני צירי זמן — חלון 12 החודשים של המעקב (`end`) וחודש ההעברות (`month`) —
+ * ולכן הניווט בונה מחדש את ה-query הקיים ומחליף בו פרמטר אחד בלבד. קישור שכותב רק את
+ * `month` היה מאפס בשקט את החלון שנבחר בצד השני של המסך.
+ */
 export function TransfersMonthPicker({ month, months }: { month: string; months: string[] }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [isPending, startTransition] = useTransition();
+
+  function go(next: string) {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("month", next);
+    startTransition(() => router.push(`/dashboard/accounting/mobile?${params.toString()}`));
+  }
 
   return (
     <label className="flex items-center gap-2 text-sm">
@@ -28,9 +42,7 @@ export function TransfersMonthPicker({ month, months }: { month: string; months:
       <select
         value={month}
         disabled={isPending}
-        onChange={(e) =>
-          startTransition(() => router.push(`/dashboard/accounting/transfers?month=${e.target.value}`))
-        }
+        onChange={(e) => go(e.target.value)}
         className="rounded-lg border border-card-border bg-white px-3 py-1.5 text-sm font-semibold text-ink focus:border-teal focus:outline-none"
       >
         {months.map((m) => (

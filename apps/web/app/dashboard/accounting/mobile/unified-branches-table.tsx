@@ -1,7 +1,6 @@
 import Link from "next/link";
-import type { Branch } from "@ultranet/shared-types";
-import { computeBranchFinancials, type BranchAccountingRawData } from "@/lib/branch-accounting-data";
-import { buildBranchLedger } from "@/lib/branch-ledger";
+import type { BranchTransferRow } from "@/lib/branch-transfer-rows";
+import { sumBranchTransferRows } from "@/lib/branch-transfer-rows";
 import { TransferMarkCell } from "./transfer-mark-cell";
 import { ReceiptCheckbox } from "./receipt-checkbox";
 
@@ -28,54 +27,15 @@ const TD = "px-2.5 py-2 whitespace-nowrap";
  * month, read right-to-left like an account statement - what was carried over, what went out,
  * what came in, and what therefore has to move between us.
  *
+ * This is the WIDE view, opened from a button on /dashboard/accounting/mobile: the screen itself
+ * carries the two numbers that get acted on (balance, amount due) and this one adds the columns
+ * that explain how they came out that way.
+ *
  * Deliberately NOT a profit-and-loss view: an expense the owner both paid and fully owes never
  * appears here, because nobody owes anybody for it. See settlementExpenseThisMonth.
  */
-export function UnifiedBranchesTable({
-  branches,
-  raw,
-  month,
-}: {
-  branches: Branch[];
-  raw: BranchAccountingRawData;
-  month: string;
-}) {
-  const sorted = [...branches].sort((a, b) => {
-    if (!a.parentBranchId && b.parentBranchId === a.id) return -1;
-    if (!b.parentBranchId && a.parentBranchId === b.id) return 1;
-    const aKey = a.parentBranchId ? `${a.parentBranchId}~${a.name}` : `${a.id}~`;
-    const bKey = b.parentBranchId ? `${b.parentBranchId}~${b.name}` : `${b.id}~`;
-    return aKey.localeCompare(bKey, "he");
-  });
-
-  const rows = sorted.map((branch) => {
-    const f = computeBranchFinancials(branch, raw, month);
-    const ledger = buildBranchLedger(branch, raw);
-    // No ledger row means the selected month predates this branch's first activity - nothing was
-    // carried in and nothing settled, so every settlement figure is simply zero.
-    const monthRow = ledger.rows.find((r) => r.month === month);
-    return {
-      branch,
-      expenses: f.settlementExpenseThisMonth,
-      income: f.grossIncomeThisMonth,
-      opening: monthRow?.openingBalance ?? 0,
-      netToOwner: monthRow?.netToOwner ?? 0,
-      totalDue: monthRow?.totalDue ?? 0,
-      transferredAmount: monthRow?.transferredAmount ?? 0,
-      receiptIssued: monthRow?.receiptIssued ?? false,
-    };
-  });
-
-  const totals = rows.reduce(
-    (acc, r) => ({
-      expenses: acc.expenses + r.expenses,
-      income: acc.income + r.income,
-      opening: acc.opening + r.opening,
-      netToOwner: acc.netToOwner + r.netToOwner,
-      totalDue: acc.totalDue + r.totalDue,
-    }),
-    { expenses: 0, income: 0, opening: 0, netToOwner: 0, totalDue: 0 }
-  );
+export function UnifiedBranchesTable({ rows, month }: { rows: BranchTransferRow[]; month: string }) {
+  const totals = sumBranchTransferRows(rows);
 
   return (
     <div className="overflow-hidden rounded-card border border-card-border bg-white shadow-card">
@@ -128,6 +88,9 @@ export function UnifiedBranchesTable({
                   </td>
                   <td className={TD}>
                     <TransferMarkCell
+                      // ראו ההערה ב-compact-transfers-table.tsx: המפתח תלוי בסכום כדי
+                      // שסימון בטבלה השנייה יתפוס גם כאן.
+                      key={`${r.branch.id}|${r.transferredAmount}`}
                       branchId={r.branch.id}
                       month={month}
                       netToOwner={r.netToOwner}

@@ -39,5 +39,5 @@ export async function recordPartnerPayoutAction(partnerName: string, month: stri
     };
     await ref.set(data, { merge: true });
   }
-  revalidatePath("/dashboard/accounting/transfers");
+  revalidatePath("/dashboard/accounting/mobile");
 }
