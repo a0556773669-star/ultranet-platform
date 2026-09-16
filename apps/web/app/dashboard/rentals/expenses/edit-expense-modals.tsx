@@ -7,6 +7,7 @@ import type { FixedExpense, VariableExpense } from "@ultranet/shared-types";
 import { updateFixedExpenseAction, updateVariableExpenseAction } from "./actions";
 import { useToast } from "@/lib/toast";
 import { CountsToMainField } from "@/components/counts-to-main-field";
+import { SharedExpenseSplitField } from "@/components/expenses/shared-expense-split-field";
 
 const CATEGORIES = ["שכירות", "חשמל ומים", "משכורות", "ציוד ותחזוקה", "שיווק ופרסום", "הדפסות ותקנונים", "ביטוח", "אחר"];
 
@@ -70,12 +71,17 @@ export function EditFixedExpenseModal({
   isPartner,
   ownerName,
   partnerName,
+  isShared = false,
+  branches = [],
 }: {
   expense: FixedExpense;
   branchId: string;
   isPartner: boolean;
   ownerName: string;
   partnerName: string;
+  /** בספר המשותף נוסף לחלון גם *איך ההוצאה מתחלקת* - על אילו סניפים וכמה אחוז על הבעלים */
+  isShared?: boolean;
+  branches?: { id: string; name: string }[];
 }) {
   const [open, setOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
@@ -128,6 +134,18 @@ export function EditFixedExpenseModal({
             {isPartner && (
               <PayerFields paidBy={expense.paidBy} owedBy={expense.owedBy} ownerName={ownerName} partnerName={partnerName} />
             )}
+            {isShared && (
+              <div className="col-span-2">
+                <SharedExpenseSplitField
+                  branches={branches}
+                  defaultOn={typeof expense.ownerPct === "number"}
+                  defaultOwnerPct={expense.ownerPct ?? undefined}
+                  defaultBranchIds={expense.branchIds}
+                  idPrefix={`edit-split-${expense.id}`}
+                  amountLabel="הסכום החודשי"
+                />
+              </div>
+            )}
             <div className="col-span-2">
               <CountsToMainField defaultChecked={expense.countsToMain === true} />
             </div>
@@ -154,12 +172,17 @@ export function EditVariableExpenseModal({
   isPartner,
   ownerName,
   partnerName,
+  isShared = false,
+  branches = [],
 }: {
   expense: VariableExpense;
   branchId: string;
   isPartner: boolean;
   ownerName: string;
   partnerName: string;
+  /** ראה `EditFixedExpenseModal` */
+  isShared?: boolean;
+  branches?: { id: string; name: string }[];
 }) {
   const [open, setOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
@@ -211,6 +234,18 @@ export function EditVariableExpenseModal({
             </div>
             {isPartner && (
               <PayerFields paidBy={expense.paidBy} owedBy={expense.owedBy} ownerName={ownerName} partnerName={partnerName} />
+            )}
+            {isShared && (
+              <div className="col-span-2">
+                <SharedExpenseSplitField
+                  branches={branches}
+                  defaultOn={typeof expense.ownerPct === "number"}
+                  defaultOwnerPct={expense.ownerPct ?? undefined}
+                  defaultBranchIds={expense.branchIds}
+                  idPrefix={`edit-split-${expense.id}`}
+                  amountLabel="הסכום"
+                />
+              </div>
             )}
             <div className="col-span-2">
               <CountsToMainField defaultChecked={expense.countsToMain === true} />

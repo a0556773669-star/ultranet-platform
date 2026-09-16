@@ -1,10 +1,12 @@
 import Link from "next/link";
-import { Building2, Armchair, Banknote, BarChart3 } from "lucide-react";
+import { Armchair, BarChart3 } from "lucide-react";
 
+/**
+ * שתי לשוניות. המשרד השיתופי הוא ארבע עמדות בסניף אחד, וזה כל מה שיש לנהל בו:
+ * מי יושב בכל עמדה ומי שילם (סניפים ועמדות), וכמה יצא מול כמה נכנס (הנה"ח).
+ */
 const TABS = [
-  { href: "/dashboard/coworking", label: "לקוחות ותשלומים", icon: Building2 },
-  { href: "/dashboard/coworking/stations", label: "עמדות", icon: Armchair },
-  { href: "/dashboard/coworking/expenses", label: "הוצאות", icon: Banknote },
+  { href: "/dashboard/coworking", label: "סניפים ועמדות", icon: Armchair },
   { href: "/dashboard/coworking/accounting", label: 'הנה"ח', icon: BarChart3 },
 ];
 
