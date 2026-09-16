@@ -1,11 +1,12 @@
 "use client";
 
-import { useCallback, useMemo, useState, useTransition } from "react";
+import { useCallback, useMemo, useState, useTransition, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { Gauge } from "lucide-react";
 import { useToast } from "@/lib/toast";
 import { setRecurringMonthAmountAction } from "@/components/recurring-expenses/actions";
 import { DataTable, money, type DataColumn } from "./data-table";
+import { RecurringRowControls } from "./recurring-row-controls";
 
 /**
  * עדכון ההוצאות הקבועות המשתנות — של **כל המודולים**, במקום אחד.
@@ -38,7 +39,8 @@ export interface RecurringUpdateRow {
   missingCount: number;
   totalToDate: number;
   countsToMain: boolean;
-  stopped: boolean;
+  /** ריק = פעילה. תאריך = הופסקה בו */
+  endDate: string;
 }
 
 function monthLabel(month: string) {
@@ -110,6 +112,8 @@ export function RecurringUpdateTable({
   defaultMonth,
   currentMonth,
   lastClosedMonth,
+  today,
+  historyPanels,
 }: {
   rows: RecurringUpdateRow[];
   /** חלון החודשים לבחירה, מהחדש לישן */
@@ -117,6 +121,11 @@ export function RecurringUpdateTable({
   defaultMonth: string;
   currentMonth: string;
   lastClosedMonth: string;
+  /** YYYY-MM-DD — ברירת המחדל בשדה ההפסקה */
+  today: string;
+  /** פאנלי ההיסטוריה המלאה (`RecurringHistoryPanel`), מרונדרים בשרת ונמסרים כ-ReactNode:
+   *  הם Server Components עם Server Actions בתוכם, ולכן אי אפשר לבנות אותם מכאן. */
+  historyPanels?: ReactNode;
 }) {
   const [month, setMonth] = useState(defaultMonth);
 
@@ -140,7 +149,7 @@ export function RecurringUpdateTable({
           <div className="min-w-0" title={`${r.name} · ${r.category || "ללא קטגוריה"}`}>
             <p className="truncate font-bold text-ink">
               {r.name}
-              {r.stopped && <span className="mr-1.5 text-[10.5px] font-bold text-muted">(הופסקה)</span>}
+              {r.endDate && <span className="mr-1.5 text-[10.5px] font-bold text-muted">(הופסקה)</span>}
             </p>
             <p className="truncate text-[10.5px] text-muted">{r.category || "ללא קטגוריה"}</p>
           </div>
@@ -227,15 +236,22 @@ export function RecurringUpdateTable({
         key: "total",
         label: 'סה"כ עד היום',
         className: "w-[118px]",
-        align: "left",
+        align: "center",
         value: (r) => r.totalToDate,
         render: (r) => <span className="font-extrabold tabular-nums text-red-600">{money(r.totalToDate)}</span>,
       },
+      {
+        key: "actions",
+        label: "",
+        align: "left",
+        className: "w-[186px]",
+        render: (r) => <RecurringRowControls id={r.id} endDate={r.endDate} today={today} />,
+      },
     ],
-    [month, statusOf],
+    [month, statusOf, today],
   );
 
-  return (
+  const table = (
     <DataTable
       title="עדכון הוצאות קבועות משתנות"
       icon={Gauge}
@@ -249,7 +265,7 @@ export function RecurringUpdateTable({
       totalLabel={`נרשם ב-${monthLabel(month)}`}
       defaultSortKey="missing"
       emptyText="אין עדיין הוצאות קבועות משתנות באף מודול"
-      minWidth={1000}
+      minWidth={1180}
       toolbar={
         <label className="flex shrink-0 items-center gap-1 text-[11px] font-bold text-muted">
           חודש לעדכון
@@ -271,10 +287,21 @@ export function RecurringUpdateTable({
         <>
           השורות כאן הן כל ההוצאות הקבועות המשתנות מכל המודולים — חדרי מחשבים, השכרות, משרד שיתופי
           והעסק עצמו — וכל עדכון נשמר במודול שההוצאה שייכת לו. חודש שעדיין רץ פתוח להזנה מוקדמת אבל
-          אינו נספר כפיגור; &quot;חודשים חסרים&quot; סופר רק חודשים שכבר נסגרו. עריכת היסטוריה מלאה,
-          הפסקה ומחיקה נשארו במסך של אותו מודול.
+          אינו נספר כפיגור; &quot;חודשים חסרים&quot; סופר רק חודשים שכבר נסגרו.
         </>
       }
     />
+  );
+
+  if (!historyPanels) return table;
+
+  return (
+    <div className="flex flex-col gap-2">
+      {table}
+      {/* ההיסטוריה המלאה נשארת מתחת לטבלה ומקופלת: הטבלה היא העבודה של ה-1 לחודש, וכל
+          השאר — למלא שנה שלמה שנרשמה באיחור, לתקן הקלדה מלפני חצי שנה, לשנות תדירות —
+          נעשה מדי פעם ולא צריך לתפוס מקום בכל כניסה. */}
+      <div className="flex flex-col gap-1.5">{historyPanels}</div>
+    </div>
   );
 }

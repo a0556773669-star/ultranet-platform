@@ -3,7 +3,7 @@
 import { useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/lib/toast";
-import { endMainFixedExpenseAction } from "../actions";
+import { endMainFixedExpenseAction } from "./actions";
 
 /**
  * "הפסקה" של הוצאה קבועה — תאריך + כפתור, ולא כפתור מחיקה.

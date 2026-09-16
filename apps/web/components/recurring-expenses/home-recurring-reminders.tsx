@@ -25,7 +25,7 @@ function scopeHref(expense: RecurringVariableExpense): string {
     case "coworking":
       return "/dashboard/coworking/accounting";
     default:
-      return "/dashboard/accounting/extra-expenses";
+      return "/dashboard/accounting";
   }
 }
 

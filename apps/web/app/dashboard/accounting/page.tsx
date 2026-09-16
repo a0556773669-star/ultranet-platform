@@ -2,10 +2,17 @@ import { redirect } from "next/navigation";
 import { BarChart3, TrendingDown, TrendingUp, Scale } from "lucide-react";
 import { requireModuleAccess } from "@/lib/perms";
 import { getAdminFirestore } from "@/lib/firebase-admin";
-import type { AccountingExpense, Branch } from "@ultranet/shared-types";
+import type { AccountingExpense, AccountingFixedExpense, Branch } from "@ultranet/shared-types";
 import { loadMainLedger, currentMonth, incomeTypeLabel } from "@/lib/main-ledger";
 import { countsToMain } from "@/lib/counts-to-main";
 import { loadRecurringPurchaseIndex } from "@/lib/recurring-purchases";
+import {
+  isMainFixedExpenseActive,
+  loadMainFixedExpenses,
+  mainFixedExpenseAccrued,
+  mainFixedExpenseMonths,
+} from "@/lib/main-fixed-expenses";
+import { RecurringHistoryPanel } from "@/components/recurring-expenses/recurring-history-panel";
 import { isSharedExpenseBranch } from "@/lib/expense-shared-scope";
 import {
   RECURRING_FREQUENCY_LABELS,
@@ -24,6 +31,7 @@ import { type LedgerTableRow } from "./ledger-table";
 import { type PurchaseRow } from "./purchases-table";
 import { type RecurringPurchaseRow } from "./recurring-purchases-table";
 import { type RecurringUpdateRow } from "./recurring-update-table";
+import { type FixedExpenseRow } from "./fixed-expenses-table";
 import { deleteExtraExpenseAction, deleteIncomeAction } from "./actions";
 
 function money(n: number) {
@@ -60,25 +68,26 @@ function monthWindow(upto: string, count = 12): string[] {
  *
  * "כמה הוצאנו עד היום, כמה הכנסנו עד היום, מה המאזן" הן השאלות שהמסך הזה קיים בשבילן,
  * ולכן הן בראשו. מתחתיהן שני כפתורי ההזנה - הכנסה והוצאה - ומתחתם סרגל הטבלאות, שסגור
- * כברירת מחדל: חמש הטבלאות של ההנה"ח לא נקראות יחד אף פעם, ומי שנכנס בוחר לאיזו שאלה
+ * כברירת מחדל: שש הטבלאות של ההנה"ח לא נקראות יחד אף פעם, ומי שנכנס בוחר לאיזו שאלה
  * הוא נכנס. ראה `ledger-workspace.tsx`.
  *
- * המסך אוסף כאן את כל מה שחמש הטבלאות צריכות, כולל מה שהיה עד היום רק ב"הוצאות
- * נוספות": הרכישות החד-פעמיות, הסיכום של הרכישות החוזרות, וההוצאות הקבועות המשתנות
- * של **כל** המודולים. השורות נשטחות לאובייקטים פשוטים כי הטבלאות הן קומפוננטות לקוח,
- * וכל החישוב נשאר כאן בשרת.
+ * המסך אוסף כאן את כל מה ששש הטבלאות צריכות, כולל כל מה שהיה עד היום במסך "הוצאות
+ * נוספות" שנמחק: הרכישות החד-פעמיות, הסיכום של הרכישות החוזרות, ההוצאות הקבועות של
+ * העסק, וההוצאות הקבועות המשתנות של **כל** המודולים. השורות נשטחות לאובייקטים פשוטים
+ * כי הטבלאות הן קומפוננטות לקוח, וכל החישוב נשאר כאן בשרת.
  */
 export default async function AccountingHomePage() {
   const session = await requireModuleAccess("accounting");
   if (session.user?.role !== "owner") redirect("/dashboard");
 
   const db = getAdminFirestore();
-  const [ledger, branchesSnap, extraSnap, purchaseIndex, recurring] = await Promise.all([
+  const [ledger, branchesSnap, extraSnap, purchaseIndex, recurring, mainFixed] = await Promise.all([
     loadMainLedger(),
     db.collection("n_branches").get(),
     db.collection("n_ah_expenses").get(),
     loadRecurringPurchaseIndex(),
     loadRecurringVariableExpenses(),
+    loadMainFixedExpenses(),
   ]);
 
   const branches = branchesSnap.docs
@@ -192,6 +201,24 @@ export default async function AccountingHomePage() {
 
   // ההוצאות הקבועות המשתנות של כל המודולים יחד — זו הפעולה החוזרת היחידה שההנה"ח
   // דורשת, וכל עוד היא הייתה מפוזרת על ארבעה מסכים היא נעשתה חלקית.
+  // ההוצאות הקבועות של העסק עצמו. הצבירה מחושבת כאן ולא מוקלדת — היא בדיוק מה שהספר
+  // הראשי סופר, שורה לכל חודש שההוצאה הייתה פעילה בו.
+  const fixedExpenseRows: FixedExpenseRow[] = mainFixed
+    .map((e: AccountingFixedExpense) => ({
+      id: e.id,
+      name: e.name,
+      amount: e.amount || 0,
+      category: e.category ?? "",
+      businessLabel: BUSINESS_LABELS[e.business] ?? BUSINESS_LABELS.general!,
+      startDate: e.startDate,
+      endDate: e.endDate ?? "",
+      accrued: mainFixedExpenseAccrued(e, month),
+      monthCount: mainFixedExpenseMonths(e, month).length,
+      countsToMain: countsToMain(e),
+      active: isMainFixedExpenseActive(e, month),
+    }))
+    .sort((a, b) => Number(b.active) - Number(a.active) || a.name.localeCompare(b.name, "he"));
+
   const closed = lastClosedMonth(month);
   const months = monthWindow(month);
   const monthsSet = new Set(months);
@@ -220,9 +247,15 @@ export default async function AccountingHomePage() {
       missingCount: missingMonths(e, closed).length,
       totalToDate: totalToDate(e, month),
       countsToMain: countsToMain(e),
-      stopped: Boolean(e.endDate),
+      endDate: e.endDate ?? "",
     };
   });
+
+  // פאנלי ההיסטוריה המלאה נבנים כאן ולא בטבלה: הם Server Components עם Server Actions
+  // בתוכם, והטבלה היא קומפוננטת לקוח. הם נמסרים לה כתוכן מוכן ויושבים מתחתיה, מקופלים.
+  const recurringHistoryPanels = recurring.map((e) => (
+    <RecurringHistoryPanel key={e.id} expense={e} upto={month} />
+  ));
 
   const frequencies = Object.entries(RECURRING_FREQUENCY_LABELS).map(([value, label]) => ({ value, label }));
 
@@ -275,7 +308,9 @@ export default async function AccountingHomePage() {
         purchasesTotalToMain={purchasesTotalToMain}
         recurringPurchaseRows={recurringPurchaseRows}
         year={year}
+        fixedExpenseRows={fixedExpenseRows}
         recurringUpdateRows={recurringUpdateRows}
+        recurringHistoryPanels={recurringHistoryPanels}
         months={months}
         deleteIncomeAction={deleteIncomeAction}
         deleteExtraExpenseAction={deleteExtraExpenseAction}

@@ -39,6 +39,5 @@ export async function deleteMultiBranchExpenseAction(id: string) {
   revalidatePath("/dashboard/rentals/accounting");
   revalidatePath("/dashboard/computer-rooms-accounting");
   revalidatePath("/dashboard/accounting");
-  revalidatePath("/dashboard/accounting/extra-expenses");
   revalidatePath("/dashboard");
 }

@@ -82,7 +82,6 @@ export async function createFixedExpenseAction(branchId: string, formData: FormD
   await getAdminFirestore().collection("n_fixed_expenses").add(stripUndefined(data));
   revalidatePath(`/dashboard/expenses/${branchId}`);
   revalidatePath("/dashboard/accounting");
-  revalidatePath("/dashboard/accounting/extra-expenses");
   revalidatePath("/dashboard/computer-rooms-accounting");
   revalidatePath(`/dashboard/computer-rooms-accounting/${branchId}`);
   revalidatePath("/dashboard");
@@ -95,7 +94,6 @@ export async function endFixedExpenseAction(id: string, branchId: string, formDa
   await ref.set({ endDate }, { merge: true });
   revalidatePath(`/dashboard/expenses/${branchId}`);
   revalidatePath("/dashboard/accounting");
-  revalidatePath("/dashboard/accounting/extra-expenses");
   revalidatePath("/dashboard/computer-rooms-accounting");
   revalidatePath(`/dashboard/computer-rooms-accounting/${branchId}`);
   revalidatePath("/dashboard");
@@ -107,7 +105,6 @@ export async function deleteFixedExpenseAction(id: string, branchId: string) {
   await ref.delete();
   revalidatePath(`/dashboard/expenses/${branchId}`);
   revalidatePath("/dashboard/accounting");
-  revalidatePath("/dashboard/accounting/extra-expenses");
   revalidatePath("/dashboard/computer-rooms-accounting");
   revalidatePath(`/dashboard/computer-rooms-accounting/${branchId}`);
   revalidatePath("/dashboard");
@@ -141,7 +138,6 @@ export async function updateFixedExpenseAction(id: string, branchId: string, for
   await ref.set(data, { merge: true });
   revalidatePath(`/dashboard/expenses/${branchId}`);
   revalidatePath("/dashboard/accounting");
-  revalidatePath("/dashboard/accounting/extra-expenses");
   revalidatePath("/dashboard/computer-rooms-accounting");
   revalidatePath(`/dashboard/computer-rooms-accounting/${branchId}`);
   revalidatePath("/dashboard");
@@ -192,7 +188,6 @@ export async function createVariableExpenseAction(branchId: string, formData: Fo
   await db.collection("n_var_expenses").add(stripUndefined(data));
   revalidatePath(`/dashboard/expenses/${branchId}`);
   revalidatePath("/dashboard/accounting");
-  revalidatePath("/dashboard/accounting/extra-expenses");
   revalidatePath("/dashboard/computer-rooms-accounting");
   revalidatePath(`/dashboard/computer-rooms-accounting/${branchId}`);
   revalidatePath("/dashboard");
@@ -245,7 +240,6 @@ export async function updateVariableExpenseAction(id: string, branchId: string, 
   await ref.set(data, { merge: true });
   revalidatePath(`/dashboard/expenses/${branchId}`);
   revalidatePath("/dashboard/accounting");
-  revalidatePath("/dashboard/accounting/extra-expenses");
   revalidatePath("/dashboard/computer-rooms-accounting");
   revalidatePath(`/dashboard/computer-rooms-accounting/${branchId}`);
   revalidatePath("/dashboard");
@@ -258,7 +252,6 @@ export async function deleteVariableExpenseAction(id: string, branchId: string) 
   await ref.delete();
   revalidatePath(`/dashboard/expenses/${branchId}`);
   revalidatePath("/dashboard/accounting");
-  revalidatePath("/dashboard/accounting/extra-expenses");
   revalidatePath("/dashboard/computer-rooms-accounting");
   revalidatePath(`/dashboard/computer-rooms-accounting/${branchId}`);
   revalidatePath("/dashboard");
