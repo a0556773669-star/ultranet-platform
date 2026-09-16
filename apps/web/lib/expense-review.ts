@@ -1,6 +1,10 @@
 /**
  * רשימת סקירה — לא שער אישור (פרק יד׳).
  *
+ * NO CONSUMER RIGHT NOW. Both the screen that produced the flags (/dashboard/rentals/my-expenses)
+ * and the list that displayed them (/dashboard/accounting/review) are gone. Kept as the
+ * definition of the rule - see SPEC section 12.
+ *
  * THE EXPOSURE THIS CLOSES
  * A branch manager can enter an expense and it immediately reduces what he owes the owner. With
  * one branch that is fine. With thirty it is a mechanism nobody is looking at.

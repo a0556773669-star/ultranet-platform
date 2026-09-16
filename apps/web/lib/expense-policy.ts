@@ -1,6 +1,11 @@
 /**
  * מדיניות התשלום של הסניף (פרק יד׳).
  *
+ * NO CONSUMER RIGHT NOW. The screen that used this (/dashboard/rentals/my-expenses) was removed
+ * in 09/2026 because it wrote to n_tx, which no accounting screen reads - so the rows it saved
+ * reached no report. This module is kept as the definition of the rule until the rule is applied
+ * to /dashboard/rentals/expenses, the screen that IS wired into the books. See SPEC section 12.
+ *
  * THE RULE THIS MODULE EXISTS FOR:
  *   מנהל הסניף מזין עובדות. לעולם לא תנאים.
  *
