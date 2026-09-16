@@ -1,13 +1,14 @@
 "use client";
 
-import { useState, type ComponentType } from "react";
-import { Gauge, Layers, Repeat, TrendingDown, TrendingUp, X } from "lucide-react";
+import { useState, type ComponentType, type ReactNode } from "react";
+import { CalendarClock, Gauge, Layers, Repeat, TrendingDown, TrendingUp, X } from "lucide-react";
 import type { RecurringPurchaseType } from "@ultranet/shared-types";
 import { AddIncomeButton, type BranchOption } from "./add-income-button";
 import { AddExpenseButton } from "./add-expense-button";
 import { LedgerTable, type LedgerTableRow } from "./ledger-table";
 import { PurchasesTable, type PurchaseRow } from "./purchases-table";
 import { RecurringPurchasesTable, type RecurringPurchaseRow } from "./recurring-purchases-table";
+import { FixedExpensesTable, type FixedExpenseRow } from "./fixed-expenses-table";
 import { RecurringUpdateTable, type RecurringUpdateRow } from "./recurring-update-table";
 
 /**
@@ -18,21 +19,23 @@ import { RecurringUpdateTable, type RecurringUpdateRow } from "./recurring-updat
  * רוצים לראות. שני כפתורים — הכנסה והוצאה — ומאחורי כל אחד מהם בדיוק אותם שדות שהיו
  * בטופס הפרוש.
  *
- * השנייה: **ברירת המחדל היא מסך נקי**. חמש הטבלאות של ההנה"ח לא נקראות יחד אף פעם;
+ * השנייה: **ברירת המחדל היא מסך נקי**. שש הטבלאות של ההנה"ח לא נקראות יחד אף פעם;
  * מי שנכנס רוצה לראות את שלושת המספרים למעלה, ואז לבחור לאיזו שאלה הוא נכנס. סרגל
  * שני, זהה לסרגל הניווט שמעליו, פותח אחת בכל פעם — ו"סגירה" מחזיר את המסך הנקי.
  *
- * זו גם הסיבה שהמסך הזה בלע את "הוצאות נוספות": הרכישות החד-פעמיות והרכישות החוזרות
- * היו מסך נפרד רק כי לא היה להן מקום כאן. עכשיו יש.
+ * זו גם הסיבה ש"הוצאות נוספות" נמחק כמסך נפרד: הרכישות החד-פעמיות, ההוצאות הקבועות
+ * והרכישות החוזרות ישבו שם רק כי לא היה להן מקום כאן. עכשיו יש, וכל מה שהמסך ההוא ידע
+ * לעשות — כולל הפסקה, מחיקה ועריכת היסטוריה — נמצא כאן.
  */
 
-type View = "income" | "expenses" | "purchases" | "recurring-purchases" | "recurring-update";
+type View = "income" | "expenses" | "purchases" | "recurring-purchases" | "fixed" | "recurring-update";
 
 const VIEWS: { key: View; label: string; icon: ComponentType<{ className?: string }> }[] = [
   { key: "income", label: "הכנסות", icon: TrendingUp },
   { key: "expenses", label: "הוצאות", icon: TrendingDown },
   { key: "purchases", label: 'רכישות והוצאות ח"פ', icon: Layers },
   { key: "recurring-purchases", label: "רכישות חוזרות", icon: Repeat },
+  { key: "fixed", label: "הוצאות קבועות", icon: CalendarClock },
   { key: "recurring-update", label: "עדכון קבוע משתנה", icon: Gauge },
 ];
 
@@ -53,7 +56,9 @@ export function LedgerWorkspace({
   purchasesTotalToMain,
   recurringPurchaseRows,
   year,
+  fixedExpenseRows,
   recurringUpdateRows,
+  recurringHistoryPanels,
   months,
   deleteIncomeAction,
   deleteExtraExpenseAction,
@@ -74,7 +79,10 @@ export function LedgerWorkspace({
   purchasesTotalToMain: number;
   recurringPurchaseRows: RecurringPurchaseRow[];
   year: string;
+  fixedExpenseRows: FixedExpenseRow[];
   recurringUpdateRows: RecurringUpdateRow[];
+  /** `RecurringHistoryPanel` לכל הוצאה — Server Components שנבנו בעמוד ונמסרים כאן כתוכן */
+  recurringHistoryPanels: ReactNode;
   months: string[];
   deleteIncomeAction: (id: string) => Promise<void>;
   deleteExtraExpenseAction: (id: string) => Promise<void>;
@@ -86,6 +94,7 @@ export function LedgerWorkspace({
     expenses: expenseRows.length,
     purchases: purchaseRows.length,
     "recurring-purchases": recurringPurchaseRows.length,
+    fixed: fixedExpenseRows.length,
     "recurring-update": recurringUpdateRows.length,
   };
 
@@ -174,6 +183,8 @@ export function LedgerWorkspace({
 
       {view === "recurring-purchases" && <RecurringPurchasesTable rows={recurringPurchaseRows} year={year} />}
 
+      {view === "fixed" && <FixedExpensesTable rows={fixedExpenseRows} />}
+
       {view === "recurring-update" && (
         <RecurringUpdateTable
           rows={recurringUpdateRows}
@@ -181,6 +192,8 @@ export function LedgerWorkspace({
           defaultMonth={lastClosedMonth}
           currentMonth={currentMonth}
           lastClosedMonth={lastClosedMonth}
+          today={defaultDate}
+          historyPanels={recurringHistoryPanels}
         />
       )}
     </div>

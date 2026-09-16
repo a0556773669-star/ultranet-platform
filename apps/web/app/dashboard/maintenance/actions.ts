@@ -33,7 +33,6 @@ export async function deleteLeftoverAction(collection: LeftoverCollection, id: s
   revalidatePath("/dashboard");
   revalidatePath("/dashboard/maintenance");
   revalidatePath("/dashboard/accounting");
-  revalidatePath("/dashboard/accounting/extra-expenses");
   revalidatePath("/dashboard/coworking");
   revalidatePath("/dashboard/coworking/accounting");
   revalidatePath("/dashboard/expenses");

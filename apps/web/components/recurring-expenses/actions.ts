@@ -73,7 +73,6 @@ function revalidateAll(scope: ExpenseScope, branchId?: string) {
   // אחרת מי שמעדכן את החשמל ממסך הסניף ממשיך לראות בבית "חסר עדכון" על מה שהרגע עדכן.
   revalidatePath("/dashboard");
   revalidatePath("/dashboard/accounting");
-  revalidatePath("/dashboard/accounting/extra-expenses");
   if (scope === "computers") {
     revalidatePath("/dashboard/expenses");
     if (branchId) revalidatePath(`/dashboard/expenses/${branchId}`);
