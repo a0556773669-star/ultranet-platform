@@ -2,34 +2,85 @@ import { redirect } from "next/navigation";
 import { BarChart3, TrendingDown, TrendingUp, Scale } from "lucide-react";
 import { requireModuleAccess } from "@/lib/perms";
 import { getAdminFirestore } from "@/lib/firebase-admin";
-import type { Branch } from "@ultranet/shared-types";
+import type { AccountingExpense, Branch } from "@ultranet/shared-types";
 import { loadMainLedger, currentMonth, incomeTypeLabel } from "@/lib/main-ledger";
+import { countsToMain } from "@/lib/counts-to-main";
+import { loadRecurringPurchaseIndex } from "@/lib/recurring-purchases";
+import { isSharedExpenseBranch } from "@/lib/expense-shared-scope";
+import {
+  RECURRING_FREQUENCY_LABELS,
+  amountForMonth,
+  dueMonths,
+  frequencyOf,
+  lastClosedMonth,
+  loadRecurringVariableExpenses,
+  missingMonths,
+  totalToDate,
+} from "@/lib/recurring-expenses";
 import { AccountingTabs } from "./accounting-tabs";
-import { AddIncomeForm, type BranchOption } from "./income-form";
-import { LedgerTable, type LedgerTableRow } from "./ledger-table";
-import { deleteIncomeAction } from "./actions";
+import { type BranchOption } from "./add-income-button";
+import { LedgerWorkspace } from "./ledger-workspace";
+import { type LedgerTableRow } from "./ledger-table";
+import { type PurchaseRow } from "./purchases-table";
+import { type RecurringPurchaseRow } from "./recurring-purchases-table";
+import { type RecurringUpdateRow } from "./recurring-update-table";
+import { deleteExtraExpenseAction, deleteIncomeAction } from "./actions";
 
 function money(n: number) {
   return `${Math.round(n).toLocaleString("he-IL")} ₪`;
 }
 
+const BUSINESS_LABELS: Record<string, string> = {
+  general: "כללי",
+  computers: "חדרי מחשבים",
+  rentals: "השכרות",
+  coworking: "משרד שיתופי",
+};
+
+const SCOPE_LABELS: Record<string, string> = {
+  main: 'הנה"ח ראשית',
+  computers: "חדרי מחשבים",
+  rentals: "השכרות",
+  coworking: "משרד שיתופי",
+};
+
+/** חלון החודשים שבורר החודש מציע: שנה אחורה, מהחדש לישן. */
+function monthWindow(upto: string, count = 12): string[] {
+  const [y, m] = upto.split("-").map(Number);
+  const out: string[] = [];
+  for (let i = 0; i < count; i += 1) {
+    const total = (y ?? 2000) * 12 + (m ?? 1) - 1 - i;
+    out.push(`${Math.floor(total / 12)}-${String((total % 12) + 1).padStart(2, "0")}`);
+  }
+  return out;
+}
+
 /**
- * הספר הראשי — שלושה מספרים ורשימה.
+ * הספר הראשי — שלושה מספרים, שני כפתורים, וטבלה אחת שנפתחת לפי בחירה.
  *
  * "כמה הוצאנו עד היום, כמה הכנסנו עד היום, מה המאזן" הן השאלות שהמסך הזה קיים בשבילן,
- * ולכן הן בראשו ולא אחרי שלוש טבלאות. שתי הטבלאות שמתחתיהן הן בדיוק מה שמרכיב את
- * המספרים - כל שורה שסומנה `countsToMain`, ורק היא - כך שאפשר תמיד ללחוץ ולראות מאיפה
- * הגיע כל שקל, בלי מסך "בדיקת שלמות" שמנסה להסביר בדיעבד למה שני מספרים לא הסתדרו.
+ * ולכן הן בראשו. מתחתיהן שני כפתורי ההזנה - הכנסה והוצאה - ומתחתם סרגל הטבלאות, שסגור
+ * כברירת מחדל: חמש הטבלאות של ההנה"ח לא נקראות יחד אף פעם, ומי שנכנס בוחר לאיזו שאלה
+ * הוא נכנס. ראה `ledger-workspace.tsx`.
  *
- * שתי הרשימות הפכו לטבלאות (`ledger-table.tsx`) - עם סינון, סידור ועימוד - אבל נשארו
- * זו לצד זו: הכנסות בימין, הוצאות בשמאל, כדי שאפשר יהיה להשוות ביניהן במבט אחד.
+ * המסך אוסף כאן את כל מה שחמש הטבלאות צריכות, כולל מה שהיה עד היום רק ב"הוצאות
+ * נוספות": הרכישות החד-פעמיות, הסיכום של הרכישות החוזרות, וההוצאות הקבועות המשתנות
+ * של **כל** המודולים. השורות נשטחות לאובייקטים פשוטים כי הטבלאות הן קומפוננטות לקוח,
+ * וכל החישוב נשאר כאן בשרת.
  */
 export default async function AccountingHomePage() {
   const session = await requireModuleAccess("accounting");
   if (session.user?.role !== "owner") redirect("/dashboard");
 
   const db = getAdminFirestore();
-  const [ledger, branchesSnap] = await Promise.all([loadMainLedger(), db.collection("n_branches").get()]);
+  const [ledger, branchesSnap, extraSnap, purchaseIndex, recurring] = await Promise.all([
+    loadMainLedger(),
+    db.collection("n_branches").get(),
+    db.collection("n_ah_expenses").get(),
+    loadRecurringPurchaseIndex(),
+    loadRecurringVariableExpenses(),
+  ]);
+
   const branches = branchesSnap.docs
     .map((d) => ({ ...(d.data() as Omit<Branch, "id">), id: d.id }) as Branch)
     .filter((b) => !b.deleted);
@@ -37,6 +88,8 @@ export default async function AccountingHomePage() {
   const opt = (b: Branch): BranchOption => ({ id: b.id, name: b.name });
   const computerBranches = branches.filter((b) => b.branchType === "computers").map(opt);
   const rentalsBranches = branches.filter((b) => b.branchType === "rentals").map(opt);
+  const allBranchOptions = [...branches].sort((a, b) => a.name.localeCompare(b.name, "he", { numeric: true })).map(opt);
+  const branchNameById = new Map(branches.map((b) => [b.id, b.name]));
 
   const month = currentMonth();
   const today = new Date().toISOString().slice(0, 10);
@@ -101,6 +154,78 @@ export default async function AccountingHomePage() {
     category: entry.category ?? "",
   }));
 
+  // רכישות והוצאות חד-פעמיות של העסק עצמו. הן חלק מהוצאות הספר רק כשסומנו, ולכן הן
+  // טבלה נפרדת ולא חלק מטבלת ההוצאות: כאן רואים גם את מה שלא נספר בשורה התחתונה.
+  const extraExpenses = extraSnap.docs
+    .map((d) => ({ ...(d.data() as Omit<AccountingExpense, "id">), id: d.id }) as AccountingExpense)
+    .filter((e) => e.date);
+
+  const purchaseRows: PurchaseRow[] = extraExpenses.map((e) => ({
+    id: e.id,
+    date: e.date,
+    desc: e.desc,
+    amount: e.amount || 0,
+    category: e.category ?? "",
+    businessLabel: BUSINESS_LABELS[e.business] ?? BUSINESS_LABELS.general!,
+    branchesLabel: (e.linkedBranchIds ?? []).map((id) => branchNameById.get(id) ?? id).join(" · "),
+    purchaseTypeName: (e.expenseTypeId && purchaseIndex.byType.get(e.expenseTypeId)?.type.name) || "",
+    countsToMain: countsToMain(e),
+  }));
+  const purchasesTotalToMain = extraExpenses
+    .filter((e) => countsToMain(e))
+    .reduce((s, e) => s + (e.amount || 0), 0);
+
+  const summaries = [...purchaseIndex.byType.values()].filter((s) => s.purchases.length > 0);
+  const year = summaries[0]?.year ?? new Date().toISOString().slice(0, 4);
+  const recurringPurchaseRows: RecurringPurchaseRow[] = summaries.map((s) => ({
+    id: s.type.id,
+    name: s.type.name,
+    year: s.year,
+    thisYearCount: s.thisYearCount,
+    thisYearTotal: s.thisYearTotal,
+    perMonth: s.perMonth,
+    branchCount: s.branches.length,
+    lastDate: s.lastPurchase?.date ?? "",
+    grandTotal: s.grandTotal,
+    totalCount: s.purchases.length,
+  }));
+
+  // ההוצאות הקבועות המשתנות של כל המודולים יחד — זו הפעולה החוזרת היחידה שההנה"ח
+  // דורשת, וכל עוד היא הייתה מפוזרת על ארבעה מסכים היא נעשתה חלקית.
+  const closed = lastClosedMonth(month);
+  const months = monthWindow(month);
+  const monthsSet = new Set(months);
+  const recurringUpdateRows: RecurringUpdateRow[] = recurring.map((e) => {
+    const values: Record<string, number> = {};
+    for (const m of months) {
+      const v = amountForMonth(e, m);
+      if (v !== null) values[m] = v;
+    }
+    const branchLabel = !e.branchId
+      ? ""
+      : isSharedExpenseBranch(e.branchId)
+        ? "כל הסניפים"
+        : (branchNameById.get(e.branchId) ?? "סניף שנמחק");
+    const scope = SCOPE_LABELS[e.scope] ?? e.scope;
+    const latest = [...(e.amounts ?? [])].sort((a, b) => b.month.localeCompare(a.month))[0];
+    return {
+      id: e.id,
+      name: e.name,
+      scopeLabel: branchLabel ? `${scope} — ${branchLabel}` : scope,
+      category: e.category ?? "",
+      frequencyLabel: RECURRING_FREQUENCY_LABELS[frequencyOf(e, month)],
+      values,
+      due: dueMonths(e, month).filter((m) => monthsSet.has(m)),
+      suggested: latest?.amount ?? e.defaultAmount ?? 0,
+      missingCount: missingMonths(e, closed).length,
+      totalToDate: totalToDate(e, month),
+      countsToMain: countsToMain(e),
+      stopped: Boolean(e.endDate),
+    };
+  });
+
+  const frequencies = Object.entries(RECURRING_FREQUENCY_LABELS).map(([value, label]) => ({ value, label }));
+
   return (
     <div className="flex flex-col gap-3.5">
       <div className="flex flex-wrap items-end justify-between gap-3">
@@ -133,26 +258,28 @@ export default async function AccountingHomePage() {
         ))}
       </div>
 
-      <AddIncomeForm computerBranches={computerBranches} rentalsBranches={rentalsBranches} defaultDate={today} />
-
-      {/* הכנסות בימין, הוצאות בשמאל - אותה פריסה שהייתה כאן תמיד, ובשתי עמודות שוות:
-          רוחב זהה ורוחבי עמודות זהים הם מה שגורם לשתי הטבלאות להיראות כמו טבלה אחת
-          שנחתכה לשניים. במסך צר הן נערמות אחת מתחת לשנייה. */}
-      <div className="grid grid-cols-1 items-start gap-3.5 xl:grid-cols-2">
-        <LedgerTable
-          kind="income"
-          rows={incomeRows}
-          total={ledger.totals.income}
-          emptyText="אין עדיין הכנסות"
-          deleteAction={deleteIncomeAction}
-        />
-        <LedgerTable
-          kind="expense"
-          rows={expenseRows}
-          total={ledger.totals.expense}
-          emptyText={'עדיין לא סומנה אף הוצאה כמתחשבנת בראשי. מסמנים הוצאה בטופס שבו היא נרשמה.'}
-        />
-      </div>
+      <LedgerWorkspace
+        computerBranches={computerBranches}
+        rentalsBranches={rentalsBranches}
+        branches={allBranchOptions}
+        expenseTypes={purchaseIndex.types}
+        frequencies={frequencies}
+        defaultDate={today}
+        currentMonth={month}
+        lastClosedMonth={closed}
+        incomeRows={incomeRows}
+        incomeTotal={ledger.totals.income}
+        expenseRows={expenseRows}
+        expenseTotal={ledger.totals.expense}
+        purchaseRows={purchaseRows}
+        purchasesTotalToMain={purchasesTotalToMain}
+        recurringPurchaseRows={recurringPurchaseRows}
+        year={year}
+        recurringUpdateRows={recurringUpdateRows}
+        months={months}
+        deleteIncomeAction={deleteIncomeAction}
+        deleteExtraExpenseAction={deleteExtraExpenseAction}
+      />
 
       <p className="px-1 text-[11.5px] leading-relaxed text-muted">
         חודש נוכחי: {month}. הספר סופר <b>רק</b> שורות שסומנו &quot;לחשבן בהנה&quot;ח הראשית&quot;. הוצאה
