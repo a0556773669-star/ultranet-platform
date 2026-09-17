@@ -2,7 +2,8 @@ import Link from "next/link";
 import { Users } from "lucide-react";
 import { getAdminFirestore } from "@/lib/firebase-admin";
 import { requireOwner } from "@/lib/perms";
-import type { AppUser } from "@ultranet/shared-types";
+import type { AppUser, UserAssignment } from "@ultranet/shared-types";
+import { unionPerms, type PermKey } from "@/lib/perms";
 import { deleteUserAction } from "./actions";
 import { DeleteButton } from "./delete-button";
 
@@ -15,12 +16,20 @@ const ROLE_LABELS: Record<string, string> = {
 const PERM_LABELS: Record<string, string> = {
   branches: "סניפים",
   computers: "מלאי",
+  tasks: "משימות",
   rentals: "השכרות",
   coworking: "משרד שיתופי",
   accounting: "הנה\"ח",
-  tasks: "משימות",
+  charging: "סליקה וקבלות",
   shop: "חנות AI",
+  duxus: "משימות ונהלים",
 };
+
+/** אותה נפילה לאחור כמו ב-`getAssignments`, כאן על מסמך מ-Firestore ולא על session. */
+function userHats(u: AppUser): UserAssignment[] {
+  if (u.assignments?.length) return u.assignments;
+  return [{ role: u.role, branchId: u.branchId, perms: u.perms }];
+}
 
 export default async function UsersPage() {
   await requireOwner();
@@ -51,19 +60,33 @@ export default async function UsersPage() {
       <div className="flex flex-col gap-3">
         {users.map((u) => {
           const boundDelete = deleteUserAction.bind(null, u.id);
+          // משתמש עם כמה תפקידים מוצג עם כולם; למשתמש רגיל זה בדיוק השורה האחת שהייתה כאן קודם.
+          const hats = userHats(u);
+          const granted = unionPerms(hats);
           return (
             <div key={u.id} className="rounded-card border border-card-border bg-white p-4 shadow-card">
               <div className="flex items-center justify-between">
                 <div>
                   <div className="flex items-center gap-2">
                     <span className="font-bold text-ink">{u.name}</span>
-                    <span className="rounded-full border border-teal bg-teal-bg px-2.5 py-0.5 text-[11px] font-bold text-teal-dark">
-                      {ROLE_LABELS[u.role] ?? u.role}
-                    </span>
+                    {hats.map((hat, i) => (
+                      <span
+                        key={i}
+                        className="rounded-full border border-teal bg-teal-bg px-2.5 py-0.5 text-[11px] font-bold text-teal-dark"
+                      >
+                        {ROLE_LABELS[hat.role] ?? hat.role}
+                      </span>
+                    ))}
                   </div>
                   <div className="mt-1 text-xs text-muted">{u.email}</div>
                   <div className="mt-1 text-xs text-muted">
-                    {u.role === "owner" ? "כל הסניפים" : branchNames.get(u.branchId) ?? u.branchId ?? "-"}
+                    {hats
+                      .map((hat) =>
+                        hat.role === "owner"
+                          ? "כל הסניפים"
+                          : (branchNames.get(hat.branchId) ?? hat.branchId ?? "-"),
+                      )
+                      .join(" · ")}
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
@@ -79,10 +102,11 @@ export default async function UsersPage() {
                 </div>
               </div>
 
-              {u.role !== "owner" && (
+              {/* צ'יפ מסומן = ההרשאה קיימת באיזשהו כובע של המשתמש. הפירוט פר-תפקיד נמצא במסך העריכה. */}
+              {!hats.every((hat) => hat.role === "owner") && (
                 <div className="mt-3 flex flex-wrap gap-1.5">
                   {Object.entries(PERM_LABELS).map(([key, label]) => {
-                    const active = Boolean(u.perms?.[key as keyof NonNullable<typeof u.perms>]);
+                    const active = Boolean(granted[key as PermKey]);
                     return (
                       <span
                         key={key}

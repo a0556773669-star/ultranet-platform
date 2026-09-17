@@ -7,9 +7,12 @@ import { authOptions } from "@/lib/auth";
 import { getAdminFirestore } from "@/lib/firebase-admin";
 import { chargeViaRoute } from "@/lib/collection-charge";
 import { countsToMainFromForm } from "@/lib/counts-to-main";
+import { resolveExpenseTypeIdFromForm } from "@/lib/recurring-purchases";
+import { MAIN_FIXED_EXPENSES_COLLECTION } from "@/lib/main-fixed-expenses";
 import type {
   AccountingIncome,
   AccountingExpense,
+  AccountingFixedExpense,
   CollectionRoute,
 } from "@ultranet/shared-types";
 
@@ -34,9 +37,11 @@ function stripUndefined<T extends Record<string, unknown>>(obj: T): T {
 
 function revalidateMain() {
   revalidatePath("/dashboard/accounting");
-  revalidatePath("/dashboard/accounting/extra-expenses");
-  revalidatePath("/dashboard/accounting/legacy");
   revalidatePath("/dashboard/rentals/accounting");
+  // הכנסת מזומן נמשכת מקופה של חדר מחשבים, ומוצגת (לתצוגה בלבד) גם בדשבורד המעקב שלו -
+  // אחרת היא הייתה מופיעה שם רק בטעינה הבאה שתעקוף את המטמון.
+  revalidatePath("/dashboard/computer-rooms-accounting");
+  revalidatePath("/dashboard/computer-rooms-accounting/[id]", "page");
   revalidatePath("/dashboard");
 }
 
@@ -134,13 +139,19 @@ export async function createExtraExpenseAction(formData: FormData) {
   const category = String(formData.get("category") ?? "").trim();
   const linkedBranchIds = formData.getAll("linkedBranchIds").map((v) => String(v)).filter(Boolean);
 
+  const business = String(formData.get("business") ?? "general") as AccountingExpense["business"];
+  // סימון "רכישה חוזרת" באותו שדה בדיוק כמו בהוצאה של סניף - זה מה שמחבר קנייה של
+  // העסק עצמו לאותו מוצר שנקנה בסניף, בלי שום מודול באמצע.
+  const expenseTypeId = await resolveExpenseTypeIdFromForm(formData, business);
+
   const data: Omit<AccountingExpense, "id"> = stripUndefined({
     date,
     amount,
     desc: String(formData.get("desc") ?? "").trim() || category || "הוצאה",
-    business: String(formData.get("business") ?? "general") as AccountingExpense["business"],
+    business,
     month: date.slice(0, 7),
     countsToMain: countsToMainFromForm(formData),
+    expenseTypeId,
     ...(category ? { category } : {}),
     ...(linkedBranchIds.length > 0 ? { linkedBranchIds } : {}),
   });
@@ -151,6 +162,55 @@ export async function createExtraExpenseAction(formData: FormData) {
 export async function deleteExtraExpenseAction(id: string) {
   await requireOwner();
   await getAdminFirestore().collection("n_ah_expenses").doc(id).delete();
+  revalidateMain();
+}
+
+/**
+ * הוצאה קבועה של העסק עצמו — אותו סכום כל חודש, מתאריך ההתחלה ועד שמפסיקים אותה.
+ *
+ * זו אחותה של ההוצאה הקבועה של סניף (`n_fixed_expenses`) בספר הראשי, ולכן היא נשמרת
+ * כשורה אחת עם סכום חודשי ולא כרכישה חדשה בכל חודש: כך אפשר לראות אותה כשורה אחת,
+ * להפסיק אותה ביום שהיא נגמרה, ולקבל את הצבירה שלה מחושבת ולא מוקלדת. הצ'קבוקס
+ * "לחשבן בהנה"ח הראשית" נפתח מסומן — זו הוצאה של העסק, זה כל מה שהיא.
+ */
+export async function createMainFixedExpenseAction(formData: FormData) {
+  await requireOwner();
+  const name = String(formData.get("name") ?? "").trim();
+  const amount = Number(formData.get("amount") ?? 0);
+  const startDate = String(formData.get("startDate") ?? "").trim();
+  if (!name || !amount || !startDate) {
+    throw new Error("שם, סכום חודשי ותאריך התחלה הם שדות חובה");
+  }
+  const category = String(formData.get("category") ?? "").trim();
+  const data: Omit<AccountingFixedExpense, "id"> = stripUndefined({
+    name,
+    amount,
+    startDate,
+    business: String(formData.get("business") ?? "general") as AccountingFixedExpense["business"],
+    countsToMain: countsToMainFromForm(formData),
+    createdAt: new Date().toISOString(),
+    ...(category ? { category } : {}),
+  });
+  await getAdminFirestore().collection(MAIN_FIXED_EXPENSES_COLLECTION).add(data);
+  revalidateMain();
+}
+
+/**
+ * הפסקת הוצאה קבועה — `endDate` ולא מחיקה, כי החודשים שהיא כן הייתה פעילה בהם באמת
+ * יצאו מהכיס וצריכים להישאר בספר. מחיקה היא לטעות הקלדה בלבד.
+ */
+export async function endMainFixedExpenseAction(id: string, formData: FormData) {
+  await requireOwner();
+  const ref = getAdminFirestore().collection(MAIN_FIXED_EXPENSES_COLLECTION).doc(id);
+  if (!(await ref.get()).exists) throw new Error("ההוצאה לא נמצאה");
+  const endDate = String(formData.get("endDate") ?? "").trim() || new Date().toISOString().slice(0, 10);
+  await ref.set({ endDate }, { merge: true });
+  revalidateMain();
+}
+
+export async function deleteMainFixedExpenseAction(id: string) {
+  await requireOwner();
+  await getAdminFirestore().collection(MAIN_FIXED_EXPENSES_COLLECTION).doc(id).delete();
   revalidateMain();
 }
 

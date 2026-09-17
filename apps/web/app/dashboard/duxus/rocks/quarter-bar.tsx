@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { Archive, ArchiveRestore, CalendarPlus, Lock, Pencil } from "lucide-react";
 import type { Quarter } from "@ultranet/shared-types";
 import { setQuarterStatusAction, updateQuarterAction } from "./actions";
@@ -12,11 +12,15 @@ const FIELD =
   "w-full rounded-lg border border-card-border bg-[#f4f6f9] px-3 py-2 text-sm focus:border-teal focus:bg-white focus:outline-none";
 
 /**
- * שורת הרבעון בראש טאב הרבעון: בחירת רבעון (כולל ארכיון), שינוי שם/תאריכים,
- * ארכוב/החזרה לפעיל, ומעבר לאשף "פתיחת רבעון חדש".
+ * שורת הרבעון שמופיעה בראש כל מסכי המשימות: בחירת רבעון (כולל ארכיון), שינוי
+ * שם/תאריכים, ארכוב/החזרה לפעיל, ומעבר לאשף "פתיחת רבעון חדש".
+ *
+ * שינוי תאריכי הרבעון **אינו מוחק שיוכים קיימים** (סעיף 14) - הוא רק נרשם ביומן.
  */
 export function QuarterBar({ quarter, quarters }: { quarter: Quarter; quarters: Quarter[] }) {
   const router = useRouter();
+  // מעבר בין רבעונים נשאר בלשונית הנוכחית (שבוע/חודש/רבעון/ארכיון) ולא קופץ לברירת מחדל.
+  const pathname = usePathname() ?? "/dashboard/duxus/rocks/week";
   const { showSuccess, showError, toastNode } = useToast();
   const [isPending, startTransition] = useTransition();
   const [editing, setEditing] = useState(false);
@@ -60,7 +64,7 @@ export function QuarterBar({ quarter, quarters }: { quarter: Quarter; quarters: 
         <div className="flex flex-wrap items-center gap-2">
           <select
             value={quarter.id}
-            onChange={(e) => router.push(`/dashboard/duxus/rocks?q=${encodeURIComponent(e.target.value)}`)}
+            onChange={(e) => router.push(`${pathname}?q=${encodeURIComponent(e.target.value)}`)}
             className="rounded-lg border border-card-border bg-[#f4f6f9] px-3 py-2 text-sm font-bold text-ink focus:border-teal focus:bg-white focus:outline-none"
           >
             {quarters.map((q) => (
