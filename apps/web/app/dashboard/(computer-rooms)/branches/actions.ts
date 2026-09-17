@@ -106,7 +106,9 @@ export async function updateBranchAction(id: string, formData: FormData) {
   await getAdminFirestore().collection("n_branches").doc(id).set(stripUndefined(data), { merge: true });
   revalidatePath("/dashboard/branches");
   revalidatePath(`/dashboard/branches/${id}`);
-  redirect("/dashboard/branches");
+  revalidatePath(`/dashboard/branches/${id}/edit`);
+  // חזרה לכרטיס ולא לרשימה: מי ששמר רוצה לראות שהשינוי אכן נקלט, ולא לחפש את הסניף מחדש.
+  redirect(`/dashboard/branches/${id}`);
 }
 
 export async function deleteBranchAction(id: string) {
