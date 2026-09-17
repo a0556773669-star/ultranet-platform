@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { getServerSession } from "next-auth";
-import type { Firestore, WriteBatch } from "firebase-admin/firestore";
+import type { DocumentReference, Firestore, WriteBatch } from "firebase-admin/firestore";
 import { authOptions } from "@/lib/auth";
 import { getAdminFirestore } from "@/lib/firebase-admin";
 import { requireModuleAccess } from "@/lib/perms";
@@ -241,6 +241,29 @@ function logActivity(db: Firestore, batch: WriteBatch | null, userName: string, 
     return Promise.resolve();
   }
   return ref.set(payload).then(() => undefined);
+}
+
+// --- מחיקה לצמיתות ---
+
+const BATCH_LIMIT = 450; // מתחת ל-500 הפעולות המותרות ב-batch, עם מרווח לרישום היומן
+
+/** מוחקת רשימת מסמכים בקבוצות, כדי שמחיקת רבעון גדול לא תיחסם במגבלת ה-batch. */
+async function purgeDocs(db: Firestore, refs: DocumentReference[]): Promise<number> {
+  for (let i = 0; i < refs.length; i += BATCH_LIMIT) {
+    const batch = db.batch();
+    refs.slice(i, i + BATCH_LIMIT).forEach((ref) => batch.delete(ref));
+    await batch.commit();
+  }
+  return refs.length;
+}
+
+/** כל השיוכים של קבוצת אבני דרך - כולל כאלה שנעשו בלוח של רבעון אחר. */
+async function assignmentRefsForMilestones(db: Firestore, milestoneIds: Set<string>): Promise<DocumentReference[]> {
+  if (!milestoneIds.size) return [];
+  const snap = await db.collection(ASSIGNMENTS).get();
+  return snap.docs
+    .filter((d) => milestoneIds.has((d.data() as Partial<PeriodAssignment>).milestoneId ?? ""))
+    .map((d) => d.ref);
 }
 
 // --- שמירה על ארכיון: רבעון מאורכב הוא לקריאה בלבד ---
@@ -648,6 +671,117 @@ export async function setQuarterStatusAction(quarterKey: string, status: Quarter
   return { ok: true };
 }
 
+/** מה ייעלם אם ימחקו את הרבעון - הדיאלוג מציג את המספרים לפני שמאשרים. */
+export type QuarterDeletionSummary = {
+  label: string;
+  rocks: number;
+  milestones: number;
+  assignments: number;
+  reviews: number;
+  activity: number;
+  /** אבני דרך של הרבעון הזה שהתחייבנו אליהן גם ברבעון אחר - הן ייעלמו גם משם */
+  sharedWithOtherQuarters: number;
+};
+
+export async function getQuarterDeletionSummary(quarterKey: string): Promise<QuarterDeletionSummary> {
+  await requireModuleAccess("duxus");
+  const db = getAdminFirestore();
+  const [quarterDoc, rocksSnap, milestonesSnap, assignmentsSnap, reviewsSnap, activitySnap] = await Promise.all([
+    db.collection(QUARTERS).doc(quarterKey).get(),
+    db.collection(ROCKS).where("quarterKey", "==", quarterKey).get(),
+    db.collection(MILESTONES).where("quarterKey", "==", quarterKey).get(),
+    db.collection(ASSIGNMENTS).get(),
+    db.collection(REVIEWS).where("periodKey", "==", quarterKey).get(),
+    db.collection(ACTIVITY).where("quarterKey", "==", quarterKey).get(),
+  ]);
+
+  const milestoneIds = new Set(milestonesSnap.docs.map((d) => d.id));
+  const related = assignmentsSnap.docs.filter((d) => {
+    const a = d.data() as Partial<PeriodAssignment>;
+    return a.quarterKey === quarterKey || milestoneIds.has(a.milestoneId ?? "");
+  });
+  const shared = new Set(
+    related
+      .map((d) => d.data() as Partial<PeriodAssignment>)
+      .filter((a) => a.quarterKey !== quarterKey && milestoneIds.has(a.milestoneId ?? ""))
+      .map((a) => a.milestoneId ?? "")
+  );
+
+  return {
+    label: toQuarter(quarterKey, quarterDoc.data() as Partial<Quarter> | undefined).label,
+    rocks: rocksSnap.size,
+    milestones: milestonesSnap.size,
+    assignments: related.length,
+    reviews: reviewsSnap.size,
+    activity: activitySnap.size,
+    sharedWithOtherQuarters: shared.size,
+  };
+}
+
+/**
+ * **מחיקת רבעון לצמיתות** - הרבעון עצמו, הסלעים ותתי-הסלעים שלו, אבני הדרך שנולדו
+ * בו, כל שיוכי התקופה שנוגעים להם (גם כאלה שנעשו בלוח של רבעון אחר, כדי שלא
+ * יישארו שיוכים יתומים), סיכומי הישיבות הרבעוניות שלו ויומן הפעולות שלו.
+ *
+ * זו הדרך היחידה במודול להיפטר באמת מדאטה, והיא **בלתי הפיכה** - הארכוב
+ * (`setQuarterStatusAction`) נשאר האפשרות השמרנית שמשאירה הכל להיסטוריה.
+ *
+ * אבני דרך שהגיעו לרבעון הזה מרבעון אחר **אינן נמחקות**: הבית שלהן במקום אחר,
+ * ורק ההתחייבות אליהן כאן יורדת.
+ */
+export async function deleteQuarterAction(quarterKey: string): Promise<ActionResult> {
+  await requireModuleAccess("duxus");
+  if (!quarterKey) return { ok: false, message: "חסר רבעון" };
+  const db = getAdminFirestore();
+  const user = await currentUserLabel();
+
+  const [quarterDoc, rocksSnap, milestonesSnap, assignmentsSnap, reviewsSnap, activitySnap] = await Promise.all([
+    db.collection(QUARTERS).doc(quarterKey).get(),
+    db.collection(ROCKS).where("quarterKey", "==", quarterKey).get(),
+    db.collection(MILESTONES).where("quarterKey", "==", quarterKey).get(),
+    db.collection(ASSIGNMENTS).get(),
+    db.collection(REVIEWS).where("periodKey", "==", quarterKey).get(),
+    db.collection(ACTIVITY).where("quarterKey", "==", quarterKey).get(),
+  ]);
+
+  const label = toQuarter(quarterKey, quarterDoc.data() as Partial<Quarter> | undefined).label;
+  const milestoneIds = new Set(milestonesSnap.docs.map((d) => d.id));
+  const assignmentRefs = assignmentsSnap.docs
+    .filter((d) => {
+      const a = d.data() as Partial<PeriodAssignment>;
+      return a.quarterKey === quarterKey || milestoneIds.has(a.milestoneId ?? "");
+    })
+    .map((d) => d.ref);
+
+  // יומן של אבני הדרך שנמחקות, גם אם נרשם בהקשר של רבעון אחר.
+  const milestoneActivity = await Promise.all(
+    [...milestoneIds].map((mid) => db.collection(ACTIVITY).where("milestoneId", "==", mid).get())
+  );
+  const activityRefs = new Map<string, DocumentReference>();
+  [...activitySnap.docs, ...milestoneActivity.flatMap((g) => g.docs)].forEach((d) => activityRefs.set(d.id, d.ref));
+
+  const removed = await purgeDocs(db, [
+    ...assignmentRefs,
+    ...Array.from(activityRefs.values()),
+    ...milestonesSnap.docs.map((d) => d.ref),
+    ...rocksSnap.docs.map((d) => d.ref),
+    ...reviewsSnap.docs.map((d) => d.ref),
+    db.collection(QUARTERS).doc(quarterKey),
+  ]);
+
+  // נכתב אחרי הניקוי, כדי שהרישום על המחיקה עצמה ישרוד אותה.
+  await logActivity(db, null, user, {
+    entityType: "quarter",
+    entityId: quarterKey,
+    action: "delete",
+    oldValue: label,
+    note: `נמחק לצמיתות · ${rocksSnap.size} סלעים · ${milestonesSnap.size} אבני דרך · ${removed} מסמכים בסך הכל`,
+  });
+
+  revalidateModule();
+  return { ok: true };
+}
+
 /**
  * נועלת את תוצאות ההתחייבות של תקופה שנסגרת: מה שלא הושלם נשאר מתועד כ"לא הושלם"
  * גם אם המשימה תושלם אחר כך בתקופה אחרת (סעיף 8) - זו האמת ההיסטורית.
@@ -842,11 +976,30 @@ async function collectRockSubtree(db: Firestore, rockId: string): Promise<string
   return [rockId, ...nested.flat()];
 }
 
+/** מה ייעלם אם ימחקו את הסלע - כדי שדיאלוג המחיקה יציג מספרים ולא ינחש. */
+export type RockDeletionSummary = { title: string; subRocks: number; milestones: number; assignments: number };
+
+export async function getRockDeletionSummary(id: string): Promise<RockDeletionSummary> {
+  await requireModuleAccess("duxus");
+  const db = getAdminFirestore();
+  const rock = toRock(id, (await db.collection(ROCKS).doc(id).get()).data() as Partial<Rock> | undefined);
+  const subtree = await collectRockSubtree(db, id);
+  const groups = await Promise.all(subtree.map((rid) => db.collection(MILESTONES).where("rockId", "==", rid).get()));
+  const milestoneIds = new Set(groups.flatMap((g) => g.docs.map((d) => d.id)));
+  const assignments = await assignmentRefsForMilestones(db, milestoneIds);
+  return { title: rock.title, subRocks: subtree.length - 1, milestones: milestoneIds.size, assignments: assignments.length };
+}
+
 /**
- * מחיקת סלע. סלע שיש לו ילדים או אבני דרך **אינו נמחק פיזית** (סעיף 14) אלא מאורכב
- * במחיקה לוגית, כדי לא לפגוע בהיסטוריה; סלע ריק לגמרי נמחק באמת.
+ * מחיקת סלע, בשתי דרגות:
+ *
+ * - **ארכוב** (ברירת המחדל): סלע שיש לו ילדים או אבני דרך אינו נמחק פיזית
+ *   (סעיף 14) אלא יורד מהלוח במחיקה לוגית מדורגת ונשאר בהיסטוריה; סלע ריק
+ *   לגמרי נמחק באמת גם כאן.
+ * - **`permanent`**: מחיקה לצמיתות של כל התת-עץ - הסלע, תתי-הסלעים, אבני הדרך
+ *   שתחתיהם, שיוכי התקופה שלהן ויומן הפעולות. פעולה בלתי הפיכה שנבחרת במפורש.
  */
-export async function deleteRockAction(id: string): Promise<ActionResult> {
+export async function deleteRockAction(id: string, permanent = false): Promise<ActionResult> {
   await requireModuleAccess("duxus");
   const db = getAdminFirestore();
   const blocked = await rockWriteBlock(db, id);
@@ -859,8 +1012,32 @@ export async function deleteRockAction(id: string): Promise<ActionResult> {
   const milestoneDocs = milestoneGroups.flatMap((g) => g.docs);
   const user = await currentUserLabel();
   const now = Date.now();
-  const batch = db.batch();
 
+  if (permanent) {
+    const milestoneIds = new Set(milestoneDocs.map((d) => d.id));
+    const assignmentRefs = await assignmentRefsForMilestones(db, milestoneIds);
+    const activityGroups = await Promise.all(
+      [...milestoneIds].map((mid) => db.collection(ACTIVITY).where("milestoneId", "==", mid).get())
+    );
+    await purgeDocs(db, [
+      ...assignmentRefs,
+      ...activityGroups.flatMap((g) => g.docs.map((d) => d.ref)),
+      ...milestoneDocs.map((d) => d.ref),
+      ...subtree.map((rid) => db.collection(ROCKS).doc(rid)),
+    ]);
+    await logActivity(db, null, user, {
+      entityType: "rock",
+      entityId: id,
+      action: "delete",
+      oldValue: before.title,
+      note: `נמחק לצמיתות · ${subtree.length - 1} תתי-סלעים · ${milestoneDocs.length} אבני דרך · ${assignmentRefs.length} שיוכים`,
+      quarterKey: before.quarterKey,
+    });
+    revalidateModule();
+    return { ok: true };
+  }
+
+  const batch = db.batch();
   if (subtree.length === 1 && milestoneDocs.length === 0) {
     batch.delete(ref);
     logActivity(db, batch, user, { entityType: "rock", entityId: id, action: "delete", oldValue: before.title, quarterKey: before.quarterKey });
@@ -1224,10 +1401,16 @@ export async function reopenMilestoneAction(id: string, reason: string, status: 
 }
 
 /**
- * מחיקה. אבן דרך שיש לה שיוך לתקופה או היסטוריה אינה נמחקת פיזית (סעיף 10) אלא
- * במחיקה לוגית; אבן דרך טרייה בלי שום שיוך נמחקת באמת.
+ * מחיקת אבן דרך, בשתי דרגות:
+ *
+ * - **ארכוב** (ברירת המחדל): אבן דרך שיש לה שיוך לתקופה או היסטוריה יורדת מהלוח
+ *   במחיקה לוגית ונשארת בהיסטוריה (סעיף 10). אבן דרך טרייה בלי שום שיוך נמחקת
+ *   באמת גם כאן, כי אין מה לשמור.
+ * - **`permanent`**: מחיקה לצמיתות - הרשומה, כל שיוכי התקופה שלה וכל יומן
+ *   הפעולות שלה. פעולה בלתי הפיכה שהמשתמש בוחר בה במפורש, ולכן היא **חורגת
+ *   מכלל המחיקה הלוגית של האפיון** ביודעין.
  */
-export async function deleteMilestoneAction(id: string): Promise<ActionResult> {
+export async function deleteMilestoneAction(id: string, permanent = false): Promise<ActionResult> {
   await requireModuleAccess("duxus");
   const db = getAdminFirestore();
   const blocked = await milestoneIdsWriteBlock(db, [id]);
@@ -1238,8 +1421,25 @@ export async function deleteMilestoneAction(id: string): Promise<ActionResult> {
   const before = toMilestone(id, snap.data() as Partial<Milestone>);
   const assignments = await db.collection(ASSIGNMENTS).where("milestoneId", "==", id).get();
   const user = await currentUserLabel();
-  const batch = db.batch();
 
+  if (permanent) {
+    const activity = await db.collection(ACTIVITY).where("milestoneId", "==", id).get();
+    await purgeDocs(db, [...assignments.docs.map((d) => d.ref), ...activity.docs.map((d) => d.ref), ref]);
+    // הרישום נכתב אחרי הניקוי, כך שהוא שורד אותו ומתעד שהמחיקה נעשתה.
+    await logActivity(db, null, user, {
+      entityType: "milestone",
+      entityId: id,
+      action: "delete",
+      oldValue: before.title,
+      note: `נמחקה לצמיתות · ${assignments.size} שיוכי תקופה`,
+      quarterKey: before.quarterKey,
+    });
+    if (before.rockId) await recomputeRockCompletion(db, before.rockId);
+    revalidateModule();
+    return { ok: true };
+  }
+
+  const batch = db.batch();
   if (assignments.empty && before.status === "not_started") {
     batch.delete(ref);
   } else {

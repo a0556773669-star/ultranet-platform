@@ -10,12 +10,15 @@ import type {
   PeriodType,
   Rock,
 } from "@ultranet/shared-types";
+import { DeleteDialog } from "./delete-dialog";
+import type { RockDeletionSummary } from "./actions";
 import {
   assignMilestonesAction,
   createMilestoneAction,
   createRockAction,
   deleteMilestoneAction,
   deleteRockAction,
+  getRockDeletionSummary,
   openNextMonthAction,
   openNextWeekAction,
   reopenMilestoneAction,
@@ -30,6 +33,12 @@ import { assignmentId, milestoneIdsInPeriod, type ToneContext } from "./task-sta
 import { useToast } from "@/lib/toast";
 import { buildRocksById, rockBreadcrumb } from "./rock-lookup";
 import type { MilestonePatch } from "./milestone-panel";
+
+/** מה שממתין לאישור מחיקה. הסיכום של סלע נטען אסינכרונית ומגיע רגע אחרי הפתיחה. */
+type PendingDelete =
+  | { kind: "milestone"; milestone: Milestone }
+  | { kind: "rock"; rock: Rock; summary?: RockDeletionSummary }
+  | null;
 
 function tempId(): string {
   return `temp-${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -52,6 +61,7 @@ export function useBoard(board: QuarterBoard, today: string, weekWarningActive: 
   const [milestones, setMilestones] = useState(board.milestones);
   const [assignments, setAssignments] = useState(board.assignments);
   const [openMilestoneId, setOpenMilestoneId] = useState<string | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<PendingDelete>(null);
 
   useEffect(() => setRocks(board.rocks), [board.rocks]);
   useEffect(() => setMilestones(board.milestones), [board.milestones]);
@@ -175,20 +185,29 @@ export function useBoard(board: QuarterBoard, today: string, weekWarningActive: 
     [openMilestoneId, router, showError, showSuccess]
   );
 
-  const removeMilestone = useCallback(
-    (m: Milestone) => {
-      if (!confirm(`למחוק את "${m.title}"? אם יש לה היסטוריה או שיוך לתקופה היא תישמר בהיסטוריה ותרד מהלוח.`)) return;
+  /**
+   * מחיקה נפתחת תמיד בדיאלוג ולא ב-`confirm`, כי יש **שתי** תשובות אפשריות
+   * ולא אחת: ארכוב (יורד מהלוח, נשמר בהיסטוריה) או מחיקה לצמיתות.
+   */
+  const removeMilestone = useCallback((m: Milestone) => setPendingDelete({ kind: "milestone", milestone: m }), []);
+
+  const runDeleteMilestone = useCallback(
+    (m: Milestone, permanent: boolean) => {
+      setPendingDelete(null);
       setMilestones((prev) => prev.filter((x) => x.id !== m.id));
       setOpenMilestoneId((id) => (id === m.id ? null : id));
       startTransition(async () => {
-        const result = await deleteMilestoneAction(m.id);
+        const result = await deleteMilestoneAction(m.id, permanent);
         if (!result.ok) {
           showError(result.message);
           setMilestones((prev) => [...prev, m]);
+          return;
         }
+        showSuccess(permanent ? "אבן הדרך נמחקה לצמיתות" : "אבן הדרך ירדה מהלוח ונשמרה בהיסטוריה");
+        router.refresh();
       });
     },
-    [showError]
+    [router, showError, showSuccess]
   );
 
   // --- שיוכי תקופה ---
@@ -373,21 +392,30 @@ export function useBoard(board: QuarterBoard, today: string, weekWarningActive: 
     [router, showError]
   );
 
-  const removeRock = useCallback(
-    (rock: Rock) => {
-      if (!confirm(`למחוק את "${rock.title}"? אם יש בו תתי-סלעים או אבני דרך הוא יאורכב וישמר בהיסטוריה במקום להימחק.`)) return;
+  /** נטען קודם סיכום מה-שרת, כדי שהדיאלוג יציג בדיוק מה ייעלם ולא ינחש. */
+  const removeRock = useCallback((rock: Rock) => {
+    setPendingDelete({ kind: "rock", rock });
+    void getRockDeletionSummary(rock.id).then((summary) =>
+      setPendingDelete((current) => (current?.kind === "rock" && current.rock.id === rock.id ? { ...current, summary } : current))
+    );
+  }, []);
+
+  const runDeleteRock = useCallback(
+    (rock: Rock, permanent: boolean) => {
+      setPendingDelete(null);
       setRocks((prev) => prev.filter((r) => r.id !== rock.id));
       startTransition(async () => {
-        const result = await deleteRockAction(rock.id);
+        const result = await deleteRockAction(rock.id, permanent);
         if (!result.ok) {
           showError(result.message);
           setRocks((prev) => [...prev, rock]);
           return;
         }
+        showSuccess(permanent ? "הסלע נמחק לצמיתות" : "הסלע ירד מהלוח ונשמר בהיסטוריה");
         router.refresh();
       });
     },
-    [router, showError]
+    [router, showError, showSuccess]
   );
 
   // --- פתיחת תקופה חדשה ---
@@ -422,6 +450,58 @@ export function useBoard(board: QuarterBoard, today: string, weekWarningActive: 
     });
   }, [board.activeMonthKey, quarterKey, router, showError, showSuccess]);
 
+  const deleteDialogNode = (() => {
+    if (!pendingDelete) return null;
+
+    if (pendingDelete.kind === "milestone") {
+      const m = pendingDelete.milestone;
+      const assignmentCount = assignments.filter((a) => a.milestoneId === m.id).length;
+      // אבן דרך טרייה בלי שום שיוך ובלי היסטוריה - אין מה לארכב, רק למחוק.
+      const hasHistory = assignmentCount > 0 || m.status !== "not_started";
+      return (
+        <DeleteDialog
+          title={`מחיקת "${m.title}"`}
+          lines={[
+            "אבן הדרך עצמה",
+            `${assignmentCount} שיוכי תקופה (רבעון / חודש / שבוע)`,
+            "יומן הפעולות של אבן הדרך",
+          ]}
+          archiveLabel={hasHistory ? "ארכוב" : undefined}
+          archiveHint="ארכוב מוריד את אבן הדרך מהלוח אך משאיר אותה בהיסטוריה ובדוחות. מחיקה לצמיתות אינה הפיכה."
+          isPending={isPending}
+          onArchive={() => runDeleteMilestone(m, false)}
+          onPermanent={() => runDeleteMilestone(m, true)}
+          onClose={() => setPendingDelete(null)}
+        />
+      );
+    }
+
+    const { rock, summary } = pendingDelete;
+    const hasChildren = (summary?.subRocks ?? 0) > 0 || (summary?.milestones ?? 0) > 0;
+    return (
+      <DeleteDialog
+        title={`מחיקת הסלע "${rock.title}"`}
+        lines={
+          summary
+            ? [
+                "הסלע עצמו",
+                `${summary.subRocks} תתי-סלעים`,
+                `${summary.milestones} אבני דרך`,
+                `${summary.assignments} שיוכי תקופה ויומן הפעולות שלהם`,
+              ]
+            : ["טוען את פירוט התכולה..."]
+        }
+        archiveLabel={hasChildren ? "ארכוב" : undefined}
+        archiveHint="ארכוב מוריד את הסלע וכל מה שתחתיו מהלוח, אך משאיר הכל בהיסטוריה. מחיקה לצמיתות אינה הפיכה."
+        requireTyping={hasChildren}
+        isPending={isPending}
+        onArchive={() => runDeleteRock(rock, false)}
+        onPermanent={() => runDeleteRock(rock, true)}
+        onClose={() => setPendingDelete(null)}
+      />
+    );
+  })();
+
   return {
     quarterKey,
     readOnly,
@@ -441,6 +521,7 @@ export function useBoard(board: QuarterBoard, today: string, weekWarningActive: 
     breadcrumb,
     isPending,
     toastNode,
+    deleteDialogNode,
     showError,
     showSuccess,
     openMilestone,

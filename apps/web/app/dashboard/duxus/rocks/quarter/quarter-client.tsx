@@ -181,6 +181,7 @@ export function QuarterClient({
   return (
     <div>
       {board.toastNode}
+      {board.deleteDialogNode}
       <QuarterBar quarter={boardData.quarter} quarters={quarters} />
 
       <ReviewPanel
