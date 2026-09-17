@@ -6,6 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { Archive, ArchiveRestore, CalendarPlus, Lock, Pencil } from "lucide-react";
 import type { Quarter } from "@ultranet/shared-types";
 import { setQuarterStatusAction, updateQuarterAction } from "./actions";
+import { DeleteQuarterButton } from "./delete-quarter-button";
 import { useToast } from "@/lib/toast";
 
 const FIELD =
@@ -112,6 +113,7 @@ export function QuarterBar({ quarter, quarters }: { quarter: Quarter; quarters: 
             {archived ? <ArchiveRestore className="h-3.5 w-3.5" /> : <Archive className="h-3.5 w-3.5" />}
             {archived ? "החזרה לפעיל" : "ארכוב"}
           </button>
+          <DeleteQuarterButton quarterKey={quarter.id} label={quarter.label} />
           <Link
             href={`/dashboard/duxus/rocks/rollover?q=${encodeURIComponent(quarter.id)}`}
             className="flex items-center gap-1 rounded-[10px] bg-gradient-to-br from-teal to-teal-light px-4 py-2 text-xs font-bold text-white shadow-primary transition hover:opacity-90"

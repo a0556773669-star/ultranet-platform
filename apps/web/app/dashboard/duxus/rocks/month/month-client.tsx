@@ -106,6 +106,7 @@ export function MonthClient({
   return (
     <div>
       {board.toastNode}
+      {board.deleteDialogNode}
       <QuarterBar quarter={boardData.quarter} quarters={quarters} />
 
       <section className="card mb-4">

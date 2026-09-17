@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Archive, ArchiveRestore } from "lucide-react";
 import type { QuarterStatus } from "@ultranet/shared-types";
 import { setQuarterStatusAction } from "../actions";
+import { DeleteQuarterButton } from "../delete-quarter-button";
 import { useToast } from "@/lib/toast";
 
 /** ארכוב/החזרה של רבעון מתוך ציר הזמן. שתי הפעולות נרשמות ביומן (סעיף 14). */
@@ -39,6 +40,7 @@ export function ArchiveActions({ quarterKey, label, status }: { quarterKey: stri
         {archived ? <ArchiveRestore className="h-3.5 w-3.5" /> : <Archive className="h-3.5 w-3.5" />}
         {archived ? "החזרה לפעיל" : "ארכוב"}
       </button>
+      <DeleteQuarterButton quarterKey={quarterKey} label={label} variant="icon" onDeleted={() => router.refresh()} />
     </>
   );
 }
