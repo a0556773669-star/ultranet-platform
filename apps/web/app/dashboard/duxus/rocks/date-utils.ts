@@ -152,3 +152,53 @@ export function nextWeekKeyAfter(current: string, today: Date = new Date()): str
   if (!current) return calendar;
   return weekKeyIndex(calendar) > weekKeyIndex(current) ? calendar : shiftWeekKey(current, 1);
 }
+
+// --- תאריכי יעד ואזהרות (סעיף 9 באפיון) ---
+
+/** "YYYY-MM-DD" של היום, לפי אזור הזמן המקומי (ולא UTC, שמקדים/מאחר את התאריך). */
+export function todayIso(d: Date = new Date()): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+/**
+ * תאריך היעד עבר (לא כולל היום עצמו - "עבר יעד" מתחיל ביום שאחרי). `today` מתקבל
+ * כמחרוזת ISO ולא נגזר מ-`new Date()` בתוך הרינדור, כדי שהשרת והלקוח יגיעו לאותה
+ * תוצאה בדיוק ולא ייווצר פער הידרציה על גבול חצות.
+ */
+export function isPastDue(dueDate: string | undefined, today: string): boolean {
+  if (!dueDate) return false;
+  return dueDate < today;
+}
+
+/** תאריך היעד הוא היום. */
+export function isDueToday(dueDate: string | undefined, today: string): boolean {
+  return Boolean(dueDate) && dueDate === today;
+}
+
+/**
+ * האם הגיע מועד האזהרה השבועית. `warningWeekday` הוא הגדרת מערכת (ברירת מחדל 3 = רביעי),
+ * ולכן היום לא מקובע בקוד. מיום האזהרה ואילך - עד סוף שבוע העבודה - משימת שבוע שטרם
+ * התחילה מקבלת חיווי כתום עדין.
+ */
+export function weekWarningActive(warningWeekday: number, weekStartDay: number, today: Date = new Date()): boolean {
+  const daysSinceStart = (today.getDay() - weekStartDay + 7) % 7;
+  const daysToWarning = (warningWeekday - weekStartDay + 7) % 7;
+  return daysSinceStart >= daysToWarning;
+}
+
+/** תאריכי ההתחלה/סיום של שבוע לפי מפתח פנימי - לתצוגה בהיסטוריה. */
+export function weekRangeIso(key: string): { start: string; end: string } {
+  const idx = weekKeyIndex(key);
+  const start = new Date(WEEK_EPOCH_MS + idx * 7 * DAY_MS);
+  const end = new Date(start.getTime() + 6 * DAY_MS);
+  const fmt = (d: Date) =>
+    `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}`;
+  return { start: fmt(start), end: fmt(end) };
+}
+
+/** תווית קצרה לתקופה לפי סוגה - משמשת את היסטוריית השיוכים ואת מסך הארכיון. */
+export function periodLabel(periodType: "quarter" | "month" | "week", periodKey: string, quarterLabels?: Map<string, string>): string {
+  if (periodType === "week") return weekLabel(periodKey);
+  if (periodType === "month") return monthLabel(periodKey);
+  return quarterLabels?.get(periodKey) ?? quarterLabel(periodKey);
+}

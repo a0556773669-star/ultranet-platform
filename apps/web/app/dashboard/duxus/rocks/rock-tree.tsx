@@ -1,8 +1,9 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
-import { ChevronDown, ChevronUp } from "lucide-react";
-import type { Rock, Milestone } from "@ultranet/shared-types";
+import { ChevronDown, ChevronUp, AlertTriangle } from "lucide-react";
+import type { Milestone, Rock } from "@ultranet/shared-types";
+import { computeProgress, rockWarning, type Progress } from "./task-status";
 
 export function toggleInSet(set: Set<string>, id: string): Set<string> {
   const next = new Set(set);
@@ -18,19 +19,16 @@ export function groupRocksByParent(rocks: Rock[]): { topRocks: Rock[]; subRocksB
     .filter((r) => r.parentRockId)
     .forEach((r) => {
       const key = r.parentRockId as string;
-      const list = subRocksByParent.get(key) ?? [];
-      list.push(r);
-      subRocksByParent.set(key, list);
+      subRocksByParent.set(key, [...(subRocksByParent.get(key) ?? []), r]);
     });
   return { topRocks, subRocksByParent };
 }
 
-/** משימות שוטפות (`source: "adhoc"`) אינן תלויות בסלע ולכן לא נכנסות לעץ - הן מוצגות בקטע נפרד. */
+/** משימות שוטפות (`source: "adhoc"`) אינן תלויות בסלע ולכן לא נכנסות לעץ. */
 export function isAdhoc(m: Milestone): boolean {
   return m.source === "adhoc" || !m.rockId;
 }
 
-/** מפרידה בין אבני דרך שנגזרו מסלע לבין המשימות השוטפות, לפי אותו כלל בכל הטאבים. */
 export function splitRockAndAdhoc(milestones: Milestone[]): { rockMilestones: Milestone[]; adhocTasks: Milestone[] } {
   return {
     rockMilestones: milestones.filter((m) => !isAdhoc(m)),
@@ -42,34 +40,19 @@ export function groupMilestonesByRock(milestones: Milestone[]): Map<string, Mile
   const map = new Map<string, Milestone[]>();
   milestones.forEach((m) => {
     if (isAdhoc(m)) return;
-    const list = map.get(m.rockId) ?? [];
-    list.push(m);
-    map.set(m.rockId, list);
+    map.set(m.rockId, [...(map.get(m.rockId) ?? []), m]);
   });
   return map;
 }
 
-/** מצב ההתקדמות של סלע/תת-סלע, נגזר אוטומטית מאבני הדרך שתחתיו - לא נשמר ב-DB. */
-export type RockProgressState = "empty" | "open" | "progress" | "done";
-
-export type RockProgress = { total: number; done: number; percent: number; state: RockProgressState };
-
-export function computeProgress(milestones: Milestone[]): RockProgress {
-  const total = milestones.length;
-  const done = milestones.filter((m) => m.done).length;
-  const percent = total === 0 ? 0 : Math.round((done / total) * 100);
-  const state: RockProgressState = total === 0 ? "empty" : done === total ? "done" : done > 0 ? "progress" : "open";
-  return { total, done, percent, state };
-}
-
-const BAR_CLASS: Record<RockProgressState, string> = {
+const BAR_CLASS: Record<Progress["state"], string> = {
   empty: "bg-card-border",
   open: "bg-card-border",
-  progress: "bg-amber-400",
+  progress: "bg-teal",
   done: "bg-emerald-500",
 };
 
-function ProgressBar({ progress }: { progress: RockProgress }) {
+function ProgressBar({ progress }: { progress: Progress }) {
   if (progress.total === 0) return null;
   return (
     <div className="mt-2 flex items-center gap-2">
@@ -78,20 +61,19 @@ function ProgressBar({ progress }: { progress: RockProgress }) {
       </div>
       <span className="shrink-0 text-[11px] font-semibold text-muted">
         {progress.done}/{progress.total}
+        {progress.cancelled ? ` · ${progress.cancelled} בוטלו` : ""}
       </span>
     </div>
   );
 }
 
 /**
- * עץ סלעים/תתי-סלעים/אבני-דרך משותף לטאבי רבעון/חודשי/שבועי - כדי שהתצוגה תהיה
- * זהה בכל מקום ("שיראה כמו ברבעון"). כל דף מזין מה להציג בכל אבן דרך
- * (renderMilestone) ומה להציג מתחת לרשימת אבני הדרך של כל סלע - למשל כפתור/טופס
- * "+ אבן דרך" (renderRockFooter). renderRockExtra מוסיף כפתורים בשורת הכותרת של
- * הסלע (למשל סטטוס/מחיקה - רלוונטי רק בטאב רבעון).
+ * עץ סלעים ➔ תתי-סלעים ➔ אבני דרך. ההתקדמות של כל סלע/תת-סלע **מחושבת** מאבני
+ * הדרך שתחתיו (סעיף 6) - אין סימון ידני של "הושלם" ואין שדה התקדמות שמור ב-DB.
+ * משימות מבוטלות יוצאות מהמכנה.
  *
- * הצבע והתג של כל סלע/תת-סלע נגזרים **אוטומטית** מאבני הדרך שתחתיו (כולל אלו של
- * תתי-הסלעים): כולן בוצעו → ירוק "הושלם", חלקן → כתום "בתהליך", אף אחת → ניטרלי.
+ * תג האזהרה (סעיף 9) מגיע לתת-סלע בלבד, ורק אם יש בו אבן דרך שעברה יעד או שכל מה
+ * שנבחר בו לתקופה עדיין לא התחיל. הסלע מציג סיכום של ילדיו ואינו נצבע ידנית.
  */
 export function RockMilestoneTree({
   topRocks,
@@ -101,6 +83,8 @@ export function RockMilestoneTree({
   renderRockExtra,
   renderRockFooter,
   emptyMessage,
+  warningContext,
+  foreignRockIds,
 }: {
   topRocks: Rock[];
   subRocksByParent: Map<string, Rock[]>;
@@ -109,6 +93,9 @@ export function RockMilestoneTree({
   renderRockExtra?: (rock: Rock, level: 0 | 1) => ReactNode;
   renderRockFooter?: (rock: Rock, level: 0 | 1) => ReactNode;
   emptyMessage: string;
+  warningContext: { today: string; selectedIds?: Set<string>; weekWarningActive?: boolean };
+  /** סלעים שהגיעו מרבעון קודם בעקבות אבן דרך שהתחייבנו אליה מחדש */
+  foreignRockIds?: Set<string>;
 }) {
   const [collapsedRocks, setCollapsedRocks] = useState<Set<string>>(new Set());
 
@@ -122,18 +109,29 @@ export function RockMilestoneTree({
     const subRocks = subRocksByParent.get(rock.id) ?? [];
     const rockMilestones = milestonesByRock.get(rock.id) ?? [];
     const collapsed = collapsedRocks.has(rock.id);
-    const progress = computeProgress(collectDescendantMilestones(rock.id));
+    const descendants = collectDescendantMilestones(rock.id);
+    const progress = computeProgress(descendants);
+    const warning = level === 1 ? rockWarning(descendants, warningContext) : "none";
+    const dropped = rock.status === "dropped";
     const pending = rock.id.startsWith("temp-");
 
-    const tone =
-      progress.state === "done"
-        ? { border: "!border-emerald-300", bg: "!bg-emerald-50", subBorder: "border-emerald-300", subBg: "bg-emerald-50" }
-        : progress.state === "progress"
-          ? { border: "!border-amber-300", bg: "!bg-amber-50/50", subBorder: "border-amber-300", subBg: "bg-amber-50/50" }
-          : { border: "", bg: "", subBorder: "border-card-border", subBg: "bg-[#f9fafb]" };
+    const side =
+      dropped
+        ? "border-r-card-border"
+        : warning === "overdue"
+          ? "border-r-red-400"
+          : warning === "warn"
+            ? "border-r-amber-400"
+            : progress.state === "done"
+              ? "border-r-emerald-400"
+              : progress.state === "progress"
+                ? "border-r-teal"
+                : "border-r-card-border";
 
     const cardClass =
-      level === 0 ? `card ${tone.border} ${tone.bg}` : `rounded-[11px] border p-3 ${tone.subBorder} ${tone.subBg}`;
+      level === 0
+        ? `card border-r-[3px] ${side}`
+        : `rounded-[11px] border border-card-border border-r-[3px] bg-[#f9fafb] p-3 ${side}`;
 
     return (
       <div key={rock.id} className={`${cardClass} ${pending ? "opacity-60" : ""}`}>
@@ -148,22 +146,38 @@ export function RockMilestoneTree({
             ) : (
               <ChevronUp className="mt-0.5 h-4 w-4 shrink-0 text-muted" />
             )}
-            <span>
-              <span className="font-bold text-ink">{rock.title}</span>
-              {progress.state === "done" && (
-                <span className="mr-2 rounded-full border border-emerald-300 bg-white px-2 py-0.5 text-[11px] font-bold text-emerald-700">
-                  ✓ הושלם במלואו
+            <span className="min-w-0">
+              <span className={`font-bold ${dropped ? "text-muted line-through" : "text-ink"}`}>{rock.title}</span>
+              {progress.state === "done" && !dropped && (
+                <span className="mr-2 rounded-full border border-emerald-300 bg-emerald-50 px-2 py-0.5 text-[11px] font-bold text-emerald-700">
+                  ✓ הושלם
                 </span>
               )}
-              {progress.state === "progress" && (
-                <span className="mr-2 rounded-full border border-amber-300 bg-white px-2 py-0.5 text-[11px] font-bold text-amber-700">
-                  בתהליך · {progress.percent}%
+              {progress.state === "progress" && !dropped && (
+                <span className="mr-2 rounded-full border border-teal bg-teal-bg px-2 py-0.5 text-[11px] font-bold text-teal-dark">
+                  {progress.percent}%
+                </span>
+              )}
+              {warning !== "none" && (
+                <span
+                  className={`mr-2 inline-flex items-center gap-0.5 rounded-full border px-2 py-0.5 text-[11px] font-bold ${
+                    warning === "overdue" ? "border-red-300 bg-red-50 text-red-700" : "border-amber-300 bg-amber-50 text-amber-700"
+                  }`}
+                >
+                  <AlertTriangle className="h-3 w-3" />
+                  {warning === "overdue" ? "עבר יעד" : "טרם התחיל"}
+                </span>
+              )}
+              {foreignRockIds?.has(rock.id) && (
+                <span className="mr-2 rounded-full border border-purple/40 bg-[#f4ecf8] px-2 py-0.5 text-[11px] font-bold text-purple">
+                  מרבעון קודם
                 </span>
               )}
               {rock.description ? <span className="mr-2 text-xs text-muted">{rock.description}</span> : null}
             </span>
           </button>
           <div className="flex shrink-0 items-center gap-1.5">
+            {rock.dueDate ? <span className="text-[11px] text-muted">יעד {rock.dueDate.slice(5)}</span> : null}
             {rock.ownerName ? <span className="text-[11px] text-muted">{rock.ownerName}</span> : null}
             {renderRockExtra?.(rock, level)}
           </div>

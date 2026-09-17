@@ -178,9 +178,22 @@ export function LaptopsList({
                       </td>
                       <td className={TD}>
                         {l.hasPartner ? (
-                          <span className="flex items-center gap-1 text-ink">
+                          /* שותפות בלי שם היא חוב בלי נושה: היא כבר יורדת מהרווח ומופיעה
+                             בטבלת ההעברות, אבל אין למי להעביר אותה. נאמר כאן ולא רק שם. */
+                          <span
+                            className={`flex items-center gap-1 ${
+                              l.partnerName?.trim() ? "text-ink" : "font-bold text-amber-700"
+                            }`}
+                            title={
+                              l.partnerName?.trim()
+                                ? undefined
+                                : "שותפות בלי שם - צריך למלא שם או להסיר את הסימון"
+                            }
+                          >
                             <Users className="h-3.5 w-3.5" />
-                            {`${l.partnerPct ?? 15}%${l.partnerName ? ` (${l.partnerName})` : ""}`}
+                            {l.partnerName?.trim()
+                              ? `${l.partnerPct ?? 15}% (${l.partnerName.trim()})`
+                              : `${l.partnerPct ?? 15}% — חסר שם`}
                           </span>
                         ) : (
                           <Minus className="h-3.5 w-3.5 text-muted" />

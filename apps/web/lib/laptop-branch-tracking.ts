@@ -115,40 +115,14 @@ export function buildLaptopBranchTracking(
   return { months, rows, target: PROFIT_PER_COMPUTER_TARGET };
 }
 
-/**
- * חלקה של המזכירה במחשבי הסניף הראשי.
+/*
+ * כאן ישב `computeSecretaryShare` / `SECRETARY_PCT` — "חלק המזכירה", 30% מהברוטו של כל
+ * הסניפים שלי, בלי שם, בלי תאריך התחלה ובלי זיכרון של מה כבר הועבר. הוא הוחלף בהסדר
+ * מפורש ב-`lib/revenue-shares.ts`: אדם בשם, סניף אחד, תאריך התחלה, וחוב שמצטבר
+ * ב-`/dashboard/accounting/mobile` עד שמסמנים שהועבר.
  *
- * המזכירה מתפעלת את המחשבים שבסניף שלי ומקבלת 30% מהברוטו שלהם כמשכורת. הסכום הזה
- * במכוון לא מופיע בטבלת ההעברות (שם יושבים רק סניפים שחייבים לי כסף) אלא כאן, כדי
- * שיוזן כשורה ב"הוצאות נוספות" - זו משכורת, לא התחשבנות בין שותפים.
+ * הסכום כבר מנוכה מ-`ownerOperatingProfitThisMonth`, ולכן הרווח-פר-מחשב שבטבלה הזו
+ * הוא מה שנשאר לי **אחרי** האחוזים שאני מעביר — לא לפניהם.
  */
-export const SECRETARY_PCT = 30;
-
-export interface SecretaryShare {
-  month: string;
-  grossIncome: number;
-  pct: number;
-  amount: number;
-  branchNames: string[];
-}
-
-export function computeSecretaryShare(
-  branches: Branch[],
-  raw: BranchAccountingRawData,
-  month: string,
-): SecretaryShare {
-  const mine = branches.filter((b) => b.branchType === "rentals" && b.isMine !== false && !b.deleted);
-  const grossIncome = mine.reduce(
-    (sum, b) => sum + computeBranchFinancials(b, raw, month).grossIncomeThisMonth,
-    0,
-  );
-  return {
-    month,
-    grossIncome,
-    pct: SECRETARY_PCT,
-    amount: (grossIncome * SECRETARY_PCT) / 100,
-    branchNames: mine.map((b) => b.name),
-  };
-}
 
 export { currentMonth };

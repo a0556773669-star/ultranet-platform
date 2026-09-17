@@ -1,5 +1,10 @@
-import { Scale, Calendar, Receipt, Wallet } from "lucide-react";
-import type { FixedExpense, VariableExpense, BranchIncome } from "@ultranet/shared-types";
+import { Scale, Calendar, Receipt, Wallet, Layers } from "lucide-react";
+import type { Branch, FixedExpense, RecurringPurchaseType, VariableExpense, BranchIncome } from "@ultranet/shared-types";
+import { SharedExpenseSplitField } from "@/components/expenses/shared-expense-split-field";
+import { sharedExpenseDivision, sharedExpenseSplitNote } from "@/lib/expense-shared-scope";
+import { ExpenseTypeField } from "@/components/recurring-purchases/expense-type-field";
+import { RecurringPurchaseBadge } from "@/components/recurring-purchases/recurring-purchase-badge";
+import type { RecurringPurchaseTypeSummary } from "@/lib/recurring-purchases";
 import { createFixedExpenseAction, createVariableExpenseAction, addBranchIncomeAction, deleteBranchIncomeAction } from "./actions";
 import { EditFixedExpenseModal, EditVariableExpenseModal } from "./edit-expense-modals";
 import { EndFixedExpenseControl, DeleteFixedExpenseButton, DeleteVariableExpenseButton } from "./expense-action-buttons";
@@ -66,6 +71,11 @@ type Props = {
   branchIncomes: BranchIncome[];
   fixedExpenses: FixedExpense[];
   variableExpenses: VariableExpense[];
+  expenseTypes?: RecurringPurchaseType[];
+  /** הסיכום של כל סוג רכישה חוזרת, לפי מזהה - זה מה שמציג את החיבור ליד השורה */
+  purchaseByType?: Map<string, RecurringPurchaseTypeSummary>;
+  /** סניפי ההשכרות החיים - נדרשים רק בספר המשותף, לבחירת הסניפים שההוצאה מתחלקת ביניהם */
+  branches?: Branch[];
 };
 
 export function BranchExpenses({
@@ -80,9 +90,23 @@ export function BranchExpenses({
   branchIncomes,
   fixedExpenses,
   variableExpenses,
+  expenseTypes = [],
+  purchaseByType,
+  branches = [],
 }: Props) {
   const activeFixed = fixedExpenses.filter((e) => !e.endDate);
   const endedFixed = fixedExpenses.filter((e) => e.endDate);
+
+  // בספר המשותף כל שורה אומרת גם *איך היא מתחלקת*. בסניף רגיל אין מה לחלק - השורה כולה שלו.
+  const branchOptions = branches.map((b) => ({ id: b.id, name: b.name }));
+  const liveBranchIds = branches.map((b) => b.id);
+  const splitNoteOf = (e: { amount?: number; ownerPct?: number; branchIds?: string[] }) => {
+    if (!isShared) return null;
+    const division = sharedExpenseDivision(e, liveBranchIds);
+    if (!division) return "לא מתחלקת לסניפים · בספר המשותף בלבד";
+    const scope = e.branchIds?.length ? `${division.branchCount} סניפים נבחרים` : "כל הסניפים";
+    return `${scope} · ${sharedExpenseSplitNote(division)}`;
+  };
 
   let net = 0;
   if (isPartner) {
@@ -97,7 +121,10 @@ export function BranchExpenses({
     <div className="flex flex-col gap-4">
       {isShared && (
         <div className="rounded-card border border-card-border bg-[#f4f6f9] p-4 text-sm text-muted">
-          הוצאות משותפות לכל סניפי ההשכרות - חלקו של הבעלים בהן מתחשבן בהנה&quot;ח הראשית כמו כל הוצאה אחרת.
+          <b className="text-ink">הספר המשותף</b> — כאן נרשמת כל הוצאה שאינה של סניף אחד, קבועה או חד-פעמית.
+          לכל שורה אפשר לקבוע על אילו סניפים היא חלה (כולם או נבחרים בלבד) וכמה אחוז ממנה עליך —
+          והשאר מתחלק שווה בשווה בין הסניפים ונכנס לספר של כל אחד מהם. שורה שלא סומנה כמתחלקת
+          נשארת בספר המשותף בלבד, כפי שהיה עד היום.
         </div>
       )}
 
@@ -148,6 +175,16 @@ export function BranchExpenses({
                 </select>
               </div>
               {isPartner && <PayerFields ownerName={ownerName} partnerName={partnerName} />}
+              {isShared && (
+                <div className="col-span-2">
+                  <SharedExpenseSplitField
+                    branches={branchOptions}
+                    defaultOn
+                    idPrefix="rentals-new-fixed-split"
+                    amountLabel="הסכום החודשי"
+                  />
+                </div>
+              )}
               <div className="col-span-2">
                 <CountsToMainField />
               </div>
@@ -190,6 +227,14 @@ export function BranchExpenses({
               </div>
               {isPartner && <PayerFields ownerName={ownerName} partnerName={partnerName} />}
               <div className="col-span-2">
+                <ExpenseTypeField types={expenseTypes} idPrefix="rentals-new-variable-type" />
+              </div>
+              {isShared && (
+                <div className="col-span-2">
+                  <SharedExpenseSplitField branches={branchOptions} defaultOn idPrefix="rentals-new-variable-split" />
+                </div>
+              )}
+              <div className="col-span-2">
                 <CountsToMainField />
               </div>
               <div className="col-span-2">
@@ -215,9 +260,15 @@ export function BranchExpenses({
                 <div>
                   <p className="flex items-center gap-1.5 text-sm font-bold text-ink">{e.name} — ₪{(e.amount || 0).toLocaleString()}/חודש<CountsToMainBadge on={countsToMain(e)} /></p>
                   <p className="text-xs text-muted">{e.category || "ללא קטגוריה"} · מתחיל {e.startDate}{isPartner ? ` · ${paymentNote(e.paidBy, e.owedBy, ownerName, partnerName)}` : ""}</p>
+                  {isShared && (
+                    <p className="mt-0.5 flex items-center gap-1 text-[11px] text-muted">
+                      <Layers className="h-3 w-3" />
+                      {splitNoteOf(e)}
+                    </p>
+                  )}
                 </div>
                 <div className="flex items-center gap-2">
-                  {canManage && <EditFixedExpenseModal expense={e} branchId={branchId} isPartner={isPartner} ownerName={ownerName} partnerName={partnerName} />}
+                  {canManage && <EditFixedExpenseModal expense={e} branchId={branchId} isPartner={isPartner} ownerName={ownerName} partnerName={partnerName} isShared={isShared} branches={branchOptions} />}
                   {canManage && <EndFixedExpenseControl id={e.id} branchId={branchId} />}
                   {canManage && <DeleteFixedExpenseButton id={e.id} branchId={branchId} />}
                 </div>
@@ -236,7 +287,7 @@ export function BranchExpenses({
                       <p className="text-xs text-muted">{e.startDate} – {e.endDate}{isPartner ? ` · ${paymentNote(e.paidBy, e.owedBy, ownerName, partnerName)}` : ""}</p>
                     </div>
                     <div className="flex items-center gap-2">
-                      {canManage && <EditFixedExpenseModal expense={e} branchId={branchId} isPartner={isPartner} ownerName={ownerName} partnerName={partnerName} />}
+                      {canManage && <EditFixedExpenseModal expense={e} branchId={branchId} isPartner={isPartner} ownerName={ownerName} partnerName={partnerName} isShared={isShared} branches={branchOptions} />}
                       {canManage && <DeleteFixedExpenseButton id={e.id} branchId={branchId} />}
                     </div>
                   </div>
@@ -256,11 +307,21 @@ export function BranchExpenses({
             {variableExpenses.map((e) => (
               <div key={e.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-card-border bg-[#f9fafb] p-3">
                 <div>
-                  <p className="flex items-center gap-1.5 text-sm font-bold text-ink">{e.desc} — ₪{(e.amount || 0).toLocaleString()}<CountsToMainBadge on={countsToMain(e)} /></p>
+                  <p className="flex flex-wrap items-center gap-1.5 text-sm font-bold text-ink">
+                    {e.desc} — ₪{(e.amount || 0).toLocaleString()}
+                    <CountsToMainBadge on={countsToMain(e)} />
+                    {e.expenseTypeId && <RecurringPurchaseBadge summary={purchaseByType?.get(e.expenseTypeId)} />}
+                  </p>
                   <p className="text-xs text-muted">{e.category || "ללא קטגוריה"} · {e.date}{isPartner ? ` · ${paymentNote(e.paidBy, e.owedBy, ownerName, partnerName)}` : ""}</p>
+                  {isShared && (
+                    <p className="mt-0.5 flex items-center gap-1 text-[11px] text-muted">
+                      <Layers className="h-3 w-3" />
+                      {splitNoteOf(e)}
+                    </p>
+                  )}
                 </div>
                 <div className="flex items-center gap-2">
-                  {canManage && <EditVariableExpenseModal expense={e} branchId={branchId} isPartner={isPartner} ownerName={ownerName} partnerName={partnerName} />}
+                  {canManage && <EditVariableExpenseModal expense={e} branchId={branchId} isPartner={isPartner} ownerName={ownerName} partnerName={partnerName} isShared={isShared} branches={branchOptions} />}
                   {canManage && <DeleteVariableExpenseButton id={e.id} branchId={branchId} />}
                 </div>
               </div>
