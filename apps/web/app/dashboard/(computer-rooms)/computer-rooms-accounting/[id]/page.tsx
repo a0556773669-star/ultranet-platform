@@ -15,9 +15,9 @@ import {
   importBranchIncomeAction,
   saveMonthlyBranchIncomeAction,
 } from "../actions";
-import { SetupCostCard } from "./setup-cost-card";
+import { SetupCostCard } from "@/components/accounting/setup-cost-card";
 import { IncomeEntryPanel } from "./income-entry-panel";
-import { MonthlyFlowChart } from "./monthly-flow-chart";
+import { MonthlyFlowChart } from "@/components/accounting/monthly-flow-chart";
 
 function money(n: number) {
   return `${Math.round(n).toLocaleString("he-IL")} ₪`;

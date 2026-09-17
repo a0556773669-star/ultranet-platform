@@ -2,108 +2,86 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { CalendarClock, Gauge, Minus, ShoppingCart, TrendingDown } from "lucide-react";
+import { CalendarClock, Gauge, Minus, Receipt, TrendingDown } from "lucide-react";
 import type { RecurringPurchaseType } from "@ultranet/shared-types";
 import { useToast } from "@/lib/toast";
 import { CountsToMainField } from "@/components/counts-to-main-field";
 import { ExpenseTypeField } from "@/components/recurring-purchases/expense-type-field";
 import { createRecurringVariableExpenseAction } from "@/components/recurring-expenses/actions";
 import { Modal } from "@/components/modal";
-import { createExtraExpenseAction, createMainFixedExpenseAction } from "./actions";
+import { createCoworkingFixedExpenseAction, createCoworkingVariableExpenseAction } from "../actions";
 
 const FIELD =
   "w-full rounded-lg border border-card-border bg-[#f4f6f9] px-3 py-2 text-sm focus:border-teal focus:bg-white focus:outline-none";
 const LABEL = "mb-1 block text-xs font-semibold text-muted";
 
-const BUSINESS_LABELS: Record<string, string> = {
-  general: "כללי",
-  computers: "חדרי מחשבים",
-  rentals: "השכרות",
-  coworking: "משרד שיתופי",
-};
-
-type ExpenseKind = "fixed" | "recurring" | "purchase";
+type ExpenseKind = "fixed" | "recurring" | "variable";
 
 const KINDS: { key: ExpenseKind; label: string; icon: typeof CalendarClock; hint: string }[] = [
   {
     key: "fixed",
     label: "הוצאה קבועה",
     icon: CalendarClock,
-    hint: "חוזרת כל חודש באותו סכום בדיוק — שכירות משרד, רואה חשבון, מנוי תוכנה. נרשמת פעם אחת ונצברת לבד מחודש ההתחלה והלאה, בלי לרשום אותה מחדש בכל חודש.",
+    hint: "חוזרת כל חודש באותו סכום בדיוק — שכירות המשרד, ארנונה, מנוי אינטרנט. נרשמת פעם אחת ונצברת לבד מחודש ההתחלה והלאה.",
   },
   {
     key: "recurring",
     label: "קבועה משתנה",
     icon: Gauge,
-    hint: "חוזרת כל חודש אבל הסכום משתנה — חשמל, משכורת, מע\"מ. נרשמת פעם אחת, והסכום של כל חודש מוזן בטבלת \"עדכון קבוע משתנה\".",
+    hint: 'חוזרת כל חודש אבל הסכום משתנה — חשמל, מים, ניקיון. נרשמת פעם אחת, והסכום של כל חודש מוזן בטבלת "הוצאות קבועות משתנות".',
   },
   {
-    key: "purchase",
-    label: "הוצאה / רכישה",
-    icon: ShoppingCart,
-    hint: "הוצאה חד-פעמית שנרשמת פעם אחת ונגמרת — משטח מחשבים, תיקון, נייר. אפשר לסמן לאילו סניפים היא הלכה, ואם היא חלק מרכישה חוזרת.",
+    key: "variable",
+    label: "הוצאה חד-פעמית",
+    icon: Receipt,
+    hint: "הוצאה שנרשמת פעם אחת ונגמרת — כיסא שנקנה, תיקון, קפה. אפשר לקשר אותה לסוג רכישה חוזרת כדי לראות כמה היא עולה לאורך זמן.",
   },
 ];
 
 /**
- * הוספת הוצאה — כפתור אחד, ובתוכו שלוש השאלות שקובעות איפה ההוצאה נרשמת.
+ * הוספת הוצאה במשרד השיתופי — כפתור אחד, ובתוכו שלושת סוגי ההוצאה.
  *
- * שלוש האפשרויות הן אותה שאלה בשלוש תשובות — האם ההוצאה חוזרת, והאם הסכום שלה ידוע —
- * ולכן הן שלושה צ'יפים בחלון אחד ולא שלושה מסכים. עד היום כדי לרשום הוצאה קבועה היה
- * צריך לעזוב את הספר הראשי ולעבור למסך "הוצאות נוספות"; זו הייתה נסיעה שלמה בשביל
- * שדה אחד, וכאן היא נגמרת.
- *
- * כל אחד משלושת הטפסים שולח בדיוק את אותם שדות שהטופס המקורי במסך "הוצאות נוספות"
- * שולח, ולאותה Server Action — לכן אין כאן דרך שנייה לכתוב את אותו נתון, רק דרך שנייה
- * להגיע לטופס.
+ * שלושת הטפסים היו פרושים על המסך אחד מתחת לשני, ויחד הם תפסו יותר מקום מהמאזן עצמו:
+ * מסך ההנה"ח הוא מסך שמסתכלים בו, והזנת הוצאה היא פעולה שעושים פעם בשבוע. אותו פתרון
+ * שכבר עובד בהנה"ח הראשית, ואותן Server Actions בדיוק — רק דרך אחרת להגיע אליהן.
  */
-export function AddExpenseButton({
-  branches,
+export function AddCoworkingExpenseButton({
+  branchId,
   expenseTypes,
   frequencies,
   defaultDate,
   currentMonth,
 }: {
-  branches: { id: string; name: string }[];
+  branchId: string;
   expenseTypes: RecurringPurchaseType[];
   /** התדירויות לבחירה, מ-`RECURRING_FREQUENCY_LABELS`. מגיעות כ-prop כדי שהקומפוננטה
    *  הזו לא תייבא את `lib/recurring-expenses` — שם יושב גם `firebase-admin`. */
   frequencies: { value: string; label: string }[];
   /** YYYY-MM-DD */
   defaultDate: string;
-  /** YYYY-MM — תאריך ההתחלה המוצע להוצאה חוזרת */
+  /** YYYY-MM */
   currentMonth: string;
 }) {
   const [open, setOpen] = useState(false);
-  const [kind, setKind] = useState<ExpenseKind>("purchase");
-  const [linked, setLinked] = useState<string[]>([]);
+  const [kind, setKind] = useState<ExpenseKind>("variable");
   const [isPending, startTransition] = useTransition();
   const router = useRouter();
   const { showSuccess, showError, toastNode } = useToast();
 
   const active = KINDS.find((k) => k.key === kind)!;
 
-  function toggle(id: string) {
-    setLinked((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
-  }
-
-  function close() {
-    setOpen(false);
-    setLinked([]);
-  }
-
   function handleSubmit(formData: FormData) {
     startTransition(async () => {
       try {
         if (kind === "fixed") {
-          await createMainFixedExpenseAction(formData);
+          await createCoworkingFixedExpenseAction(branchId, formData);
         } else if (kind === "recurring") {
-          await createRecurringVariableExpenseAction("main", undefined, formData);
+          await createRecurringVariableExpenseAction("coworking", branchId, formData);
         } else {
-          await createExtraExpenseAction(formData);
+          await createCoworkingVariableExpenseAction(branchId, formData);
         }
         router.refresh();
-        close();
+        setOpen(false);
         showSuccess("ההוצאה נוספה");
       } catch (err) {
         showError(err instanceof Error ? err.message : "אירעה שגיאה בשמירה");
@@ -123,7 +101,7 @@ export function AddExpenseButton({
       </button>
 
       {open && (
-        <Modal title="הוספת הוצאה" icon={TrendingDown} onClose={close} wide>
+        <Modal title="הוספת הוצאה — משרד שיתופי" icon={TrendingDown} onClose={() => setOpen(false)} wide>
           <div className="mb-3 flex flex-wrap gap-1.5">
             {KINDS.map((k) => {
               const on = k.key === kind;
@@ -151,7 +129,7 @@ export function AddExpenseButton({
               <>
                 <div>
                   <label className={LABEL}>שם ההוצאה</label>
-                  <input name="name" placeholder="שכירות משרד / רואה חשבון" required className={FIELD} autoFocus />
+                  <input name="name" placeholder="שכירות המשרד / ארנונה" required className={FIELD} autoFocus />
                 </div>
                 <div>
                   <label className={LABEL}>סכום חודשי</label>
@@ -165,16 +143,6 @@ export function AddExpenseButton({
                   <label className={LABEL}>קטגוריה</label>
                   <input name="category" className={FIELD} />
                 </div>
-                <div className="sm:col-span-2">
-                  <label className={LABEL}>שייך לתחום</label>
-                  <select name="business" defaultValue="general" className={FIELD}>
-                    {Object.entries(BUSINESS_LABELS).map(([value, label]) => (
-                      <option key={value} value={value}>
-                        {label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
               </>
             )}
 
@@ -182,7 +150,7 @@ export function AddExpenseButton({
               <>
                 <div>
                   <label className={LABEL}>שם ההוצאה</label>
-                  <input name="name" placeholder="חשמל / משכורת מזכירה" required className={FIELD} autoFocus />
+                  <input name="name" placeholder="חשמל / ניקיון" required className={FIELD} autoFocus />
                 </div>
                 <div>
                   <label className={LABEL}>קטגוריה</label>
@@ -220,69 +188,26 @@ export function AddExpenseButton({
               </>
             )}
 
-            {kind === "purchase" && (
+            {kind === "variable" && (
               <>
                 <div className="sm:col-span-2">
                   <label className={LABEL}>תיאור</label>
-                  <input name="desc" placeholder="למשל: משטח מחשבים" required className={FIELD} autoFocus />
+                  <input name="desc" placeholder="למשל: כיסא משרדי" required className={FIELD} autoFocus />
                 </div>
                 <div>
                   <label className={LABEL}>סכום</label>
-                  <input type="number" name="amount" min={0} step="0.01" required className={FIELD} />
+                  <input name="amount" type="number" min={0} step="0.01" required className={FIELD} />
                 </div>
                 <div>
                   <label className={LABEL}>תאריך</label>
-                  <input type="date" name="date" defaultValue={defaultDate} required className={FIELD} />
+                  <input name="date" type="date" defaultValue={defaultDate} required className={FIELD} />
                 </div>
-                <div>
+                <div className="sm:col-span-2">
                   <label className={LABEL}>קטגוריה</label>
                   <input name="category" className={FIELD} />
                 </div>
-                <div>
-                  <label className={LABEL}>שייך לתחום</label>
-                  <select name="business" defaultValue="general" className={FIELD}>
-                    {Object.entries(BUSINESS_LABELS).map(([value, label]) => (
-                      <option key={value} value={value}>
-                        {label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="flex flex-col gap-1.5 sm:col-span-2">
-                  <span className="text-[11px] font-bold text-muted">
-                    שיוך לסניפים ({linked.length}) — תיעוד בלבד, לא פותח התחשבנות מולם
-                  </span>
-                  <div className="flex flex-wrap gap-1.5 rounded-lg border border-card-border bg-[#f8fafc] p-2">
-                    {branches.length === 0 && <span className="text-xs text-muted">אין סניפים</span>}
-                    {branches.map((b) => {
-                      const on = linked.includes(b.id);
-                      return (
-                        <label
-                          key={b.id}
-                          className={`cursor-pointer rounded-full border px-2.5 py-1 text-xs font-semibold transition ${
-                            on
-                              ? "border-teal bg-teal text-white"
-                              : "border-card-border bg-white text-ink hover:bg-[#f1f5f9]"
-                          }`}
-                        >
-                          <input
-                            type="checkbox"
-                            name="linkedBranchIds"
-                            value={b.id}
-                            checked={on}
-                            onChange={() => toggle(b.id)}
-                            className="sr-only"
-                          />
-                          {b.name}
-                        </label>
-                      );
-                    })}
-                  </div>
-                </div>
-
                 <div className="sm:col-span-2">
-                  <ExpenseTypeField types={expenseTypes} idPrefix="main-expense-type" />
+                  <ExpenseTypeField types={expenseTypes} idPrefix="coworking-new-variable-type" />
                 </div>
               </>
             )}
@@ -301,7 +226,7 @@ export function AddExpenseButton({
               </button>
               <button
                 type="button"
-                onClick={close}
+                onClick={() => setOpen(false)}
                 className="rounded-[10px] border border-card-border bg-white px-4 py-2 text-sm font-bold text-muted transition hover:bg-[#f4f6f9]"
               >
                 ביטול

@@ -20,6 +20,7 @@ import type {
   VariableExpense,
 } from "@ultranet/shared-types";
 import { monthsBetween } from "./branch-accounting";
+import { buildMonthlyFlow, type MonthFlow } from "./monthly-flow";
 import { countsToMain } from "./counts-to-main";
 
 export function currentMonth(): string {
@@ -253,6 +254,58 @@ export function buildCoworkingLedger(params: {
     receivedToDate,
     balance: receivedToDate - paidToDate,
   };
+}
+
+/**
+ * ההוצאות וההכנסות של המשרד השיתופי פרוסות חודש-חודש — הבסיס לגרף המאזן החודשי.
+ *
+ * אותו חישוב של `buildCoworkingLedger`, רק שהוא נזקף לחודש ולא מסתכם: הוצאה קבועה נזקפת
+ * לכל חודש שהייתה פעילה בו, הוצאה משתנה לחודש שלה בלבד, ותשלום של שוכר לחודש שהוא שילם
+ * עליו (`payment.month`) — לא ליום שבו נרשם, כי שוכר שמשלים שלושה חודשים ביום אחד לא
+ * הרוויח את כולם באותו חודש.
+ *
+ * **עלות ההקמה לא נכנסת** — בדיוק כמו בחדרי מחשבים: היא נקודה אחת בזמן שהייתה מוחצת את
+ * כל שאר העמודים לגובה אפס. היא נספרת ב"שילמתי עד היום" שמעל הגרף.
+ */
+export function buildCoworkingMonthlyFlow(params: {
+  fixed: FixedExpense[];
+  variable: VariableExpense[];
+  clients: CoworkingClient[];
+  upto?: string;
+}): MonthFlow[] {
+  const upto = params.upto ?? currentMonth();
+  const expense = new Map<string, number>();
+  const income = new Map<string, number>();
+  const add = (map: Map<string, number>, month: string, amount: number) => {
+    if (!month) return;
+    map.set(month, (map.get(month) ?? 0) + amount);
+  };
+
+  for (const e of params.fixed) {
+    if (!e.startDate) continue;
+    const start = e.startDate.slice(0, 7);
+    if (start > upto) continue;
+    const end = e.endDate && e.endDate.slice(0, 7) < upto ? e.endDate.slice(0, 7) : upto;
+    if (end < start) continue;
+    const monthly = e.variableAmount && e.lastAmount != null ? e.lastAmount : e.amount || 0;
+    for (const m of monthsBetween(start, end)) add(expense, m, monthly);
+  }
+
+  // שורת "הקמה" ישנה מדולגת מאותה סיבה שעלות ההקמה של הסניף מדולגת — אחרת אותה הוצאה
+  // הייתה נופלת על חודש אחד ומשטחת את כל השאר.
+  for (const e of params.variable) {
+    if (e.category === SETUP_CATEGORY) continue;
+    const m = e.month || (e.date ?? "").slice(0, 7);
+    if (m > upto) continue;
+    add(expense, m, e.amount || 0);
+  }
+
+  for (const p of params.clients.flatMap((c) => c.payments ?? [])) {
+    if (p.month > upto) continue;
+    add(income, p.month, p.amount || 0);
+  }
+
+  return buildMonthlyFlow(expense, income, upto);
 }
 
 /** ארבע העמדות הפיזיות במשרד. מספר העמדה הוא הזהות שלה, לא מסמך שמקימים. */

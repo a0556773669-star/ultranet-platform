@@ -27,9 +27,12 @@ import type {
   SetupCostItem,
 } from "@ultranet/shared-types";
 import { monthsBetween } from "./branch-accounting";
+import { buildMonthlyFlow, type MonthFlow } from "./monthly-flow";
 import { SHARED_COMPUTERS_BRANCH_ID, sharedExpenseBranchIds } from "./expense-shared-scope";
 import { loadAssets } from "./assets-data";
 import { ITEM_KINDS, ITEM_KIND_LABEL, paybackStatus, type PaybackStatus } from "./assets";
+
+export type { MonthFlow };
 
 /** Sentinel branchId for fixed/variable expenses that apply to all computer-room branches together
  *  (e.g. shared advertising, shared software) rather than to one specific branch. */
@@ -48,13 +51,6 @@ export interface ExpenseLine {
   amount: number;
 }
 
-/** חודש אחד על הגרף: מה נזקף לאותו חודש בלבד — לא מצטבר, ובלי עלות ההקמה (היא נקודה
- *  אחת בזמן ולא הוצאה חודשית, והיא הייתה מוחצת את כל שאר העמודים). */
-export interface MonthFlow {
-  month: string;
-  expense: number;
-  income: number;
-}
 
 function fixedExpenseLines(fixed: FixedExpense[], uptoMonth: string): ExpenseLine[] {
   const lines: ExpenseLine[] = [];
@@ -108,27 +104,6 @@ function monthlyExpenseMap(
   }
   for (const e of variable) add((e.date ?? "").slice(0, 7), e.amount || 0);
   return map;
-}
-
-/**
- * ציר זמן רציף מהחודש הראשון שיש בו נתון ועד החודש הנוכחי.
- *
- * גם חודש שלא קרה בו כלום מקבל שורה: בלעדיו הגרף היה מדלג על חודשים ריקים והמרווחים בו
- * היו משקרים — שני עמודים צמודים שנראים כמו חודשים עוקבים אבל מפריד ביניהם חצי שנה.
- */
-function buildMonthlyFlow(
-  expense: Map<string, number>,
-  income: Map<string, number>,
-  uptoMonth: string,
-): MonthFlow[] {
-  const dated = [...expense.keys(), ...income.keys()].filter((m) => m && m <= uptoMonth).sort();
-  const first = dated[0];
-  if (!first) return [];
-  return monthsBetween(first, uptoMonth).map((month) => ({
-    month,
-    expense: expense.get(month) ?? 0,
-    income: income.get(month) ?? 0,
-  }));
 }
 
 function sumLines(lines: ExpenseLine[]): number {
