@@ -1,23 +1,20 @@
 import { getReview, listReviews } from "../actions";
 import { TasksShell, loadTasksPage } from "../board-loader";
-import { WeekClient } from "./week-client";
+import { QuarterClient } from "./quarter-client";
 
-export default async function WeekPage({ searchParams }: { searchParams: { q?: string } }) {
+export default async function QuarterPage({ searchParams }: { searchParams: { q?: string } }) {
   const { quarters, board, today, weekWarning } = await loadTasksPage(searchParams.q);
-  const [review, weeklyReviews] = await Promise.all([
-    board.activeWeekKey ? getReview("weekly", board.activeWeekKey) : Promise.resolve(null),
-    listReviews("weekly"),
-  ]);
+  const [review, quarterlyReviews] = await Promise.all([getReview("quarterly", board.quarter.id), listReviews("quarterly")]);
 
   return (
     <TasksShell quarterKey={board.quarter.id}>
-      <WeekClient
+      <QuarterClient
         board={board}
         quarters={quarters}
         today={today}
         weekWarning={weekWarning}
         reviewNotes={review?.notes ?? ""}
-        previousReviews={weeklyReviews.filter((r) => r.periodKey !== board.activeWeekKey)}
+        previousReviews={quarterlyReviews.filter((r) => r.periodKey !== board.quarter.id)}
       />
     </TasksShell>
   );

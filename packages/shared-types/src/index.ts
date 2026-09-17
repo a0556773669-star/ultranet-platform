@@ -801,6 +801,13 @@ export interface ShopLead {
 }
 
 // --- משימות ונהלים (נהלים + סלעים ואבני דרך) ---
+//
+// החלטת היסוד של המודול: **אבן דרך נוצרת פעם אחת בלבד.** רבעון, חודש ושבוע אינם
+// עותקים של המשימה אלא *שיוכים* (`PeriodAssignment`) של אותה אבן דרך לתקופות עבודה.
+// לכן סטטוס הביצוע נשמר פעם אחת ב-`Milestone.status`, ושינוי בו משתקף מיד בכל
+// התצוגות - אין `completedMonthly`/`completedWeekly` ואין שכפול רשומות.
+
+export type ProcedureStatus = "draft" | "active" | "superseded" | "archived";
 
 /** collection: n_procedures - נהלים ברורים למודול "משימות ונהלים" (עורך עשיר, כמו הדרכות) */
 export interface Procedure {
@@ -808,10 +815,22 @@ export interface Procedure {
   title: string;
   content: string; // HTML עשיר
   category?: string;
+  /** תיאור קצר לכרטיס ולחיפוש */
+  summary?: string;
+  /** מספר גרסה שהמשתמש מנהל ידנית ("1.2"); העלאת גרסה חדשה לא מוחקת את הקודמת */
+  version?: string;
+  status?: ProcedureStatus;
+  ownerName?: string;
+  /** הנוהל שהוחלף על ידי הנוהל הזה (שרשרת גרסאות, בלי מחיקה) */
+  supersedesId?: string | null;
+  /** קובץ מצורף כ-data URL בתוך המסמך (אותו דגם כמו קבצי ההדרכות, מתחת למגבלת ה-1MB) */
+  attachmentName?: string;
+  attachmentDataUrl?: string;
   order?: number;
   createdAt: number;
   updatedAt: number;
   createdBy?: string;
+  updatedBy?: string;
 }
 
 export type QuarterStatus = "active" | "archived";
@@ -831,10 +850,10 @@ export interface Quarter {
   endDate?: string;
   /** מיון ציר הזמן; ככל שגדול יותר - חדש יותר */
   order: number;
-  /** החודש ה"פתוח" ברבעון - מה שמוצג בקומת החודש בלוח העבודה. ריק = עוד לא נפתח חודש. */
+  /** החודש ה"פתוח" ברבעון - מה שמוצג במסך החודש. ריק = עוד לא נפתח חודש. */
   activeMonthKey?: string;
-  /** השבוע ה"פתוח" ברבעון - מה שמוצג בראש לוח העבודה. ריק = עוד לא נפתח שבוע.
-   *  פתיחת שבוע חדש דוחפת את הקודם ל"שבועות קודמים" (הוא נשאר גלוי ברמת החודש/רבעון). */
+  /** השבוע ה"פתוח" ברבעון - מה שמוצג במסך השבוע. ריק = עוד לא נפתח שבוע.
+   *  פתיחת שבוע חדש דוחפת את הקודם ל"שבועות קודמים" - היא לא מוחקת ולא נועלת אותו. */
   activeWeekKey?: string;
   /** הרבעון שממנו גולגל רבעון זה ב-"פתיחת רבעון חדש" */
   rolledFromKey?: string | null;
@@ -845,73 +864,208 @@ export interface Quarter {
 export type RockStatus = "active" | "done" | "dropped";
 
 /** collection: n_rocks - סלעים רבעוניים ותתי-סלעים (מודל EOS-style, מודול "משימות ונהלים").
- *  `parentRockId` ריק = סלע רבעוני עצמו; מוגדר = תת-סלע תחת סלע קיים (עומק אחד בלבד). */
+ *  `parentRockId` ריק = סלע רבעוני עצמו; מוגדר = תת-סלע תחת סלע קיים (עומק אחד בלבד).
+ *  `status` **מחושב** מאבני הדרך שמתחתיו ואינו מסומן ידנית כ"הושלם" - רק `dropped` (ביטול)
+ *  הוא החלטה ידנית. */
 export interface Rock {
   id: string;
   title: string;
   description?: string;
-  /** "2026-Q3" */
+  /** מזהה המסמך ב-`n_quarters` - הרבעון שבו נוצר הסלע */
   quarterKey: string;
   parentRockId?: string | null;
   ownerUserId?: string;
   ownerName?: string;
   status: RockStatus;
+  /** "YYYY-MM-DD" (רשות) - תאריך יעד לתת-סלע/סלע */
+  dueDate?: string;
   order?: number;
   /** מזהה הסלע/תת-הסלע המקורי שממנו שוכפל בגלגול רבעון (שמירת ההקשר ההיסטורי) */
   rolledFromId?: string | null;
+  /** מחיקה לוגית - סלע עם היסטוריה או ילדים לעולם לא נמחק פיזית */
+  deletedAt?: number | null;
   createdAt: number;
   createdBy?: string;
+  updatedAt?: number;
 }
 
+/** @deprecated הדלי הישן של אבן הדרך (לפני מודל `PeriodAssignment`). נקרא לצורך תאימות
+ *  לאחור בלבד - קוד חדש לא כותב אותו. */
 export type MilestoneStage = "backlog" | "month" | "week";
 
 /** מקור אבן הדרך/המשימה: `rock` = נגזרה מסלע (ברירת מחדל, כולל כל הדאטה הישן שאין בו את
- *  השדה), `adhoc` = משימה שבועית/שוטפת שלא קשורה לאף סלע. */
+ *  השדה), `adhoc` = משימה שוטפת שלא קשורה לאף סלע. */
 export type MilestoneSource = "rock" | "adhoc";
 
+/** באיזו תקופה נוספה אבן הדרך - כדי שההיסטוריה תדע להפריד בין "תוכנן מראש" לבין
+ *  "נוסף במהלך החודש/השבוע" (סעיף 11 באפיון). */
+export type MilestoneOrigin = "quarter" | "month" | "week";
+
+/** סטטוס הביצוע של אבן דרך - **המקור היחיד לאמת**. רק אבן דרך מקבלת סטטוס ידני;
+ *  סלע ותת-סלע מחושבים ממנה. */
+export type MilestoneStatus = "not_started" | "in_progress" | "waiting" | "done" | "cancelled";
+
+export type MilestonePriority = "low" | "normal" | "high";
+
 /** collection: n_milestones - אבני הדרך (המשימות בפועל) תחת סלע/תת-סלע. `quarterKey` מוכפל
- *  מהסלע-אב כדי לאפשר שאילתת שוויון יחידה בתצוגת הרבעון בלי אינדקס מורכב. `monthKey`/`weekKey`
- *  נשארים על הרשומה גם אחרי שהיא קודמה הלאה (לצורך היסטוריה/דפדוף אחורה), ו-`stage` מסמן את
- *  הדלי הפעיל הנוכחי שלה. */
+ *  מהסלע-אב כדי לאפשר שאילתת שוויון יחידה בלי אינדקס מורכב. לצידן חיות **משימות שוטפות**
+ *  באותה קולקשן עם `source: "adhoc"` ובלי `rockId`.
+ *
+ *  השיוך לתקופות **אינו** יושב כאן אלא ב-`n_period_assignments`, כדי שאותה אבן דרך תוכל
+ *  להיות משויכת לרבעון, לחודש ולכמה שבועות בלי להשתכפל. */
 export interface Milestone {
   id: string;
   /** ריק (`""`) כשמדובר במשימה שוטפת (`source: "adhoc"`) שלא תלויה בסלע */
   rockId: string;
   quarterKey: string;
   title: string;
+  description?: string;
   ownerUserId?: string;
   ownerName?: string;
-  stage: MilestoneStage;
-  /** "2026-08" - מוגדר כש-stage מגיע ל-"month" ואילך */
-  monthKey?: string;
-  /** מפתח שבוע פנימי לא-ISO ("W1234"), ניתן להזזה בקלות - מוגדר כש-stage מגיע ל-"week" */
-  weekKey?: string;
+  /** המקור היחיד לאמת לגבי ביצוע. דאטה ישן בלי השדה נגזר מ-`done`. */
+  status: MilestoneStatus;
+  /** שיקוף היסטורי של `status === "done"` - נשמר כדי ששאילתות ישנות ("מה הושלם")
+   *  ימשיכו לעבוד. לעולם לא לעדכן אותו בנפרד מ-`status`. */
   done: boolean;
+  priority?: MilestonePriority;
+  /** "YYYY-MM-DD" (רשות) */
+  dueDate?: string;
+  /** הערה חופשית קצרה שמוצגת בשורה */
+  notes?: string;
+  /** חובה כש-`status === "waiting"` - במי/במה תלוי הביצוע */
+  waitReason?: string;
+  /** "YYYY-MM-DD" (רשות) - תאריך מעקב להמתנה */
+  waitUntil?: string;
+  /** חובה כש-`status === "cancelled"` */
+  cancelReason?: string;
   doneAt?: number;
-  /** כמה פעמים הועברה קדימה (לשבוע/חודש הבא) בלי להסתיים */
+  completedBy?: string;
+  /** כמה פעמים נפתחה מחדש אחרי שהושלמה */
+  reopenCount?: number;
+  /** כמה פעמים שובצה מחדש לתקופה נוספת בלי להסתיים */
   carryOverCount?: number;
   /** ברירת מחדל `"rock"` כשהשדה חסר (כל הדאטה שנוצר לפני מודל המשימות השוטפות) */
   source?: MilestoneSource;
+  /** ברירת מחדל `"quarter"` - איפה נוספה אבן הדרך */
+  origin?: MilestoneOrigin;
   /** מזהה אבן הדרך המקורית שממנה שוכפלה בגלגול רבעון */
   rolledFromId?: string | null;
   order?: number;
+  /** מחיקה לוגית - אבן דרך עם היסטוריה או שיוך לתקופה לא נמחקת פיזית */
+  deletedAt?: number | null;
   createdAt: number;
   createdBy?: string;
+  /** נעילה אופטימית: הלקוח שולח את הערך שראה, והשרת דוחה עדכון על גרסה ישנה */
+  updatedAt?: number;
+  updatedBy?: string;
+
+  /** @deprecated הדלי הישן; נקרא לתאימות לאחור (סינתזת שיוכי תקופה לדאטה שקדם למודל). */
+  stage?: MilestoneStage;
+  /** @deprecated "2026-08" - הדלי החודשי הישן */
+  monthKey?: string;
+  /** @deprecated מפתח שבוע פנימי ישן ("W1234") */
+  weekKey?: string;
+}
+
+export type PeriodType = "quarter" | "month" | "week";
+
+/** תוצאת ההתחייבות לתקופה. `open` כל עוד התקופה פתוחה; בסיום התקופה התוצאה ננעלת כדי
+ *  שההיסטוריה תישאר נכונה גם אם המשימה תושלם אחר כך בתקופה אחרת. */
+export type AssignmentOutcome = "open" | "done" | "missed" | "cancelled";
+
+/** collection: n_period_assignments - **השיוך של אבן דרך לתקופת עבודה, לא עותק שלה.**
+ *
+ *  מזהה המסמך דטרמיניסטי: `${milestoneId}__${periodType}__${periodKey}` - וכך אילוץ
+ *  הייחודיות "אבן דרך אחת לכל תקופה" נאכף ברמת בסיס הנתונים ולא רק בממשק (סעיף 14). */
+export interface PeriodAssignment {
+  id: string;
+  milestoneId: string;
+  /** מוכפל מאבן הדרך כדי לאפשר שליפת כל שיוכי הרבעון בשאילתת שוויון יחידה */
+  quarterKey: string;
+  periodType: PeriodType;
+  /** מפתח התקופה: quarterKey / "2026-08" / "W1234" */
+  periodKey: string;
+  assignedAt: number;
+  assignedBy?: string;
+  outcome: AssignmentOutcome;
+  /** מתי ננעלה התוצאה (סוף התקופה) */
+  closedAt?: number;
+}
+
+export type TaskEntityType = "quarter" | "rock" | "milestone" | "procedure";
+
+export type TaskActivityAction =
+  | "create"
+  | "update"
+  | "assign"
+  | "unassign"
+  | "status"
+  | "complete"
+  | "reopen"
+  | "cancel"
+  | "move"
+  | "delete"
+  | "restore";
+
+/** collection: n_task_activity - יומן פעולות לכל ישות במודול. אינו ניתן לעריכה דרך
+ *  הממשק; כל פעולה משמעותית נרשמת כאן עם מי ומתי (סעיף 16 באפיון). */
+export interface TaskActivity {
+  id: string;
+  entityType: TaskEntityType;
+  entityId: string;
+  action: TaskActivityAction;
+  /** שם השדה שהשתנה בפעולת `update` */
+  field?: string;
+  oldValue?: string;
+  newValue?: string;
+  /** הקשר לשליפה מהירה של יומן אבן דרך / רבעון */
+  milestoneId?: string;
+  quarterKey?: string;
+  /** סיבה/הערה חופשית (ביטול, פתיחה מחדש, המתנה) */
+  note?: string;
+  userName?: string;
+  at: number;
 }
 
 export type RockReviewPeriod = "quarterly" | "monthly" | "weekly";
 
-/** collection: n_rock_reviews - סיכום/לקחים לכל פגישת רבעון/חודש/שבוע. מזהה דטרמיניסטי
+/** collection: n_rock_reviews - סיכום ישיבת רבעון/חודש/שבוע. מזהה דטרמיניסטי
  *  `${period}_${periodKey}` כך שיש רשומה אחת בלבד לכל תקופה (upsert). */
 export interface RockReview {
   id: string;
   period: RockReviewPeriod;
   periodKey: string;
   notes: string;
+  /** משתתפי הישיבה (שמות חופשיים) */
+  participants?: string[];
+  /** "YYYY-MM-DD" - מתי התקיימה הישיבה */
+  meetingDate?: string;
+  /** ישיבה נעולה = סיכום סופי, לא נערך יותר מהמסך הרגיל */
+  locked?: boolean;
   createdAt: number;
   updatedAt: number;
   createdBy?: string;
 }
+
+/** collection: n_task_settings - הגדרות המודול. מסמך יחיד במזהה `default`.
+ *  שבוע העבודה ומועד האזהרה הם הגדרה ולא קבוע בקוד (סעיף 19 באפיון). */
+export interface TaskSettings {
+  id: string;
+  /** 0=ראשון ... 6=שבת - היום שבו מתחיל שבוע העבודה */
+  weekStartDay: number;
+  /** 0=ראשון ... 6=שבת - מהיום הזה בבוקר מוצגת אזהרה כתומה על משימת שבוע שטרם התחילה */
+  warningWeekday: number;
+  /** ברירת המחדל שהשיטה ממליצה עליה; חריגה אפשרית אחרי אזהרה */
+  recommendedRocksPerQuarter: number;
+  updatedAt: number;
+  updatedBy?: string;
+}
+
+export const DEFAULT_TASK_SETTINGS: Omit<TaskSettings, "id" | "updatedAt"> = {
+  weekStartDay: 0,
+  warningWeekday: 3,
+  recommendedRocksPerQuarter: 3,
+};
 
 /* ================================================================== *
  * מודל שלוש השכבות — שכבה 2 (נכסים) ושכבה 1 (תנועות)

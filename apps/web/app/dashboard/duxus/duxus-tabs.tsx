@@ -2,14 +2,17 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { NotebookText, Mountain, type LucideIcon } from "lucide-react";
+import { NotebookText, Target, History, Settings, type LucideIcon } from "lucide-react";
 
 type TabItem = { href: string; label: string; icon: LucideIcon };
 
-// סדר הטאבים = סדר העבודה: קודם המשימות (מה עושים עכשיו), ואז הנהלים (איך עושים).
+// ארבע הלשוניות של האזור לפי סעיף 7 באפיון, בסדר העבודה: קודם מה עושים, אחר כך
+// איך עושים, אחר כך מה היה, ובסוף ההגדרות.
 const TABS: TabItem[] = [
-  { href: "/dashboard/duxus/rocks", label: "סלעים, יעדים וקצב עבודה", icon: Mountain },
+  { href: "/dashboard/duxus/rocks", label: "משימות ויעדים", icon: Target },
   { href: "/dashboard/duxus/procedures", label: "נהלים", icon: NotebookText },
+  { href: "/dashboard/duxus/history", label: "היסטוריה", icon: History },
+  { href: "/dashboard/duxus/settings", label: "הגדרות", icon: Settings },
 ];
 
 export function DuxusTabs() {
