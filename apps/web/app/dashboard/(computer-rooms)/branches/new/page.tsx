@@ -2,12 +2,13 @@ import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
 import { Building2 } from "lucide-react";
 import { authOptions } from "@/lib/auth";
+import { isOwnerSession } from "@/lib/perms";
 import { createBranchAction } from "../actions";
 import { BranchForm } from "../branch-form";
 
 export default async function NewBranchPage() {
   const session = await getServerSession(authOptions);
-  if (session?.user?.role !== "owner") {
+  if (!isOwnerSession(session)) {
     redirect("/dashboard/branches");
   }
 

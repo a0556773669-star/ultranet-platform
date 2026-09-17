@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import { currentModuleScope, isOwnerSession } from "@/lib/perms";
 import { getAdminFirestore } from "@/lib/firebase-admin";
 import type { BranchIncome } from "@ultranet/shared-types";
 import {
@@ -12,16 +13,16 @@ import {
 } from "@/lib/branch-income-excel";
 
 async function requireBranchAccess(branchId: string) {
-  const session = await getServerSession(authOptions);
-  if (!session) throw new Error("לא מחובר");
-  if (session.user?.role === "owner") return session;
-  if (session.user?.role === "partner" && session.user?.branchId === branchId) return session;
+  const scope = await currentModuleScope("computers");
+  if (!scope) throw new Error("לא מחובר");
+  if (scope.isOwner) return scope;
+  if (scope.isManager && scope.allows(branchId)) return scope;
   throw new Error("אין הרשאה");
 }
 
 async function requireOwner() {
   const session = await getServerSession(authOptions);
-  if (!session || session.user?.role !== "owner") {
+  if (!session || !isOwnerSession(session)) {
     throw new Error("גישה זו מוגבלת לבעלים בלבד");
   }
   return session;

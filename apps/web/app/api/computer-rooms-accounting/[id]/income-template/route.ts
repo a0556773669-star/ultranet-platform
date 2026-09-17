@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import { resolveModuleScope } from "@/lib/perms";
 import { getAdminFirestore } from "@/lib/firebase-admin";
 import type { Branch } from "@ultranet/shared-types";
 import { buildBranchIncomeTemplateWorkbook, isBranchIncomeImportEnabled } from "@/lib/branch-income-excel";
@@ -12,9 +13,11 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
   }
   // אותה בדיקת הרשאה בדיוק כמו במסך ובפעולת הייבוא - שותף מוריד תבנית לסניף שלו בלבד.
   const session = await getServerSession(authOptions);
-  const role = session?.user?.role;
-  const isOwner = role === "owner";
-  if (!session || (!isOwner && !(role === "partner" && session.user?.branchId === params.id))) {
+  if (!session) {
+    return new NextResponse("אין הרשאה", { status: 403 });
+  }
+  const scope = resolveModuleScope(session, "computers");
+  if (!scope.isManager || !scope.allows(params.id)) {
     return new NextResponse("אין הרשאה", { status: 403 });
   }
 

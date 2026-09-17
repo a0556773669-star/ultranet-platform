@@ -10,7 +10,8 @@ import { currentMonth, fixedExpenseAccrued } from "@/lib/main-ledger";
 import { BranchExpenseTable, type BranchExpenseRow } from "@/components/expenses/branch-expense-table";
 
 export default async function ComputerRoomExpensesHomePage() {
-  const session = await requireModuleAccess("computers");
+  // מנהלים בלבד: עובד חדר מחשבים מתפעל מלאי ומשימות, ואת הוצאות הסניף רואה מי שמנהל אותו.
+  const session = await requireModuleAccess("computers", { managerOnly: true });
   const isOwner = session.user?.role === "owner";
   if (!isOwner) {
     const myBranchId = session.user?.branchId;

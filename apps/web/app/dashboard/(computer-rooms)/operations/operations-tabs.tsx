@@ -4,19 +4,27 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ClipboardCheck, ListChecks, Settings2, type LucideIcon } from "lucide-react";
 
-type OpsTab = { href: string; label: string; icon: LucideIcon; ownerOnly?: boolean };
+type OpsTab = { href: string; label: string; icon: LucideIcon; show: (p: OpsTabsProps) => boolean };
 
 const TABS: OpsTab[] = [
-  { href: "/dashboard/operations/stock", label: "עדכון מלאי", icon: ClipboardCheck },
-  { href: "/dashboard/operations/tasks", label: "משימות", icon: ListChecks },
-  { href: "/dashboard/operations/settings", label: "הגדרות תפעול", icon: Settings2, ownerOnly: true },
+  { href: "/dashboard/operations/stock", label: "עדכון מלאי", icon: ClipboardCheck, show: (p) => p.canStock },
+  { href: "/dashboard/operations/tasks", label: "משימות", icon: ListChecks, show: (p) => p.canTasks },
+  { href: "/dashboard/operations/settings", label: "הגדרות תפעול", icon: Settings2, show: (p) => p.isOwner },
 ];
 
-export function OperationsTabs({ isOwner }: { isOwner: boolean }) {
+type OpsTabsProps = {
+  isOwner: boolean;
+  /** הרשאת "מלאי" (`computers`). */
+  canStock: boolean;
+  /** הרשאת "משימות" — או `tasks`, או `computers` שתמיד כלל אותה. */
+  canTasks: boolean;
+};
+
+export function OperationsTabs(props: OpsTabsProps) {
   const pathname = usePathname();
   return (
     <nav className="flex flex-wrap items-center gap-1">
-      {TABS.filter((t) => !t.ownerOnly || isOwner).map((tab) => {
+      {TABS.filter((tab) => tab.show(props)).map((tab) => {
         const active = pathname?.startsWith(tab.href);
         return (
           <Link key={tab.href} href={tab.href} className={active ? "pill-active" : "pill-inactive"}>

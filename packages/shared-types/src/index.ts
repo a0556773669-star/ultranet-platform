@@ -124,15 +124,63 @@ export interface Branch {
  */
 export type ExpensePolicyKey = "ads" | "internet" | "filtering" | "rent" | "electricity" | "print";
 
+/** מפתחות ההרשאה למודולים. משוכפל כטיפוס נגזר ב-`apps/web/lib/perms.ts` (`PermKey`). */
+export type PermissionKey =
+  | "branches"
+  | "computers"
+  | "rentals"
+  | "coworking"
+  | "accounting"
+  | "tasks"
+  | "charging"
+  | "shop"
+  | "duxus";
+
+/**
+ * כובע אחד של משתמש: תפקיד בסניף מסוים, עם ההרשאות שנלוות לתפקיד הזה.
+ *
+ * הסיבה שזה קיים: אותו אדם יכול להיות שותף שמנהל סניף השכרות **וגם** עובד תחזוקה בחדר
+ * מחשבים. עד כה `AppUser` החזיק `role` אחד ו-`branchId` אחד, ולכן אי אפשר היה לבטא את זה
+ * בלי לבחור איזה מהשניים "מנצח" — ובחירה כזו תמיד נותנת לו או יותר מדי (תפקיד שותף בחדר
+ * המחשבים) או פחות מדי (הוא לא מגיע לסניף השני בכלל).
+ *
+ * `branchType` נשמר על השיוך עצמו ולא נקרא מ-`n_branches` בכל בקשה: הוא מה שמאפשר להכריע
+ * **איזה כובע חל באיזה מודול** בלי שאילתה נוספת בכל רינדור. הוא דנורמליזציה מכוונת, ומי
+ * שמעדכן את סוג הסניף אחראי לשמור עליו מסונכרן (טופס המשתמשים כותב אותו מחדש בכל שמירה).
+ */
+export interface UserAssignment {
+  role: UserRole;
+  branchId: string;
+  /** סוג הסניף של `branchId` בזמן השמירה — ראה הערת הטיפוס. */
+  branchType?: BranchType;
+  perms?: Partial<Record<PermissionKey, boolean>>;
+}
+
 /** collection: n_users */
 export interface AppUser {
     id: string;
     name: string;
     email: string;
     pass: string; // legacy plaintext - replace with proper auth before any customer-facing exposure
+  /**
+   * **התפקיד הראשי.** נשאר השדה הקנוני של המשתמש גם אחרי שנוסף `assignments`: `app.html`
+   * ו-`n_approved_emails` קוראים אותו, ולכן הוא תמיד משקף את `assignments[0]`.
+   */
   role: UserRole;
-    branchId: string; // "all" for owner
-  perms?: Partial<Record<"branches" | "computers" | "rentals" | "coworking" | "accounting" | "tasks" | "charging" | "shop" | "duxus", boolean>>;
+  /** **הסניף הראשי.** `"all"` לבעלים. משקף תמיד את `assignments[0].branchId` — ראה `role`. */
+    branchId: string;
+  /** **ההרשאות הראשיות.** משקפות תמיד את `assignments[0].perms` — ראה `role`. */
+  perms?: Partial<Record<PermissionKey, boolean>>;
+  /**
+   * כל הכובעים של המשתמש (רשות). חסר או באורך 1 = משתמש עם כובע אחד, בדיוק ההתנהגות
+   * ההיסטורית; במקרה כזה `apps/web/lib/perms.ts` גוזר שיוך יחיד מ-`role`/`branchId`/`perms`
+   * ואין שום הבדל התנהגותי. שני שיוכים ומעלה = אדם עם כמה תפקידים, וההכרעה איזה מהם חל
+   * בכל מודול נעשית לפי `branchType` (ראה `resolveModuleScope`).
+   *
+   * השדה הזה **מוסיף** ולא מחליף: `role`/`branchId`/`perms` ממשיכים לשקף את השיוך הראשון,
+   * כך ש-`app.html` והדאטה הקיים עובדים בלי מיגרציה.
+   */
+  assignments?: UserAssignment[];
   viewClientBranchIds?: string[];
 }
 

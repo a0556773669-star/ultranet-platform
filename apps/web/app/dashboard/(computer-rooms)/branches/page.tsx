@@ -12,7 +12,7 @@ async function listBranches(): Promise<Branch[]> {
 }
 
 export default async function BranchesPage() {
-  const session = await requireModuleAccess("branches");
+  const session = await requireModuleAccess("branches", { managerOnly: true });
   const role = session.user?.role;
   const myBranchId = session.user?.branchId;
 

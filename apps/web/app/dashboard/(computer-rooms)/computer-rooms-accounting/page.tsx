@@ -19,7 +19,8 @@ export default async function ComputerRoomsAccountingHomePage({
 }: {
   searchParams?: { month?: string; monthSaved?: string; monthCleared?: string };
 }) {
-  const session = await requireModuleAccess("computers");
+  // מנהלים בלבד, מאותה סיבה כמו במסך ההוצאות.
+  const session = await requireModuleAccess("computers", { managerOnly: true });
   const isOwner = session.user?.role === "owner";
   const myBranchId = session.user?.branchId;
 

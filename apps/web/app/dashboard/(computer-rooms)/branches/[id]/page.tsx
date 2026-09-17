@@ -9,7 +9,7 @@ import { DeleteButton } from "../delete-button";
 import { updateBranchAction, deleteBranchAction } from "../actions";
 
 export default async function BranchDetailPage({ params }: { params: { id: string } }) {
-  const session = await requireModuleAccess("branches");
+  const session = await requireModuleAccess("branches", { managerOnly: true });
   const role = session.user?.role;
   const myBranchId = session.user?.branchId;
 

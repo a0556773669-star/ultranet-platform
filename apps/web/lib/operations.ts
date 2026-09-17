@@ -1,5 +1,6 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "./auth";
+import { resolveModuleScope } from "./perms";
 import { getAdminFirestore } from "./firebase-admin";
 import type { Branch } from "@ultranet/shared-types";
 import type { OpsBranch } from "./operations-shared";
@@ -47,10 +48,12 @@ export type OpsAccess = {
 export async function getOpsAccess(): Promise<OpsAccess> {
   const session = await getServerSession(authOptions);
   if (!session) throw new Error("יש להתחבר למערכת");
-  const isOwner = session.user?.role === "owner";
+  // הכובע שחל בחדרי מחשבים, ולא התפקיד הראשי: `scope.allows` מכסה גם מי שמשויך ליותר
+  // מחדר מחשבים אחד, מה ש-`branchId` יחיד מעולם לא ידע לבטא.
+  const scope = resolveModuleScope(session, "computers");
+  const isOwner = scope.isOwner;
   const all = await listComputerBranches();
-  const myBranchId = session.user?.branchId;
-  const branches = isOwner ? all : all.filter((b) => b.id === myBranchId);
+  const branches = isOwner ? all : all.filter((b) => scope.allows(b.id));
   return {
     isOwner,
     branches,

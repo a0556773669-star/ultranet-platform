@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import { isOwnerSession } from "@/lib/perms";
 import { getAdminFirestore } from "@/lib/firebase-admin";
 import { FieldValue } from "firebase-admin/firestore";
 import {
@@ -35,7 +36,7 @@ const OPS_PATH = "/dashboard/operations";
 async function requireOwnerSession() {
   const session = await getServerSession(authOptions);
   if (!session) throw new Error("יש להתחבר למערכת");
-  if (session.user?.role !== "owner") throw new Error("רק מנהל יכול לשנות הגדרות תפעול");
+  if (!isOwnerSession(session)) throw new Error("רק מנהל יכול לשנות הגדרות תפעול");
   return session;
 }
 
