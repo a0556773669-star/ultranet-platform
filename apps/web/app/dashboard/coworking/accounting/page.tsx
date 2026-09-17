@@ -3,13 +3,14 @@ import { BarChart3, Calendar, Receipt } from "lucide-react";
 import { requireModuleAccess } from "@/lib/perms";
 import { getAdminFirestore } from "@/lib/firebase-admin";
 import type { Branch, CoworkingClient, FixedExpense, VariableExpense } from "@ultranet/shared-types";
-import { buildCoworkingLedger } from "@/lib/coworking";
+import { buildCoworkingLedger, buildCoworkingMonthlyFlow } from "@/lib/coworking";
 import { countsToMain } from "@/lib/counts-to-main";
-import { loadRecurringVariableExpenses } from "@/lib/recurring-expenses";
+import { RECURRING_FREQUENCY_LABELS, loadRecurringVariableExpenses } from "@/lib/recurring-expenses";
 import { RecurringExpensesCard } from "@/components/recurring-expenses/recurring-expenses-card";
 import { CountsToMainBadge } from "@/components/counts-to-main-field";
+import { MonthlyFlowChart } from "@/components/accounting/monthly-flow-chart";
 import { CoworkingTabs } from "../coworking-tabs";
-import { CoworkingExpenseForm } from "./expense-forms";
+import { AddCoworkingExpenseButton } from "./add-expense-button";
 import { loadRecurringPurchaseIndex, type RecurringPurchaseTypeSummary } from "@/lib/recurring-purchases";
 import { RecurringPurchaseBadge } from "@/components/recurring-purchases/recurring-purchase-badge";
 import { RecurringPurchasesSummary } from "@/components/recurring-purchases/recurring-purchases-summary";
@@ -131,6 +132,13 @@ function ExpenseList({
  * ולהחזיק את הסיכום במקום אחד ואת ההזנה במקום אחר רק חייב לקפוץ בין שני מסכים כדי
  * להבין מספר. **הקמה כבר לא נרשמת כאן** אלא בטופס הסניף (`/branches`), ששם היא באמת
  * תכונה של הסניף ולא אירוע חודשי.
+ *
+ * ## סדר המסך
+ *
+ * למעלה שלוש המשבצות של המאזן, בחצי הימני בלבד, ולצידן בחצי השמאלי הפירוט "ממה מורכבות
+ * ההוצאות" - שתי שאלות שקוראים יחד ("כמה?" ו"ממה?") ולכן הן באותו גובה ולא אחת מתחת
+ * לשנייה. מתחת הגרף החודשי, שעונה על השאלה שאף מספר מצטבר לא עונה עליה: האם החודש הזה
+ * טוב או רע ביחס לחודשים שלפניו. הזנת ההוצאות ירדה כולה לחלון אחד בכפתור שלמעלה.
  */
 export default async function CoworkingAccountingPage() {
   const session = await requireModuleAccess("coworking");
@@ -173,7 +181,9 @@ export default async function CoworkingAccountingPage() {
     .filter((e) => branchIds.has(e.branchId))
     .sort((a, b) => (b.date ?? "").localeCompare(a.date ?? ""));
 
-  const ledger = buildCoworkingLedger({ fixed, variable, clients: [...clients, ...orphanClients], branches });
+  const allModuleClients = [...clients, ...orphanClients];
+  const ledger = buildCoworkingLedger({ fixed, variable, clients: allModuleClients, branches });
+  const monthlyFlow = buildCoworkingMonthlyFlow({ fixed, variable, clients: allModuleClients });
 
   // הסניף שההזנה נרשמת עליו. כרגע יש סניף אחד, ולכן אין בורר: הראשון הוא הסניף.
   const branch = branches[0];
@@ -183,6 +193,7 @@ export default async function CoworkingAccountingPage() {
   ]);
 
   const today = new Date().toISOString().slice(0, 10);
+  const frequencies = Object.entries(RECURRING_FREQUENCY_LABELS).map(([value, label]) => ({ value, label }));
   const fixedRows = fixed.map((e) => ({
     id: e.id,
     title: `${e.name} (${money(e.amount || 0)}/חודש)`,
@@ -210,63 +221,83 @@ export default async function CoworkingAccountingPage() {
     <div>
       <CoworkingTabs active="/dashboard/coworking/accounting" />
 
-      <h1 className="mb-4 flex items-center gap-1.5 text-[21px] font-extrabold text-ink">
-        <BarChart3 className="h-5 w-5" />
-        {'הנה"ח משרד שיתופי'}
-      </h1>
-
-      <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-3">
-        <article className="rounded-card border border-card-border bg-white p-4 shadow-card">
-          <p className="text-[11px] font-extrabold uppercase tracking-wide text-muted">שילמתי עד היום</p>
-          <p className="mt-1 text-[26px] font-black text-red-600">{money(ledger.paidToDate)}</p>
-        </article>
-        <article className="rounded-card border border-card-border bg-white p-4 shadow-card">
-          <p className="text-[11px] font-extrabold uppercase tracking-wide text-muted">קיבלתי עד היום</p>
-          <p className="mt-1 text-[26px] font-black text-emerald-600">{money(ledger.receivedToDate)}</p>
-          {orphanReceived > 0 && (
-            <p className="mt-1 text-[11px] font-bold text-amber-700">
-              כולל {money(orphanReceived)} מ{orphanClients.length === 1 ? "השכרה שאינה משויכת" : "השכרות שאינן משויכות"}{" "}
-              לסניף —{" "}
-              <Link href="/dashboard/coworking" className="underline">
-                לטיפול במסך העמדות
-              </Link>
-            </p>
-          )}
-        </article>
-        <article className="rounded-card border border-card-border bg-white p-4 shadow-card">
-          <p className="text-[11px] font-extrabold uppercase tracking-wide text-muted">מאזן</p>
-          <p className={`mt-1 text-[26px] font-black ${ledger.balance >= 0 ? "text-teal-dark" : "text-red-600"}`}>
-            {money(ledger.balance)}
-          </p>
-        </article>
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+        <h1 className="flex items-center gap-1.5 text-[21px] font-extrabold text-ink">
+          <BarChart3 className="h-5 w-5" />
+          {'הנה"ח משרד שיתופי'}
+        </h1>
+        {branch && (
+          <AddCoworkingExpenseButton
+            branchId={branch.id}
+            expenseTypes={purchaseIndex.types}
+            frequencies={frequencies}
+            defaultDate={today}
+            currentMonth={today.slice(0, 7)}
+          />
+        )}
       </div>
 
-      <div className="mt-3 rounded-card border border-card-border bg-white p-4 text-[12.5px] shadow-card">
-        <p className="mb-1.5 font-bold text-ink">ממה מורכבות ההוצאות</p>
-        <ul className="space-y-0.5 text-muted">
-          <li>
-            הקמה: <b className="text-ink">{money(ledger.setupToDate)}</b>
-            {ledger.setupFromBranches > 0 && ledger.setupFromExpenses > 0 && (
-              <span className="text-[11.5px]">
-                {" "}
-                ({money(ledger.setupFromBranches)} מפירוט הסניפים · {money(ledger.setupFromExpenses)} משורות ישנות)
-              </span>
-            )}{" "}
-            <Link href="/dashboard/coworking" className="font-bold text-teal hover:underline">
-              נרשמת בטופס הסניף
-            </Link>
-          </li>
-          <li>
-            קבועות (נצבר מתחילת כל הוצאה עד היום): <b className="text-ink">{money(ledger.fixedToDate)}</b>
-          </li>
-          <li>
-            משתנות: <b className="text-ink">{money(ledger.variableToDate)}</b>
-          </li>
-        </ul>
-        <p className="mt-2 text-[11.5px] leading-relaxed text-muted">
-          המספרים כאן הם של המשרד השיתופי בלבד. מה מתוכם נכנס גם לשורה התחתונה של העסק נקבע פר-שורה
-          לפי הסימון &quot;לחשבן בהנה&quot;ח הראשית&quot;.
-        </p>
+      {/* חצי אחד למאזן, חצי שני לפירוט. שלוש המשבצות לבדן על כל הרוחב היו טופס ריק ברובו. */}
+      <div className="grid grid-cols-1 gap-2.5 lg:grid-cols-2">
+        <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-3">
+          <article className="rounded-card border border-card-border bg-white p-3.5 shadow-card">
+            <p className="text-[11px] font-extrabold uppercase tracking-wide text-muted">שילמתי עד היום</p>
+            <p className="mt-1 text-[22px] font-black text-red-600">{money(ledger.paidToDate)}</p>
+          </article>
+          <article className="rounded-card border border-card-border bg-white p-3.5 shadow-card">
+            <p className="text-[11px] font-extrabold uppercase tracking-wide text-muted">קיבלתי עד היום</p>
+            <p className="mt-1 text-[22px] font-black text-emerald-600">{money(ledger.receivedToDate)}</p>
+            {orphanReceived > 0 && (
+              <p className="mt-1 text-[11px] font-bold text-amber-700">
+                כולל {money(orphanReceived)} מ
+                {orphanClients.length === 1 ? "השכרה שאינה משויכת" : "השכרות שאינן משויכות"} לסניף —{" "}
+                <Link href="/dashboard/coworking" className="underline">
+                  לטיפול במסך העמדות
+                </Link>
+              </p>
+            )}
+          </article>
+          <article className="rounded-card border border-card-border bg-white p-3.5 shadow-card">
+            <p className="text-[11px] font-extrabold uppercase tracking-wide text-muted">מאזן</p>
+            <p className={`mt-1 text-[22px] font-black ${ledger.balance >= 0 ? "text-teal-dark" : "text-red-600"}`}>
+              {money(ledger.balance)}
+            </p>
+          </article>
+        </div>
+
+        <div className="rounded-card border border-card-border bg-white p-4 text-[12.5px] shadow-card">
+          <p className="mb-1.5 font-bold text-ink">ממה מורכבות ההוצאות</p>
+          <ul className="space-y-0.5 text-muted">
+            <li>
+              הקמה: <b className="text-ink">{money(ledger.setupToDate)}</b>
+              {ledger.setupFromBranches > 0 && ledger.setupFromExpenses > 0 && (
+                <span className="text-[11.5px]">
+                  {" "}
+                  ({money(ledger.setupFromBranches)} מפירוט הסניפים · {money(ledger.setupFromExpenses)} משורות ישנות)
+                </span>
+              )}{" "}
+              <Link href="/dashboard/coworking" className="font-bold text-teal hover:underline">
+                נרשמת בטופס הסניף
+              </Link>
+            </li>
+            <li>
+              קבועות (נצבר מתחילת כל הוצאה עד היום): <b className="text-ink">{money(ledger.fixedToDate)}</b>
+            </li>
+            <li>
+              משתנות: <b className="text-ink">{money(ledger.variableToDate)}</b>
+            </li>
+          </ul>
+          <p className="mt-2 text-[11.5px] leading-relaxed text-muted">
+            המספרים כאן הם של המשרד השיתופי בלבד. מה מתוכם נכנס גם לשורה התחתונה של העסק נקבע פר-שורה
+            לפי הסימון &quot;לחשבן בהנה&quot;ח הראשית&quot;.
+          </p>
+        </div>
+      </div>
+
+      {/* הגרף החודשי — אותו רכיב שמשרת את חדרי המחשבים. עלות ההקמה לא נכנסת אליו בכוונה:
+          היא נקודה אחת בזמן שהייתה משטחת את כל שאר העמודים. */}
+      <div className="mt-3">
+        <MonthlyFlowChart flow={monthlyFlow} />
       </div>
 
       {!branch ? (
@@ -283,17 +314,23 @@ export default async function CoworkingAccountingPage() {
         </div>
       ) : (
         <div className="mt-4 flex flex-col gap-4">
-          <RecurringExpensesCard scope="coworking" branchId={branch.id} expenses={recurring} canManage />
+          {/* ההזנה של כל שלושת הסוגים יושבת בכפתור שלמעלה, ולכן הכרטיסים כאן מציגים בלבד. */}
+          <RecurringExpensesCard
+            scope="coworking"
+            branchId={branch.id}
+            expenses={recurring}
+            canManage
+            showCreateForm={false}
+          />
 
           <section className="rounded-card border border-card-border bg-white p-4 shadow-card">
             <h2 className="mb-3 flex items-center gap-1.5 text-sm font-bold text-ink">
               <Calendar className="h-4 w-4" />
               הוצאות קבועות
             </h2>
-            <CoworkingExpenseForm branchId={branch.id} kind="fixed" />
             <ExpenseList
               rows={fixedRows}
-              emptyText="אין הוצאות קבועות"
+              emptyText='אין הוצאות קבועות — נרשמות בכפתור "הוספת הוצאה" שלמעלה.'
               deleteAction={deleteCoworkingFixedExpenseAction}
               endAction={endCoworkingFixedExpenseAction}
               resumeAction={resumeCoworkingFixedExpenseAction}
@@ -306,10 +343,9 @@ export default async function CoworkingAccountingPage() {
               <Receipt className="h-4 w-4" />
               הוצאות משתנות
             </h2>
-            <CoworkingExpenseForm branchId={branch.id} kind="variable" expenseTypes={purchaseIndex.types} />
             <ExpenseList
               rows={variableRows}
-              emptyText="אין הוצאות משתנות"
+              emptyText='אין הוצאות משתנות — נרשמות בכפתור "הוספת הוצאה" שלמעלה.'
               deleteAction={deleteCoworkingVariableExpenseAction}
               purchaseByType={purchaseIndex.byType}
             />

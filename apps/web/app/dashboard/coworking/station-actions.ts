@@ -131,6 +131,44 @@ export async function assignRentalToBranchAction(clientId: string, formData: For
   revalidateAll();
 }
 
+/**
+ * עריכת פרטי השכרה קיימת — שם, טלפון, תאריך התחלה ומחיר חודשי.
+ *
+ * עד כאן הדרך היחידה לתקן שם שהוקלד לא נכון או מחיר שעלה הייתה לסיים את ההשכרה ולפתוח
+ * אותה מחדש — כלומר לאבד את כל לוח התשלומים שלה. הפעולה הזו נוגעת בפרטים בלבד: התשלומים
+ * שנרשמו לא משתנים, ותאריך הסיום נשאר בידי "סיום השכרה" שלצידה.
+ *
+ * `payDay` נגזר מחדש מתאריך ההתחלה, כי זו ההגדרה שלו בכל המערכת: מי שהתחיל ב-10 משלם ב-10.
+ */
+export async function updateStationRentalAction(clientId: string, formData: FormData) {
+  await requireSession();
+  const name = String(formData.get("name") ?? "").trim();
+  const startDate = String(formData.get("startDate") ?? "").trim();
+  if (!name || !startDate) throw new Error("שם השוכר ותאריך התחלה הם שדות חובה");
+
+  const priceRaw = String(formData.get("price") ?? "").trim();
+  const price = priceRaw === "" ? 0 : Number(priceRaw);
+  if (!Number.isFinite(price) || price < 0) throw new Error("מחיר חודשי חייב להיות מספר חיובי");
+
+  const phone = String(formData.get("phone") ?? "").trim();
+  await getAdminFirestore()
+    .collection("n_cw_clients")
+    .doc(clientId)
+    .set(
+      {
+        name,
+        startDate,
+        // שדה שרוקנו צריך באמת להתרוקן, ולכן מחיקה מפורשת ולא `stripUndefined` שהיה
+        // משאיר את הערך הישן על כנו.
+        phone: phone || FieldValue.delete(),
+        customPrice: price || FieldValue.delete(),
+        payDay: Number(startDate.slice(8, 10)) || 1,
+      },
+      { merge: true },
+    );
+  revalidateAll();
+}
+
 /** סיום השכרה. התאריך הוא עובדה היסטורית, ולכן נשמר ולא נמחק. */
 export async function endStationRentalAction(clientId: string, formData: FormData) {
   await requireSession();

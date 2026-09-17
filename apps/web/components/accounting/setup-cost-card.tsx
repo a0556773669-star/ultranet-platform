@@ -13,15 +13,23 @@ function money(n: number) {
  *
  * הפירוט ישב קודם בתוך הקובייה עצמה, וסניף עם עשר שורות הקמה מתח את כל שורת הקוביות
  * לגובה שדחף את כל שאר המסך מטה. הוא עדיין נגיש בלחיצה אחת — רק לא על חשבון תמונת המצב.
+ *
+ * משותפת לחדרי מחשבים ולמשרד השיתופי: אותה שאלה בדיוק ("ממה מורכבים ה-X ₪ האלה") ולכן
+ * אותו חלון. `triggerClassName` קיים רק בשביל הקובייה שמארחת אותה — במשרד השיתופי היא
+ * יושבת בתוך ריבוע הסניף ולא כקובייה עצמאית בשורת סיכום.
  */
 export function SetupCostCard({
   amount,
   items,
   fromAssets,
+  triggerClassName = "rounded-card border border-card-border bg-white px-3 py-2.5 text-center shadow-card transition hover:border-teal",
+  label = "עלות הקמה",
 }: {
   amount: number;
   items: SetupCostItem[];
   fromAssets: boolean;
+  triggerClassName?: string;
+  label?: string;
 }) {
   const [open, setOpen] = useState(false);
   const detailed = items.length > 0;
@@ -32,10 +40,10 @@ export function SetupCostCard({
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="rounded-card border border-card-border bg-white px-3 py-2.5 text-center shadow-card transition hover:border-teal"
+        className={triggerClassName}
       >
         <p className="flex items-center justify-center gap-1 text-[10.5px] font-bold uppercase tracking-wide text-muted">
-          עלות הקמה
+          {label}
           <ChevronLeft className="h-3 w-3" />
         </p>
         <p className="mt-0.5 text-lg font-black leading-tight text-ink">{money(amount)}</p>

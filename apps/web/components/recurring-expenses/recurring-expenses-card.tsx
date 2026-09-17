@@ -78,6 +78,7 @@ export function RecurringExpensesCard({
   branchId,
   expenses,
   canManage,
+  showCreateForm = true,
   monthsBack = 6,
   title = "הוצאות קבועות משתנות",
   subtitle = 'הוצאה שחוזרת כל חודש אבל הסכום שלה משתנה — חשמל, משכורת, מע"מ. התזכורת על חודש מגיעה ב-1 לחודש שאחריו, כשהחודש כבר נסגר.',
@@ -86,6 +87,9 @@ export function RecurringExpensesCard({
   branchId?: string;
   expenses: RecurringVariableExpense[];
   canManage: boolean;
+  /** כשההזנה נמצאת במקום אחר במסך (חלון "הוספת הוצאה"), הטופס שבתחתית הכרטיס מיותר —
+   *  שתי דרכים לרשום את אותה שורה הן שתי דרכים לשכוח איפה רשמו אותה. */
+  showCreateForm?: boolean;
   monthsBack?: number;
   title?: string;
   subtitle?: string;
@@ -262,7 +266,7 @@ export function RecurringExpensesCard({
         </div>
       )}
 
-      {canManage && (
+      {canManage && showCreateForm && (
         <form action={create} className="grid grid-cols-2 gap-2 border-t border-card-border pt-3 md:grid-cols-4">
           <div>
             <label className={LABEL}>שם ההוצאה</label>

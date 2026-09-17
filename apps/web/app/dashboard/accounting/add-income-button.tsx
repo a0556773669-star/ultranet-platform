@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Plus, CreditCard, Banknote, Laptop, PackageOpen, TrendingUp } from "lucide-react";
 import { useToast } from "@/lib/toast";
-import { Modal } from "./modal";
+import { Modal } from "@/components/modal";
 import { createIncomeAction } from "./actions";
 
 const FIELD =

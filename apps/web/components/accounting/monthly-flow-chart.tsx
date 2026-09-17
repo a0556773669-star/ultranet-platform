@@ -2,8 +2,7 @@
 
 import { useState } from "react";
 import { ChevronLeft, ChevronRight, TrendingUp } from "lucide-react";
-import type { MonthFlow } from "@/lib/computer-room-accounting";
-import { monthLabel } from "@/lib/branch-income-excel";
+import { flowMonthLabel as monthLabel, type MonthFlow } from "@/lib/monthly-flow";
 
 function money(n: number) {
   return `${Math.round(n).toLocaleString("he-IL")} ₪`;
