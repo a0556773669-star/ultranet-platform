@@ -1,14 +1,42 @@
 import { redirect } from "next/navigation";
-import Link from "next/link";
-import { Banknote, Layers } from "lucide-react";
+import { Banknote } from "lucide-react";
 import { requireModuleAccess } from "@/lib/perms";
 import { getAdminFirestore } from "@/lib/firebase-admin";
 import type { Branch, FixedExpense, VariableExpense } from "@ultranet/shared-types";
 import { SHARED_EXPENSE_BRANCH_ID } from "@/lib/computer-room-accounting";
+import { sharedExpenseScopeLabel } from "@/lib/expense-shared-scope";
 import { countsToMain } from "@/lib/counts-to-main";
-import { currentMonth, fixedExpenseAccrued } from "@/lib/main-ledger";
-import { BranchExpenseTable, type BranchExpenseRow } from "@/components/expenses/branch-expense-table";
+import { getOwnerName, resolveSharedPartnerName, branchPartnerName } from "@/lib/owner-name";
+import { loadRecurringVariableExpenses } from "@/lib/recurring-expenses";
+import { loadRecurringPurchaseIndex } from "@/lib/recurring-purchases";
+import { AddExpenseModal } from "./add-expense-modal";
+import { ExpensesDetailPanel, type ExpenseDetailRow } from "./expenses-detail-panel";
+import { PendingRecurringRows } from "./pending-recurring-rows";
 
+/** "שילם: X · חוב: Y" — נכתב רק בסניף שותפות, ששם לשאלה הזו יש בכלל תשובה. */
+function paymentNote(paidBy: string | undefined, owedBy: string | undefined, ownerName: string, partnerName: string) {
+  const paidLabels: Record<string, string> = { owner: ownerName, partner: partnerName };
+  const owedLabels: Record<string, string> = {
+    owner: `על ${ownerName} (הכל)`,
+    partner: `על ${partnerName} (הכל)`,
+    shared: "משותף (חצי-חצי)",
+  };
+  const p = paidBy === "partner" ? "partner" : "owner";
+  const o = owedBy === "partner" ? "partner" : owedBy === "shared" ? "shared" : "owner";
+  return `שילם: ${paidLabels[p]} · חוב: ${owedLabels[o]}`;
+}
+
+/**
+ * מסך ההוצאות של חדרי מחשבים — פעולה אחת למעלה, היסטוריה מאחורי כפתור, מטלות למטה.
+ *
+ * הרשימה שהייתה כאן (שורה לכל סניף, ועוד כפתור נפרד ל"הוצאות על כל הסניפים יחד") הכריחה
+ * לבחור סניף לפני שבכלל אפשר היה לרשום הוצאה, ופיצלה את אותה פעולה עצמה לשני מסלולים לפי
+ * מה שעוד לא ידעת בתחילת הדרך — אם ההוצאה שייכת לסניף אחד או לכמה. כאן יש כפתור אחד
+ * ("הוספת הוצאה"), והשאלה על מי ההוצאה חלה היא הצעד הראשון בתוכו ולא תנאי כניסה.
+ *
+ * מתחת: `ExpensesDetailPanel` — כל ההוצאות של כל הסניפים בטבלה אחת, סגורה כברירת מחדל —
+ * ואז `PendingRecurringRows`, השורות שבאמת ממתינות להקלדה היום.
+ */
 export default async function ComputerRoomExpensesHomePage() {
   const session = await requireModuleAccess("computers");
   const isOwner = session.user?.role === "owner";
@@ -22,94 +50,123 @@ export default async function ComputerRoomExpensesHomePage() {
   }
 
   const db = getAdminFirestore();
-  const [branchesSnap, fixedSnap, variableSnap] = await Promise.all([
+  const [branchesSnap, fixedSnap, variableSnap, recurring, purchaseIndex, ownerName, sharedPartner] = await Promise.all([
     db.collection("n_branches").where("branchType", "==", "computers").get(),
     db.collection("n_fixed_expenses").get(),
     db.collection("n_var_expenses").get(),
+    loadRecurringVariableExpenses({ scope: "computers" }),
+    loadRecurringPurchaseIndex(),
+    getOwnerName(session.user?.name),
+    resolveSharedPartnerName("computers"),
   ]);
 
   const branches = branchesSnap.docs
     .map((d) => ({ ...(d.data() as Omit<Branch, "id">), id: d.id }) as Branch)
     .filter((b) => !b.deleted)
     .sort((a, b) => a.name.localeCompare(b.name, "he"));
+  const branchById = new Map(branches.map((b) => [b.id, b]));
+  const branchNameById = new Map(branches.map((b) => [b.id, b.name]));
 
-  const allFixed = fixedSnap.docs.map((d) => ({ ...(d.data() as Omit<FixedExpense, "id">), id: d.id }) as FixedExpense);
-  const allVariable = variableSnap.docs.map(
-    (d) => ({ ...(d.data() as Omit<VariableExpense, "id">), id: d.id }) as VariableExpense,
-  );
-  const upto = currentMonth();
+  /**
+   * ההוצאות של כל המודולים חיות באותן קולקשנים ונבדלות ב-`branchId` בלבד, ולכן הסינון כאן
+   * הוא מול סניפי חדרי המחשבים והספר המשותף שלהם — אחרת הוצאה של השכרות הייתה מופיעה כאן
+   * בלי סניף.
+   */
+  const belongsHere = (branchId: string) => branchId === SHARED_EXPENSE_BRANCH_ID || branchById.has(branchId);
 
-  const rows: BranchExpenseRow[] = branches.map((branch) => {
-    const fixed = allFixed.filter((e) => e.branchId === branch.id);
-    const variable = allVariable.filter((e) => e.branchId === branch.id);
-    let total = 0;
-    let toMain = 0;
-    for (const e of fixed) {
-      const accrued = fixedExpenseAccrued(e, upto);
-      total += accrued;
-      if (countsToMain(e)) toMain += accrued;
+  const allFixed = fixedSnap.docs
+    .map((d) => ({ ...(d.data() as Omit<FixedExpense, "id">), id: d.id }) as FixedExpense)
+    .filter((e) => belongsHere(e.branchId));
+  const allVariable = variableSnap.docs
+    .map((d) => ({ ...(d.data() as Omit<VariableExpense, "id">), id: d.id }) as VariableExpense)
+    .filter((e) => belongsHere(e.branchId));
+
+  function bookOf(branchId: string) {
+    if (branchId === SHARED_EXPENSE_BRANCH_ID) {
+      return {
+        label: "כל הסניפים (ספר משותף)",
+        isShared: true,
+        isPartner: sharedPartner.hasPartner,
+        partnerName: sharedPartner.partnerName,
+      };
     }
-    for (const e of variable) {
-      total += e.amount || 0;
-      if (countsToMain(e)) toMain += e.amount || 0;
-    }
-    return { branch, fixedCount: fixed.length, variableCount: variable.length, total, toMain };
-  });
+    const branch = branchById.get(branchId);
+    return {
+      label: branch?.name ?? "סניף שנמחק",
+      isShared: false,
+      isPartner: branch?.isMine === false,
+      partnerName: branchPartnerName(branch ?? null),
+    };
+  }
 
-  // הספר המשותף כשורה בטבלה, עם המספרים שלו - כדי שהוצאה שנרשמה על כל הסניפים לא תהיה
-  // המספר היחיד במסך שאי אפשר לראות לפני שהוא כבר התחלק בין הסניפים.
-  const sharedFixed = allFixed.filter((e) => e.branchId === SHARED_EXPENSE_BRANCH_ID);
-  const sharedVariable = allVariable.filter((e) => e.branchId === SHARED_EXPENSE_BRANCH_ID);
-  let sharedTotal = 0;
-  let sharedToMain = 0;
-  for (const e of sharedFixed) {
-    const accrued = fixedExpenseAccrued(e, upto);
-    sharedTotal += accrued;
-    if (countsToMain(e)) sharedToMain += accrued;
-  }
-  for (const e of sharedVariable) {
-    sharedTotal += e.amount || 0;
-    if (countsToMain(e)) sharedToMain += e.amount || 0;
-  }
+  const detailRows: ExpenseDetailRow[] = [
+    ...allFixed.map((e) => {
+      const book = bookOf(e.branchId);
+      return {
+        branchId: e.branchId,
+        branchLabel: book.label,
+        isShared: book.isShared,
+        isPartner: book.isPartner,
+        ownerName,
+        partnerName: book.partnerName,
+        scopeNote: book.isShared ? `חל על: ${sharedExpenseScopeLabel(e, branchNameById)}` : undefined,
+        payerNote: book.isPartner ? paymentNote(e.paidBy, e.owedBy, ownerName, book.partnerName) : undefined,
+        countsToMain: countsToMain(e),
+        date: e.startDate,
+        fixed: e,
+      } satisfies ExpenseDetailRow;
+    }),
+    ...allVariable.map((e) => {
+      const book = bookOf(e.branchId);
+      return {
+        branchId: e.branchId,
+        branchLabel: book.label,
+        isShared: book.isShared,
+        isPartner: book.isPartner,
+        ownerName,
+        partnerName: book.partnerName,
+        scopeNote: book.isShared ? `חל על: ${sharedExpenseScopeLabel(e, branchNameById)}` : undefined,
+        payerNote: book.isPartner ? paymentNote(e.paidBy, e.owedBy, ownerName, book.partnerName) : undefined,
+        countsToMain: countsToMain(e),
+        date: e.date,
+        variable: e,
+      } satisfies ExpenseDetailRow;
+    }),
+  ];
+
+  const branchOptions = branches.map((b) => ({ id: b.id, name: b.name }));
 
   return (
-    <div className="flex flex-col gap-5">
-      <div>
-        <div className="mb-2.5 flex flex-wrap items-center justify-between gap-2">
-          <h1 className="flex items-center gap-1.5 text-[21px] font-extrabold text-ink">
-            <Banknote className="h-5 w-5" />
-            הוצאות — חדרי מחשבים
-          </h1>
-          <Link
-            href={`/dashboard/expenses/${SHARED_EXPENSE_BRANCH_ID}`}
-            className="flex items-center gap-1.5 text-xs font-bold text-teal hover:underline"
-          >
-            <Layers className="h-4 w-4" />
-            הוצאות על כל הסניפים יחד
-          </Link>
-        </div>
-        <BranchExpenseTable
-          rows={rows}
-          hrefFor={(id) => `/dashboard/expenses/${id}`}
-          sharedRow={{
-            href: `/dashboard/expenses/${SHARED_EXPENSE_BRANCH_ID}`,
-            label: "הוצאות על כל הסניפים יחד",
-            fixedCount: sharedFixed.length,
-            variableCount: sharedVariable.length,
-            total: sharedTotal,
-            toMain: sharedToMain,
-          }}
+    <div className="flex flex-col gap-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h1 className="flex items-center gap-1.5 text-[21px] font-extrabold text-ink">
+          <Banknote className="h-5 w-5" />
+          הוצאות — חדרי מחשבים
+        </h1>
+        <AddExpenseModal
+          branches={branches.map((b) => ({
+            id: b.id,
+            name: b.name,
+            isMine: b.isMine !== false,
+            partnerName: branchPartnerName(b),
+          }))}
+          ownerName={ownerName}
+          sharedHasPartner={sharedPartner.hasPartner}
+          sharedPartnerName={sharedPartner.partnerName}
+          expenseTypes={purchaseIndex.types}
         />
-        <p className="mt-1.5 px-1 text-[11.5px] leading-relaxed text-muted">
-          השורה העליונה היא <b>הספר המשותף</b> — הוצאות שנרשמו על כמה סניפים יחד ומתחלקות ביניהם
-          בהנה&quot;ח. אפשר לבחור לכל הוצאה כזו על אילו סניפים היא חלה, כך שסניף חדש לא יירש
-          אוטומטית הוצאה שלא קשורה אליו.
-        </p>
-        <p className="mt-1 px-1 text-[11.5px] leading-relaxed text-muted">
-          עמודת <b>&quot;מזה לראשי&quot;</b> היא מה שנספר בהנה&quot;ח הראשית. הוצאה שלא סומנה נשארת בספר של
-          הסניף בלבד ולא נכנסת לשורה התחתונה של העסק.
-        </p>
       </div>
+
+      <p className="px-1 text-[11.5px] leading-relaxed text-muted">
+        הוצאה נרשמת על סניף אחד, על כל הסניפים או על סניפים נבחרים. הוצאה שחלה על יותר מסניף
+        אחד נשמרת בספר המשותף ומתחלקת בהנה&quot;ח בין הסניפים שנבחרו — סניף חדש לא יירש
+        אוטומטית הוצאה שלא קשורה אליו. הסימון <b>&quot;נספר בהנה&quot;ח הראשית&quot;</b> הוא
+        מה שמכניס את השורה לשורה התחתונה של העסק; בלעדיו ההוצאה נשארת בספר של הסניף בלבד.
+      </p>
+
+      <ExpensesDetailPanel rows={detailRows} branches={branchOptions} />
+
+      <PendingRecurringRows expenses={recurring} branchNameById={branchNameById} canManage />
     </div>
   );
 }
