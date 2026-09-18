@@ -884,6 +884,10 @@ export interface Rock {
   rolledFromId?: string | null;
   /** מחיקה לוגית - סלע עם היסטוריה או ילדים לעולם לא נמחק פיזית */
   deletedAt?: number | null;
+  /** אצוות ייבוא חד-פעמי שיצרה את הרשומה (למשל `quarter_1_legacy_import`) */
+  importBatch?: string;
+  /** מזהה המקור היציב בתוך האצווה - הוא שהופך ייבוא חוזר ל-idempotent */
+  importKey?: string;
   createdAt: number;
   createdBy?: string;
   updatedAt?: number;
@@ -953,6 +957,10 @@ export interface Milestone {
   order?: number;
   /** מחיקה לוגית - אבן דרך עם היסטוריה או שיוך לתקופה לא נמחקת פיזית */
   deletedAt?: number | null;
+  /** אצוות ייבוא חד-פעמי שיצרה את הרשומה (למשל `quarter_1_legacy_import`) */
+  importBatch?: string;
+  /** מזהה המקור היציב בתוך האצווה - הוא שהופך ייבוא חוזר ל-idempotent */
+  importKey?: string;
   createdAt: number;
   createdBy?: string;
   /** נעילה אופטימית: הלקוח שולח את הערך שראה, והשרת דוחה עדכון על גרסה ישנה */
