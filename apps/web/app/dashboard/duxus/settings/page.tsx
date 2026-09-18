@@ -1,12 +1,17 @@
 import { Target } from "lucide-react";
-import { requireModuleAccess } from "@/lib/perms";
+import { currentModuleScope, requireModuleAccess } from "@/lib/perms";
 import { DuxusTabs } from "../duxus-tabs";
 import { getTaskSettings } from "../rocks/actions";
+import { getPersonalAccessSettings } from "../personal/actions";
 import { SettingsClient } from "./settings-client";
 
 export default async function DuxusSettingsPage() {
   await requireModuleAccess("duxus");
-  const settings = await getTaskSettings();
+  const [settings, personalAccess, scope] = await Promise.all([
+    getTaskSettings(),
+    getPersonalAccessSettings(),
+    currentModuleScope("duxus"),
+  ]);
 
   return (
     <div>
@@ -15,7 +20,7 @@ export default async function DuxusSettingsPage() {
         משימות ונהלים
       </h1>
       <DuxusTabs />
-      <SettingsClient settings={settings} />
+      <SettingsClient settings={settings} personalAccess={personalAccess} canManageAccess={Boolean(scope?.isOwner)} />
     </div>
   );
 }

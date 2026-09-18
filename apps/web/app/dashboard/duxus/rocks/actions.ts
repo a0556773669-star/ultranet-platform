@@ -192,12 +192,22 @@ function toReview(id: string, data: Partial<RockReview> | undefined): RockReview
   };
 }
 
+/** רשימת דוא"ל מנורמלת: לא-מערך הופך לרשימה ריקה, וכל ערך נחתך ומורד לאותיות קטנות
+ *  כדי שההשוואה מול ה-session לא תיפול על רווח או על אות גדולה. */
+function toEmailList(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return Array.from(new Set(value.map((v) => String(v ?? "").trim().toLowerCase()).filter(Boolean)));
+}
+
 function toSettings(data: Partial<TaskSettings> | undefined): TaskSettings {
   return {
     id: SETTINGS_DOC,
     weekStartDay: data?.weekStartDay ?? DEFAULT_TASK_SETTINGS.weekStartDay,
     warningWeekday: data?.warningWeekday ?? DEFAULT_TASK_SETTINGS.warningWeekday,
     recommendedRocksPerQuarter: data?.recommendedRocksPerQuarter ?? DEFAULT_TASK_SETTINGS.recommendedRocksPerQuarter,
+    personalOwnerEmails: toEmailList(data?.personalOwnerEmails),
+    personalEditorEmails: toEmailList(data?.personalEditorEmails),
+    personalViewerEmails: toEmailList(data?.personalViewerEmails),
     updatedAt: data?.updatedAt ?? 0,
     updatedBy: data?.updatedBy ?? "",
   };
