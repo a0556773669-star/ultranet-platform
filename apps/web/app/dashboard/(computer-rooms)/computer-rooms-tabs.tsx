@@ -2,32 +2,48 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Building2, Package, CheckCircle2, Tag, Megaphone, Mail, Banknote, BarChart3, type LucideIcon } from "lucide-react";
+import { Building2, ClipboardList, Banknote, BarChart3, type LucideIcon } from "lucide-react";
 import type { PermKey } from "@/lib/perms";
 
-type TabItem = { href: string; label: string; icon: LucideIcon; perm?: PermKey };
+/**
+ * `managerOnly` הוא הגבול בין לתפעל לבין לראות את הכסף: עובד חדר מחשבים נכנס לתפעול
+ * (מלאי ומשימות) בלבד, וסניפים / הוצאות / הנה"ח נשארים לבעלים ולשותף שמנהל את הסניף.
+ * אותו גבול נאכף בצד השרת דרך `requireModuleAccess(..., { managerOnly: true })` — הסתרת
+ * הטאב כאן היא רק כדי לא להציע קישור שיחזיר את המשתמש לדשבורד.
+ */
+type TabItem = { href: string; label: string; icon: LucideIcon; perm?: PermKey | PermKey[]; managerOnly?: boolean };
 
 const TABS: TabItem[] = [
-  { href: "/dashboard/branches", label: "סניפים", icon: Building2, perm: "branches" },
-  { href: "/dashboard/inventory", label: "מלאי", icon: Package, perm: "computers" },
-  { href: "/dashboard/tasks", label: "משימות", icon: CheckCircle2, perm: "tasks" },
-  { href: "/dashboard/tickets", label: "פניות", icon: Tag, perm: "computers" },
-  { href: "/dashboard/news", label: "עדכונים", icon: Megaphone },
-  { href: "/dashboard/orders", label: "הזמנות", icon: Mail, perm: "computers" },
-  { href: "/dashboard/expenses", label: "הוצאות", icon: Banknote, perm: "computers" },
-  { href: "/dashboard/computer-rooms-accounting", label: "הנה\"ח", icon: BarChart3, perm: "computers" },
+  { href: "/dashboard/branches", label: "סניפים", icon: Building2, perm: "branches", managerOnly: true },
+  { href: "/dashboard/operations", label: "תפעול", icon: ClipboardList, perm: ["computers", "tasks"] },
+  { href: "/dashboard/expenses", label: "הוצאות", icon: Banknote, perm: "computers", managerOnly: true },
+  {
+    href: "/dashboard/computer-rooms-accounting",
+    label: "הנה\"ח",
+    icon: BarChart3,
+    perm: "computers",
+    managerOnly: true,
+  },
 ];
 
 export function ComputerRoomsTabs({
   isOwner,
+  isManager,
   perms,
 }: {
   isOwner: boolean;
+  isManager: boolean;
   perms: Partial<Record<PermKey, boolean>> | undefined;
 }) {
   const pathname = usePathname();
-  const has = (key?: PermKey) => !key || isOwner || Boolean(perms?.[key]);
-  const visibleTabs = TABS.filter((tab) => has(tab.perm));
+  const has = (tab: TabItem) => {
+    if (tab.managerOnly && !isManager) return false;
+    if (!tab.perm) return true;
+    if (isOwner) return true;
+    const keys = Array.isArray(tab.perm) ? tab.perm : [tab.perm];
+    return keys.some((key) => Boolean(perms?.[key]));
+  };
+  const visibleTabs = TABS.filter(has);
 
   return (
     <nav className="mb-4 flex flex-wrap items-center gap-1">

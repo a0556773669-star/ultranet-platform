@@ -42,6 +42,13 @@ export interface BranchRentalPricing {
   };
 }
 
+/** שורה אחת בפירוט עלות ההקמה של חדר מחשבים (מוטמעת בתוך מסמך `n_branches`). */
+export interface SetupCostItem {
+  /** תיאור ההוצאה, למשל "12 מחשבים" או "ריהוט" */
+  label: string;
+  amount: number;
+}
+
 export interface Branch {
     id: string;
     name: string;
@@ -64,7 +71,21 @@ export interface Branch {
     myPct: number;
     partnerPct: number;
   parentPct?: number;
-    setupCost?: number;
+  /** סך עלות ההקמה של החדר. כשיש `setupItems` זהו בדיוק סכום השורות שלהן - השדה נשמר כמספר
+   *  מוכן כדי שכל מי שקורא אותו היום (תחזית ההון ב-tx-data, מסך ההשקעה מול הרווח) ימשיך
+   *  לעבוד בלי לדעת על הפירוט. חדר ישן שיש לו רק מספר בלי פירוט נשאר תקף. */
+  setupCost?: number;
+  /** פירוט עלות ההקמה: שורה לכל הוצאה (מה נקנה וכמה). ריק/חסר = לא הוזן פירוט ו-`setupCost`
+   *  הוא מספר שהוזן ידנית. */
+  setupItems?: SetupCostItem[];
+  /** האם עלות ההקמה של הסניף נספרת בהנה"ח הראשית.
+   *
+   *  **ברירת המחדל כאן הפוכה מ-`countsToMain` הרגיל**: `undefined` = כן נספר. זה מכוון ולא
+   *  פליטה. הדגל הרגיל מתחיל כבוי כדי ששורות שהוזנו לפני שהוא נולד לא ייסחפו לספר הראשי
+   *  בדיעבד; לעלות הקמה אין "שורות שהוזנו" - יש שדה אחד לסניף, גלוי בטופס, והבעלים ביקש
+   *  במפורש שעלויות ההקמה ייכנסו לראשי. הכיבוי כאן הוא ההחרגה, לא ההצטרפות.
+   *  הקריאה עוברת תמיד דרך `setupCostCountsToMain()` ב-`apps/web/lib/counts-to-main.ts`. */
+  setupCountsToMain?: boolean;
     notes?: string;
     /** sub-branch model: set when this branch rolls up under a head partner's branch */
   parentBranchId?: string | null;
@@ -103,15 +124,63 @@ export interface Branch {
  */
 export type ExpensePolicyKey = "ads" | "internet" | "filtering" | "rent" | "electricity" | "print";
 
+/** מפתחות ההרשאה למודולים. משוכפל כטיפוס נגזר ב-`apps/web/lib/perms.ts` (`PermKey`). */
+export type PermissionKey =
+  | "branches"
+  | "computers"
+  | "rentals"
+  | "coworking"
+  | "accounting"
+  | "tasks"
+  | "charging"
+  | "shop"
+  | "duxus";
+
+/**
+ * כובע אחד של משתמש: תפקיד בסניף מסוים, עם ההרשאות שנלוות לתפקיד הזה.
+ *
+ * הסיבה שזה קיים: אותו אדם יכול להיות שותף שמנהל סניף השכרות **וגם** עובד תחזוקה בחדר
+ * מחשבים. עד כה `AppUser` החזיק `role` אחד ו-`branchId` אחד, ולכן אי אפשר היה לבטא את זה
+ * בלי לבחור איזה מהשניים "מנצח" — ובחירה כזו תמיד נותנת לו או יותר מדי (תפקיד שותף בחדר
+ * המחשבים) או פחות מדי (הוא לא מגיע לסניף השני בכלל).
+ *
+ * `branchType` נשמר על השיוך עצמו ולא נקרא מ-`n_branches` בכל בקשה: הוא מה שמאפשר להכריע
+ * **איזה כובע חל באיזה מודול** בלי שאילתה נוספת בכל רינדור. הוא דנורמליזציה מכוונת, ומי
+ * שמעדכן את סוג הסניף אחראי לשמור עליו מסונכרן (טופס המשתמשים כותב אותו מחדש בכל שמירה).
+ */
+export interface UserAssignment {
+  role: UserRole;
+  branchId: string;
+  /** סוג הסניף של `branchId` בזמן השמירה — ראה הערת הטיפוס. */
+  branchType?: BranchType;
+  perms?: Partial<Record<PermissionKey, boolean>>;
+}
+
 /** collection: n_users */
 export interface AppUser {
     id: string;
     name: string;
     email: string;
     pass: string; // legacy plaintext - replace with proper auth before any customer-facing exposure
+  /**
+   * **התפקיד הראשי.** נשאר השדה הקנוני של המשתמש גם אחרי שנוסף `assignments`: `app.html`
+   * ו-`n_approved_emails` קוראים אותו, ולכן הוא תמיד משקף את `assignments[0]`.
+   */
   role: UserRole;
-    branchId: string; // "all" for owner
-  perms?: Partial<Record<"branches" | "computers" | "rentals" | "coworking" | "accounting" | "tasks" | "charging" | "shop" | "duxus", boolean>>;
+  /** **הסניף הראשי.** `"all"` לבעלים. משקף תמיד את `assignments[0].branchId` — ראה `role`. */
+    branchId: string;
+  /** **ההרשאות הראשיות.** משקפות תמיד את `assignments[0].perms` — ראה `role`. */
+  perms?: Partial<Record<PermissionKey, boolean>>;
+  /**
+   * כל הכובעים של המשתמש (רשות). חסר או באורך 1 = משתמש עם כובע אחד, בדיוק ההתנהגות
+   * ההיסטורית; במקרה כזה `apps/web/lib/perms.ts` גוזר שיוך יחיד מ-`role`/`branchId`/`perms`
+   * ואין שום הבדל התנהגותי. שני שיוכים ומעלה = אדם עם כמה תפקידים, וההכרעה איזה מהם חל
+   * בכל מודול נעשית לפי `branchType` (ראה `resolveModuleScope`).
+   *
+   * השדה הזה **מוסיף** ולא מחליף: `role`/`branchId`/`perms` ממשיכים לשקף את השיוך הראשון,
+   * כך ש-`app.html` והדאטה הקיים עובדים בלי מיגרציה.
+   */
+  assignments?: UserAssignment[];
   viewClientBranchIds?: string[];
 }
 
@@ -131,6 +200,23 @@ export interface FixedExpense {
   owedBy?: string;
   /** ראה `COUNTS_TO_MAIN_DOC` למטה. הוצאה קבועה נספרת מהחודש של `startDate` והלאה. */
   countsToMain?: boolean;
+  /**
+   * רלוונטי רק כש-`branchId` הוא סנטינל של הוצאה משותפת (`shared-computers` וכו'): רשימת
+   * הסניפים שההוצאה באמת מתחלקת ביניהם. שדה חסר (או ריק) = כל סניפי המודול, כולל סניפים
+   * שייפתחו בעתיד — זו ההתנהגות ההיסטורית וגם ברירת המחדל. ראה `lib/expense-shared-scope.ts`.
+   */
+  branchIds?: string[];
+  /**
+   * **רק כש-`branchId` הוא סנטינל של הוצאה משותפת** (`shared-rentals` וכו'): כמה אחוז
+   * מההוצאה על הבעלים, והסניפים שב-`branchIds` מתחלקים בשאר שווה בשווה. זה בדיוק מה
+   * ש-`owedBy` לא ידע לבטא — הוא מכיר רק בעלים / שותף / חצי-חצי — ובגללו נולד בשעתו
+   * `n_multi_branch_expenses` ככולקשן נפרד.
+   *
+   * **השדה הזה הוא גם המתג**: קיים = ההוצאה מתחלקת בין הסניפים ונכנסת לספר של כל אחד
+   * מהם; חסר = ההתנהגות ההיסטורית של הספר המשותף — ההוצאה נספרת בספר הבעלים בלבד ואינה
+   * מגיעה לאף סניף. `owedBy` נקרא רק כשהשדה הזה חסר. ראה `lib/expense-shared-scope.ts`.
+   */
+  ownerPct?: number;
 }
 
 /** collection: n_var_expenses */
@@ -151,6 +237,21 @@ export interface VariableExpense {
    *  (ownerExpenseBurden of amount/owedBy) when this expense was added; undefined if the
    *  owner's burden was 0 (e.g. owedBy === "partner"). Deleted together with this expense. */
   linkedAhExpenseId?: string;
+  /** כמו ב-`FixedExpense`: הסניפים שהוצאה משותפת מתחלקת ביניהם. חסר = כל סניפי המודול. */
+  branchIds?: string[];
+  /**
+   * **רק כש-`branchId` הוא סנטינל של הוצאה משותפת** (`shared-rentals` וכו'): כמה אחוז
+   * מההוצאה על הבעלים, והסניפים שב-`branchIds` מתחלקים בשאר שווה בשווה. זה בדיוק מה
+   * ש-`owedBy` לא ידע לבטא — הוא מכיר רק בעלים / שותף / חצי-חצי — ובגללו נולד בשעתו
+   * `n_multi_branch_expenses` ככולקשן נפרד.
+   *
+   * **השדה הזה הוא גם המתג**: קיים = ההוצאה מתחלקת בין הסניפים ונכנסת לספר של כל אחד
+   * מהם; חסר = ההתנהגות ההיסטורית של הספר המשותף — ההוצאה נספרת בספר הבעלים בלבד ואינה
+   * מגיעה לאף סניף. `owedBy` נקרא רק כשהשדה הזה חסר. ראה `lib/expense-shared-scope.ts`.
+   */
+  ownerPct?: number;
+  /** ראה `RecurringPurchaseType`: מסמן שהרכישה הזו היא עוד קנייה של אותו מוצר חוזר. */
+  expenseTypeId?: string;
 }
 
 /**
@@ -179,6 +280,13 @@ export interface BranchIncome {
     /** rentals only: true if the owner already personally holds this cash (mirrors
      *  isCollectedByOwner for real rentals) - affects the partner-settlement direction. */
     collectedByOwner?: boolean;
+    /** computer rooms only: how the row got here. Absent (=== manual) on every row typed into
+     *  the form, `import` on a row created from an uploaded monthly-income spreadsheet. The
+     *  import is idempotent per month by rewriting only its own rows, so a hand-typed row for
+     *  the same month is never touched by a re-upload - hence the marker rather than a date
+     *  match. It also lets the whole import be cleared in one action once the historical
+     *  back-fill is done. */
+    source?: "manual" | "import";
 }
 
 /** collection: n_tasks */
@@ -446,6 +554,38 @@ export interface MultiBranchExpense {
   /** id of the matching n_ah_expenses doc auto-created for the owner's share, when the owner
    *  is the one who paid. Deleted together with this expense. */
   linkedAhExpenseId?: string;
+  /** ראה `RecurringPurchaseType`: מסמן שהרכישה הזו היא עוד קנייה של אותו מוצר חוזר. */
+  expenseTypeId?: string;
+}
+
+/**
+ * collection: `n_expense_types` — **סוג רכישה חוזרת**.
+ *
+ * נייר למדפסת, שקיות אשפה, פחיות. כל קנייה כזו היא באמת הוצאה חד-פעמית — קונים כשנגמר,
+ * בסכום אחר ובתאריך לא צפוי — ולכן היא נשארת שורה ב-`n_var_expenses` או
+ * `n_multi_branch_expenses` בדיוק כפי שהייתה. מה שחסר הוא לא מקום אחר לרשום בו, אלא
+ * **הידיעה ששתי השורות האלה הן אותו מוצר**: שלוש קניות נייר של 300 ₪ מפוזרות על השנה
+ * נראות כלום, וביחד הן 900 ₪ שראוי לדעת עליהם.
+ *
+ * הסוג הוא רק המזהה הזה. הוא לא מחזיק סכומים, לא משנה איך ההוצאה נספרת בהנה"ח ולא מחלק
+ * כסף בפועל — **החלוקה ל-12 חודשים ובין הסניפים היא חישוב של הדוח בלבד**
+ * (`apps/web/lib/recurring-purchases.ts`). הכסף יצא בחודש שהוא יצא, וכך הוא נשאר בספר.
+ */
+export interface RecurringPurchaseType {
+  id: string;
+  /** "נייר למדפסת", "שקיות אשפה" */
+  name: string;
+  category?: string;
+  /**
+   * המודול שבו הסוג נוצר. **תיעוד בלבד** — הסוגים גלובליים, ואותו "נייר למדפסת" מוצע
+   * ומחובר בכל המודולים. סינון לפי השדה הזה היה יוצר סוג כפול באותו שם בכל מודול,
+   * ומפצל בדיוק את המספר שהסימון נועד לאחד.
+   */
+  module: "computers" | "rentals" | "coworking" | "general";
+  /** הופסק: לא מוצע יותר בטפסים, אבל כל ההיסטוריה שלו נשארת בדוח. */
+  archived?: boolean;
+  note?: string;
+  createdAt: string;
 }
 
 /** collection: n_cw_stations */
@@ -536,6 +676,45 @@ export interface AccountingExpense {
     countsToMain?: boolean;
     /** "הוצאות נוספות": רכישה מלאה שתקושר בהמשך לסניפים ללא התחשבנות (רשימת שמות חופשית). */
     linkedBranchIds?: string[];
+    /**
+     * סימון "זו רכישה חוזרת" - מפנה ל-`n_expense_types`. אותו שדה בדיוק קיים על
+     * `VariableExpense` ו-`MultiBranchExpense`, וזה מה שמחבר את אותה קנייה בכל מקום
+     * בעסק. לא משנה שום חישוב: הכסף נשאר בחודש שבו יצא.
+     */
+    expenseTypeId?: string;
+}
+
+/**
+ * collection: `n_ah_fixed_expenses` — **הוצאה קבועה של העסק עצמו**.
+ *
+ * הוצאות נוספות נבנו לרכישה חד-פעמית (`n_ah_expenses`) ולהוצאה חוזרת שהסכום שלה משתנה
+ * (`n_recurring_var_expenses`, `scope: "main"`). מה שנפל בין השתיים הוא הדבר הפשוט
+ * מכולם: הוצאה של העסק שחוזרת כל חודש **באותו סכום** — שכירות משרד, רואה חשבון,
+ * מנוי תוכנה. בלי קולקשן משלה היא נרשמה כרכישה חד-פעמית בכל חודש מחדש (שורה חדשה
+ * לתמיד, ואי אפשר לראות אותה כשורה אחת) או כקבועה משתנה שמבקשת סכום כל חודש
+ * לנצח למרות שהסכום ידוע.
+ *
+ * זו המקבילה של `FixedExpense` לספר הראשי: אותה סמנטיקה בדיוק (סכום חודשי שנצבר
+ * מהחודש של `startDate` ועד `endDate`/היום), רק בלי `branchId` — ההוצאה היא של העסק
+ * ולא של סניף, ולכן היא לא יכולה ליפול מהמסכים כשסניף נמחק (`lib/leftovers.ts`).
+ * הצבירה עצמה ב-`lib/main-fixed-expenses.ts`, ושורה לכל חודש נכנסת לספר הראשי.
+ */
+export interface AccountingFixedExpense {
+    id: string;
+    name: string;
+    /** הסכום ה**חודשי**, לא הסכום הכולל */
+    amount: number;
+    business: "computers" | "rentals" | "coworking" | "general";
+    /** free-text category picked from ACCOUNTING_EXPENSE_CATEGORIES (apps/web/lib/accounting-categories.ts) */
+    category?: string;
+    /** YYYY-MM-DD — ההוצאה נספרת מהחודש הזה והלאה, החודש הראשון במלואו */
+    startDate: string;
+    /** YYYY-MM-DD — החודש הזה הוא האחרון שנספר; חסר = ההוצאה עדיין פעילה */
+    endDate?: string;
+    /** ראה `COUNTS_TO_MAIN_DOC`. הטופס נפתח מסומן, כי זו הוצאה של העסק עצמו. */
+    countsToMain?: boolean;
+    /** ISO timestamp, לתצוגה בלבד */
+    createdAt?: string;
 }
 
 /** collection: n_collection_routes */
@@ -670,6 +849,13 @@ export interface ShopLead {
 }
 
 // --- משימות ונהלים (נהלים + סלעים ואבני דרך) ---
+//
+// החלטת היסוד של המודול: **אבן דרך נוצרת פעם אחת בלבד.** רבעון, חודש ושבוע אינם
+// עותקים של המשימה אלא *שיוכים* (`PeriodAssignment`) של אותה אבן דרך לתקופות עבודה.
+// לכן סטטוס הביצוע נשמר פעם אחת ב-`Milestone.status`, ושינוי בו משתקף מיד בכל
+// התצוגות - אין `completedMonthly`/`completedWeekly` ואין שכפול רשומות.
+
+export type ProcedureStatus = "draft" | "active" | "superseded" | "archived";
 
 /** collection: n_procedures - נהלים ברורים למודול "משימות ונהלים" (עורך עשיר, כמו הדרכות) */
 export interface Procedure {
@@ -677,10 +863,22 @@ export interface Procedure {
   title: string;
   content: string; // HTML עשיר
   category?: string;
+  /** תיאור קצר לכרטיס ולחיפוש */
+  summary?: string;
+  /** מספר גרסה שהמשתמש מנהל ידנית ("1.2"); העלאת גרסה חדשה לא מוחקת את הקודמת */
+  version?: string;
+  status?: ProcedureStatus;
+  ownerName?: string;
+  /** הנוהל שהוחלף על ידי הנוהל הזה (שרשרת גרסאות, בלי מחיקה) */
+  supersedesId?: string | null;
+  /** קובץ מצורף כ-data URL בתוך המסמך (אותו דגם כמו קבצי ההדרכות, מתחת למגבלת ה-1MB) */
+  attachmentName?: string;
+  attachmentDataUrl?: string;
   order?: number;
   createdAt: number;
   updatedAt: number;
   createdBy?: string;
+  updatedBy?: string;
 }
 
 export type QuarterStatus = "active" | "archived";
@@ -700,10 +898,10 @@ export interface Quarter {
   endDate?: string;
   /** מיון ציר הזמן; ככל שגדול יותר - חדש יותר */
   order: number;
-  /** החודש ה"פתוח" ברבעון - מה שמוצג בקומת החודש בלוח העבודה. ריק = עוד לא נפתח חודש. */
+  /** החודש ה"פתוח" ברבעון - מה שמוצג במסך החודש. ריק = עוד לא נפתח חודש. */
   activeMonthKey?: string;
-  /** השבוע ה"פתוח" ברבעון - מה שמוצג בראש לוח העבודה. ריק = עוד לא נפתח שבוע.
-   *  פתיחת שבוע חדש דוחפת את הקודם ל"שבועות קודמים" (הוא נשאר גלוי ברמת החודש/רבעון). */
+  /** השבוע ה"פתוח" ברבעון - מה שמוצג במסך השבוע. ריק = עוד לא נפתח שבוע.
+   *  פתיחת שבוע חדש דוחפת את הקודם ל"שבועות קודמים" - היא לא מוחקת ולא נועלת אותו. */
   activeWeekKey?: string;
   /** הרבעון שממנו גולגל רבעון זה ב-"פתיחת רבעון חדש" */
   rolledFromKey?: string | null;
@@ -714,73 +912,317 @@ export interface Quarter {
 export type RockStatus = "active" | "done" | "dropped";
 
 /** collection: n_rocks - סלעים רבעוניים ותתי-סלעים (מודל EOS-style, מודול "משימות ונהלים").
- *  `parentRockId` ריק = סלע רבעוני עצמו; מוגדר = תת-סלע תחת סלע קיים (עומק אחד בלבד). */
+ *  `parentRockId` ריק = סלע רבעוני עצמו; מוגדר = תת-סלע תחת סלע קיים (עומק אחד בלבד).
+ *  `status` **מחושב** מאבני הדרך שמתחתיו ואינו מסומן ידנית כ"הושלם" - רק `dropped` (ביטול)
+ *  הוא החלטה ידנית. */
 export interface Rock {
   id: string;
   title: string;
   description?: string;
-  /** "2026-Q3" */
+  /** מזהה המסמך ב-`n_quarters` - הרבעון שבו נוצר הסלע */
   quarterKey: string;
   parentRockId?: string | null;
   ownerUserId?: string;
   ownerName?: string;
   status: RockStatus;
+  /** "YYYY-MM-DD" (רשות) - תאריך יעד לתת-סלע/סלע */
+  dueDate?: string;
   order?: number;
   /** מזהה הסלע/תת-הסלע המקורי שממנו שוכפל בגלגול רבעון (שמירת ההקשר ההיסטורי) */
   rolledFromId?: string | null;
+  /** מחיקה לוגית - סלע עם היסטוריה או ילדים לעולם לא נמחק פיזית */
+  deletedAt?: number | null;
   createdAt: number;
   createdBy?: string;
+  updatedAt?: number;
 }
 
+/** @deprecated הדלי הישן של אבן הדרך (לפני מודל `PeriodAssignment`). נקרא לצורך תאימות
+ *  לאחור בלבד - קוד חדש לא כותב אותו. */
 export type MilestoneStage = "backlog" | "month" | "week";
 
 /** מקור אבן הדרך/המשימה: `rock` = נגזרה מסלע (ברירת מחדל, כולל כל הדאטה הישן שאין בו את
- *  השדה), `adhoc` = משימה שבועית/שוטפת שלא קשורה לאף סלע. */
+ *  השדה), `adhoc` = משימה שוטפת שלא קשורה לאף סלע. */
 export type MilestoneSource = "rock" | "adhoc";
 
+/** באיזו תקופה נוספה אבן הדרך - כדי שההיסטוריה תדע להפריד בין "תוכנן מראש" לבין
+ *  "נוסף במהלך החודש/השבוע" (סעיף 11 באפיון). */
+export type MilestoneOrigin = "quarter" | "month" | "week";
+
+/** סטטוס הביצוע של אבן דרך - **המקור היחיד לאמת**. רק אבן דרך מקבלת סטטוס ידני;
+ *  סלע ותת-סלע מחושבים ממנה. */
+export type MilestoneStatus = "not_started" | "in_progress" | "waiting" | "done" | "cancelled";
+
+export type MilestonePriority = "low" | "normal" | "high";
+
 /** collection: n_milestones - אבני הדרך (המשימות בפועל) תחת סלע/תת-סלע. `quarterKey` מוכפל
- *  מהסלע-אב כדי לאפשר שאילתת שוויון יחידה בתצוגת הרבעון בלי אינדקס מורכב. `monthKey`/`weekKey`
- *  נשארים על הרשומה גם אחרי שהיא קודמה הלאה (לצורך היסטוריה/דפדוף אחורה), ו-`stage` מסמן את
- *  הדלי הפעיל הנוכחי שלה. */
+ *  מהסלע-אב כדי לאפשר שאילתת שוויון יחידה בלי אינדקס מורכב. לצידן חיות **משימות שוטפות**
+ *  באותה קולקשן עם `source: "adhoc"` ובלי `rockId`.
+ *
+ *  השיוך לתקופות **אינו** יושב כאן אלא ב-`n_period_assignments`, כדי שאותה אבן דרך תוכל
+ *  להיות משויכת לרבעון, לחודש ולכמה שבועות בלי להשתכפל. */
 export interface Milestone {
   id: string;
   /** ריק (`""`) כשמדובר במשימה שוטפת (`source: "adhoc"`) שלא תלויה בסלע */
   rockId: string;
   quarterKey: string;
   title: string;
+  description?: string;
   ownerUserId?: string;
   ownerName?: string;
-  stage: MilestoneStage;
-  /** "2026-08" - מוגדר כש-stage מגיע ל-"month" ואילך */
-  monthKey?: string;
-  /** מפתח שבוע פנימי לא-ISO ("W1234"), ניתן להזזה בקלות - מוגדר כש-stage מגיע ל-"week" */
-  weekKey?: string;
+  /** המקור היחיד לאמת לגבי ביצוע. דאטה ישן בלי השדה נגזר מ-`done`. */
+  status: MilestoneStatus;
+  /** שיקוף היסטורי של `status === "done"` - נשמר כדי ששאילתות ישנות ("מה הושלם")
+   *  ימשיכו לעבוד. לעולם לא לעדכן אותו בנפרד מ-`status`. */
   done: boolean;
+  priority?: MilestonePriority;
+  /** "YYYY-MM-DD" (רשות) */
+  dueDate?: string;
+  /** הערה חופשית קצרה שמוצגת בשורה */
+  notes?: string;
+  /** חובה כש-`status === "waiting"` - במי/במה תלוי הביצוע */
+  waitReason?: string;
+  /** "YYYY-MM-DD" (רשות) - תאריך מעקב להמתנה */
+  waitUntil?: string;
+  /** חובה כש-`status === "cancelled"` */
+  cancelReason?: string;
   doneAt?: number;
-  /** כמה פעמים הועברה קדימה (לשבוע/חודש הבא) בלי להסתיים */
+  completedBy?: string;
+  /** כמה פעמים נפתחה מחדש אחרי שהושלמה */
+  reopenCount?: number;
+  /** כמה פעמים שובצה מחדש לתקופה נוספת בלי להסתיים */
   carryOverCount?: number;
   /** ברירת מחדל `"rock"` כשהשדה חסר (כל הדאטה שנוצר לפני מודל המשימות השוטפות) */
   source?: MilestoneSource;
+  /** ברירת מחדל `"quarter"` - איפה נוספה אבן הדרך */
+  origin?: MilestoneOrigin;
   /** מזהה אבן הדרך המקורית שממנה שוכפלה בגלגול רבעון */
   rolledFromId?: string | null;
   order?: number;
+  /** מחיקה לוגית - אבן דרך עם היסטוריה או שיוך לתקופה לא נמחקת פיזית */
+  deletedAt?: number | null;
   createdAt: number;
   createdBy?: string;
+  /** נעילה אופטימית: הלקוח שולח את הערך שראה, והשרת דוחה עדכון על גרסה ישנה */
+  updatedAt?: number;
+  updatedBy?: string;
+
+  /** @deprecated הדלי הישן; נקרא לתאימות לאחור (סינתזת שיוכי תקופה לדאטה שקדם למודל). */
+  stage?: MilestoneStage;
+  /** @deprecated "2026-08" - הדלי החודשי הישן */
+  monthKey?: string;
+  /** @deprecated מפתח שבוע פנימי ישן ("W1234") */
+  weekKey?: string;
+}
+
+export type PeriodType = "quarter" | "month" | "week";
+
+/** תוצאת ההתחייבות לתקופה. `open` כל עוד התקופה פתוחה; בסיום התקופה התוצאה ננעלת כדי
+ *  שההיסטוריה תישאר נכונה גם אם המשימה תושלם אחר כך בתקופה אחרת. */
+export type AssignmentOutcome = "open" | "done" | "missed" | "cancelled";
+
+/** collection: n_period_assignments - **השיוך של אבן דרך לתקופת עבודה, לא עותק שלה.**
+ *
+ *  מזהה המסמך דטרמיניסטי: `${milestoneId}__${periodType}__${periodKey}` - וכך אילוץ
+ *  הייחודיות "אבן דרך אחת לכל תקופה" נאכף ברמת בסיס הנתונים ולא רק בממשק (סעיף 14). */
+export interface PeriodAssignment {
+  id: string;
+  milestoneId: string;
+  /** מוכפל מאבן הדרך כדי לאפשר שליפת כל שיוכי הרבעון בשאילתת שוויון יחידה */
+  quarterKey: string;
+  periodType: PeriodType;
+  /** מפתח התקופה: quarterKey / "2026-08" / "W1234" */
+  periodKey: string;
+  assignedAt: number;
+  assignedBy?: string;
+  outcome: AssignmentOutcome;
+  /** מתי ננעלה התוצאה (סוף התקופה) */
+  closedAt?: number;
+}
+
+export type TaskEntityType = "quarter" | "rock" | "milestone" | "procedure" | "personal_task";
+
+export type TaskActivityAction =
+  | "create"
+  | "update"
+  | "assign"
+  | "unassign"
+  | "status"
+  | "complete"
+  | "reopen"
+  | "cancel"
+  | "move"
+  | "delete"
+  | "restore"
+  /** פתיחה ראשונה של משימה אישית - מתי היא נראתה בפועל (סעיף 15 באפיון המשלים) */
+  | "view"
+  /** הערה שנוספה לשרשור ההערות של משימה אישית */
+  | "comment";
+
+/** collection: n_task_activity - יומן פעולות לכל ישות במודול. אינו ניתן לעריכה דרך
+ *  הממשק; כל פעולה משמעותית נרשמת כאן עם מי ומתי (סעיף 16 באפיון). */
+export interface TaskActivity {
+  id: string;
+  entityType: TaskEntityType;
+  entityId: string;
+  action: TaskActivityAction;
+  /** שם השדה שהשתנה בפעולת `update` */
+  field?: string;
+  oldValue?: string;
+  newValue?: string;
+  /** הקשר לשליפה מהירה של יומן אבן דרך / רבעון */
+  milestoneId?: string;
+  /** הקשר מקביל למשימות ה"משימות ליוני" - שליפת יומן בשאילתת שוויון יחידה בלי אינדקס מורכב */
+  personalTaskId?: string;
+  quarterKey?: string;
+  /** סיבה/הערה חופשית (ביטול, פתיחה מחדש, המתנה) */
+  note?: string;
+  userName?: string;
+  at: number;
 }
 
 export type RockReviewPeriod = "quarterly" | "monthly" | "weekly";
 
-/** collection: n_rock_reviews - סיכום/לקחים לכל פגישת רבעון/חודש/שבוע. מזהה דטרמיניסטי
+/** collection: n_rock_reviews - סיכום ישיבת רבעון/חודש/שבוע. מזהה דטרמיניסטי
  *  `${period}_${periodKey}` כך שיש רשומה אחת בלבד לכל תקופה (upsert). */
 export interface RockReview {
   id: string;
   period: RockReviewPeriod;
   periodKey: string;
   notes: string;
+  /** משתתפי הישיבה (שמות חופשיים) */
+  participants?: string[];
+  /** "YYYY-MM-DD" - מתי התקיימה הישיבה */
+  meetingDate?: string;
+  /** ישיבה נעולה = סיכום סופי, לא נערך יותר מהמסך הרגיל */
+  locked?: boolean;
   createdAt: number;
   updatedAt: number;
   createdBy?: string;
 }
+
+/** collection: n_task_settings - הגדרות המודול. מסמך יחיד במזהה `default`.
+ *  שבוע העבודה ומועד האזהרה הם הגדרה ולא קבוע בקוד (סעיף 19 באפיון). */
+export interface TaskSettings {
+  id: string;
+  /** 0=ראשון ... 6=שבת - היום שבו מתחיל שבוע העבודה */
+  weekStartDay: number;
+  /** 0=ראשון ... 6=שבת - מהיום הזה בבוקר מוצגת אזהרה כתומה על משימת שבוע שטרם התחילה */
+  warningWeekday: number;
+  /** ברירת המחדל שהשיטה ממליצה עליה; חריגה אפשרית אחרי אזהרה */
+  recommendedRocksPerQuarter: number;
+
+  /* --- גישה לטאב "משימות ליוני" (סעיף 4 באפיון המשלים) ---
+   *
+   * הטאב הוא רשימת העבודה האישית של אדם אחד, ולכן הוא **אינו** נפתח לכל מי שיש לו
+   * הרשאת `duxus`: הגישה נקבעת בשמות משתמש (דוא"ל ה-session) שנשמרים כאן. שלוש
+   * רשימות ריקות = המודול עוד לא הוגדר, ואז רק בעלים יכולים להיכנס כדי להגדיר אותו. */
+
+  /** יוני - כל הפעולות, כולל מחיקה לוגית, ביטול והיסטוריה */
+  personalOwnerEmails: string[];
+  /** המזכירה - יצירה, עריכת משימות פעילות, הערות, דחיפות ותאריך יעד. בלי מחיקה */
+  personalEditorEmails: string[];
+  /** צפייה בלבד - הרשאה שניתנת במפורש (למשל למנכ"ל), ברירת המחדל היא בלי גישה */
+  personalViewerEmails: string[];
+
+  updatedAt: number;
+  updatedBy?: string;
+}
+
+export const DEFAULT_TASK_SETTINGS: Omit<TaskSettings, "id" | "updatedAt"> = {
+  weekStartDay: 0,
+  warningWeekday: 3,
+  recommendedRocksPerQuarter: 3,
+  personalOwnerEmails: [],
+  personalEditorEmails: [],
+  personalViewerEmails: [],
+};
+
+/* ------------------------------------------------------------------ *
+ * טאב "משימות ליוני" - משימות קצרות שהמזכירה מזינה ויוני מסמן שבוצעו.
+ *
+ * מכוון **לא** משתמש ב-`Rock` / `Milestone` / `PeriodAssignment`: אין כאן רבעון,
+ * אין שיוך לתקופות ואין תכנון - רק רשימה אחת נקייה שנכנסת אליה משימה ויוצאת
+ * ממנה כשהיא בוצעה (סעיף 2 באפיון המשלים). מה שכן משותף למודול האסטרטגי הוא
+ * תשתית המשתמשים, ההרשאות ויומן הפעילות (`n_task_activity`).
+ * ------------------------------------------------------------------ */
+
+/** רמת הגישה של המשתמש הנוכחי לטאב. נגזרת בשרת מ-`TaskSettings` ולעולם לא נשלחת
+ *  מהלקוח - הלקוח מקבל אותה רק כדי להסתיר כפתורים. */
+export type PersonalTaskAccess = "owner" | "editor" | "viewer" | "none";
+
+/** `normal` רגילה · `important` חשובה · `urgent` דחופה (סעיף 5) */
+export type PersonalTaskPriority = "normal" | "important" | "urgent";
+
+/** `new` נוצרה וטרם נפתחה · `open` נפתחה וטרם התחיל טיפול · `in_progress` בטיפול ·
+ *  `waiting` ממתין לגורם אחר · `done` הושלמה · `cancelled` בוטלה (סעיף 9). */
+export type PersonalTaskStatus = "new" | "open" | "in_progress" | "waiting" | "done" | "cancelled";
+
+/** collection: n_personal_tasks */
+export interface PersonalTask {
+  id: string;
+  /** השדה היחיד שחובה למלא בהזנה מהירה (סעיף 20) */
+  title: string;
+  description?: string;
+  /** שם הלקוח/הפונה שביקש את הטיפול */
+  contactName?: string;
+  /** נשמר כטקסט חופשי - פורמט לא תקין לא חוסם שמירה (סעיף 17) */
+  contactPhone?: string;
+  priority: PersonalTaskPriority;
+  status: PersonalTaskStatus;
+  /** "YYYY-MM-DD" (רשות). ריק = בלי תאריך יעד, ואז המשימה לעולם אינה "באיחור" (סעיף 8).
+   *  נשמר כמחרוזת ולא כחותמת זמן - בדיוק כמו `Milestone.dueDate` - כדי ש"היום" יהיה
+   *  אותו יום בשרת ובדפדפן בלי תלות באזור זמן. */
+  dueDate?: string;
+  /** "HH:MM" (רשות) - שעת היעד בתוך `dueDate`. ריק = תאריך בלבד */
+  dueTime?: string;
+  /** מוצמדת לראש הרשימה - גוברת על כל כללי המיון (סעיף 8) */
+  pinned?: boolean;
+  /** שיקוף ההערה האחרונה לתצוגה בשורה, בלי שליפת שרשור ההערות לכל שורה */
+  lastNote?: string;
+  createdBy?: string;
+  createdAt: number;
+  /** מתי המשימה נפתחה לראשונה על ידי בעל הרשימה - זה מה שמסיר את חיווי "חדש" */
+  viewedAt?: number | null;
+  completedBy?: string;
+  completedAt?: number | null;
+  cancelledBy?: string;
+  cancelledAt?: number | null;
+  /** חובה בביטול (סעיף 4) */
+  cancelReason?: string;
+  /** כמה פעמים נפתחה מחדש אחרי השלמה */
+  reopenCount?: number;
+  /** מחיקה לוגית בלבד - המידע נשמר לצורכי שחזור (סעיף 17) */
+  deletedAt?: number | null;
+  deletedBy?: string;
+  /** נעילה אופטימית: הלקוח שולח את הערך שראה, והשרת דוחה עדכון על גרסה ישנה (סעיף 18) */
+  updatedAt: number;
+  updatedBy?: string;
+}
+
+/** collection: n_personal_task_comments - הערות כרונולוגיות על משימה אישית */
+export interface PersonalTaskComment {
+  id: string;
+  taskId: string;
+  body: string;
+  createdBy?: string;
+  createdAt: number;
+  editedAt?: number | null;
+}
+
+/** ברירות המחדל של משימה חדשה - כותרת ודחיפות מספיקות ליצירה מהירה (סעיף 6). */
+export const PERSONAL_TASK_DEFAULTS = {
+  priority: "normal" as PersonalTaskPriority,
+  status: "new" as PersonalTaskStatus,
+};
+
+/** הסטטוסים שנחשבים "רשימה פעילה" - כל מה שאינו הושלם, בוטל או נמחק (סעיף 9). */
+export const ACTIVE_PERSONAL_TASK_STATUSES: readonly PersonalTaskStatus[] = [
+  "new",
+  "open",
+  "in_progress",
+  "waiting",
+] as const;
 
 /* ================================================================== *
  * מודל שלוש השכבות — שכבה 2 (נכסים) ושכבה 1 (תנועות)
@@ -1058,8 +1500,8 @@ export type TxFlag =
  * אין העתק — יש דגל, והמסך הראשי הוא סכום עליו.
  *
  * `undefined` נחשב `false` בכוונה: כל הדאטה ההיסטורי נכנס למצב "לא מתחשבן בראשי",
- * ומסך "עדכון רטרואקטיבי" (`/dashboard/accounting/legacy`) הוא המקום להחליט עליו
- * הוצאה-הוצאה. כך שום סכום ישן לא מופיע פתאום בשורה התחתונה בלי שמישהו אמר שהוא שייך.
+ * כך ששום סכום ישן לא מופיע פתאום בשורה התחתונה בלי שמישהו אמר שהוא שייך. את הדגל
+ * מסמנים בטופס שבו ההוצאה נרשמת (`components/counts-to-main-field.tsx`).
  */
 export type CountsToMain = boolean;
 
@@ -1086,6 +1528,34 @@ export interface RecurringVariableAmount {
  * המבנה הוא שורה אחת + סכום לכל חודש (`amounts`). חודש בלי סכום הוא חודש שעדיין לא
  * עודכן, וזה בדיוק מה שמסך התזכורת מחפש: `missingMonths()` ב-`lib/recurring-expenses.ts`.
  */
+/**
+ * כל כמה זמן ההוצאה נדרשת בפועל. זה לא נתון קוסמטי — הוא קובע באילו חודשים המערכת
+ * מבקשת סכום (`dueMonths`), ולכן גם על מה היא מתריעה. ארנונה דו-חודשית שנרשמה כחודשית
+ * מייצרת התראה שקרית בכל חודש שני, וזו בדיוק הסיבה שהשדה קיים.
+ */
+export type RecurringFrequency = "monthly" | "bimonthly" | "quarterly" | "yearly";
+
+/** אורך המחזור בחודשים. `undefined` = חודשי, כדי שרשומות שנכתבו לפני השדה יישארו נכונות. */
+export const RECURRING_FREQUENCY_MONTHS: Record<RecurringFrequency, number> = {
+  monthly: 1,
+  bimonthly: 2,
+  quarterly: 3,
+  yearly: 12,
+};
+
+/**
+ * שינוי תדירות באמצע החיים של אותה הוצאה.
+ *
+ * חשמל שהיה דו-חודשי ועבר לחודשי הוא **אותה הוצאה**, ולכן פתיחת שורה שנייה בשביל
+ * התדירות החדשה שוברת את הסיכום שבשבילו המודול קיים. במקום זה נשמר כאן קו-זמן: מהחודש
+ * `from` והלאה התדירות היא `frequency`, והמחזור נמדד מחדש מאותו חודש.
+ */
+export interface RecurringFrequencyChange {
+  /** החודש (YYYY-MM) שממנו התדירות החדשה תקפה */
+  from: string;
+  frequency: RecurringFrequency;
+}
+
 export interface RecurringVariableExpense {
   id: string;
   scope: ExpenseScope;
@@ -1097,6 +1567,28 @@ export interface RecurringVariableExpense {
   startDate: string;
   /** הפסקה: מהחודש הזה ואילך כבר לא מבקשים עדכון */
   endDate?: string;
+  /**
+   * תדירות החיוב. `undefined` = `monthly` (כל הרשומות שנוצרו לפני השדה). המחזור נמדד
+   * מחודש ה-`startDate`: ארנונה דו-חודשית שהתחילה ב-01/2025 נדרשת ב-01, 03, 05 וכן הלאה.
+   */
+  frequency?: RecurringFrequency;
+  /**
+   * פריסה: לחלק תשלום רב-חודשי על פני חודשי המחזור שלו בדוחות החודשיים.
+   *
+   * ביטוח שנתי של 12,000 ₪ ששולם בינואר הוא 12,000 ₪ במזומן בינואר, אבל 1,000 ₪ עלות
+   * בכל חודש. בלי פריסה ינואר נראה חודש קטסטרופלי ושאר השנה נראית זולה מכפי שהיא, ואי
+   * אפשר להשוות חודש לחודש — וזו כל הסיבה לקיומו של השדה.
+   *
+   * `undefined` = פרוס (ברירת המחדל לתדירות רב-חודשית); `false` = הכל נופל בחודש התשלום.
+   * בתדירות חודשית אין לשדה משמעות — מחזור של חודש אחד נפרס לעצמו.
+   */
+  spread?: boolean;
+  /**
+   * שינויי תדירות לאורך הזמן. `frequency` למעלה היא התדירות מ-`startDate`, וכל רשומה כאן
+   * מחליפה אותה מחודש מסוים והלאה (חשמל דו-חודשי שעבר לחודשי ב-06/2026). ריק/חסר = תדירות
+   * אחת לכל החיים, כפי שהיה לפני השדה. ראה `frequencySegments` ב-`lib/recurring-expenses.ts`.
+   */
+  frequencyChanges?: RecurringFrequencyChange[];
   /** סכום ברירת מחדל להצעה בעת עדכון חודש חדש */
   defaultAmount?: number;
   /** ראה `COUNTS_TO_MAIN_DOC` */
@@ -1123,4 +1615,104 @@ export interface PartnerPayout {
   paidAmount: number;
   paidAt?: string;
   note?: string;
+}
+
+/* ────────────────────────────────────────────────────────────────────────────
+ * תפעול חדרי מחשבים (`/dashboard/operations`)
+ * ──────────────────────────────────────────────────────────────────────────── */
+
+/** למי הפריט/המשימה שייכים: לכל הסניפים, או לרשימת סניפים מפורשת. */
+export type OpsScope = "all" | "branches";
+
+/**
+ * collection: `n_ops_stock_items` — הגדרת פריט מלאי אחד, נקבעת בצד המנהל
+ * ("הגדרות תפעול"). הסניף לא מזין כמויות; הוא רק מסמן V/X מול ההגדרה הזו.
+ */
+export interface OpsStockItem {
+  id: string;
+  /** שם הפריט כפי שמוצג לסניף (למשל "עטים") */
+  name: string;
+  /** כמה אמורים להיות תמיד בסניף. טקסט חופשי-כמותי שמוצג ליד הפריט, לא נספר. */
+  targetQty: number;
+  /** יחידת מידה להצגה (למשל "יח'", "חבילות"). ריק = בלי יחידה. */
+  unit?: string;
+  scope: OpsScope;
+  /** רלוונטי רק כש-`scope === "branches"` */
+  branchIds: string[];
+  /** סדר הצגה ברשימה (עולה) */
+  order: number;
+  /** פריט שכבוי לא מוצג לסניפים ולא נספר, אבל ההיסטוריה שלו נשמרת */
+  active: boolean;
+  createdAt?: string;
+}
+
+/** מה הסניף סימן מול פריט מלאי: יש / חסר. */
+export type OpsStockMark = "ok" | "missing";
+
+export interface OpsStockMarkEntry {
+  status: OpsStockMark;
+  /** הערה חופשית, בעיקר כשסומן "חסר" */
+  note?: string;
+  at: string;
+  by?: string;
+}
+
+/**
+ * collection: `n_ops_stock_checks` — בדיקת המלאי של סניף אחד בחודש אחד.
+ *
+ * מזהה המסמך דטרמיניסטי: `${branchId}__${periodKey}` (`periodKey` = `YYYY-MM`).
+ * **כאן נמצא ה"איפוס בכל ראשון לחודש"**: אין job שמוחק כלום — חודש חדש הוא פשוט
+ * מסמך חדש שעוד לא קיים, ולכן כל הסימונים מתחילים ריקים.
+ */
+export interface OpsStockCheck {
+  id: string;
+  branchId: string;
+  /** YYYY-MM */
+  periodKey: string;
+  /** מפתח = `OpsStockItem.id` */
+  marks: Record<string, OpsStockMarkEntry>;
+  updatedAt?: string;
+  updatedBy?: string;
+}
+
+export type OpsTaskFreq = "weekly" | "monthly";
+
+/**
+ * collection: `n_ops_tasks` — הגדרת משימה שבועית/חודשית, נקבעת בצד המנהל.
+ * הסניף רק מסמן V על ביצוע בתקופה הנוכחית.
+ */
+export interface OpsTask {
+  id: string;
+  name: string;
+  /** פירוט/הוראות ביצוע, אופציונלי */
+  details?: string;
+  freq: OpsTaskFreq;
+  scope: OpsScope;
+  /** רלוונטי רק כש-`scope === "branches"` */
+  branchIds: string[];
+  order: number;
+  active: boolean;
+  createdAt?: string;
+}
+
+export interface OpsTaskDoneEntry {
+  at: string;
+  by?: string;
+}
+
+/**
+ * collection: `n_ops_task_checks` — ביצועי המשימות של סניף אחד בתקופה אחת.
+ *
+ * מזהה המסמך דטרמיניסטי: `${branchId}__${periodKey}`, כאשר `periodKey` הוא
+ * `YYYY-Www` למשימות שבועיות ו-`YYYY-MM` לחודשיות. לכן לסניף יש בו-זמנית מסמך
+ * שבועי ומסמך חודשי, וגם כאן האיפוס הוא מעבר תקופה ולא מחיקה.
+ */
+export interface OpsTaskCheck {
+  id: string;
+  branchId: string;
+  periodKey: string;
+  /** מפתח = `OpsTask.id` */
+  done: Record<string, OpsTaskDoneEntry>;
+  updatedAt?: string;
+  updatedBy?: string;
 }

@@ -1,31 +1,10 @@
-"use client";
+import { canSeePersonalTab } from "./personal/actions";
+import { DuxusTabsNav } from "./duxus-tabs-nav";
 
-import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { NotebookText, Mountain, type LucideIcon } from "lucide-react";
-
-type TabItem = { href: string; label: string; icon: LucideIcon };
-
-// סדר הטאבים = סדר העבודה: קודם המשימות (מה עושים עכשיו), ואז הנהלים (איך עושים).
-const TABS: TabItem[] = [
-  { href: "/dashboard/duxus/rocks", label: "סלעים, יעדים וקצב עבודה", icon: Mountain },
-  { href: "/dashboard/duxus/procedures", label: "נהלים", icon: NotebookText },
-];
-
-export function DuxusTabs() {
-  const pathname = usePathname();
-
-  return (
-    <nav className="mb-4 flex flex-wrap items-center gap-1">
-      {TABS.map((tab) => {
-        const active = pathname?.startsWith(tab.href);
-        return (
-          <Link key={tab.href} href={tab.href} className={active ? "pill-active" : "pill-inactive"}>
-            <tab.icon className="ml-1 h-4 w-4" />
-            {tab.label}
-          </Link>
-        );
-      })}
-    </nav>
-  );
+/**
+ * סרגל הלשוניות של האזור. רכיב **שרת**, כדי שלשונית "משימות ליוני" לא תרונדר בכלל
+ * למי שאין לו גישה אליה - הסתרה בצד הלקוח הייתה משאירה את קיומה גלוי במקור העמוד.
+ */
+export async function DuxusTabs() {
+  return <DuxusTabsNav showPersonal={await canSeePersonalTab()} />;
 }

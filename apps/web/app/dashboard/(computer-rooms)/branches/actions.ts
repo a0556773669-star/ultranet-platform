@@ -4,12 +4,14 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import { isOwnerSession } from "@/lib/perms";
 import { getAdminFirestore } from "@/lib/firebase-admin";
-import type { Branch } from "@ultranet/shared-types";
+import type { Branch, SetupCostItem } from "@ultranet/shared-types";
+import { setupCostCountsToMainFromForm } from "@/lib/counts-to-main";
 
 async function requireOwner() {
   const session = await getServerSession(authOptions);
-  if (!session || session.user?.role !== "owner") {
+  if (!session || !isOwnerSession(session)) {
     throw new Error("גישה זו מוגבלת לבעלים בלבד");
   }
   return session;
@@ -23,6 +25,22 @@ function stripUndefined<T extends Record<string, unknown>>(obj: T): T {
     }
   }
   return out;
+}
+
+function parseSetupItems(raw: FormDataEntryValue | null): SetupCostItem[] | undefined {
+  if (typeof raw !== "string" || raw === "") return undefined;
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return undefined;
+    return parsed
+      .map((entry) => {
+        const item = entry as Partial<SetupCostItem>;
+        return { label: String(item?.label ?? "").trim(), amount: Number(item?.amount) || 0 };
+      })
+      .filter((item) => item.label !== "" || item.amount !== 0);
+  } catch {
+    return undefined;
+  }
 }
 
 function parseBranchForm(formData: FormData): Omit<Branch, "id"> {
@@ -40,8 +58,16 @@ function parseBranchForm(formData: FormData): Omit<Branch, "id"> {
   const partnerEmail = String(formData.get("partnerEmail") ?? "").trim() || undefined;
   const myPct = Number(formData.get("myPct") ?? 100);
   const partnerPct = Number(formData.get("partnerPct") ?? 0);
+  // עלות ההקמה מגיעה מ-`SetupCostField`: פירוט השורות ב-`setupItems` והסכום המוכן ב-`setupCost`.
+  // הסכום מחושב כאן מחדש מהשורות ולא נלקח כמו שהוא, כדי ששני השדות לעולם לא יסתרו זה את זה.
+  const setupItems = parseSetupItems(formData.get("setupItems"));
   const setupCostRaw = formData.get("setupCost");
-  const setupCost = setupCostRaw ? Number(setupCostRaw) : undefined;
+  const setupCost = setupItems
+    ? setupItems.reduce((total, item) => total + item.amount, 0)
+    : setupCostRaw
+      ? Number(setupCostRaw)
+      : undefined;
+  const setupCountsToMain = setupCostCountsToMainFromForm(formData);
   const notes = String(formData.get("notes") ?? "").trim() || undefined;
   const parentBranchId = String(formData.get("parentBranchId") ?? "").trim() || null;
 
@@ -57,6 +83,8 @@ function parseBranchForm(formData: FormData): Omit<Branch, "id"> {
     myPct,
     partnerPct,
     setupCost,
+    setupItems,
+    setupCountsToMain,
     notes,
     parentBranchId,
   };
@@ -79,7 +107,9 @@ export async function updateBranchAction(id: string, formData: FormData) {
   await getAdminFirestore().collection("n_branches").doc(id).set(stripUndefined(data), { merge: true });
   revalidatePath("/dashboard/branches");
   revalidatePath(`/dashboard/branches/${id}`);
-  redirect("/dashboard/branches");
+  revalidatePath(`/dashboard/branches/${id}/edit`);
+  // חזרה לכרטיס ולא לרשימה: מי ששמר רוצה לראות שהשינוי אכן נקלט, ולא לחפש את הסניף מחדש.
+  redirect(`/dashboard/branches/${id}`);
 }
 
 export async function deleteBranchAction(id: string) {

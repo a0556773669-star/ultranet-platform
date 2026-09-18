@@ -1,20 +1,25 @@
 "use server";
 import { revalidatePath } from "next/cache";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { currentModuleScope } from "@/lib/perms";
 import { getAdminFirestore } from "@/lib/firebase-admin";
 import { FieldValue } from "firebase-admin/firestore";
 import type { Branch, FixedExpense, VariableExpense } from "@ultranet/shared-types";
 import { SHARED_EXPENSE_BRANCH_ID } from "@/lib/computer-room-accounting";
 import { createLinkedOwnerLedgerExpense, deleteLinkedOwnerLedgerExpense } from "@/lib/branch-expense-ledger";
+import { resolveExpenseTypeIdFromForm } from "@/lib/recurring-purchases";
 import { countsToMainFromForm } from "@/lib/counts-to-main";
+import { sharedExpenseBranchIdsFromForm } from "@/lib/expense-shared-scope";
 
+/**
+ * הוצאות של חדר מחשבים הן עניין של מי שמנהל את הסניף: בעלים, או שותף בסניף הזה. עובד
+ * שמתפעל את המלאי אינו נוגע בהן — אותו גבול בדיוק שמסך ההוצאות אוכף ב-`managerOnly`.
+ */
 async function requireBranchAccess(branchId: string) {
-  const session = await getServerSession(authOptions);
-  if (!session) throw new Error("לא מחובר");
-  if (session.user?.role === "owner") return session;
+  const scope = await currentModuleScope("computers");
+  if (!scope) throw new Error("לא מחובר");
+  if (scope.isOwner) return scope;
   if (branchId === SHARED_EXPENSE_BRANCH_ID) throw new Error("אין הרשאה");
-  if (session.user?.branchId === branchId) return session;
+  if (scope.isManager && scope.allows(branchId)) return scope;
   throw new Error("אין הרשאה");
 }
 
@@ -22,6 +27,15 @@ function stripUndefined<T extends Record<string, any>>(obj: T): T {
   const out: any = {};
   for (const k in obj) if (obj[k] !== undefined) out[k] = obj[k];
   return out;
+}
+
+/**
+ * הסניפים שהוצאה משותפת מתחלקת ביניהם. רלוונטי רק לספר המשותף - להוצאה של סניף בודד אין
+ * מה לחלק, ולכן שם השדה אף פעם לא נכתב (וטופס מזויף שישלח אותו לא ישנה כלום).
+ */
+function sharedBranchIdsFor(branchId: string, formData: FormData): string[] | undefined {
+  if (branchId !== SHARED_EXPENSE_BRANCH_ID) return undefined;
+  return sharedExpenseBranchIdsFromForm(formData);
 }
 
 /**
@@ -57,7 +71,17 @@ export async function createFixedExpenseAction(branchId: string, formData: FormD
   if (!name || !startDate) {
     throw new Error("חובה למלא שם ותאריך התחלה");
   }
-  const data: Omit<FixedExpense, "id"> = { branchId, name, amount, startDate, category, paidBy, owedBy, countsToMain };
+  const data: Omit<FixedExpense, "id"> = {
+    branchId,
+    name,
+    amount,
+    startDate,
+    category,
+    paidBy,
+    owedBy,
+    countsToMain,
+    branchIds: sharedBranchIdsFor(branchId, formData),
+  };
   await getAdminFirestore().collection("n_fixed_expenses").add(stripUndefined(data));
   revalidatePath(`/dashboard/expenses/${branchId}`);
   revalidatePath("/dashboard/accounting");
@@ -101,6 +125,7 @@ export async function updateFixedExpenseAction(id: string, branchId: string, for
   if (!name || !startDate) {
     throw new Error("חובה למלא שם ותאריך התחלה");
   }
+  const branchIds = sharedBranchIdsFor(branchId, formData);
   const data = {
     name,
     amount,
@@ -109,6 +134,9 @@ export async function updateFixedExpenseAction(id: string, branchId: string, for
     paidBy,
     owedBy,
     countsToMain: countsToMainFromForm(formData),
+    // חזרה ל"כל הסניפים" מוחקת את הרשימה במקום לשמור מערך ריק, כדי שההוצאה תיראה בדיוק
+    // כמו הוצאה משותפת ותיקה שמעולם לא הגבילו אותה.
+    branchIds: branchIds ?? FieldValue.delete(),
   };
   await ref.set(data, { merge: true });
   revalidatePath(`/dashboard/expenses/${branchId}`);
@@ -157,6 +185,8 @@ export async function createVariableExpenseAction(branchId: string, formData: Fo
     owedBy,
     countsToMain: countsToMainFromForm(formData),
     linkedAhExpenseId,
+    branchIds: sharedBranchIdsFor(branchId, formData),
+    expenseTypeId: await resolveExpenseTypeIdFromForm(formData, "computers"),
   };
   await db.collection("n_var_expenses").add(stripUndefined(data));
   revalidatePath(`/dashboard/expenses/${branchId}`);
@@ -197,6 +227,7 @@ export async function updateVariableExpenseAction(id: string, branchId: string, 
     date,
   });
 
+  const branchIds = sharedBranchIdsFor(branchId, formData);
   const data = {
     desc,
     amount,
@@ -207,6 +238,7 @@ export async function updateVariableExpenseAction(id: string, branchId: string, 
     owedBy,
     countsToMain: countsToMainFromForm(formData),
     linkedAhExpenseId: linkedAhExpenseId ?? FieldValue.delete(),
+    branchIds: branchIds ?? FieldValue.delete(),
   };
   await ref.set(data, { merge: true });
   revalidatePath(`/dashboard/expenses/${branchId}`);

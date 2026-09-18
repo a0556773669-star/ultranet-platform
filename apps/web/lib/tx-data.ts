@@ -37,14 +37,23 @@ import type {
   Purchase,
   Rental,
   Transaction,
+  TxAllocation,
   TxBusiness,
   VariableExpense,
+  Laptop,
 } from "@ultranet/shared-types";
 import { isCollectedByOwner, ownerExpenseBurden } from "./branch-accounting";
 import { HQ_NODE_ID, SHARED_NODE_ID, TX_COLLECTION, normalizeAllocations } from "./tx";
 import { splitOf } from "./multi-branch-expense";
 import { PURCHASES_COLLECTION } from "./assets";
-import { SHARED_COMPUTERS_BRANCH_ID, SHARED_RENTALS_BRANCH_ID } from "./expense-shared-scope";
+import { SHARED_COMPUTERS_BRANCH_ID, SHARED_RENTALS_BRANCH_ID, sharedExpenseDivision } from "./expense-shared-scope";
+import {
+  branchRevenueShareFor,
+  computerRevenueShareLines,
+  countsAsCollected,
+  revenueShareForMonth,
+  type DatedAmount,
+} from "./revenue-shares";
 
 /** Which collection a row in the model came from - shown in the UI so every number is traceable. */
 export type TxSource =
@@ -58,7 +67,8 @@ export type TxSource =
   | "branch_income"
   | "rental"
   | "purchase"
-  | "setup_cost";
+  | "setup_cost"
+  | "revenue_share";
 
 export const TX_SOURCE_LABEL: Record<TxSource, string> = {
   tx: "תנועה",
@@ -72,6 +82,7 @@ export const TX_SOURCE_LABEL: Record<TxSource, string> = {
   rental: "השכרה",
   purchase: "רכישה",
   setup_cost: "עלות הקמה",
+  revenue_share: "אחוז שאני מעביר",
 };
 
 export interface UnifiedTx extends Transaction {
@@ -101,6 +112,13 @@ function earliestDatedMonth(rows: { month?: string; recurring?: { from: string }
   return earliest ?? new Date().toISOString().slice(0, 7);
 }
 
+/** היום האחרון בחודש - התאריך שבו נרשמת צבירה חודשית, כדי שתיפול בתוך החודש שלה. */
+function endOfMonth(month: string): string {
+  const [y, m] = month.split("-").map(Number);
+  const last = new Date(Date.UTC(y ?? 1970, m ?? 1, 0)).getUTCDate();
+  return `${month}-${String(last).padStart(2, "0")}`;
+}
+
 function businessOf(branch: Branch | undefined): TxBusiness {
   switch (branch?.branchType) {
     case "rentals":
@@ -127,6 +145,28 @@ function nodeFor(branchId: string, branchById: Map<string, Branch>): { business:
   const branch = branchById.get(branchId);
   if (!branch) return { business: "hq", branchId: HQ_NODE_ID };
   return { business: businessOf(branch), branchId };
+}
+
+/**
+ * A shared-ledger expense that divides between the branches (`ownerPct`), as the transaction
+ * model sees it: the owner's part in ₪, and the per-branch split. It is the same fact the
+ * legacy `n_multi_branch_expenses` row carries - which is exactly why that collection stopped
+ * being necessary (see the header of ./tx.ts).
+ */
+function sharedSplitOf(
+  e: { branchId: string; amount?: number; ownerPct?: number; branchIds?: string[] },
+  liveRentalsBranchIds: string[],
+): { ownerShare: number; allocations: TxAllocation[] } | null {
+  if (e.branchId !== SHARED_RENTALS_BRANCH_ID) return null;
+  const division = sharedExpenseDivision(e, liveRentalsBranchIds);
+  if (!division) return null;
+  return {
+    ownerShare: division.ownerTotal,
+    allocations: normalizeAllocations(
+      e.amount || 0,
+      division.branchIds.map((branchId) => ({ branchId, amount: division.perBranchLineTotal })),
+    ),
+  };
 }
 
 function branchHasPartner(branch: Branch | undefined): boolean {
@@ -169,6 +209,8 @@ export async function loadTransactionModel(): Promise<TransactionModel> {
     branchIncomeSnap,
     rentalsSnap,
     routesSnap,
+    laptopsSnap,
+    sticksSnap,
   ] = await Promise.all([
     db.collection(TX_COLLECTION).get(),
     db.collection("n_branches").get(),
@@ -183,10 +225,13 @@ export async function loadTransactionModel(): Promise<TransactionModel> {
     db.collection("n_branch_income").get(),
     db.collection("n_rentals").where("status", "==", "returned").get(),
     db.collection("n_collection_routes").get(),
+    db.collection("n_laptops").get(),
+    db.collection("n_sticks").select("linkedLaptopId").get(),
   ]);
 
   const branches = branchesSnap.docs.map((d) => doc<Branch>(d));
   const branchById = new Map(branches.map((b) => [b.id, b]));
+  const liveRentalsBranchIds = branches.filter((b) => b.branchType === "rentals" && !b.deleted).map((b) => b.id);
   const purchases = purchasesSnap.docs.map((d) => doc<Purchase>(d));
   const routesById = new Map(routesSnap.docs.map((d) => [d.id, doc<CollectionRoute>(d)]));
 
@@ -306,6 +351,7 @@ export async function loadTransactionModel(): Promise<TransactionModel> {
   /* --- n_var_expenses: one-off branch expenses ----------------------------- */
   for (const e of varExpenses) {
     const amount = e.amount || 0;
+    const shared = sharedSplitOf(e, liveRentalsBranchIds);
     out.push({
       id: e.id,
       source: "var_expense",
@@ -318,7 +364,8 @@ export async function loadTransactionModel(): Promise<TransactionModel> {
       desc: e.desc || "הוצאה חד פעמית",
       category: e.category,
       paidBy: e.paidBy === "partner" ? "partner" : "owner",
-      ownerShare: ownerExpenseBurden(amount, e.owedBy),
+      ownerShare: shared ? shared.ownerShare : ownerExpenseBurden(amount, e.owedBy),
+      ...(shared ? { allocations: shared.allocations } : {}),
       createdAt: 0,
     });
   }
@@ -328,6 +375,7 @@ export async function loadTransactionModel(): Promise<TransactionModel> {
     const e = doc<FixedExpense>(d);
     if (!e.startDate) continue;
     const amount = e.variableAmount && e.lastAmount != null ? e.lastAmount : e.amount || 0;
+    const shared = sharedSplitOf({ ...e, amount }, liveRentalsBranchIds);
     out.push({
       id: e.id,
       source: "fixed_expense",
@@ -340,7 +388,8 @@ export async function loadTransactionModel(): Promise<TransactionModel> {
       desc: e.name || "הוצאה קבועה",
       category: e.category,
       paidBy: e.paidBy === "partner" ? "partner" : "owner",
-      ownerShare: ownerExpenseBurden(amount, e.owedBy),
+      ownerShare: shared ? shared.ownerShare : ownerExpenseBurden(amount, e.owedBy),
+      ...(shared ? { allocations: shared.allocations } : {}),
       // The separate "fixed expenses" collection was only ever this field.
       recurring: { from: e.startDate.slice(0, 7), ...(e.endDate ? { to: e.endDate.slice(0, 7) } : {}) },
       createdAt: 0,
@@ -467,6 +516,91 @@ export async function loadTransactionModel(): Promise<TransactionModel> {
       ownerShare: (amount * ownerPct) / 100,
       createdAt: 0,
     });
+  }
+
+  /* --- אחוזים שאני מעביר לאנשים ------------------------------------------- */
+  /**
+   * 30% מהברוטו של הסניף הראשי לאלישבע רומנו (מ-23/08), ו-15% מהמחשבים שמסומנים
+   * בשותפות לשלמה גולדשמידט. הכסף הזה נכנס לקופה ויוצא ממנה, ולכן הוא חייב להופיע כאן
+   * כשורת יציאה: בלעדיה הספר הראשי היה סופר את מלוא ההשכרה כרווח שלי ומראה לי מחזור
+   * ורווח שמעולם לא היו בכיס. שורה אחת לכל (אדם, סניף, חודש) - לא לכל השכרה - כי זה
+   * הסכום שאני באמת מעביר, וכך הוא גם מוצג ב-/dashboard/accounting/mobile.
+   *
+   * החישוב עצמו הוא אותן פונקציות של `lib/revenue-shares.ts` שמורידות את הסכום מהרווח
+   * בהנה"ח ההשכרות, כדי ששני הספרים לא יגיעו לשני מספרים שונים.
+   */
+  {
+    const laptops = laptopsSnap.docs.map((d) => doc<Laptop>(d));
+    const sticks = sticksSnap.docs.map((d) => ({
+      id: d.id,
+      linkedLaptopId: (d.data() as { linkedLaptopId?: string }).linkedLaptopId,
+    }));
+    const rentals = rentalsSnap.docs.map((d) => doc<Rental>(d));
+
+    // The months anything was actually collected in - the only months a share can arise in.
+    const activeMonths = new Set<string>();
+    const incomeByBranch = new Map<string, DatedAmount[]>();
+    const addIncome = (branchId: string, line: DatedAmount) => {
+      const arr = incomeByBranch.get(branchId) ?? [];
+      arr.push(line);
+      incomeByBranch.set(branchId, arr);
+      activeMonths.add(line.date.slice(0, 7));
+    };
+    for (const r of rentals) {
+      if (!countsAsCollected(r)) continue;
+      addIncome(r.branchId, { date: r.returnDate as string, amount: r.finalPrice ?? r.calcPrice ?? 0 });
+    }
+    for (const d of branchIncomeSnap.docs) {
+      const i = doc<BranchIncome>(d);
+      const branch = branchById.get(i.branchId);
+      // Same rule as the n_branch_income projection above: for a computer room these rows are a
+      // status log, not income, and an owner's percentage cannot arise from them.
+      if (branch?.branchType === "computers" || !i.date) continue;
+      addIncome(i.branchId, { date: i.date, amount: i.amount || 0 });
+    }
+
+    const push = (branchId: string, month: string, desc: string, amount: number) => {
+      if (amount <= 0) return;
+      const date = endOfMonth(month);
+      out.push({
+        id: `revshare_${branchId}_${month}_${desc}`,
+        source: "revenue_share",
+        date,
+        month,
+        direction: "out",
+        amount,
+        nature: "operating",
+        node: nodeFor(branchId, branchById),
+        desc,
+        paidBy: "owner",
+        ownerShare: amount,
+        createdAt: 0,
+      });
+    };
+
+    // Rentals are bucketed by month once, so the per-computer pass stays linear in the number of
+    // rentals instead of rescanning every rental for every month in the ledger.
+    const rentalsByMonth = new Map<string, Rental[]>();
+    for (const r of rentals) {
+      if (!countsAsCollected(r)) continue;
+      const m = (r.returnDate as string).slice(0, 7);
+      const arr = rentalsByMonth.get(m) ?? [];
+      arr.push(r);
+      rentalsByMonth.set(m, arr);
+    }
+
+    for (const month of activeMonths) {
+      const monthRentals = rentalsByMonth.get(month) ?? [];
+      for (const line of computerRevenueShareLines(laptops, sticks, monthRentals, () => true)) {
+        push(line.branchId, month, `${line.pct}% ל${line.personName} — ${line.subjects.join(", ")}`, line.amount);
+      }
+      for (const branch of branches) {
+        const share = branchRevenueShareFor(branch);
+        if (!share) continue;
+        const { amount } = revenueShareForMonth(incomeByBranch.get(branch.id) ?? [], share, month);
+        push(branch.id, month, `${share.pct}% ל${share.personName} — ${branch.name}`, amount);
+      }
+    }
   }
 
   out.sort((a, b) => (b.date ?? "").localeCompare(a.date ?? ""));
