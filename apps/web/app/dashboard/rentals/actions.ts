@@ -2,8 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { scopedSession } from "@/lib/perms";
 import { getAdminFirestore } from "@/lib/firebase-admin";
 import { FieldValue } from "firebase-admin/firestore";
 import { resolveEzcountCreds, createEzcountReceipt, EZCOUNT_DOC_TYPES } from "@/lib/ezcount";
@@ -16,12 +15,12 @@ import {
   roundPrice,
 } from "@/lib/rental-pricing";
 
+/**
+ * ה-session של **מודול ההשכרות**: `role` ו-`branchId` כאן הם של הכובע שהמשתמש מחזיק
+ * בהשכרות, גם אם יש לו כובע אחר במודול אחר. ראה `scopedSession`.
+ */
 async function requireSession() {
-  const session = await getServerSession(authOptions);
-  if (!session) {
-    throw new Error("יש להתחבר");
-  }
-  return session;
+  return scopedSession("rentals");
 }
 
 function stripUndefined<T extends Record<string, unknown>>(obj: T): T {

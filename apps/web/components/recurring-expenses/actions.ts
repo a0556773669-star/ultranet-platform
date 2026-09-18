@@ -10,6 +10,7 @@
 import { revalidatePath } from "next/cache";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import { isOwnerSession, roleAtBranch } from "@/lib/perms";
 import { getAdminFirestore } from "@/lib/firebase-admin";
 import { FieldValue } from "firebase-admin/firestore";
 import type {
@@ -54,11 +55,15 @@ function spreadFromForm(formData: FormData): boolean {
   return String(formData.get("spread") ?? "true") !== "false";
 }
 
+/**
+ * הרכיב הזה משותף לחדרי מחשבים ולהשכרות, ולכן הסניף — ולא המודול — הוא מה שקובע: די בכובע
+ * אחד של המשתמש באותו סניף. ראה `roleAtBranch`.
+ */
 async function requireAccess(branchId?: string) {
   const session = await getServerSession(authOptions);
   if (!session) throw new Error("לא מחובר");
-  if (session.user?.role === "owner") return session;
-  if (branchId && session.user?.branchId === branchId) return session;
+  if (isOwnerSession(session)) return session;
+  if (branchId && roleAtBranch(session, branchId)) return session;
   throw new Error("אין הרשאה");
 }
 

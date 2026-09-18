@@ -4,6 +4,7 @@ import { BarChart3, ArrowLeft, Layers } from "lucide-react";
 import { requireModuleAccess } from "@/lib/perms";
 import { branchMonthlyIncomeRows, loadComputerRoomAccounting, SHARED_EXPENSE_BRANCH_ID } from "@/lib/computer-room-accounting";
 import { monthLabel } from "@/lib/branch-income-excel";
+import { ClickableRow } from "@/components/clickable-row";
 import { saveMonthlyBranchIncomeAction } from "./actions";
 import { IncomeEntryPanel } from "./[id]/income-entry-panel";
 
@@ -19,7 +20,8 @@ export default async function ComputerRoomsAccountingHomePage({
 }: {
   searchParams?: { month?: string; monthSaved?: string; monthCleared?: string };
 }) {
-  const session = await requireModuleAccess("computers");
+  // מנהלים בלבד, מאותה סיבה כמו במסך ההוצאות.
+  const session = await requireModuleAccess("computers", { managerOnly: true });
   const isOwner = session.user?.role === "owner";
   const myBranchId = session.user?.branchId;
 
@@ -129,7 +131,11 @@ export default async function ComputerRoomsAccountingHomePage({
                 </tr>
               )}
               {rows.map(({ branch, stats }, idx) => (
-                <tr key={branch.id} className={idx % 2 === 1 ? "bg-[#fafbfc]" : "bg-white"}>
+                <ClickableRow
+                  key={branch.id}
+                  href={`/dashboard/computer-rooms-accounting/${branch.id}`}
+                  className={idx % 2 === 1 ? "bg-[#fafbfc]" : "bg-white"}
+                >
                   <td className={`${TD} font-bold text-ink`}>
                     <Link href={`/dashboard/computer-rooms-accounting/${branch.id}`} className="hover:text-teal hover:underline">
                       {branch.name}
@@ -150,7 +156,7 @@ export default async function ComputerRoomsAccountingHomePage({
                       <ArrowLeft className="h-3.5 w-3.5" />
                     </Link>
                   </td>
-                </tr>
+                </ClickableRow>
               ))}
             </tbody>
           </table>

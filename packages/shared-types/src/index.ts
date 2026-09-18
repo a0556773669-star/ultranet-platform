@@ -124,15 +124,63 @@ export interface Branch {
  */
 export type ExpensePolicyKey = "ads" | "internet" | "filtering" | "rent" | "electricity" | "print";
 
+/** מפתחות ההרשאה למודולים. משוכפל כטיפוס נגזר ב-`apps/web/lib/perms.ts` (`PermKey`). */
+export type PermissionKey =
+  | "branches"
+  | "computers"
+  | "rentals"
+  | "coworking"
+  | "accounting"
+  | "tasks"
+  | "charging"
+  | "shop"
+  | "duxus";
+
+/**
+ * כובע אחד של משתמש: תפקיד בסניף מסוים, עם ההרשאות שנלוות לתפקיד הזה.
+ *
+ * הסיבה שזה קיים: אותו אדם יכול להיות שותף שמנהל סניף השכרות **וגם** עובד תחזוקה בחדר
+ * מחשבים. עד כה `AppUser` החזיק `role` אחד ו-`branchId` אחד, ולכן אי אפשר היה לבטא את זה
+ * בלי לבחור איזה מהשניים "מנצח" — ובחירה כזו תמיד נותנת לו או יותר מדי (תפקיד שותף בחדר
+ * המחשבים) או פחות מדי (הוא לא מגיע לסניף השני בכלל).
+ *
+ * `branchType` נשמר על השיוך עצמו ולא נקרא מ-`n_branches` בכל בקשה: הוא מה שמאפשר להכריע
+ * **איזה כובע חל באיזה מודול** בלי שאילתה נוספת בכל רינדור. הוא דנורמליזציה מכוונת, ומי
+ * שמעדכן את סוג הסניף אחראי לשמור עליו מסונכרן (טופס המשתמשים כותב אותו מחדש בכל שמירה).
+ */
+export interface UserAssignment {
+  role: UserRole;
+  branchId: string;
+  /** סוג הסניף של `branchId` בזמן השמירה — ראה הערת הטיפוס. */
+  branchType?: BranchType;
+  perms?: Partial<Record<PermissionKey, boolean>>;
+}
+
 /** collection: n_users */
 export interface AppUser {
     id: string;
     name: string;
     email: string;
     pass: string; // legacy plaintext - replace with proper auth before any customer-facing exposure
+  /**
+   * **התפקיד הראשי.** נשאר השדה הקנוני של המשתמש גם אחרי שנוסף `assignments`: `app.html`
+   * ו-`n_approved_emails` קוראים אותו, ולכן הוא תמיד משקף את `assignments[0]`.
+   */
   role: UserRole;
-    branchId: string; // "all" for owner
-  perms?: Partial<Record<"branches" | "computers" | "rentals" | "coworking" | "accounting" | "tasks" | "charging" | "shop" | "duxus", boolean>>;
+  /** **הסניף הראשי.** `"all"` לבעלים. משקף תמיד את `assignments[0].branchId` — ראה `role`. */
+    branchId: string;
+  /** **ההרשאות הראשיות.** משקפות תמיד את `assignments[0].perms` — ראה `role`. */
+  perms?: Partial<Record<PermissionKey, boolean>>;
+  /**
+   * כל הכובעים של המשתמש (רשות). חסר או באורך 1 = משתמש עם כובע אחד, בדיוק ההתנהגות
+   * ההיסטורית; במקרה כזה `apps/web/lib/perms.ts` גוזר שיוך יחיד מ-`role`/`branchId`/`perms`
+   * ואין שום הבדל התנהגותי. שני שיוכים ומעלה = אדם עם כמה תפקידים, וההכרעה איזה מהם חל
+   * בכל מודול נעשית לפי `branchType` (ראה `resolveModuleScope`).
+   *
+   * השדה הזה **מוסיף** ולא מחליף: `role`/`branchId`/`perms` ממשיכים לשקף את השיוך הראשון,
+   * כך ש-`app.html` והדאטה הקיים עובדים בלי מיגרציה.
+   */
+  assignments?: UserAssignment[];
   viewClientBranchIds?: string[];
 }
 
@@ -1000,7 +1048,7 @@ export interface PeriodAssignment {
   closedAt?: number;
 }
 
-export type TaskEntityType = "quarter" | "rock" | "milestone" | "procedure";
+export type TaskEntityType = "quarter" | "rock" | "milestone" | "procedure" | "personal_task";
 
 export type TaskActivityAction =
   | "create"
@@ -1013,7 +1061,11 @@ export type TaskActivityAction =
   | "cancel"
   | "move"
   | "delete"
-  | "restore";
+  | "restore"
+  /** פתיחה ראשונה של משימה אישית - מתי היא נראתה בפועל (סעיף 15 באפיון המשלים) */
+  | "view"
+  /** הערה שנוספה לשרשור ההערות של משימה אישית */
+  | "comment";
 
 /** collection: n_task_activity - יומן פעולות לכל ישות במודול. אינו ניתן לעריכה דרך
  *  הממשק; כל פעולה משמעותית נרשמת כאן עם מי ומתי (סעיף 16 באפיון). */
@@ -1028,6 +1080,8 @@ export interface TaskActivity {
   newValue?: string;
   /** הקשר לשליפה מהירה של יומן אבן דרך / רבעון */
   milestoneId?: string;
+  /** הקשר מקביל למשימות ה"משימות ליוני" - שליפת יומן בשאילתת שוויון יחידה בלי אינדקס מורכב */
+  personalTaskId?: string;
   quarterKey?: string;
   /** סיבה/הערה חופשית (ביטול, פתיחה מחדש, המתנה) */
   note?: string;
@@ -1065,6 +1119,20 @@ export interface TaskSettings {
   warningWeekday: number;
   /** ברירת המחדל שהשיטה ממליצה עליה; חריגה אפשרית אחרי אזהרה */
   recommendedRocksPerQuarter: number;
+
+  /* --- גישה לטאב "משימות ליוני" (סעיף 4 באפיון המשלים) ---
+   *
+   * הטאב הוא רשימת העבודה האישית של אדם אחד, ולכן הוא **אינו** נפתח לכל מי שיש לו
+   * הרשאת `duxus`: הגישה נקבעת בשמות משתמש (דוא"ל ה-session) שנשמרים כאן. שלוש
+   * רשימות ריקות = המודול עוד לא הוגדר, ואז רק בעלים יכולים להיכנס כדי להגדיר אותו. */
+
+  /** יוני - כל הפעולות, כולל מחיקה לוגית, ביטול והיסטוריה */
+  personalOwnerEmails: string[];
+  /** המזכירה - יצירה, עריכת משימות פעילות, הערות, דחיפות ותאריך יעד. בלי מחיקה */
+  personalEditorEmails: string[];
+  /** צפייה בלבד - הרשאה שניתנת במפורש (למשל למנכ"ל), ברירת המחדל היא בלי גישה */
+  personalViewerEmails: string[];
+
   updatedAt: number;
   updatedBy?: string;
 }
@@ -1073,7 +1141,96 @@ export const DEFAULT_TASK_SETTINGS: Omit<TaskSettings, "id" | "updatedAt"> = {
   weekStartDay: 0,
   warningWeekday: 3,
   recommendedRocksPerQuarter: 3,
+  personalOwnerEmails: [],
+  personalEditorEmails: [],
+  personalViewerEmails: [],
 };
+
+/* ------------------------------------------------------------------ *
+ * טאב "משימות ליוני" - משימות קצרות שהמזכירה מזינה ויוני מסמן שבוצעו.
+ *
+ * מכוון **לא** משתמש ב-`Rock` / `Milestone` / `PeriodAssignment`: אין כאן רבעון,
+ * אין שיוך לתקופות ואין תכנון - רק רשימה אחת נקייה שנכנסת אליה משימה ויוצאת
+ * ממנה כשהיא בוצעה (סעיף 2 באפיון המשלים). מה שכן משותף למודול האסטרטגי הוא
+ * תשתית המשתמשים, ההרשאות ויומן הפעילות (`n_task_activity`).
+ * ------------------------------------------------------------------ */
+
+/** רמת הגישה של המשתמש הנוכחי לטאב. נגזרת בשרת מ-`TaskSettings` ולעולם לא נשלחת
+ *  מהלקוח - הלקוח מקבל אותה רק כדי להסתיר כפתורים. */
+export type PersonalTaskAccess = "owner" | "editor" | "viewer" | "none";
+
+/** `normal` רגילה · `important` חשובה · `urgent` דחופה (סעיף 5) */
+export type PersonalTaskPriority = "normal" | "important" | "urgent";
+
+/** `new` נוצרה וטרם נפתחה · `open` נפתחה וטרם התחיל טיפול · `in_progress` בטיפול ·
+ *  `waiting` ממתין לגורם אחר · `done` הושלמה · `cancelled` בוטלה (סעיף 9). */
+export type PersonalTaskStatus = "new" | "open" | "in_progress" | "waiting" | "done" | "cancelled";
+
+/** collection: n_personal_tasks */
+export interface PersonalTask {
+  id: string;
+  /** השדה היחיד שחובה למלא בהזנה מהירה (סעיף 20) */
+  title: string;
+  description?: string;
+  /** שם הלקוח/הפונה שביקש את הטיפול */
+  contactName?: string;
+  /** נשמר כטקסט חופשי - פורמט לא תקין לא חוסם שמירה (סעיף 17) */
+  contactPhone?: string;
+  priority: PersonalTaskPriority;
+  status: PersonalTaskStatus;
+  /** "YYYY-MM-DD" (רשות). ריק = בלי תאריך יעד, ואז המשימה לעולם אינה "באיחור" (סעיף 8).
+   *  נשמר כמחרוזת ולא כחותמת זמן - בדיוק כמו `Milestone.dueDate` - כדי ש"היום" יהיה
+   *  אותו יום בשרת ובדפדפן בלי תלות באזור זמן. */
+  dueDate?: string;
+  /** "HH:MM" (רשות) - שעת היעד בתוך `dueDate`. ריק = תאריך בלבד */
+  dueTime?: string;
+  /** מוצמדת לראש הרשימה - גוברת על כל כללי המיון (סעיף 8) */
+  pinned?: boolean;
+  /** שיקוף ההערה האחרונה לתצוגה בשורה, בלי שליפת שרשור ההערות לכל שורה */
+  lastNote?: string;
+  createdBy?: string;
+  createdAt: number;
+  /** מתי המשימה נפתחה לראשונה על ידי בעל הרשימה - זה מה שמסיר את חיווי "חדש" */
+  viewedAt?: number | null;
+  completedBy?: string;
+  completedAt?: number | null;
+  cancelledBy?: string;
+  cancelledAt?: number | null;
+  /** חובה בביטול (סעיף 4) */
+  cancelReason?: string;
+  /** כמה פעמים נפתחה מחדש אחרי השלמה */
+  reopenCount?: number;
+  /** מחיקה לוגית בלבד - המידע נשמר לצורכי שחזור (סעיף 17) */
+  deletedAt?: number | null;
+  deletedBy?: string;
+  /** נעילה אופטימית: הלקוח שולח את הערך שראה, והשרת דוחה עדכון על גרסה ישנה (סעיף 18) */
+  updatedAt: number;
+  updatedBy?: string;
+}
+
+/** collection: n_personal_task_comments - הערות כרונולוגיות על משימה אישית */
+export interface PersonalTaskComment {
+  id: string;
+  taskId: string;
+  body: string;
+  createdBy?: string;
+  createdAt: number;
+  editedAt?: number | null;
+}
+
+/** ברירות המחדל של משימה חדשה - כותרת ודחיפות מספיקות ליצירה מהירה (סעיף 6). */
+export const PERSONAL_TASK_DEFAULTS = {
+  priority: "normal" as PersonalTaskPriority,
+  status: "new" as PersonalTaskStatus,
+};
+
+/** הסטטוסים שנחשבים "רשימה פעילה" - כל מה שאינו הושלם, בוטל או נמחק (סעיף 9). */
+export const ACTIVE_PERSONAL_TASK_STATUSES: readonly PersonalTaskStatus[] = [
+  "new",
+  "open",
+  "in_progress",
+  "waiting",
+] as const;
 
 /* ================================================================== *
  * מודל שלוש השכבות — שכבה 2 (נכסים) ושכבה 1 (תנועות)

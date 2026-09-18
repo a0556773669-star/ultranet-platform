@@ -2,6 +2,7 @@
 import { revalidatePath } from "next/cache";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import { currentModuleScope } from "@/lib/perms";
 import { getAdminFirestore } from "@/lib/firebase-admin";
 import { FieldValue } from "firebase-admin/firestore";
 import type { Branch, FixedExpense, VariableExpense, BranchIncome } from "@ultranet/shared-types";
@@ -22,11 +23,11 @@ async function requireOwner() {
 }
 
 async function requireBranchAccess(branchId: string) {
-  const session = await getServerSession(authOptions);
-  if (!session) throw new Error("לא מחובר");
-  if (session.user?.role === "owner") return session;
+  const scope = await currentModuleScope("rentals");
+  if (!scope) throw new Error("לא מחובר");
+  if (scope.isOwner) return scope;
   if (branchId === SHARED_RENTALS_BRANCH_ID) throw new Error("אין הרשאה");
-  if (session.user?.branchId === branchId) return session;
+  if (scope.allows(branchId)) return scope;
   throw new Error("אין הרשאה");
 }
 

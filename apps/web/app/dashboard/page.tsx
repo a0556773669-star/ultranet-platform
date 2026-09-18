@@ -4,7 +4,14 @@ import { getServerSession } from "next-auth";
 import { Laptop as LaptopIcon, Users, FolderOpen, AlertCircle, Package, CheckCircle2, AlertTriangle, ArrowLeft, Armchair, Stethoscope } from "lucide-react";
 import { authOptions } from "@/lib/auth";
 import { getAdminFirestore } from "@/lib/firebase-admin";
-import type { PermKey } from "@/lib/perms";
+import {
+  getAssignments,
+  isOwnerSession,
+  resolveModuleScope,
+  topRole,
+  unionPerms,
+  type PermKey,
+} from "@/lib/perms";
 import { NAV_ITEMS, visibleFor, type NavItem } from "@/lib/nav-items";
 import HomeClock from "./home-clock";
 import type { ExpenseScope, Laptop, RecurringVariableExpense, Rental } from "@ultranet/shared-types";
@@ -28,12 +35,19 @@ export default async function DashboardHomePage() {
     redirect("/login");
   }
 
-  const role = session.user?.role ?? "employee";
-  const perms = (session.user as { perms?: Partial<Record<PermKey, boolean>> } | undefined)?.perms;
+  // דף הבית הוא היחיד שמסתכל על כמה מודולים בבת אחת, ולכן הוא צריך את כל הכובעים ולא
+  // כובע אחד: ההרשאות הן האיחוד, והסינון לפי סניף נעשה בכל כרטיס לפי הכובע של **אותו**
+  // מודול. מי שהוא שותף בסניף השכרות וגם עובד בחדר מחשבים רואה כאן את שניהם, כל אחד
+  // בסניף הנכון שלו.
+  const assignments = getAssignments(session);
+  const role = topRole(assignments);
+  const perms = unionPerms(assignments);
   const name = session.user?.name ?? session.user?.email ?? "";
-  const branchId = session.user?.branchId;
-  const isOwner = role === "owner";
-  const has = (key: PermKey) => isOwner || Boolean(perms?.[key]);
+  const isOwner = isOwnerSession(session);
+  const has = (key: PermKey) => isOwner || Boolean(perms[key]);
+  const scopeOf = (key: PermKey) => resolveModuleScope(session, key);
+  const rentalsScope = scopeOf("rentals");
+  const coworkingScope = scopeOf("coworking");
 
   const db = getAdminFirestore();
 
@@ -77,7 +91,7 @@ export default async function DashboardHomePage() {
     });
     rentedLaptops = rentalsSnap.docs
       .map((d) => d.data() as Rental)
-      .filter((r) => isOwner || r.branchId === branchId)
+      .filter((r) => rentalsScope.allows(r.branchId))
       .map((r) => ({ name: laptopNames[r.itemId] || "נייד", startDate: r.startDate }));
 
     const clientNames: Record<string, string> = {};
@@ -86,7 +100,7 @@ export default async function DashboardHomePage() {
     });
     unpaidRentals = unpaidSnap.docs
       .map((d) => ({ ...(d.data() as Omit<Rental, "id">), id: d.id }))
-      .filter((r) => isOwner || r.branchId === branchId)
+      .filter((r) => rentalsScope.allows(r.branchId))
       .map((r) => ({
         id: r.id,
         clientName: clientNames[r.clientId] || "לקוח",
@@ -121,7 +135,7 @@ export default async function DashboardHomePage() {
     | null = null;
 
   if (has("coworking")) {
-    const cw = await loadCoworkingData(isOwner ? undefined : { branchId });
+    const cw = await loadCoworkingData(isOwner ? undefined : { branchId: coworkingScope.branchId });
     const month = coworkingMonth();
     const clients = cw.statuses
       .filter((st) => st.active)
@@ -153,9 +167,13 @@ export default async function DashboardHomePage() {
     const all = await loadRecurringVariableExpenses();
     // עובד סניף רואה ומעדכן רק את הסניף שלו — בדיוק מה ש-`requireAccess` בפעולות מתיר,
     // כדי שלא יוצג כאן טופס שכל שליחה שלו תיפול על "אין הרשאה".
-    recurringExpenses = all.filter(
-      (e) => visibleScopes.has(e.scope) && (isOwner || (Boolean(branchId) && e.branchId === branchId)),
-    );
+    // כל סוג הוצאה נבדק מול הכובע של המודול שלו — הוצאה של חדר מחשבים מול השיוך בחדרי
+    // המחשבים, של השכרות מול השיוך בהשכרות.
+    recurringExpenses = all.filter((e) => {
+      if (!visibleScopes.has(e.scope)) return false;
+      if (isOwner) return true;
+      return Boolean(e.branchId) && scopeOf(RECURRING_SCOPE_PERM[e.scope]).allows(e.branchId ?? "");
+    });
   }
 
   // חוסרי מלאי מגיעים ממודול התפעול: מה שסניף סימן עליו X בבדיקה של החודש הנוכחי.

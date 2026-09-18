@@ -4,13 +4,14 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import { isOwnerSession } from "@/lib/perms";
 import { getAdminFirestore } from "@/lib/firebase-admin";
 import type { Branch, SetupCostItem } from "@ultranet/shared-types";
 import { setupCostCountsToMainFromForm } from "@/lib/counts-to-main";
 
 async function requireOwner() {
   const session = await getServerSession(authOptions);
-  if (!session || session.user?.role !== "owner") {
+  if (!session || !isOwnerSession(session)) {
     throw new Error("גישה זו מוגבלת לבעלים בלבד");
   }
   return session;
@@ -106,7 +107,9 @@ export async function updateBranchAction(id: string, formData: FormData) {
   await getAdminFirestore().collection("n_branches").doc(id).set(stripUndefined(data), { merge: true });
   revalidatePath("/dashboard/branches");
   revalidatePath(`/dashboard/branches/${id}`);
-  redirect("/dashboard/branches");
+  revalidatePath(`/dashboard/branches/${id}/edit`);
+  // חזרה לכרטיס ולא לרשימה: מי ששמר רוצה לראות שהשינוי אכן נקלט, ולא לחפש את הסניף מחדש.
+  redirect(`/dashboard/branches/${id}`);
 }
 
 export async function deleteBranchAction(id: string) {

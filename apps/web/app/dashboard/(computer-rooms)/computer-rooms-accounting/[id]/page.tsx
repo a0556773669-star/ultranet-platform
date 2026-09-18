@@ -103,7 +103,7 @@ export default async function ComputerRoomBranchAccountingPage({
     monthCleared?: string;
   };
 }) {
-  const session = await requireModuleAccess("computers");
+  const session = await requireModuleAccess("computers", { managerOnly: true });
   const isOwner = session.user?.role === "owner";
   const myBranchId = session.user?.branchId;
   if (!isOwner && params.id !== myBranchId) redirect("/dashboard/computer-rooms-accounting");

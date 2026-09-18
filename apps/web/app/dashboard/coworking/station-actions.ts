@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { getServerSession } from "next-auth";
 import { FieldValue } from "firebase-admin/firestore";
 import { authOptions } from "@/lib/auth";
+import { isOwnerSession } from "@/lib/perms";
 import { getAdminFirestore } from "@/lib/firebase-admin";
 import type { CoworkingClient, CoworkingStation } from "@ultranet/shared-types";
 import { STATION_NUMBERS } from "@/lib/coworking";
@@ -93,7 +94,7 @@ export async function rentStationAction(branchId: string, stationNumber: number,
  */
 export async function assignRentalToBranchAction(clientId: string, formData: FormData) {
   const session = await requireSession();
-  if (session.user?.role !== "owner") {
+  if (!isOwnerSession(session)) {
     throw new Error("שיוך השכרה לסניף מוגבל לבעלים בלבד");
   }
 
@@ -238,7 +239,7 @@ export async function unmarkStationPaidAction(clientId: string, month: string) {
  */
 export async function deleteRentalAction(clientId: string) {
   const session = await requireSession();
-  if (session.user?.role !== "owner") {
+  if (!isOwnerSession(session)) {
     throw new Error("מחיקת השכרה מוגבלת לבעלים בלבד");
   }
   await getAdminFirestore().collection("n_cw_clients").doc(clientId).delete();

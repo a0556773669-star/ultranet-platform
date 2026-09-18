@@ -1,7 +1,6 @@
 "use server";
 import { revalidatePath } from "next/cache";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { currentModuleScope } from "@/lib/perms";
 import { getAdminFirestore } from "@/lib/firebase-admin";
 import { FieldValue } from "firebase-admin/firestore";
 import type { Branch, FixedExpense, VariableExpense } from "@ultranet/shared-types";
@@ -11,12 +10,16 @@ import { resolveExpenseTypeIdFromForm } from "@/lib/recurring-purchases";
 import { countsToMainFromForm } from "@/lib/counts-to-main";
 import { sharedExpenseBranchIdsFromForm } from "@/lib/expense-shared-scope";
 
+/**
+ * הוצאות של חדר מחשבים הן עניין של מי שמנהל את הסניף: בעלים, או שותף בסניף הזה. עובד
+ * שמתפעל את המלאי אינו נוגע בהן — אותו גבול בדיוק שמסך ההוצאות אוכף ב-`managerOnly`.
+ */
 async function requireBranchAccess(branchId: string) {
-  const session = await getServerSession(authOptions);
-  if (!session) throw new Error("לא מחובר");
-  if (session.user?.role === "owner") return session;
+  const scope = await currentModuleScope("computers");
+  if (!scope) throw new Error("לא מחובר");
+  if (scope.isOwner) return scope;
   if (branchId === SHARED_EXPENSE_BRANCH_ID) throw new Error("אין הרשאה");
-  if (session.user?.branchId === branchId) return session;
+  if (scope.isManager && scope.allows(branchId)) return scope;
   throw new Error("אין הרשאה");
 }
 

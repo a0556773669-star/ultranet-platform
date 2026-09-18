@@ -1,10 +1,11 @@
 import { ListChecks } from "lucide-react";
-import { requireModuleAccess } from "@/lib/perms";
+import { requireAnyModuleAccess } from "@/lib/perms";
 import { getOpsTasksSnapshotAction } from "../actions";
 import { OpsTasksClient } from "./tasks-client";
 
 export default async function OperationsTasksPage() {
-  await requireModuleAccess("computers");
+  // "מלאי" נתן גישה למשימות מאז ומתמיד, ו"משימות" לבדו נותן אותה בלי המלאי.
+  await requireAnyModuleAccess(["computers", "tasks"]);
   const snapshot = await getOpsTasksSnapshotAction();
   return (
     <div className="space-y-3">

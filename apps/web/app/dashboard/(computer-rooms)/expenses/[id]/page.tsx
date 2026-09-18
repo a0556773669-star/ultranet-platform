@@ -14,7 +14,7 @@ import { loadRecurringPurchaseIndex } from "@/lib/recurring-purchases";
 import { RecurringPurchasesSummary } from "@/components/recurring-purchases/recurring-purchases-summary";
 
 export default async function ComputerRoomBranchExpensesPage({ params }: { params: { id: string } }) {
-  const session = await requireModuleAccess("computers");
+  const session = await requireModuleAccess("computers", { managerOnly: true });
   const isOwner = session.user?.role === "owner";
   const myBranchId = session.user?.branchId;
 
