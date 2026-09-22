@@ -284,7 +284,7 @@ pnpm dev        # turbo run dev — מריץ web + api
 | `n_period_assignments` | `PeriodAssignment` | **השיוך של אבן דרך לתקופת עבודה - לא עותק שלה.** מזהה המסמך דטרמיניסטי: `${milestoneId}__${periodType}__${periodKey}`, וכך אילוץ "אבן דרך אחת לכל תקופה" נאכף ברמת בסיס הנתונים ולא רק בממשק. שדות: `milestoneId`, `quarterKey` (**הרבעון שבו נעשה השיוך**, לא בהכרח רבעון הבית של אבן הדרך - כך שאילתת שוויון אחת מחזירה את כל שיוכי הלוח), `periodType` (`quarter`/`month`/`week`), `periodKey`, `assignedAt`/`assignedBy`, `outcome` (`open` כל עוד התקופה פתוחה; בסגירת התקופה ננעל ל-`done`/`missed`/`cancelled`), `closedAt` |
 | `n_task_activity` | `TaskActivity` | יומן הפעולות של המודול - כל פעולה משמעותית עם מי, מתי, ומה השתנה: `entityType`, `entityId`, `action` (`create`/`update`/`assign`/`unassign`/`status`/`complete`/`reopen`/`cancel`/`move`/`delete`/`restore`/`view`/`comment`), `field`/`oldValue`/`newValue`, `milestoneId`/`personalTaskId`/`quarterKey` (להקשר ולשליפה מהירה בשאילתת שוויון יחידה), `note` (סיבה), `userName`, `at`. **משרת גם את הטאב "משימות ליוני"** (`entityType: "personal_task"`) - אותו יומן, ישות נוספת. אינו ניתן לעריכה דרך הממשק |
 | `n_task_settings` | `TaskSettings` | מסמך יחיד במזהה `default`: `weekStartDay`, `warningWeekday` (מתי מופיעה האזהרה הכתומה) ו-`recommendedRocksPerQuarter`. שבוע העבודה ומועד האזהרה הם **הגדרה ולא קבוע בקוד**. בנוסף שלוש רשימות הגישה לטאב "משימות ליוני": `personalOwnerEmails` (בעל הרשימה - הכול), `personalEditorEmails` (הזנה ועריכה) ו-`personalViewerEmails` (צפייה). נשמרות באותיות קטנות; שלוש רשימות ריקות = הטאב מוצג לבעלים בלבד |
-| `n_personal_tasks` | `PersonalTask` | משימות הטאב "משימות ליוני" (`/dashboard/duxus/personal`) - `title` (השדה היחיד שחובה), `description`, `contactName`/`contactPhone` (טלפון כטקסט חופשי; פורמט לא תקין אינו חוסם שמירה), `priority` (`normal`/`important`/`urgent`), `status` (`new`/`open`/`in_progress`/`waiting`/`done`/`cancelled`), `dueDate` ("YYYY-MM-DD") ו-`dueTime` ("HH:MM", רשות) - **מחרוזות ולא חותמת זמן**, בדיוק כמו `Milestone.dueDate`, כדי ש"היום" יהיה אותו יום בשרת ובדפדפן, `pinned` (הצמדה לראש הרשימה), `lastNote` (שיקוף ההערה האחרונה לתצוגה בשורה), `viewedAt` (פתיחה ראשונה - מה שמסיר את חיווי "חדש"), `completedAt`/`completedBy`, `cancelledAt`/`cancelledBy`/`cancelReason` (חובה בביטול), `reopenCount`, `deletedAt`/`deletedBy` (מחיקה לוגית בלבד), `updatedAt` (נעילה אופטימית). **אינן משתמשות ב-`Rock`/`Milestone`/`PeriodAssignment`** - אין כאן רבעון ואין שיוך לתקופות |
+| `n_personal_tasks` | `PersonalTask` | משימות הטאב "משימות ליוני" (`/dashboard/duxus/personal`) - `title` (השדה היחיד שחובה), `description`, `contactName`/`contactPhone` (טלפון כטקסט חופשי; פורמט לא תקין אינו חוסם שמירה), `priority` (`normal`/`important`/`urgent`), `status` (`new`/`open`/`in_progress`/`waiting`/`done`/`cancelled`), `dueDate` ("YYYY-MM-DD") ו-`dueTime` ("HH:MM", רשות) - **מחרוזות ולא חותמת זמן**, בדיוק כמו `Milestone.dueDate`, כדי ש"היום" יהיה אותו יום בשרת ובדפדפן, `pinned` (הצמדה לראש הרשימה), `lastNote` (שיקוף ההערה האחרונה לתצוגה בשורה), `viewedAt` (פתיחה ראשונה - מה שמסיר את חיווי "חדש"), `completedAt`/`completedBy`, `cancelledAt`/`cancelledBy`/`cancelReason` (חובה בביטול), `reopenCount`, `deletedAt`/`deletedBy` (מחיקה לוגית בלבד), `updatedAt` (נעילה אופטימית). **אינן משתמשות ב-`Rock`/`Milestone`/`PeriodAssignment`** - אין כאן רבעון ואין שיוך לתקופות, ו-`importBatch`/`importKey` (רשומות שנוצרו או אוחדו בייבוא חד-פעמי, ראו "ייבוא משימות ליוני") |
 | `n_personal_task_comments` | `PersonalTaskComment` | הערות כרונולוגיות על משימה אישית - `taskId`, `body`, `createdBy`, `createdAt`, `editedAt`. ההערה האחרונה מוכפלת ל-`lastNote` על המשימה, כדי שהרשימה לא תשלוף שרשור לכל שורה |
 | `n_rock_reviews` | `RockReview` | סיכום ישיבת רבעון/חודש/שבוע - מזהה דטרמיניסטי `${period}_${periodKey}` (upsert, רשומה אחת לתקופה). בנוסף ל-`notes`: `participants`, `meetingDate` ו-`locked` (ישיבה נעולה = סיכום סופי, עד שנפתחת מחדש במפורש) |
 | `n_cost_rates` | `CostRate` | תעריפון עלויות התפעול (`/dashboard/accounting/rates`) - מחשב/תיק/סטיק/סינון וגלישה: `unitCost`, `kind` (`once`/`monthly`), `owedBy` (ברירת מחדל של חלוקת החוב), `qtySource` (מאיפה נגזרת הכמות בסניף). כשהקולקשן ריק מוצגות ברירות המחדל מ-`lib/cost-rates.ts` בזיכרון בלבד עד ששומרים אותן במפורש. **שורות `kind: "once"` (ציוד) הוצאו מהתעריפון** ומסוננות ב-`isRetiredRate` — העלות האמיתית מגיעה מ-`n_items.unitCost`; ראו "מה יצא מהתעריפון" בסעיף 8 |
@@ -1659,6 +1659,52 @@ HTML עשיר (`rich-editor.tsx` עצמאי למודול). חיפוש לפי ש�
 
 **אזהרת כפילות (סעיף 6).** בהזנה מהירה, כותרת זהה או אותו מספר טלפון במשימה
 **פעילה** מציגים אזהרה עדינה עם קישור למשימה הדומה — ולעולם לא חוסמים שמירה.
+#### ייבוא "משימות ליוני" (`/dashboard/duxus/import`) - כלי חד-פעמי
+
+ייבוא **נפרד לחלוטין** לטאב האישי, באותו מסך של ייבוא הרבעון אך במנוע משלו.
+אצווה `yoni_tasks_legacy_import_01`. 12 משימות פעילות ו-17 היסטוריות.
+
+**הוא אינו נוגע בסלעים, בתתי-סלעים, באבני דרך או ברבעון** - כותב רק
+ל-`n_personal_tasks` ול-`n_personal_task_comments`.
+
+| קובץ | תפקיד |
+| --- | --- |
+| `import/personal-source-data.ts` | מקור האמת: 29 הרשומות בסדר ההזנה המקורי |
+| `import/personal-import-plan.ts` | מנוע טהור, ללא Firestore - ניתן ל-dry-run מלא |
+| `import/personal-actions.ts` | הכתיבה בפועל |
+
+**החלטות התרגום:**
+
+- **איחוד סמנטי במקור**: ארבעה נושאים שבהם כמה הודעות תיארו את אותו עניין אוחדו
+  למשימה אחת (מרקוביץ, משה חיים, רכישת ביתר, מלאי נייר), והנוסחים המקוריים
+  נשמרו כהערות ולא נמחקו. **תקלות שונות באותו סניף לא אוחדו** - מזגן, מקלדת,
+  מדפסת, דפדפן וקליטה הן משימות נפרדות.
+- **דחיפות**: תקלה שמשביתה ציוד → `urgent`; כל היתר → `normal`.
+- **אין תאריכי יעד מומצאים.** אף רשומה לא קיבלה `dueDate`.
+- מה שלא היה חד-משמעי במקור (סניף שלא צוין, ניסוח לא ברור, שם לא ודאי) נשמר
+  כלשונו ומסומן לבדיקה - 6 רשומות.
+
+**סדר התצוגה** נשמר דרך חותמות הזמן, בלי להוסיף שדה `sortOrder` למודל:
+`createdAt` עולה עם סדר המקור (ולכן שובר-השוויון "הוותיקה קודם" משמר אותו),
+ו-`completedAt` יורד (ולכן ההיסטוריה מציגה את סדר המקור מלמעלה). העוגן הוא
+קבוע ולא `Date.now()`, אחרת כל הרצה הייתה משנה את הסדר.
+
+> שים לב: המיון החכם של המסך מקדים משימות דחופות בכוונה (ההתנהגות המתועדת של
+> הטאב), ולכן ברשימה הפעילה סדר המקור נשמר **בתוך כל קבוצת דחיפות**. מיון
+> "הוותיקה קודם" מחזיר את סדר המקור במדויק.
+
+**שלוש דרגות התאמה** בכתיבה, בסדר הזה:
+1. רשומה של האצווה עם אותו `importKey` → עדכון (זה מה שהופך הרצה חוזרת לבטוחה).
+2. משימה **פעילה** שכבר הייתה בטאב עם אותה כותרת או אותו טלפון → **מיזוג שמרני**:
+   מוסיפים הערות, ממלאים רק שדות ריקים, ולא נוגעים בסטטוס, בדחיפות או בכל ערך
+   קיים. היא מסומנת ב-`importKey` כדי שהמיזוג עצמו יהיה idempotent. המיזוגים
+   מדווחים בשמם בדוח.
+3. אין התאמה → יצירה.
+
+**`createdBy`** נקבע ממש כפי שההוראה דרשה: רק כשמוגדרת **בדיוק כתובת אחת**
+ברשימת העורכים (`personalEditorEmails`, זו של המזכירה) היא נבחרת; בכל מצב אחר
+נופלים למשתמש `"ייבוא"` - בלי להמציא משתמש.
+
 #### ייבוא רבעון 1 (`/dashboard/duxus/import`) - כלי חד-פעמי
 
 ייבוא היסטורי של תוכנית העבודה הידנית של רבעון 1 אל המודול. הכלי **בעלים בלבד**

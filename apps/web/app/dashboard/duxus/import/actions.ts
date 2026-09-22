@@ -16,6 +16,8 @@ const MILESTONES = "n_milestones";
 const ASSIGNMENTS = "n_period_assignments";
 const ACTIVITY = "n_task_activity";
 const REVIEWS = "n_rock_reviews";
+const PERSONAL_TASKS = "n_personal_tasks";
+const PERSONAL_COMMENTS = "n_personal_task_comments";
 
 const BATCH_LIMIT = 400;
 
@@ -91,11 +93,14 @@ async function commitWrites(db: Firestore, writes: Write[]): Promise<void> {
 /**
  * גיבוי מלא של מודול המשימות לפני כתיבה - JSON אחד שאפשר להוריד ולשמור.
  * זו רשת הביטחון: גם אם משהו ישתבש, המצב הקודם קיים מחוץ למסד.
+ *
+ * מכסה את שמונת הקולקשנים של המודול, כולל הטאב האישי "משימות ליוני".
  */
 export async function exportModuleBackupAction(): Promise<{ ok: true; json: string; counts: Record<string, number> } | { ok: false; message: string }> {
   await requireOwner();
   const db = getAdminFirestore();
-  const names = [QUARTERS, ROCKS, MILESTONES, ASSIGNMENTS, REVIEWS, ACTIVITY];
+  // הגיבוי מכסה גם את הטאב האישי, כדי ששתי אצוות הייבוא יהיו מכוסות באותו קובץ.
+  const names = [QUARTERS, ROCKS, MILESTONES, ASSIGNMENTS, REVIEWS, ACTIVITY, PERSONAL_TASKS, PERSONAL_COMMENTS];
   const snaps = await Promise.all(names.map((n) => db.collection(n).get()));
   const dump: Record<string, unknown[]> = {};
   const counts: Record<string, number> = {};
