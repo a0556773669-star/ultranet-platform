@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Download, PlayCircle, ShieldCheck, AlertTriangle, CheckCircle2 } from "lucide-react";
 import { exportModuleBackupAction, runImportAction, type ImportReport } from "./actions";
+import { runPersonalImportAction, type PersonalImportReport } from "./personal-actions";
 import { useToast } from "@/lib/toast";
 
 function Stat({ label, value }: { label: string; value: number | string }) {
@@ -29,6 +30,8 @@ export function ImportClient() {
   const [report, setReport] = useState<ImportReport | null>(null);
   const [committed, setCommitted] = useState(false);
   const [backedUp, setBackedUp] = useState(false);
+  const [personalReport, setPersonalReport] = useState<PersonalImportReport | null>(null);
+  const [personalCommitted, setPersonalCommitted] = useState(false);
 
   function handleBackup() {
     startTransition(async () => {
@@ -60,6 +63,21 @@ export function ImportClient() {
       setReport(result.report);
       setCommitted(result.committed);
       showSuccess(result.committed ? "הייבוא הושלם" : "הרצה יבשה הסתיימה - לא נכתב דבר");
+      if (result.committed) router.refresh();
+    });
+  }
+
+  function handlePersonalRun(commit: boolean) {
+    if (commit && !confirm("להריץ את ייבוא \"משימות ליוני\" בפועל? הפעולה כותבת לדאטה החי, אינה מוחקת דבר ובטוחה להרצה חוזרת.")) return;
+    startTransition(async () => {
+      const result = await runPersonalImportAction(commit);
+      if (!result.ok) {
+        showError(result.message);
+        return;
+      }
+      setPersonalReport(result.report);
+      setPersonalCommitted(result.committed);
+      showSuccess(result.committed ? "ייבוא המשימות האישיות הושלם" : "הרצה יבשה הסתיימה - לא נכתב דבר");
       if (result.committed) router.refresh();
     });
   }
@@ -165,6 +183,106 @@ export function ImportClient() {
               </div>
               <ul className="list-disc space-y-1 pr-5 text-xs text-amber-900">
                 {report.review.map((r) => (
+                  <li key={r.key}>
+                    <b>{r.title}</b> — {r.reason}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </section>
+      )}
+
+      {/* --- ייבוא שני, נפרד לגמרי: הטאב האישי "משימות ליוני" --- */}
+      <section className="card">
+        <h2 className="mb-1 text-base font-extrabold text-ink">ייבוא &quot;משימות ליוני&quot;</h2>
+        <p className="mb-3 text-xs text-muted">
+          ייבוא נפרד לחלוטין לטאב האישי: 12 משימות פעילות ו-17 היסטוריות. <b>אינו נוגע בסלעים, באבני הדרך או ברבעון.</b>{" "}
+          משימה שכבר קיימת בטאב לא תידרס - המידע יאוחד לתוכה והיא תופיע בדוח.
+        </p>
+
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => handlePersonalRun(false)}
+            disabled={isPending}
+            className="flex items-center gap-1.5 rounded-lg border border-card-border px-3 py-2 text-xs font-semibold text-ink hover:bg-[#f4f6f9] disabled:opacity-60"
+          >
+            <ShieldCheck className="h-3.5 w-3.5" />
+            הרצה יבשה
+            {personalReport && !personalCommitted && <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />}
+          </button>
+          <button
+            type="button"
+            onClick={() => handlePersonalRun(true)}
+            disabled={isPending || !personalReport}
+            title={!personalReport ? "יש להריץ קודם הרצה יבשה" : undefined}
+            className="flex items-center gap-1.5 rounded-[10px] bg-gradient-to-br from-teal to-teal-light px-4 py-2 text-xs font-bold text-white shadow-primary transition hover:opacity-90 disabled:opacity-50"
+          >
+            <PlayCircle className="h-3.5 w-3.5" />
+            ייבוא בפועל
+          </button>
+        </div>
+
+        {!backedUp && (
+          <p className="mt-2 flex items-center gap-1 text-[11px] font-semibold text-amber-700">
+            <AlertTriangle className="h-3.5 w-3.5" />
+            הגיבוי שלמעלה מכסה גם את הטאב הזה - מומלץ להוריד אותו קודם.
+          </p>
+        )}
+      </section>
+
+      {personalReport && (
+        <section className="card">
+          <h2 className="mb-1 flex items-center gap-2 text-base font-extrabold text-ink">
+            {personalCommitted ? "דוח ייבוא - משימות ליוני" : "דוח הרצה יבשה - משימות ליוני"}
+            <span
+              className={`rounded-full border px-2 py-0.5 text-[11px] font-bold ${
+                personalCommitted ? "border-emerald-300 bg-emerald-50 text-emerald-700" : "border-card-border bg-[#f4f6f9] text-muted"
+              }`}
+            >
+              {personalCommitted ? "נכתב לדאטה" : "לא נכתב דבר"}
+            </span>
+          </h2>
+          <p className="mb-3 text-xs text-muted">נרשמות על שם: {personalReport.createdBy}</p>
+
+          <div className="mb-3 grid grid-cols-3 gap-2 sm:grid-cols-6">
+            <Stat label="פעילות" value={personalReport.plan.active} />
+            <Stat label="היסטוריות" value={personalReport.plan.completed} />
+            <Stat label="דחופות" value={personalReport.plan.urgent} />
+            <Stat label="הערות" value={personalReport.plan.comments} />
+            <Stat label="עם טלפון" value={personalReport.plan.withPhone} />
+            <Stat label="אוחדו במקור" value={personalReport.plan.mergedAtSource} />
+          </div>
+
+          <div className="mb-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+            <Stat label="ייווצרו" value={personalReport.created} />
+            <Stat label="יעודכנו" value={personalReport.updated} />
+            <Stat label="יאוחדו לקיימות" value={personalReport.mergedIntoExisting.length} />
+            <Stat label="לא נגענו" value={personalReport.untouched} />
+          </div>
+
+          {personalReport.mergedIntoExisting.length > 0 && (
+            <div className="mb-3 rounded-[11px] border border-teal bg-teal-bg/50 p-3">
+              <div className="mb-2 text-xs font-bold text-teal-dark">אוחדו לתוך משימות שכבר היו בטאב</div>
+              <ul className="list-disc space-y-1 pr-5 text-xs text-ink">
+                {personalReport.mergedIntoExisting.map((m) => (
+                  <li key={m.title}>
+                    <b>{m.title}</b> — זוהתה לפי {m.matchedBy}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {personalReport.review.length > 0 && (
+            <div className="rounded-[11px] border border-amber-300 bg-amber-50/60 p-3">
+              <div className="mb-2 flex items-center gap-1.5 text-xs font-bold text-amber-800">
+                <AlertTriangle className="h-3.5 w-3.5" />
+                סומנו לבדיקה ({personalReport.review.length})
+              </div>
+              <ul className="list-disc space-y-1 pr-5 text-xs text-amber-900">
+                {personalReport.review.map((r) => (
                   <li key={r.key}>
                     <b>{r.title}</b> — {r.reason}
                   </li>

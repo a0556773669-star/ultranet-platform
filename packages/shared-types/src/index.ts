@@ -1206,6 +1206,10 @@ export interface PersonalTask {
   /** נעילה אופטימית: הלקוח שולח את הערך שראה, והשרת דוחה עדכון על גרסה ישנה (סעיף 18) */
   updatedAt: number;
   updatedBy?: string;
+  /** אצוות ייבוא חד-פעמי שיצרה או מיזגה את הרשומה (למשל `yoni_tasks_legacy_import_01`) */
+  importBatch?: string;
+  /** מזהה המקור היציב בתוך האצווה - הוא שהופך ייבוא חוזר ל-idempotent */
+  importKey?: string;
 }
 
 /** collection: n_personal_task_comments - הערות כרונולוגיות על משימה אישית */
