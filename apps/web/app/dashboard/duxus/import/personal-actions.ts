@@ -26,10 +26,6 @@ const BATCH_LIMIT = 400;
 /** שם ברירת המחדל כשלא ניתן לזהות את המזכירה בוודאות - לא ממציאים משתמש. */
 const IMPORT_USER = "ייבוא";
 
-function importEnabled(): boolean {
-  return (process.env.QUARTER1_IMPORT ?? "on").toLowerCase() !== "off";
-}
-
 export type PersonalImportResult =
   | { ok: true; committed: boolean; report: PersonalImportReport }
   | { ok: false; message: string };
@@ -95,7 +91,6 @@ async function commitWrites(db: Firestore, writes: Write[]): Promise<void> {
  */
 export async function runPersonalImportAction(commit: boolean): Promise<PersonalImportResult> {
   await requireOwner();
-  if (!importEnabled()) return { ok: false, message: "כלי הייבוא כבוי (QUARTER1_IMPORT=off)." };
 
   const db = getAdminFirestore();
   const plan = buildPersonalImportPlan();
