@@ -305,3 +305,41 @@ export async function runImportAction(commit: boolean): Promise<ImportResult> {
   revalidatePath("/dashboard/duxus", "layout");
   return { ok: true, committed: true, report };
 }
+
+export type DiagnosticsResult =
+  | { ok: true; lines: string[] }
+  | { ok: false; message: string };
+
+/**
+ * בדיקת חיבור: קוראת מעט מאוד מכל קולקשן ומדווחת מה קיים.
+ *
+ * קיימת כדי שכשמשהו לא עובד תהיה **תשובה** ולא מסך שותק - היא מבדילה בין
+ * "אין הרשאה", "אין חיבור ל-Firestore" ו-"הכל תקין אבל עוד לא ייבאת".
+ */
+export async function runDiagnosticsAction(): Promise<DiagnosticsResult> {
+  try {
+    await requireOwner();
+  } catch {
+    return { ok: false, message: "אין לך הרשאת בעלים, או שההתחברות פגה. יש להתחבר מחדש." };
+  }
+
+  const lines: string[] = [];
+  try {
+    const db = getAdminFirestore();
+    lines.push("חיבור ל-Firestore: תקין");
+
+    const names = [QUARTERS, ROCKS, MILESTONES, ASSIGNMENTS, PERSONAL_TASKS, PERSONAL_COMMENTS, ACTIVITY];
+    const counts = await Promise.all(names.map(async (n) => [n, (await db.collection(n).count().get()).data().count] as const));
+    counts.forEach(([n, c]) => lines.push(`${n}: ${c} מסמכים`));
+
+    const imported = await db.collection(ROCKS).where("importBatch", "==", IMPORT_BATCH).count().get();
+    lines.push(`סלעים מאצוות הייבוא: ${imported.data().count}`);
+    const user = await currentUserLabel();
+    lines.push(`משתמש מחובר: ${user || "(לא זוהה שם)"}`);
+    lines.push(`דגל QUARTER1_IMPORT: ${importEnabled() ? "on" : "off"}`);
+    return { ok: true, lines };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return { ok: false, message: `שגיאה בגישה ל-Firestore: ${message}` };
+  }
+}

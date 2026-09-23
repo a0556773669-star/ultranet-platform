@@ -2,10 +2,12 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Download, PlayCircle, ShieldCheck, AlertTriangle, CheckCircle2 } from "lucide-react";
-import { exportModuleBackupAction, runImportAction, type ImportReport } from "./actions";
+import { Download, PlayCircle, ShieldCheck, AlertTriangle, CheckCircle2, Stethoscope, XCircle } from "lucide-react";
+import { exportModuleBackupAction, runDiagnosticsAction, runImportAction, type ImportReport } from "./actions";
 import { runPersonalImportAction, type PersonalImportReport } from "./personal-actions";
 import { useToast } from "@/lib/toast";
+
+type LogLine = { kind: "info" | "ok" | "error"; text: string; at: string };
 
 function Stat({ label, value }: { label: string; value: number | string }) {
   return (
@@ -32,11 +34,42 @@ export function ImportClient() {
   const [backedUp, setBackedUp] = useState(false);
   const [personalReport, setPersonalReport] = useState<PersonalImportReport | null>(null);
   const [personalCommitted, setPersonalCommitted] = useState(false);
+  const [log, setLog] = useState<LogLine[]>([]);
+
+  /**
+   * יומן מתמשך על המסך. ה-toast נעלם אחרי שלוש שניות, וזה בדיוק הזמן שבו קל
+   * לפספס כישלון ולחשוב ש"לא קרה כלום" - ולכן כל פעולה נרשמת גם כאן ונשארת.
+   */
+  function push(kind: LogLine["kind"], text: string) {
+    setLog((prev) => [...prev, { kind, text, at: new Date().toLocaleTimeString("he-IL") }]);
+  }
+
+  /**
+   * כל קריאה לשרת עוברת דרך כאן.
+   *
+   * בלי העטיפה הזו, חריגה בצד השרת (פסק זמן, הרשאה, תקלת Firestore) הייתה
+   * מפילה את ה-Promise בשקט והמסך לא היה מציג **דבר**. עכשיו כל כישלון מגיע
+   * למסך עם ההודעה האמיתית.
+   */
+  async function guard<T>(label: string, fn: () => Promise<T>): Promise<T | null> {
+    push("info", `${label} - התחיל`);
+    try {
+      const value = await fn();
+      return value;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      push("error", `${label} - נכשל: ${message}`);
+      showError(`${label} נכשל: ${message}`);
+      return null;
+    }
+  }
 
   function handleBackup() {
     startTransition(async () => {
-      const result = await exportModuleBackupAction();
+      const result = await guard("גיבוי", () => exportModuleBackupAction());
+      if (!result) return;
       if (!result.ok) {
+        push("error", `גיבוי - ${result.message}`);
         showError(result.message);
         return;
       }
@@ -48,20 +81,26 @@ export function ImportClient() {
       a.click();
       URL.revokeObjectURL(url);
       setBackedUp(true);
-      showSuccess(`גיבוי הורד · ${Object.values(result.counts).reduce((a2, b) => a2 + b, 0)} מסמכים`);
+      const total = Object.values(result.counts).reduce((a2, b) => a2 + b, 0);
+      push("ok", `גיבוי הורד · ${total} מסמכים · ${Object.entries(result.counts).map(([k, v]) => `${k}=${v}`).join(" · ")}`);
+      showSuccess(`גיבוי הורד · ${total} מסמכים`);
     });
   }
 
   function handleRun(commit: boolean) {
     if (commit && !confirm("להריץ את הייבוא בפועל? הפעולה כותבת לדאטה החי. היא בטוחה להרצה חוזרת ואינה מוחקת נתונים קיימים.")) return;
     startTransition(async () => {
-      const result = await runImportAction(commit);
+      const label = commit ? "ייבוא רבעון 1" : "הרצה יבשה - רבעון 1";
+      const result = await guard(label, () => runImportAction(commit));
+      if (!result) return;
       if (!result.ok) {
+        push("error", `${label} - ${result.message}`);
         showError(result.message);
         return;
       }
       setReport(result.report);
       setCommitted(result.committed);
+      push("ok", `${label} - הסתיים · ${result.report.plan.milestones} אבני דרך · ${result.report.rocksCreated} סלעים חדשים · ${result.report.milestonesCreated} אבני דרך חדשות`);
       showSuccess(result.committed ? "הייבוא הושלם" : "הרצה יבשה הסתיימה - לא נכתב דבר");
       if (result.committed) router.refresh();
     });
@@ -70,21 +109,87 @@ export function ImportClient() {
   function handlePersonalRun(commit: boolean) {
     if (commit && !confirm("להריץ את ייבוא \"משימות ליוני\" בפועל? הפעולה כותבת לדאטה החי, אינה מוחקת דבר ובטוחה להרצה חוזרת.")) return;
     startTransition(async () => {
-      const result = await runPersonalImportAction(commit);
+      const label = commit ? "ייבוא משימות ליוני" : "הרצה יבשה - משימות ליוני";
+      const result = await guard(label, () => runPersonalImportAction(commit));
+      if (!result) return;
       if (!result.ok) {
+        push("error", `${label} - ${result.message}`);
         showError(result.message);
         return;
       }
       setPersonalReport(result.report);
       setPersonalCommitted(result.committed);
+      push("ok", `${label} - הסתיים · ${result.report.created} ייווצרו · ${result.report.updated} יעודכנו · ${result.report.mergedIntoExisting.length} יאוחדו`);
       showSuccess(result.committed ? "ייבוא המשימות האישיות הושלם" : "הרצה יבשה הסתיימה - לא נכתב דבר");
       if (result.committed) router.refresh();
+    });
+  }
+
+  function handleDiagnostics() {
+    startTransition(async () => {
+      const result = await guard("בדיקת חיבור", () => runDiagnosticsAction());
+      if (!result) return;
+      if (!result.ok) {
+        push("error", `בדיקת חיבור - ${result.message}`);
+        showError(result.message);
+        return;
+      }
+      result.lines.forEach((line) => push("ok", line));
+      showSuccess("בדיקת החיבור הסתיימה");
     });
   }
 
   return (
     <div className="flex flex-col gap-4">
       {toastNode}
+
+      <section className="card">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-base font-extrabold text-ink">בדיקת חיבור</h2>
+          <button
+            type="button"
+            onClick={handleDiagnostics}
+            disabled={isPending}
+            className="flex items-center gap-1.5 rounded-lg border border-card-border px-3 py-2 text-xs font-semibold text-ink hover:bg-[#f4f6f9] disabled:opacity-60"
+          >
+            <Stethoscope className="h-3.5 w-3.5" />
+            הרץ בדיקה
+          </button>
+        </div>
+        <p className="mt-1 text-xs text-muted">
+          לוחצים על זה קודם. הבדיקה סופרת כמה מסמכים יש בכל קולקשן ומוודאת שהחיבור וההרשאות תקינים - כך שאם משהו לא
+          עובד, תהיה תשובה ולא מסך שותק.
+        </p>
+      </section>
+
+      {log.length > 0 && (
+        <section className="card">
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <h2 className="text-base font-extrabold text-ink">יומן הפעולות במסך</h2>
+            <button type="button" onClick={() => setLog([])} className="text-xs font-semibold text-muted hover:underline">
+              ניקוי
+            </button>
+          </div>
+          <div className="flex flex-col gap-1 font-mono text-[11px]" dir="ltr">
+            {log.map((line, i) => (
+              <div
+                key={i}
+                className={`flex items-start gap-2 rounded px-2 py-1 ${
+                  line.kind === "error" ? "bg-red-50 text-red-700" : line.kind === "ok" ? "bg-emerald-50 text-emerald-800" : "bg-[#f4f6f9] text-muted"
+                }`}
+              >
+                {line.kind === "error" ? (
+                  <XCircle className="mt-0.5 h-3 w-3 shrink-0" />
+                ) : line.kind === "ok" ? (
+                  <CheckCircle2 className="mt-0.5 h-3 w-3 shrink-0" />
+                ) : null}
+                <span className="shrink-0 opacity-60">{line.at}</span>
+                <span dir="rtl" className="flex-1 text-right font-sans">{line.text}</span>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       <section className="card">
         <h2 className="mb-1 text-base font-extrabold text-ink">ייבוא רבעון 1</h2>

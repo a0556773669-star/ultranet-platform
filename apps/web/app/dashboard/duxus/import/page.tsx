@@ -3,6 +3,10 @@ import { Target, ArrowRight } from "lucide-react";
 import { requireOwner } from "@/lib/perms";
 import { ImportClient } from "./import-client";
 
+/** הייבוא קורא וכותב מאות מסמכים, ובברירת המחדל של Vercel הוא עלול להיחתך
+ *  באמצע בלי הודעה. הארכת החלון מונעת בדיוק את ה"לחצתי ולא קרה כלום". */
+export const maxDuration = 300;
+
 /**
  * כלי ייבוא חד-פעמי, בעלים בלבד. הוא לא חלק מלשוניות המודול הרגילות כדי שלא
  * יופיע בעבודה היומיומית - נכנסים אליו ישירות בכתובת.
