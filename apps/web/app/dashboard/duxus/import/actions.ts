@@ -21,15 +21,6 @@ const PERSONAL_COMMENTS = "n_personal_task_comments";
 
 const BATCH_LIMIT = 400;
 
-/**
- * הכלי כבוי בברירת מחדל כשמסמנים `off` - אותו דפוס כמו `BRANCH_INCOME_IMPORT`:
- * כשמילוי ההיסטוריה יסתיים, שמים `QUARTER1_IMPORT=off` והכלי מסרב לפעול גם
- * בשרת, לא רק במסך.
- */
-function importEnabled(): boolean {
-  return (process.env.QUARTER1_IMPORT ?? "on").toLowerCase() !== "off";
-}
-
 export type ImportResult =
   | { ok: true; committed: boolean; report: ImportReport }
   | { ok: false; message: string };
@@ -125,7 +116,6 @@ export async function exportModuleBackupAction(): Promise<{ ok: true; json: stri
  */
 export async function runImportAction(commit: boolean): Promise<ImportResult> {
   await requireOwner();
-  if (!importEnabled()) return { ok: false, message: "כלי הייבוא כבוי (QUARTER1_IMPORT=off)." };
 
   const db = getAdminFirestore();
   const plan = buildImportPlan(new Date());
@@ -336,7 +326,6 @@ export async function runDiagnosticsAction(): Promise<DiagnosticsResult> {
     lines.push(`סלעים מאצוות הייבוא: ${imported.data().count}`);
     const user = await currentUserLabel();
     lines.push(`משתמש מחובר: ${user || "(לא זוהה שם)"}`);
-    lines.push(`דגל QUARTER1_IMPORT: ${importEnabled() ? "on" : "off"}`);
     return { ok: true, lines };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
