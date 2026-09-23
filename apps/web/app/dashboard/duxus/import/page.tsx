@@ -31,8 +31,30 @@ export default async function Quarter1ImportPage() {
       {enabled ? (
         <ImportClient />
       ) : (
-        <div className="card text-sm text-muted">
-          כלי הייבוא כבוי (<code>QUARTER1_IMPORT=off</code>). כדי להפעיל אותו שוב, יש להסיר את ההגדרה ולפרוס מחדש.
+        <div className="card border-r-4 border-r-amber-400">
+          <h2 className="mb-2 text-base font-extrabold text-ink">כלי הייבוא כבוי</h2>
+          <p className="mb-3 text-sm text-muted">
+            משתנה הסביבה <code className="rounded bg-[#f4f6f9] px-1">QUARTER1_IMPORT</code> מוגדר ל-<code className="rounded bg-[#f4f6f9] px-1">off</code>,
+            ולכן המסך אינו מציג את כפתורי הייבוא והפעולות מסרבות לפעול גם בשרת. זו הגנה מכוונת שמופעלת{" "}
+            <b>אחרי</b> שהייבוא הסתיים - אם עוד לא ייבאת, צריך לכבות אותה.
+          </p>
+          <div className="rounded-[11px] border border-card-border bg-[#f9fafb] p-3 text-sm text-ink">
+            <div className="mb-1 font-bold">כדי להפעיל מחדש:</div>
+            <ol className="list-decimal space-y-1 pr-5">
+              <li>
+                ב-Vercel: פרויקט <code>ultranet-platform</code> ← <b>Settings</b> ← <b>Environment Variables</b>
+              </li>
+              <li>
+                למחוק את <code>QUARTER1_IMPORT</code>, או לשנות את הערך ל-<code>on</code>
+              </li>
+              <li>
+                ← <b>Deployments</b> ← בפריסה העליונה <code>···</code> ← <b>Redeploy</b>
+              </li>
+            </ol>
+            <p className="mt-2 text-xs text-muted">
+              חובה לפרוס מחדש: משתני סביבה נקראים בזמן הפריסה, ושינוי הערך בלבד אינו משפיע על הגרסה שכבר באוויר.
+            </p>
+          </div>
         </div>
       )}
     </div>
