@@ -52,7 +52,8 @@ export default async function BranchExpensesPage({ params }: { params: { id: str
   ]);
   const rentalsBranches = (rentalsBranchesSnap?.docs ?? [])
     .map((d) => ({ ...(d.data() as Omit<Branch, "id">), id: d.id }) as Branch)
-    .filter((b) => !b.deleted)
+    // סניף סגור כבר לא משתתף בהוצאות של כלל הסניפים — לא מוצע לבחירה ולא נספר בחלוקה המוצגת.
+    .filter((b) => !b.deleted && !b.closedAt)
     .sort((a, b) => a.name.localeCompare(b.name, "he", { numeric: true }));
   const fixedExpenses = fixedSnap.docs
     .map((d) => ({ ...(d.data() as Omit<FixedExpense, "id">), id: d.id }) as FixedExpense)
