@@ -28,6 +28,7 @@ import {
   revenueShareToDate as revenueShareToDateOf,
 } from "./revenue-shares";
 import { LAPTOP_COST_RATES_COLLECTION, laptopCostLines } from "./laptop-costs";
+import { lastDayOfMonth, nextMonth, previousMonth } from "./fixed-expense-revision";
 
 export const LAPTOP_SALES_COLLECTION = "n_laptop_sales";
 
@@ -404,25 +405,52 @@ export async function loadBranchAccountingRawData(): Promise<BranchAccountingRaw
   // הספר המשותף שמתחלק: הוצאה ב-`shared-rentals` שנושאת `ownerPct` נכנסת לספר של כל סניף
   // שהיא חלה עליו, כפרוסה שלו ממנה - בדיוק כמו הוצאה רב-סניפית, רק שהיא חיה באותו קולקשן
   // ככל הוצאה אחרת (ולכן גם קבועה יכולה להתחלק, מה שלא היה אפשרי עד היום).
-  const liveRentalsBranchIds = branches.filter((b) => b.branchType === "rentals" && !b.deleted).map((b) => b.id);
+  //
+  // **סניף סגור לא משלם על הוצאות של כלל הסניפים.** מהחודש שאחרי `closedAt` הוא יוצא מהחלוקה,
+  // והסניפים שנשארו מתחלקים בכל הסכום. חודש הסגירה עצמו עוד נספר עליו — בדיוק כמו ההוצאות
+  // הקבועות שלו, שנעצרות בתאריך הסגירה. לכן הוצאה קבועה משותפת נחתכת לתקופות: בכל תקופה
+  // קבוצת הסניפים החיים קבועה, ולכל תקופה יש פרוסה משלה.
+  const rentalsBranches = branches.filter((b) => b.branchType === "rentals" && !b.deleted);
+  const liveRentalsBranchIdsAt = (month: string) =>
+    rentalsBranches.filter((b) => !b.closedAt || b.closedAt.slice(0, 7) >= month).map((b) => b.id);
+  // החודשים שבהם קבוצת הסניפים החיים משתנה: החודש שאחרי כל סגירה.
+  const changeMonths = [
+    ...new Set(rentalsBranches.filter((b) => b.closedAt).map((b) => nextMonth(b.closedAt!.slice(0, 7)))),
+  ].sort();
+
   for (const e of fixedByBranch.get(SHARED_RENTALS_BRANCH_ID) ?? []) {
-    const division = sharedExpenseDivision(e, liveRentalsBranchIds);
-    if (!division) continue;
-    for (const branchId of division.branchIds) {
-      const arr = fixedByBranch.get(branchId) ?? [];
-      // הסכום מוחלף בפרוסה של הסניף, ו-`ownerPct` נשאר - כך `lineOwnerShare` מגיע בדיוק
-      // ל-`perBranchOwnerShare` בלי שאף מסך יצטרך לדעת שהשורה הגיעה מהספר המשותף.
-      arr.push({
-        ...e,
-        branchId,
-        amount: division.perBranchLineTotal,
-        ...(e.lastAmount != null ? { lastAmount: e.lastAmount / division.branchCount } : {}),
-      });
-      fixedByBranch.set(branchId, arr);
-    }
+    if (!e.startDate) continue;
+    const startMonth = e.startDate.slice(0, 7);
+    const endMonth = e.endDate ? e.endDate.slice(0, 7) : null;
+    const cuts = changeMonths.filter((m) => m > startMonth && (!endMonth || m <= endMonth));
+    const segmentStarts = [startMonth, ...cuts];
+    segmentStarts.forEach((segStart, i) => {
+      const nextStart = segmentStarts[i + 1];
+      const division = sharedExpenseDivision(e, liveRentalsBranchIdsAt(segStart));
+      if (!division) return;
+      const segment = {
+        startDate: i === 0 ? e.startDate : `${segStart}-01`,
+        endDate: nextStart ? lastDayOfMonth(previousMonth(nextStart)) : e.endDate,
+      };
+      for (const branchId of division.branchIds) {
+        const arr = fixedByBranch.get(branchId) ?? [];
+        // הסכום מוחלף בפרוסה של הסניף, ו-`ownerPct` נשאר - כך `lineOwnerShare` מגיע בדיוק
+        // ל-`perBranchOwnerShare` בלי שאף מסך יצטרך לדעת שהשורה הגיעה מהספר המשותף.
+        const copy: FixedExpense = {
+          ...e,
+          ...segment,
+          branchId,
+          amount: division.perBranchLineTotal,
+          ...(e.lastAmount != null ? { lastAmount: e.lastAmount / division.branchCount } : {}),
+        };
+        if (!copy.endDate) delete copy.endDate;
+        arr.push(copy);
+        fixedByBranch.set(branchId, arr);
+      }
+    });
   }
   for (const e of variableByBranch.get(SHARED_RENTALS_BRANCH_ID) ?? []) {
-    const division = sharedExpenseDivision(e, liveRentalsBranchIds);
+    const division = sharedExpenseDivision(e, liveRentalsBranchIdsAt(e.month || (e.date ?? "").slice(0, 7)));
     if (!division) continue;
     for (const branchId of division.branchIds) {
       const arr = variableByBranch.get(branchId) ?? [];
