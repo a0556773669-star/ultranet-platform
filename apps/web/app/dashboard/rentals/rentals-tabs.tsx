@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Building2, Banknote, Laptop, Tag, Users, ClipboardList, Briefcase, BarChart3, type LucideIcon } from "lucide-react";
+import { Building2, Banknote, Laptop, Tag, Users, ClipboardList, Briefcase, BarChart3, Coins, type LucideIcon } from "lucide-react";
 
 type TabItem = { href: string; label: string; icon: LucideIcon; ownerOnly?: boolean };
 
@@ -15,6 +15,8 @@ const TABS: TabItem[] = [
   // here ("ההוצאות שלי") wrote to n_tx, which no accounting screen reads — see SPEC פרק יד׳.
   { href: "/dashboard/rentals/expenses", label: "הוצאות", icon: Banknote },
   { href: "/dashboard/rentals/laptops", label: "מחשבים", icon: Laptop },
+  // כמה עולה לי כל מחשב שנכנס לסניף — נזקף אוטומטית להשקעה בסניף. בעלים בלבד.
+  { href: "/dashboard/rentals/laptop-costs", label: "עלות להוספה", icon: Coins, ownerOnly: true },
   { href: "/dashboard/rentals/labels", label: "מדבקות", icon: Tag },
   { href: "/dashboard/rentals/accounting", label: "הנה\"ח", icon: BarChart3 },
   { href: "/dashboard/rentals/branches", label: "סניפים", icon: Building2, ownerOnly: true },

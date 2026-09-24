@@ -5,7 +5,7 @@ import { CalendarClock } from "lucide-react";
 import { CountsToMainBadge } from "@/components/counts-to-main-field";
 import { DataTable, money, type DataColumn } from "./data-table";
 import { DeleteEntryButton } from "./delete-entry-button";
-import { EndMainFixedExpenseControl } from "./main-fixed-expense-controls";
+import { EndMainFixedExpenseControl, ReviseMainFixedExpenseControl } from "./main-fixed-expense-controls";
 import { deleteMainFixedExpenseAction } from "./actions";
 
 /**
@@ -131,9 +131,10 @@ export function FixedExpensesTable({ rows }: { rows: FixedExpenseRow[] }) {
         key: "actions",
         label: "",
         align: "left",
-        className: "w-[186px]",
+        className: "w-[300px]",
         render: (r) => (
           <div className="flex items-center justify-end gap-1.5">
+            {r.active && <ReviseMainFixedExpenseControl id={r.id} amount={r.amount} />}
             {r.active && <EndMainFixedExpenseControl id={r.id} />}
             <DeleteEntryButton
               compact

@@ -7,6 +7,7 @@ import { getAdminFirestore } from "@/lib/firebase-admin";
 import type { Branch, CollectionRoute } from "@ultranet/shared-types";
 import { RentalBranchForm } from "../rental-branch-form";
 import { DeleteRentalBranchButton } from "../delete-button";
+import { CloseBranchControl } from "../close-branch-control";
 import { updateRentalBranchAction, deleteRentalBranchAction } from "../actions";
 
 export default async function RentalBranchDetailPage({ params }: { params: { id: string } }) {
@@ -42,6 +43,11 @@ export default async function RentalBranchDetailPage({ params }: { params: { id:
         <h2 className="flex items-center gap-1.5 text-lg font-extrabold text-ink">
           <Building2 className="h-5 w-5" />
           {branch.name}
+          {branch.closedAt && (
+            <span className="rounded-full bg-[#f4f6f9] px-2.5 py-0.5 text-[11px] font-extrabold text-muted">
+              סניף סגור מ-{branch.closedAt}
+            </span>
+          )}
         </h2>
         <div className="flex items-center gap-2">
           <Link
@@ -52,6 +58,7 @@ export default async function RentalBranchDetailPage({ params }: { params: { id:
             ניהול הוצאות
             <ArrowRight className="h-4 w-4" />
           </Link>
+          <CloseBranchControl branchId={branch.id} branchName={branch.name} closedAt={branch.closedAt} />
           <form action={boundDelete}>
             <DeleteRentalBranchButton />
           </form>

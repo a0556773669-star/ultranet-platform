@@ -1,3 +1,4 @@
+import { ReviseCoworkingFixedControl } from "./revise-fixed-control";
 import Link from "next/link";
 import { BarChart3, Calendar, Receipt } from "lucide-react";
 import { requireModuleAccess } from "@/lib/perms";
@@ -40,6 +41,7 @@ function ExpenseList({
   purchaseByType,
   endAction,
   resumeAction,
+  revisable,
   today,
 }: {
   rows: {
@@ -56,6 +58,8 @@ function ExpenseList({
   purchaseByType?: Map<string, RecurringPurchaseTypeSummary>;
   endAction?: (id: string, formData: FormData) => Promise<void>;
   resumeAction?: (id: string) => Promise<void>;
+  /** הוצאה קבועה: כפתור "עדכון מחיר" */
+  revisable?: boolean;
   today?: string;
 }) {
   return (
@@ -81,6 +85,7 @@ function ExpenseList({
               <p className="text-xs text-muted">{r.subtitle}</p>
             </div>
             <div className="flex flex-wrap items-center gap-1.5">
+              {revisable && !r.endDate && <ReviseCoworkingFixedControl id={r.id} amount={r.amount} />}
               {end && !r.endDate && (
                 <form action={end} className="flex items-center gap-1">
                   <input
@@ -333,6 +338,7 @@ export default async function CoworkingAccountingPage() {
               emptyText='אין הוצאות קבועות — נרשמות בכפתור "הוספת הוצאה" שלמעלה.'
               deleteAction={deleteCoworkingFixedExpenseAction}
               endAction={endCoworkingFixedExpenseAction}
+              revisable
               resumeAction={resumeCoworkingFixedExpenseAction}
               today={today}
             />

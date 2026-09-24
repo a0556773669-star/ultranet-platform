@@ -9,6 +9,7 @@ import { chargeViaRoute } from "@/lib/collection-charge";
 import { countsToMainFromForm } from "@/lib/counts-to-main";
 import { resolveExpenseTypeIdFromForm } from "@/lib/recurring-purchases";
 import { MAIN_FIXED_EXPENSES_COLLECTION } from "@/lib/main-fixed-expenses";
+import { reviseFixedExpenseAmount, type RevisionResult } from "@/lib/fixed-expense-revision";
 import type {
   AccountingIncome,
   AccountingExpense,
@@ -309,4 +310,21 @@ export async function manualChargeAction(formData: FormData) {
     throw new Error(result.message);
   }
   revalidateMain();
+}
+
+/** "עדכון מחיר" של הוצאה קבועה של העסק — מ-`fromMonth` והלאה, העבר לא משתנה. */
+export async function reviseMainFixedExpenseAction(
+  id: string,
+  fromMonth: string,
+  newAmount: number,
+): Promise<RevisionResult> {
+  await requireOwner();
+  const result = await reviseFixedExpenseAmount({
+    collection: MAIN_FIXED_EXPENSES_COLLECTION as "n_ah_fixed_expenses",
+    id,
+    fromMonth,
+    newAmount,
+  });
+  revalidateMain();
+  return result;
 }

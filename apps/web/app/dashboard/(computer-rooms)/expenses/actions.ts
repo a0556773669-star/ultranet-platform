@@ -9,6 +9,7 @@ import { createLinkedOwnerLedgerExpense, deleteLinkedOwnerLedgerExpense } from "
 import { resolveExpenseTypeIdFromForm } from "@/lib/recurring-purchases";
 import { countsToMainFromForm } from "@/lib/counts-to-main";
 import { sharedExpenseBranchIdsFromForm } from "@/lib/expense-shared-scope";
+import { reviseFixedExpenseAmount, type RevisionResult } from "@/lib/fixed-expense-revision";
 
 /**
  * הוצאות של חדר מחשבים הן עניין של מי שמנהל את הסניף: בעלים, או שותף בסניף הזה. עובד
@@ -258,4 +259,29 @@ export async function deleteVariableExpenseAction(id: string, branchId: string) 
   revalidatePath("/dashboard/computer-rooms-accounting");
   revalidatePath(`/dashboard/computer-rooms-accounting/${branchId}`);
   revalidatePath("/dashboard");
+}
+
+/** "עדכון מחיר" — הסכום החודשי משתנה מ-`fromMonth` והלאה, החודשים שעברו לא. */
+export async function reviseFixedExpenseAmountAction(
+  id: string,
+  branchId: string,
+  fromMonth: string,
+  newAmount: number,
+): Promise<RevisionResult> {
+  await requireBranchAccess(branchId);
+  const result = await reviseFixedExpenseAmount({
+    collection: "n_fixed_expenses",
+    id,
+    fromMonth,
+    newAmount,
+    guard: (d) => {
+      if (d.branchId !== branchId) throw new Error("ההוצאה לא נמצאה בסניף הזה");
+    },
+  });
+  revalidatePath(`/dashboard/expenses/${branchId}`);
+  revalidatePath("/dashboard/accounting");
+  revalidatePath("/dashboard/computer-rooms-accounting");
+  revalidatePath(`/dashboard/computer-rooms-accounting/${branchId}`);
+  revalidatePath("/dashboard");
+  return result;
 }

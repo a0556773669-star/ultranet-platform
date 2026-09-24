@@ -65,3 +65,29 @@ export async function sendMonthlyReportsAction(month: string): Promise<BranchSen
   revalidatePath("/dashboard/rentals/accounting");
   return outcomes;
 }
+
+/**
+ * שליחה לסניפים שנבחרו בטבלת הבחירה ("שליחה לסניפים נבחרים"), בעלים בלבד.
+ *
+ * כאן **לא** מדלגים על סניף שכבר קיבל את הדו"ח החודש: הבחירה נעשתה במפורש, מול עמודת
+ * "נשלח" שבטבלה, ולכן היא גם הדרך לשלוח שוב (למשל אחרי תיקון הוצאה). כמו בשליחה לכולם,
+ * שליחה מוצלחת מסמנת `reportSentAt`.
+ */
+export async function sendSelectedReportsAction(month: string, branchIds: string[]): Promise<BranchSendOutcome[]> {
+  const session = await requireOwner();
+  if (!/^\d{4}-\d{2}$/.test(month)) {
+    return [{ branchId: "", branchName: "", email: null, ok: false, message: "חודש לא תקין" }];
+  }
+  const ids = Array.isArray(branchIds) ? branchIds.filter((id) => typeof id === "string" && id) : [];
+  if (ids.length === 0) {
+    return [{ branchId: "", branchName: "", email: null, ok: false, message: "לא נבחר אף סניף" }];
+  }
+  const outcomes = await sendMonthlyReports({
+    month,
+    ownerDisplayName: session.user?.name,
+    skipAlreadySent: false,
+    branchIds: ids,
+  });
+  revalidatePath("/dashboard/accounting/mobile");
+  return outcomes;
+}

@@ -16,7 +16,7 @@ export default async function NewLaptopPage({
   const branchesSnap = await db.collection("n_branches").where("branchType", "==", "rentals").get();
   const allBranches = branchesSnap.docs
     .map((d) => ({ ...(d.data() as Omit<Branch, "id">), id: d.id }) as Branch)
-    .filter((b) => !b.deleted);
+    .filter((b) => !b.deleted && !b.closedAt);
   const branches = isOwner ? allBranches : [];
   // מחירון ברירת המחדל של כל סניף, כדי להציג בטופס מה יתומחר אם משאירים שדה ריק.
   const branchPricing = Object.fromEntries(allBranches.map((b) => [b.id, b.rentalPricing]));
@@ -29,7 +29,12 @@ export default async function NewLaptopPage({
       </h1>
       {searchParams?.error === "missing" && (
         <div className="mb-4 rounded-card border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-700">
-          חובה לבחור סניף ולמלא שם מחשב לפני השמירה.
+          חובה לבחור סניף ולמלא מספר מחשב לפני השמירה.
+        </div>
+      )}
+      {searchParams?.error === "duplicate" && (
+        <div className="mb-4 rounded-card border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-700">
+          כבר יש בסניף הזה מחשב פעיל עם המספר הזה. יש לבחור מספר אחר.
         </div>
       )}
       {searchParams?.error === "no-branch" && (
