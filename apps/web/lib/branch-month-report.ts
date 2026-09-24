@@ -27,6 +27,9 @@ export interface BranchMonthReport {
   rentalCount: number;
   /** Gross collected income for the month, before any owner/partner split. */
   income: number;
+  /** מכירות מחשבים בחודש — 100% לבעלים, כלולות במלואן ב-`netToOwner`. */
+  sales: { name: string; date: string; price: number }[];
+  salesTotal: number;
   expenseLines: SettlementExpenseLine[];
   /** Total spent on the settlement-relevant expense lines above. */
   expenseTotal: number;
@@ -58,6 +61,11 @@ export function buildBranchMonthReport(
     month,
     rentalCount: f.rentalCountThisMonth,
     income: f.grossIncomeThisMonth,
+    sales: (raw.salesByBranch.get(branch.id) ?? [])
+      .filter((s) => s.month === month)
+      .sort((a, b) => a.date.localeCompare(b.date))
+      .map((s) => ({ name: s.laptopName, date: s.date, price: s.price })),
+    salesTotal: f.saleIncomeThisMonth,
     expenseLines: settlementExpenseLinesForMonth(branch, raw, month),
     expenseTotal: f.settlementExpenseThisMonth,
     openingBalance,
@@ -242,7 +250,23 @@ export function renderBranchMonthReportHtml(report: BranchMonthReport, opts: Rep
         </table>
       </td>
     </tr>
-
+${
+  report.sales.length > 0
+    ? `
+    <tr>
+      <td style="padding:18px 20px 4px">
+        <div style="font-size:13px;font-weight:800;color:${MUTED};letter-spacing:.02em">מכירות מחשבים החודש</div>
+        <table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse;margin-top:6px">
+          ${report.sales.map((s) => summaryRow(`${esc(s.name)} · ${esc(s.date)}`, money(s.price), INK)).join("")}
+          ${summaryRow('סה"כ מכירות — מועבר במלואו', money(report.salesTotal), GREEN, true)}
+        </table>
+        <div style="margin-top:8px;font-size:11px;color:${MUTED};line-height:1.6">
+          מכירת מחשב היא 100% של ${esc(ownerName)} ולכן היא לא מתחלקת — הסכום כולו כלול בהתחשבנות החודש.
+        </div>
+      </td>
+    </tr>`
+    : ""
+}
     <tr>
       <td style="padding:18px 20px 4px">
         <div style="font-size:13px;font-weight:800;color:${MUTED};letter-spacing:.02em">הוצאות משותפות החודש</div>

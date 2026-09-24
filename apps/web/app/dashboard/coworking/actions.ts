@@ -8,6 +8,7 @@ import { FieldValue } from "firebase-admin/firestore";
 import type { FixedExpense, VariableExpense } from "@ultranet/shared-types";
 import { resolveExpenseTypeIdFromForm } from "@/lib/recurring-purchases";
 import { countsToMainFromForm } from "@/lib/counts-to-main";
+import { reviseFixedExpenseAmount, type RevisionResult } from "@/lib/fixed-expense-revision";
 
 /**
  * מה שנשאר כאן הוא ניהול ההוצאות של המשרד השיתופי, שמסך ההנה"ח מזין דרכו.
@@ -127,4 +128,16 @@ export async function deleteCoworkingVariableExpenseAction(id: string) {
   await requireSession();
   await getAdminFirestore().collection("n_var_expenses").doc(id).delete();
   revalidateCoworking();
+}
+
+/** "עדכון מחיר" של הוצאה קבועה במשרד השיתופי — מ-`fromMonth` והלאה, העבר לא משתנה. */
+export async function reviseCoworkingFixedExpenseAction(
+  id: string,
+  fromMonth: string,
+  newAmount: number,
+): Promise<RevisionResult> {
+  await requireSession();
+  const result = await reviseFixedExpenseAmount({ collection: "n_fixed_expenses", id, fromMonth, newAmount });
+  revalidateCoworking();
+  return result;
 }

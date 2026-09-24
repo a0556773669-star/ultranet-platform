@@ -8,7 +8,7 @@
  * הרוויח" הן שתי תשובות שונות, ואפס היה מוחק את ההבדל.
  *
  * החישוב עצמו נשען על מה שכבר קיים: `computeBranchFinancials` יודע את הרווח של הבעלים
- * לחודש, ו-`computersActiveInMonth` יודע כמה מחשבים היו באותו חודש (לפי `addedDate` של כל
+ * לחודש, ו-`laptopActiveInMonth` יודע כמה מחשבים היו באותו חודש (לפי `addedDate` ו-`endedAt` של כל
  * מחשב) - כך שמחשב שנוסף באמצע הדרך מחלק את הרווח רק מהחודש שנוסף בו.
  *
  * **המונה כאן הוא `ownerOperatingProfitThisMonth` ולא `ownerNetProfitThisMonth`**: שורה
@@ -22,18 +22,20 @@ import {
   currentMonth,
   type BranchAccountingRawData,
 } from "./branch-accounting-data";
-import {
-  computersActiveInMonth,
-  monthsBetween,
-  PROFIT_PER_COMPUTER_TARGET,
-} from "./branch-accounting";
+import { monthsBetween, PROFIT_PER_COMPUTER_TARGET } from "./branch-accounting";
+import { laptopActiveInMonth } from "./laptop-names";
 
 export interface TrackingCell {
   month: string;
+  /** false = הסניף לא היה קיים בחודש הזה (לפני הפתיחה / אחרי הסגירה) */
+  existed: boolean;
   /** null = הסניף לא היה קיים בחודש הזה - התא נשאר ריק */
   profitPerComputer: number | null;
   /** הרווח התפעולי של הבעלים באותו חודש, בלי שורות רכש שהסניף לא לוקח בהן חלק */
   netProfit: number;
+  /** מכירות מחשבים באותו חודש — 100% שלי, אבל **לא** חלק מהרווח התפעולי שבתא (מכירה היא לא
+   *  השכרה, וחודש שנמכר בו מחשב היה נראה כמו חודש מצוין בסניף שתפקד כרגיל). מוצג בנפרד. */
+  saleIncome: number;
   computerCount: number;
   isHealthy: boolean;
 }
@@ -44,6 +46,8 @@ export interface TrackingRow {
   cells: TrackingCell[];
   /** ממוצע הרווח למחשב על החודשים שהסניף היה בהם פעיל */
   average: number | null;
+  /** ממוצע הרווח הכולל (לא למחשב) על אותם חודשים */
+  averageTotal: number | null;
 }
 
 export interface LaptopBranchTracking {
@@ -85,21 +89,32 @@ export function buildLaptopBranchTracking(
     const opened = firstActiveMonth(branch);
     const closed = lastActiveMonth(branch);
     const laptops = raw.laptopsByBranch.get(branch.id) ?? [];
-    const addedDates = laptops.map((l) => l.addedDate);
 
     const cells: TrackingCell[] = months.map((month) => {
       const existed = !branch.notStarted && (!opened || opened <= month) && (!closed || month <= closed);
       if (!existed) {
-        return { month, profitPerComputer: null, netProfit: 0, computerCount: 0, isHealthy: false };
+        return {
+          month,
+          existed: false,
+          profitPerComputer: null,
+          netProfit: 0,
+          saleIncome: 0,
+          computerCount: 0,
+          isHealthy: false,
+        };
       }
       const f = computeBranchFinancials(branch, raw, month);
-      const computerCount = computersActiveInMonth(addedDates, month);
+      // מחשב נספר מהחודש שנוסף ועד החודש שיצא בו (מכירה/הוצאה) כולל — `laptopActiveInMonth`.
+      // עד 09/2026 נספרו כאן רק תאריכי ההוספה, כך שמחשב שיצא מהסניף המשיך לחלק את הרווח לנצח.
+      const computerCount = laptops.filter((l) => laptopActiveInMonth(l, month)).length;
       const netProfit = f.ownerOperatingProfitThisMonth;
       const perComputer = computerCount > 0 ? netProfit / computerCount : 0;
       return {
         month,
+        existed: true,
         profitPerComputer: computerCount > 0 ? perComputer : null,
         netProfit,
+        saleIncome: f.saleIncomeThisMonth,
         computerCount,
         isHealthy: computerCount > 0 && perComputer >= PROFIT_PER_COMPUTER_TARGET,
       };
@@ -109,7 +124,11 @@ export function buildLaptopBranchTracking(
     const average =
       live.length > 0 ? live.reduce((s, c) => s + (c.profitPerComputer ?? 0), 0) / live.length : null;
 
-    return { branch, isMineBranch: branch.isMine !== false, cells, average };
+    const existed = cells.filter((c) => c.existed);
+    const averageTotal =
+      existed.length > 0 ? existed.reduce((s, c) => s + c.netProfit, 0) / existed.length : null;
+
+    return { branch, isMineBranch: branch.isMine !== false, cells, average, averageTotal };
   });
 
   return { months, rows, target: PROFIT_PER_COMPUTER_TARGET };

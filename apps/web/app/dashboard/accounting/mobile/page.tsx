@@ -128,6 +128,15 @@ export default async function MobileAccountingPage({
   ]);
 
   const transferRows = buildBranchTransferRows(settlingBranches, raw, month);
+  const recipientById = new Map(recipients.map((r) => [r.branchId, r]));
+  const sendRows = transferRows.map((row) => ({
+    branchId: row.branch.id,
+    branchName: row.branch.name,
+    email: recipientById.get(row.branch.id)?.email ?? null,
+    // מה שעוד נשאר להעביר החודש: "צריך להעביר" פחות מה שכבר סומן כהועבר.
+    totalDue: row.totalDue - row.transferredAmount,
+    sent: !!raw.transfersByBranchMonth.get(`${row.branch.id}|${month}`)?.reportSentAt,
+  }));
 
   const query = (nextEnd: string) => `?end=${nextEnd}&month=${month}`;
   const prevHref = `/dashboard/accounting/mobile${query(shiftMonth(end, -12))}`;
@@ -258,6 +267,7 @@ export default async function MobileAccountingPage({
               ownerEmail={ownerEmail}
               mailerError={mailerConfigError()}
               sandboxNotice={mailerSandboxMode() ? SANDBOX_NOTICE : null}
+              sendRows={sendRows}
             />
             <WideTableModal title={`העברות חודשיות — ${monthLabel(month)}`}>
               <UnifiedBranchesTable rows={transferRows} month={month} />

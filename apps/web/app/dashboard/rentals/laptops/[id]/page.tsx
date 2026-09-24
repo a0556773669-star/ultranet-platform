@@ -51,7 +51,12 @@ export default async function EditLaptopPage({
       </div>
       {searchParams?.error === "missing" && (
         <div className="mb-4 rounded-card border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-700">
-          חובה לבחור סניף ולמלא שם מחשב לפני השמירה.
+          חובה לבחור סניף ולמלא מספר מחשב לפני השמירה.
+        </div>
+      )}
+      {searchParams?.error === "duplicate" && (
+        <div className="mb-4 rounded-card border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-700">
+          כבר יש בסניף הזה מחשב פעיל עם המספר הזה. יש לבחור מספר אחר.
         </div>
       )}
       {searchParams?.error === "no-branch" && (

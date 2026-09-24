@@ -3,7 +3,18 @@
 import { useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/lib/toast";
-import { endMainFixedExpenseAction } from "./actions";
+import { endMainFixedExpenseAction, reviseMainFixedExpenseAction } from "./actions";
+import { PriceUpdateControl } from "@/components/expenses/price-update-control";
+
+/** "עדכון מחיר" של הוצאה קבועה של העסק — ראו `PriceUpdateControl`. */
+export function ReviseMainFixedExpenseControl({ id, amount }: { id: string; amount: number }) {
+  return (
+    <PriceUpdateControl
+      currentAmount={amount}
+      submit={(fromMonth, newAmount) => reviseMainFixedExpenseAction(id, fromMonth, newAmount)}
+    />
+  );
+}
 
 /**
  * "הפסקה" של הוצאה קבועה — תאריך + כפתור, ולא כפתור מחיקה.

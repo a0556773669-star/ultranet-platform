@@ -14,6 +14,7 @@ import {
 import { createLinkedOwnerLedgerExpense, deleteLinkedOwnerLedgerExpense } from "@/lib/branch-expense-ledger";
 import { resolveExpenseTypeIdFromForm } from "@/lib/recurring-purchases";
 import { countsToMainFromForm } from "@/lib/counts-to-main";
+import { reviseFixedExpenseAmount, type RevisionResult } from "@/lib/fixed-expense-revision";
 
 async function requireOwner() {
   const session = await getServerSession(authOptions);
@@ -305,4 +306,29 @@ export async function deleteBranchIncomeAction(id: string, branchId: string) {
   await getAdminFirestore().collection("n_branch_income").doc(id).delete();
   revalidatePath(`/dashboard/rentals/expenses/${branchId}`);
   revalidatePath("/dashboard/rentals/accounting");
+}
+
+/** "עדכון מחיר" — הסכום החודשי משתנה מ-`fromMonth` והלאה, החודשים שעברו לא. */
+export async function reviseFixedExpenseAmountAction(
+  id: string,
+  branchId: string,
+  fromMonth: string,
+  newAmount: number,
+): Promise<RevisionResult> {
+  await requireBranchAccess(branchId);
+  const result = await reviseFixedExpenseAmount({
+    collection: "n_fixed_expenses",
+    id,
+    fromMonth,
+    newAmount,
+    guard: (d) => {
+      if (d.branchId !== branchId) throw new Error("ההוצאה לא נמצאה בסניף הזה");
+    },
+  });
+  revalidatePath(`/dashboard/rentals/expenses/${branchId}`);
+  revalidatePath("/dashboard/accounting");
+  revalidatePath("/dashboard/rentals/accounting");
+  revalidatePath("/dashboard/accounting/mobile");
+  revalidatePath("/dashboard");
+  return result;
 }

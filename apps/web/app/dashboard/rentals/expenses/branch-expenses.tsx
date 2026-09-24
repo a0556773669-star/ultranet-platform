@@ -7,7 +7,7 @@ import { RecurringPurchaseBadge } from "@/components/recurring-purchases/recurri
 import type { RecurringPurchaseTypeSummary } from "@/lib/recurring-purchases";
 import { createFixedExpenseAction, createVariableExpenseAction, addBranchIncomeAction, deleteBranchIncomeAction } from "./actions";
 import { EditFixedExpenseModal, EditVariableExpenseModal } from "./edit-expense-modals";
-import { EndFixedExpenseControl, DeleteFixedExpenseButton, DeleteVariableExpenseButton } from "./expense-action-buttons";
+import { EndFixedExpenseControl, DeleteFixedExpenseButton, DeleteVariableExpenseButton, ReviseFixedExpenseControl } from "./expense-action-buttons";
 import { CountsToMainField, CountsToMainBadge } from "@/components/counts-to-main-field";
 import { countsToMain } from "@/lib/counts-to-main";
 
@@ -269,6 +269,7 @@ export function BranchExpenses({
                 </div>
                 <div className="flex items-center gap-2">
                   {canManage && <EditFixedExpenseModal expense={e} branchId={branchId} isPartner={isPartner} ownerName={ownerName} partnerName={partnerName} isShared={isShared} branches={branchOptions} />}
+                  {canManage && <ReviseFixedExpenseControl id={e.id} branchId={branchId} amount={e.amount || 0} />}
                   {canManage && <EndFixedExpenseControl id={e.id} branchId={branchId} />}
                   {canManage && <DeleteFixedExpenseButton id={e.id} branchId={branchId} />}
                 </div>

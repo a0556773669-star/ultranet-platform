@@ -3,11 +3,12 @@
 import { useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Eye, Mail, Send, X, Check, AlertTriangle } from "lucide-react";
+import { Eye, Mail, Send, X, Check, AlertTriangle, ListChecks } from "lucide-react";
 import { useToast } from "@/lib/toast";
 import type { ReportRecipient } from "@/lib/branch-report-recipients";
 import type { BranchSendOutcome } from "@/lib/branch-report-send";
 import { sendBranchReportAction, sendMonthlyReportsAction } from "./report-actions";
+import { SelectSendModal, type SendChoiceRow } from "./select-send-modal";
 
 const FIELD =
   "w-full rounded-lg border border-card-border bg-[#f4f6f9] px-3 py-2 text-sm focus:border-teal focus:bg-white focus:outline-none";
@@ -42,6 +43,7 @@ export function ReportButtons({
   ownerEmail,
   mailerError,
   sandboxNotice,
+  sendRows,
 }: {
   month: string;
   monthLabel: string;
@@ -51,12 +53,15 @@ export function ReportButtons({
   mailerError: string | null;
   /** set when sending works but only reaches your own inbox (Resend's sandbox sender). */
   sandboxNotice: string | null;
+  /** טבלת הבחירה של "שליחה לסניפים נבחרים" — כולל כמה כל סניף צריך להעביר החודש */
+  sendRows: SendChoiceRow[];
 }) {
   const withEmail = recipients.filter((r) => r.email);
   const missingEmail = recipients.filter((r) => !r.email);
 
   const [testOpen, setTestOpen] = useState(false);
   const [allOpen, setAllOpen] = useState(false);
+  const [selectOpen, setSelectOpen] = useState(false);
   const [toEmail, setToEmail] = useState(ownerEmail ?? withEmail[0]?.email ?? "");
   const [branchId, setBranchId] = useState(recipients[0]?.branchId ?? "");
   const [outcomes, setOutcomes] = useState<BranchSendOutcome[] | null>(null);
@@ -128,6 +133,24 @@ export function ReportButtons({
         <Send className="h-4 w-4" />
         שלח לכל הסניפים
       </button>
+      <button
+        type="button"
+        onClick={() => setSelectOpen(true)}
+        className="inline-flex items-center gap-1.5 rounded-[10px] border border-teal bg-white px-3 py-1.5 text-sm font-bold text-teal-dark transition hover:bg-teal-bg"
+      >
+        <ListChecks className="h-4 w-4" />
+        שלח לסניפים נבחרים
+      </button>
+
+      {selectOpen && (
+        <SelectSendModal
+          month={month}
+          monthLabel={monthLabel}
+          rows={sendRows}
+          blocker={mailerError ?? (sandboxNotice ? `${sandboxNotice} כלומר שליחה לסניפים תיכשל כרגע.` : null)}
+          onClose={() => setSelectOpen(false)}
+        />
+      )}
 
       {testOpen && (
         <Modal title='שליחת דו"ח לבדיקה' onClose={() => setTestOpen(false)}>

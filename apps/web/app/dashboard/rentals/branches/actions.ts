@@ -6,6 +6,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { getAdminFirestore } from "@/lib/firebase-admin";
 import type { Branch } from "@ultranet/shared-types";
+import { closeBranch, reopenBranch } from "@/lib/history";
 
 async function requireOwner() {
   const session = await getServerSession(authOptions);
@@ -183,4 +184,27 @@ export async function auditRentalPermissionsAction(): Promise<{ checked: number;
   }
   revalidatePath("/dashboard/rentals/branches");
   return { checked, fixed, skipped };
+}
+
+/**
+ * סגירת סניף — בעלים בלבד. הסניף לא נמחק: הוא מקבל תאריך סגירה עסקי (`closedAt`), כל
+ * ההוצאות הקבועות שלו נעצרות באותו יום, והמעקב אחריו נעצר בחודש הסגירה. ההיסטוריה, וגם יתרת
+ * ההעברה הפתוחה מול השותף, נשארות — סגירת סניף היא לא מחיקת חוב. ראו `closeBranch` ב-`lib/history.ts`.
+ */
+export async function closeRentalBranchAction(id: string, closedAt: string): Promise<{ ok: boolean; message: string }> {
+  await requireOwner();
+  const result = await closeBranch(id, closedAt);
+  revalidatePath("/dashboard/rentals", "layout");
+  revalidatePath("/dashboard/accounting/mobile");
+  revalidatePath("/dashboard/accounting");
+  return { ok: result.ok, message: result.message };
+}
+
+/** פתיחה מחדש של סניף שנסגר. ההוצאות שנעצרו לא חוזרות לבד. בעלים בלבד. */
+export async function reopenRentalBranchAction(id: string): Promise<{ ok: boolean; message: string }> {
+  await requireOwner();
+  const result = await reopenBranch(id);
+  revalidatePath("/dashboard/rentals", "layout");
+  revalidatePath("/dashboard/accounting/mobile");
+  return result;
 }

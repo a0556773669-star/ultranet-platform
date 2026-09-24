@@ -217,6 +217,9 @@ export interface FixedExpense {
    * מגיעה לאף סניף. `owedBy` נקרא רק כשהשדה הזה חסר. ראה `lib/expense-shared-scope.ts`.
    */
   ownerPct?: number;
+  /** "עדכון מחיר": השורה הזו נפתחה כגרסה חדשה של השורה `revisedFromId`, שנסגרה בחודש שלפני
+   *  `startDate` שלה. לתיעוד בלבד - כל שורה נספרת לבד בתקופה שלה. ראו `lib/fixed-expense-revision.ts`. */
+  revisedFromId?: string;
 }
 
 /** collection: n_var_expenses */
@@ -346,6 +349,92 @@ export interface Laptop {
    *  real `unitCost`. Unset for computers registered before the asset layer existed - those are
    *  listed as "מחשב בלי רכישה משויכת" on the integrity screen. */
   itemId?: string;
+  /** מספר המחשב. השם נגזר ממנו תמיד: "מחשב 145", ובמחשב גרפיקה "מחשב 56 גרפיקה"
+   *  (`laptopDisplayName`, `apps/web/lib/laptop-names.ts`). חסר = מחשב שנרשם לפני הכלל ועוד לא
+   *  עבר האחדת שמות - `name` שלו הוא עדיין טקסט חופשי. */
+  number?: number;
+  /** מחשב גרפיקה: משנה את השם ("... גרפיקה") ואת עלות ההוספה שנזקפת לסניף
+   *  (`n_laptop_cost_rates`, `kind: "graphics"`). */
+  isGraphics?: boolean;
+  /** מצב המחשב. חסר = `active`. מחשב שנמכר או הוצא מהסניף **לא נמחק** - הוא נשאר במסמך כדי
+   *  שההשכרות שלו, העלות שנזקפה לסניף ומספר המחשבים בחודשים שעברו יישארו נכונים; הוא רק
+   *  יוצא מכל רשימה פעילה (לוח ההשכרות, השכרה חדשה, מלאי, ספירת מחשבים מהחודש שאחרי). */
+  status?: LaptopStatus;
+  /** ISO date. מתי יצא מהסניף (מכירה או הוצאה). נספר במעקב עד סוף החודש הזה כולל. */
+  endedAt?: string;
+  /** הוצאה (לא מכירה): הערה חופשית של הבעלים - לאן לקח את המחשב. */
+  endNote?: string;
+}
+
+export type LaptopStatus = "active" | "sold" | "removed";
+
+/**
+ * collection: n_laptop_sales — מכירת מחשב מתוך סניף השכרות.
+ *
+ * **המכירה כולה של הבעלים (100%)**: המחיר לא מתחלק עם השותף ולא נכנס לאחוזים מהברוטו. השותף
+ * הוא שמחזיק בכסף (הוא מכר), ולכן המחיר נוסף **במלואו** להתחשבנות החודשית שלו מול הבעלים -
+ * "צריך להעביר" של אותו חודש (`computeBranchFinancials`, `lib/branch-accounting-data.ts`).
+ * לא נכתב ל-`n_ah_income`: לספר הראשי הוא מגיע רק כשהבעלים מסמן שההעברה החודשית בוצעה.
+ */
+export interface LaptopSale {
+  id: string;
+  branchId: string;
+  laptopId: string;
+  /** השם בזמן המכירה - המחשב עצמו עוד עשוי לעבור שינוי שם */
+  laptopName: string;
+  /** ISO date */
+  date: string;
+  /** YYYY-MM */
+  month: string;
+  /** המחיר הכולל של כל מה שנמכר יחד */
+  price: number;
+  /** מה נמכר יחד עם העסקה */
+  items: LaptopSaleItems;
+  /** רק כשנמכר סים: האם הסים הועבר על שם הקונה */
+  simTransferred?: boolean;
+  /** רק כשנמכר סים: האם נטפרי הועבר על שם הקונה */
+  netfreeTransferred?: boolean;
+  buyerName?: string;
+  notes?: string;
+  createdAt: string;
+  createdBy?: string;
+}
+
+export interface LaptopSaleItems {
+  laptop: boolean;
+  charger: boolean;
+  stick: boolean;
+  sim: boolean;
+  bag: boolean;
+}
+
+/** שורה אחת בפירוט עלות מחשב (תיק, סטיק, מטען...). */
+export interface LaptopCostItem {
+  label: string;
+  amount: number;
+}
+
+/**
+ * collection: n_laptop_cost_rates — כמה עולה לי מחשב שנוסף לסניף השכרות, לפי סוג ותאריך.
+ *
+ * כל מסמך הוא **גרסת מחיר**: מאיזה תאריך היא חלה (`from`), לאיזה סוג מחשב, ופירוט השורות.
+ * עדכון מחיר הוא מסמך חדש עם `from` חדש, לעולם לא עריכה של הקיים - מחשב שנוסף לפני העדכון
+ * ממשיך לעלות את מה שעלה ביום שנוסף. העלות של מחשב = הגרסה של הסוג שלו עם ה-`from` המאוחר
+ * ביותר שעדיין לא אחרי `addedDate` שלו; מחשב שנוסף לפני הגרסה הראשונה מקבל את הראשונה.
+ *
+ * העלות נזקפת **לבעלים בלבד** (שילם הבעלים, החוב על הבעלים, `countsToMain: false`): היא נכנסת
+ * ל"ההוצאות שלי" / "ששילמתי בפועל" בהנה"ח של ההשכרות, ולא לספר הראשי, לא להתחשבנות מול השותף
+ * ולא לרווח התפעולי במעקב (היא רכש). ראו `lib/laptop-costs.ts`.
+ */
+export interface LaptopCostRate {
+  id: string;
+  kind: "standard" | "graphics";
+  /** ISO date - הגרסה חלה על מחשבים שנוספו מהתאריך הזה והלאה */
+  from: string;
+  items: LaptopCostItem[];
+  /** סכום השורות, נשמר מוכן */
+  total: number;
+  createdAt: string;
 }
 
 /** collection: n_sticks */
@@ -367,6 +456,10 @@ export interface Stick {
     linkedLaptopId?: string | null;
     /** n_items doc id of the physical stick this catalogue entry stands for (שכבה 2). */
     itemId?: string;
+  /** כמו `Laptop.status`: סטיק שנמכר (יחד עם מחשב) או הוצא יחד עם המחשב שלו יוצא מהרשימות
+   *  הפעילות, ולא נמחק. חסר = `active`. */
+  status?: LaptopStatus;
+  endedAt?: string;
 }
 
 /** collection: n_rental_clients */
@@ -715,6 +808,8 @@ export interface AccountingFixedExpense {
     countsToMain?: boolean;
     /** ISO timestamp, לתצוגה בלבד */
     createdAt?: string;
+  /** "עדכון מחיר" - כמו `FixedExpense.revisedFromId`. */
+  revisedFromId?: string;
 }
 
 /** collection: n_collection_routes */
