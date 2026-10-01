@@ -1,4 +1,4 @@
-import { Home, Monitor, Laptop, Handshake, BarChart3, BookOpen, Sparkles, Target, type LucideIcon } from "lucide-react";
+import { Home, Monitor, Laptop, Handshake, BarChart3, BookOpen, Sparkles, Target, LifeBuoy, type LucideIcon } from "lucide-react";
 import type { PermKey } from "@/lib/perms";
 
 export type NavItem = { href: string; label: string; icon: LucideIcon; perm?: PermKey | PermKey[] };
@@ -12,6 +12,7 @@ export const NAV_ITEMS: NavItem[] = [
   { href: "/dashboard/duxus", label: "משימות ונהלים", icon: Target, perm: "duxus" },
   { href: "/dashboard/shop", label: "חנות AI", icon: Sparkles, perm: "shop" },
   { href: "/dashboard/tutorials", label: "הדרכות", icon: BookOpen },
+  { href: "/dashboard/help", label: "עזרה ושאלות", icon: LifeBuoy },
 ];
 
 export function visibleFor(role: string, perms: Partial<Record<PermKey, boolean>> | null | undefined, item: NavItem) {

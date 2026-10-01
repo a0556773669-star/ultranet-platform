@@ -3,7 +3,7 @@
 > מסמך חי. יש לעדכן אותו בכל שינוי פיצ'ר, מודול, מודל נתונים או אינטגרציה
 > (ראה כלל תחזוקת התיעוד ב-[`CLAUDE.md`](CLAUDE.md)).
 >
-> עודכן לאחרונה: 2026-09-24
+> עודכן לאחרונה: 2026-10-01
 
 ## תוכן עניינים
 1. [סקירה כללית](#1-סקירה-כללית)
@@ -103,6 +103,7 @@ pnpm dev        # turbo run dev — מריץ web + api
 | `NEXTAUTH_SECRET` | סוד NextAuth |
 | `NEXTAUTH_URL` | כתובת הבסיס (localhost:3000 בפיתוח) |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | אופציונלי — כניסת Google |
+| `ANTHROPIC_API_KEY` | אופציונלי — העוזר החכם של מרכז העזרה (`/dashboard/help`). בלעדיו מרכז העזרה עונה מתוך השאלות הנפוצות בלבד |
 
 ל-`apps/api` קובץ `.env.example` נפרד עם פרטי Firebase.
 
@@ -289,6 +290,7 @@ pnpm dev        # turbo run dev — מריץ web + api
 | `n_personal_tasks` | `PersonalTask` | משימות הטאב "משימות ליוני" (`/dashboard/duxus/personal`) - `title` (השדה היחיד שחובה), `description`, `contactName`/`contactPhone` (טלפון כטקסט חופשי; פורמט לא תקין אינו חוסם שמירה), `priority` (`normal`/`important`/`urgent`), `status` (`new`/`open`/`in_progress`/`waiting`/`done`/`cancelled`), `dueDate` ("YYYY-MM-DD") ו-`dueTime` ("HH:MM", רשות) - **מחרוזות ולא חותמת זמן**, בדיוק כמו `Milestone.dueDate`, כדי ש"היום" יהיה אותו יום בשרת ובדפדפן, `pinned` (הצמדה לראש הרשימה), `lastNote` (שיקוף ההערה האחרונה לתצוגה בשורה), `viewedAt` (פתיחה ראשונה - מה שמסיר את חיווי "חדש"), `completedAt`/`completedBy`, `cancelledAt`/`cancelledBy`/`cancelReason` (חובה בביטול), `reopenCount`, `deletedAt`/`deletedBy` (מחיקה לוגית בלבד), `updatedAt` (נעילה אופטימית). **אינן משתמשות ב-`Rock`/`Milestone`/`PeriodAssignment`** - אין כאן רבעון ואין שיוך לתקופות, ו-`importBatch`/`importKey` (רשומות שנוצרו או אוחדו בייבוא חד-פעמי, ראו "ייבוא משימות ליוני") |
 | `n_personal_task_comments` | `PersonalTaskComment` | הערות כרונולוגיות על משימה אישית - `taskId`, `body`, `createdBy`, `createdAt`, `editedAt`. ההערה האחרונה מוכפלת ל-`lastNote` על המשימה, כדי שהרשימה לא תשלוף שרשור לכל שורה |
 | `n_rock_reviews` | `RockReview` | סיכום ישיבת רבעון/חודש/שבוע - מזהה דטרמיניסטי `${period}_${periodKey}` (upsert, רשומה אחת לתקופה). בנוסף ל-`notes`: `participants`, `meetingDate` ו-`locked` (ישיבה נעולה = סיכום סופי, עד שנפתחת מחדש במפורש) |
+| `n_help_questions` | `HelpQuestion` | כל שאלה שנשאלה במרכז העזרה (`/dashboard/help`): `question`, `answer`, `source` (`ai` = העוזר החכם, `faq` = הותאמה שאלה נפוצה, `none` = לא נמצאה תשובה), `matchedIds` (השאלות הנפוצות שהוצעו), `audience` (`owner`/`renter`), `userEmail`/`userName`, `helpful` (סימון 👍/👎 של השואל; חסר = לא סומן), `createdAt` (ISO). נכתב רק ע"י מרכז העזרה ו-`app.html` לא קורא אותו. הבעלים רואה אותו ב-`/dashboard/help/questions` |
 | `n_cost_rates` | `CostRate` | תעריפון עלויות התפעול (`/dashboard/accounting/rates`) - מחשב/תיק/סטיק/סינון וגלישה: `unitCost`, `kind` (`once`/`monthly`), `owedBy` (ברירת מחדל של חלוקת החוב), `qtySource` (מאיפה נגזרת הכמות בסניף). כשהקולקשן ריק מוצגות ברירות המחדל מ-`lib/cost-rates.ts` בזיכרון בלבד עד ששומרים אותן במפורש. **שורות `kind: "once"` (ציוד) הוצאו מהתעריפון** ומסוננות ב-`isRetiredRate` — העלות האמיתית מגיעה מ-`n_items.unitCost`; ראו "מה יצא מהתעריפון" בסעיף 8 |
 | `n_branch_cost_settings` | `BranchCostSetting` | דריסה של שורת תעריפון לסניף מסוים - מזהה דטרמיניסטי `${branchId}__${rateKey}` (upsert). כל שדה רשות: `qty`/`unitCost`/`owedBy`/`paidBy`/`enabled` - מה שלא מוגדר נופל חזרה לערך שבתעריפון |
 | `n_multi_branch_expenses` | `MultiBranchExpense` | **קולקשן סגור לכתיבה (2026-09).** הוצאה חד-פעמית אחת שמתחלקת בין כמה סניפי השכרות: `amount` (הסכום המלא), `ownerPct` (כמה אחוז ממנה על הבעלים), `branchIds` (בין מי מתחלק השאר, שווה בשווה), `paidBy`, `date`/`month`, `linkedAhExpenseId`. הוא נולד כי `owedBy` יודע לבטא רק בעלים/שותף/50-50 ולא אחוז חופשי — ומאז ש-`ownerPct` יושב על ההוצאה עצמה בספר המשותף אותה שאלה נענית שם, גם בהוצאה קבועה (מה שכאן מעולם לא היה אפשרי), ולכן **טופס היצירה הוסר ואין דרך לכתוב לכאן שורה חדשה**. השורות הקיימות ממשיכות להיפרס לשורת הוצאה פר-סניף בזמן קריאה (`expandExpenseLines`, `lib/branch-accounting-data.ts`) ומוצגות למחיקה בספר המשותף (`legacy-multi-branch.tsx`) |
@@ -1878,6 +1880,32 @@ HTML עשיר (`rich-editor.tsx` עצמאי למודול). חיפוש לפי ש�
 ### הדרכות (`/dashboard/tutorials`)
 מאגר הדרכות עם עורך עשיר (`rich-editor.tsx`), קבצים מצורפים, תמונות והדפסה.
 
+### עזרה ושאלות (`/dashboard/help`) — כל משתמש מחובר
+מקום אחד לשאול "איך עושים את זה" ולקבל תשובה מיד. פתוח לכולם בתפריט, אבל **כל משתמש מקבל רק
+את מה שהוא רואה במערכת** (`helpScopeFor` ב-`lib/help/knowledge.ts`):
+- **בעלים** (וכל מי שעובד על חשבון הבעלים, כמו המזכירה) — מדריך הבעלים המלא + מדריך המשכירים.
+- **שותף/עובד עם `rentals`** — מדריך המשכירים בלבד (בלי מסכי בעלים כמו "השכרות יוני", "עלות להוספה", "סניפים").
+- משתמש עם הרשאות אחרות — שאלות מהמודולים שיש לו אליהם הרשאה, בלי מסכי בעלים.
+
+**בסיס הידע** — `lib/help/kb-owner.ts` ו-`lib/help/kb-renter.ts`: מדריך מלא לפי מסכים (`*_GUIDE`) ו-185 שאלות
+נפוצות (`*_FAQ`, כל אחת עם `module` ו-`tags`). התוויות בהן הן התוויות האמיתיות שבקוד; **כשמשנים מסך — מעדכנים
+גם את השאלות הרלוונטיות.**
+
+**מנגנון התשובה** (`askHelpAction` ב-`app/dashboard/help/actions.ts`):
+1. אם `ANTHROPIC_API_KEY` מוגדר — Claude (`lib/help/assistant.ts`) עונה מתוך המדריך של אותו משתמש בלבד, עם
+   היסטוריית השיחה. המדריך יושב ב-system prompt ונשמר במטמון (prompt caching). אין לעוזר גישה לנתונים — רק להסבר.
+2. אחרת, או אם הקריאה נכשלה — חיפוש מקומי בשאלות הנפוצות (`lib/help/search.ts`: הסרת תחיליות עבריות ו-ים/ות,
+   ניקוד לפי שאלה/תגיות/תשובה), והתשובה של ההתאמה הטובה ביותר.
+3. בכל מקרה מוצגות "שאלות קשורות", ובזמן ההקלדה "אולי התכוונתם" מתוך אותו חיפוש — בדפדפן, בלי לחכות לשרת.
+
+כל שאלה נרשמת ב-`n_help_questions`, והשואל יכול לסמן 👍/👎. **"שאלות שנשאלו"** (`/dashboard/help/questions`,
+`requireOwner`) מציג לבעלים את 300 האחרונות, עם סינון "לא עזר / בלי תשובה" — הרמז הכי טוב למה כדאי להסביר טוב יותר.
+
+**סרטוני הדרכה** — בראש המסך, לפי הקהל: `public/help-videos/owner.mp4` (בעלים ומזכירות) ו-`public/help-videos/renter.mp4`
+(משכירים). קבצים סטטיים (Vercel מגיש אותם ישירות); הם מצולמים על נתוני הדגמה בלבד. אם הקובץ חסר — הכרטיס פשוט לא מוצג.
+הסרטונים נוצרים אוטומטית מהמערכת האמיתית עם `tools/tutorial-videos` (ראו ה-README שם): הקלטת מסך בדפדפן על
+Firestore Emulator עם נתוני הדגמה, כתוביות בעברית צרובות, וקריינות.
+
 ### חנות AI (`/shop` ציבורי + `/dashboard/shop` ניהול) — perm: shop
 
 **`/shop`** — עמוד ציבורי (`app/shop/`, לא מוגן ב-middleware שמכסה רק `/dashboard/:path*`, ולכן נגיש
@@ -1961,6 +1989,9 @@ HTML עשיר (`rich-editor.tsx` עצמאי למודול). חיפוש לפי ש�
 
 - **Firebase / Firestore** — מסד הנתונים. גישת אדמין דרך `lib/firebase-admin.ts`
   (web) ו-`firebase.service.ts` (api). פרויקט: `ultranet-e94aa`.
+- **Claude (Anthropic API)** (`lib/help/assistant.ts`, `@anthropic-ai/sdk`) — העוזר החכם של מרכז העזרה. מודל `claude-opus-5-5` במאמץ `low`,
+  המדריך ב-system prompt עם prompt caching, ו-`fallbacks: "default"` (חזרה אוטומטית למודל חלופי אם שאלה תמימה נחסמת בטעות).
+  אופציונלי לחלוטין: בלי `ANTHROPIC_API_KEY` מרכז העזרה עובד במצב שאלות נפוצות.
 - **Nedarim Plus** (`lib/nedarim.ts`) — סליקה ישראלית.
   `resolveNedarimCreds(branchId?, routeId?)`: אם ניתן `routeId` מפורש (מסלול
   ה-`collectionRouteId` שנשמר על לקוח השכרות מסוים) הוא המקור היחיד — נכשל
@@ -2135,6 +2166,8 @@ app שרץ בדפדפן ניתן ל"התקנה" כאפליקציה עם אייק
 | `apps/web/lib/shop-recommender.ts` | מנוע ההמלצות של חנות ה-AI - זיהוי תחום שימוש מטקסט חופשי, שאלות המשך, ניקוד רמת עומס, מפרט גנרי פר-תחום, התאמה לקטלוג האמיתי (`n_shop_catalog`) |
 | `apps/web/lib/shop-quote.ts` | בניית מסמך ה-HTML העצמאי של הצעת המחיר שהלקוח מוריד בסוף השיחה ב-`/shop` |
 | `apps/web/lib/owner-name.ts` | שמות אמיתיים (לא "אני"/"השותף") לשדות "מי שילם"/"על מי החוב" במסכי הוצאות - `getOwnerName` (שם המשתמש עם `role: "owner"`) ו-`resolveSharedPartnerName` (שם השותף ל"סניף" המדומה המשותף, כשכל סניפי השותפות במודול מסכימים על אותו שותף) |
+| `apps/web/lib/help/*` | מרכז העזרה: בסיס הידע (`kb-owner.ts`/`kb-renter.ts`), סינון לפי קהל (`knowledge.ts`), חיפוש (`search.ts`), העוזר החכם (`assistant.ts`) |
+| `tools/tutorial-videos/*` | הפקת סרטוני ההדרכה: נתוני הדגמה, הקלטה, הרכבה וקריינות |
 | `apps/web/lib/device-trust.ts` | אימות/אמון מכשיר |
 | `apps/web/middleware.ts` | middleware של Next (הגנת נתיבים) |
 | `apps/web/public/manifest.webmanifest` | הגדרת ה-PWA (אייקונים/צבעים/standalone) |

@@ -1823,3 +1823,22 @@ export interface OpsTaskCheck {
   updatedAt?: string;
   updatedBy?: string;
 }
+
+/** collection: n_help_questions — כל שאלה שנשאלה במרכז העזרה (`/dashboard/help`), כדי שהבעלים
+ *  יראה במה המשתמשים נתקעים וישפר את ההדרכה. נכתב רק ע"י מרכז העזרה; `app.html` לא קורא אותו. */
+export interface HelpQuestion {
+  id: string;
+  question: string;
+  answer: string;
+  /** "ai" = תשובת העוזר החכם, "faq" = הותאמה שאלה נפוצה, "none" = לא נמצאה תשובה */
+  source: "ai" | "faq" | "none";
+  /** מזהי השאלות הנפוצות שהוצעו (במצב faq) */
+  matchedIds?: string[];
+  /** "owner" = בעלים/מזכירה, "renter" = שותף בסניף השכרות */
+  audience: "owner" | "renter";
+  userEmail: string;
+  userName?: string;
+  /** סימון המשתמש: האם התשובה עזרה. חסר = לא סומן */
+  helpful?: boolean;
+  createdAt: string; // ISO
+}
