@@ -85,7 +85,8 @@ export function LoginForm() {
         onClick={() => signIn("google", { callbackUrl })}
         className="w-full rounded-lg border border-gray-300 px-4 py-2 font-medium text-gray-700 transition hover:bg-gray-50"
       >
-        התחברות עם       </button>
+        התחברות עם Google
+      </button>
 
       <div className="my-6 flex items-center gap-3">
         <div className="h-px flex-1 bg-gray-200" />

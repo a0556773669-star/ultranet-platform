@@ -3,9 +3,9 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { authOptions, invalidateUserSyncCache } from "@/lib/auth";
 import { getAdminFirestore } from "@/lib/firebase-admin";
-import type { Branch } from "@ultranet/shared-types";
+import type { Branch, PermissionKey, UserAssignment, UserRole } from "@ultranet/shared-types";
 import { closeBranch, reopenBranch } from "@/lib/history";
 
 async function requireOwner() {
@@ -139,51 +139,100 @@ export async function deleteRentalBranchAction(id: string) {
 }
 
 
-export async function auditRentalPermissionsAction(): Promise<{ checked: number; fixed: number; skipped: number }> {
+/**
+ * "בדוק הרשאות השכרות לכל הסניפים" — מוודא שלכל סניף השכרות עם "מייל השותף" יש משתמש שותף
+ * עם הרשאת השכרות **בסניף הזה**.
+ *
+ * הגרסה הקודמת דרסה את `role`/`branchId`/`perms` הראשיים של כל משתמש שהמייל שלו נמצא, ולכן:
+ * - בעלים שהמייל שלו רשום כמייל שותף (למשל בסניף "שלי" שמולא בטעות) ירד לתפקיד שותף ואיבד גישה;
+ * - שותף בשני סניפים "קפץ" בכל הרצה לסניף האחרון בלולאה;
+ * - עובד בחדר מחשבים איבד את התפקיד הזה — ו-`assignments` נשאר לא מסונכרן עם השדות הראשיים.
+ *
+ * עכשיו: בעלים לא נוגעים בו לעולם; כשהתפקיד הנכון חסר הוא **נוסף כשיוך נוסף** ולא מחליף את
+ * הקיים. רק כשהסניף הזה הוא כבר הסניף הראשי של המשתמש מתקנים את השדות הראשיים (ואת
+ * `assignments[0]` איתם). משתמש חדש נוצר גם עם אישור כניסה בקוד במייל — בלי זה לא הייתה לו
+ * שום דרך להתחבר (אין לו סיסמה).
+ */
+export async function auditRentalPermissionsAction(): Promise<{ checked: number; fixed: number; skipped: number; owners: number }> {
   await requireOwner();
   const db = getAdminFirestore();
   const branchesSnap = await db.collection("n_branches").where("branchType", "==", "rentals").get();
   let checked = 0;
   let fixed = 0;
   let skipped = 0;
+  let owners = 0;
   for (const doc of branchesSnap.docs) {
     const data = doc.data() as { partnerEmail?: string; partnerName?: string; deleted?: boolean };
-    if (data.deleted || !data.partnerEmail) {
+    if (data.deleted || !data.partnerEmail?.trim()) {
       skipped++;
       continue;
     }
     checked++;
     const emailLower = data.partnerEmail.trim().toLowerCase();
+    const wanted: UserAssignment = { role: "partner", branchId: doc.id, branchType: "rentals", perms: { rentals: true } };
     const usersSnap = await db.collection("n_users").where("email", "==", emailLower).get();
+
     if (usersSnap.empty) {
+      const name = data.partnerName || emailLower;
       await db.collection("n_users").add({
-        name: data.partnerName || emailLower,
+        name,
         email: emailLower,
         role: "partner",
         branchId: doc.id,
         perms: { rentals: true },
+        assignments: [wanted],
       });
+      await db.collection("n_approved_emails").doc(emailLower).set({ name, role: "partner", branchId: doc.id });
       fixed++;
-    } else {
-      const userDoc = usersSnap.docs[0];
-        if (!userDoc) continue;
-      const userData = userDoc.data() as { perms?: Record<string, boolean>; branchId?: string; role?: string };
-      const needsFix = userData.perms?.rentals !== true || userData.branchId !== doc.id || userData.role !== "partner";
-      if (needsFix) {
-        await userDoc.ref.set(
-          {
-            role: "partner",
-            branchId: doc.id,
-            perms: { ...(userData.perms ?? {}), rentals: true },
-          },
-          { merge: true }
-        );
-        fixed++;
-      }
+      continue;
     }
+
+    const userDoc = usersSnap.docs[0]!;
+    const user = userDoc.data() as {
+      role?: UserRole;
+      branchId?: string;
+      perms?: Partial<Record<PermissionKey, boolean>>;
+      assignments?: UserAssignment[];
+    };
+    const assignments: UserAssignment[] =
+      Array.isArray(user.assignments) && user.assignments.length > 0
+        ? user.assignments.filter((a) => a && a.role)
+        : [{ role: user.role ?? "employee", branchId: user.branchId ?? "", perms: user.perms ?? {} }];
+
+    // בעלים (בכל אחד מהכובעים) רואה הכל ממילא — אסור להוריד אותו לשותף.
+    if (user.role === "owner" || assignments.some((a) => a.role === "owner")) {
+      owners++;
+      continue;
+    }
+
+    const idx = assignments.findIndex((a) => a.branchId === doc.id);
+    const current = idx >= 0 ? assignments[idx] : undefined;
+    if (current && current.role !== "employee" && current.perms?.rentals === true) continue; // תקין
+
+    let next: UserAssignment[];
+    if (current) {
+      // יש לו כבר כובע בסניף הזה — משלימים אותו לשותף עם השכרות, בלי לגעת בכובעים האחרים.
+      next = assignments.map((a, i) =>
+        i === idx ? { ...a, role: a.role === "employee" ? "partner" : a.role, branchType: "rentals", perms: { ...(a.perms ?? {}), rentals: true } } : a,
+      );
+    } else if (assignments.length === 1 && !assignments[0]!.branchId) {
+      // משתמש בלי סניף בכלל — הסניף הזה הופך לשיוך הראשי שלו.
+      next = [{ ...wanted, perms: { ...(assignments[0]!.perms ?? {}), rentals: true } }];
+    } else {
+      next = [...assignments, wanted];
+    }
+
+    const primary = next[0]!;
+    await userDoc.ref.set(
+      { assignments: next, role: primary.role, branchId: primary.branchId, perms: primary.perms ?? {} },
+      { merge: true },
+    );
+    invalidateUserSyncCache(emailLower);
+    fixed++;
   }
   revalidatePath("/dashboard/rentals/branches");
-  return { checked, fixed, skipped };
+  revalidatePath("/dashboard/users");
+  return { checked, fixed, skipped, owners };
 }
 
 /**

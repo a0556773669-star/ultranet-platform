@@ -52,8 +52,8 @@ export default async function DashboardHomePage() {
   const db = getAdminFirestore();
 
   let moneyStats: {
-    todayIncome: number;
-    todayExpenses: number;
+    totalIncome: number;
+    totalExpenses: number;
     monthIncome: number;
     monthExpenses: number;
   } | null = null;
@@ -62,11 +62,12 @@ export default async function DashboardHomePage() {
     // Read from the same ledger the accounting screen shows, so the number on the home page and
     // the number on /dashboard/accounting can never disagree: both are the sum of the rows
     // marked countsToMain, and nothing is added back on top here.
+    // "עד היום" = הסה"כ המצטבר, בדיוק "הכנסנו/הוצאנו עד היום" של ההנה"ח הראשית. עד עכשיו
+    // נספרו כאן רק שורות שתאריכן היום, כך שהקוביות הראו כמעט תמיד 0.
     const ledger = await loadMainLedger();
-    const today = new Date().toISOString().slice(0, 10);
     moneyStats = {
-      todayIncome: ledger.income.filter((r) => r.date === today).reduce((s, r) => s + r.amount, 0),
-      todayExpenses: ledger.expenses.filter((r) => r.date === today).reduce((s, r) => s + r.amount, 0),
+      totalIncome: ledger.totals.income,
+      totalExpenses: ledger.totals.expense,
       monthIncome: ledger.thisMonth.income,
       monthExpenses: ledger.thisMonth.expense,
     };
@@ -241,12 +242,12 @@ export default async function DashboardHomePage() {
           <div className="relative overflow-hidden rounded-card border border-card-border bg-white p-4 shadow-card">
             <span className="absolute right-0 top-0 h-full w-1 bg-emerald-500" />
             <div className="text-[11px] font-semibold uppercase tracking-wide text-muted">{"הכנסות עד היום"}</div>
-            <div className="mt-1 text-[25px] font-black text-emerald-600">{moneyStats.todayIncome.toLocaleString()} ₪</div>
+            <div className="mt-1 text-[25px] font-black text-emerald-600">{moneyStats.totalIncome.toLocaleString()} ₪</div>
           </div>
           <div className="relative overflow-hidden rounded-card border border-card-border bg-white p-4 shadow-card">
             <span className="absolute right-0 top-0 h-full w-1 bg-red-500" />
             <div className="text-[11px] font-semibold uppercase tracking-wide text-muted">{"הוצאות עד היום"}</div>
-            <div className="mt-1 text-[25px] font-black text-red-600">{moneyStats.todayExpenses.toLocaleString()} ₪</div>
+            <div className="mt-1 text-[25px] font-black text-red-600">{moneyStats.totalExpenses.toLocaleString()} ₪</div>
           </div>
           <div className="relative overflow-hidden rounded-card border border-card-border bg-white p-4 shadow-card">
             <span className="absolute right-0 top-0 h-full w-1 bg-teal" />
