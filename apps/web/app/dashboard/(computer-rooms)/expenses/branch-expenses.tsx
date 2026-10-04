@@ -1,4 +1,4 @@
-import { Scale, Calendar, Receipt } from "lucide-react";
+import { Calendar, Receipt } from "lucide-react";
 import type { FixedExpense, VariableExpense } from "@ultranet/shared-types";
 import { createFixedExpenseAction, createVariableExpenseAction } from "./actions";
 import { EditFixedExpenseModal, EditVariableExpenseModal } from "./edit-expense-modals";
@@ -11,14 +11,6 @@ const CATEGORIES = ["שכירות", "חשמל ומים", "משכורות", "צי
 const FIELD = "w-full rounded-lg border border-card-border bg-[#f4f6f9] px-3 py-2 text-sm focus:border-teal focus:bg-white focus:outline-none";
 const LABEL = "mb-1 block text-xs font-semibold text-muted";
 const BTN = "rounded-[10px] bg-gradient-to-br from-teal to-teal-light px-4 py-2 text-xs font-bold text-white shadow-primary transition hover:opacity-90";
-
-function netToOwner(amount: number, paidBy?: string, owedBy?: string): number {
-  const p = paidBy === "partner" ? "partner" : "owner";
-  const o = owedBy === "partner" ? "partner" : owedBy === "shared" ? "shared" : "owner";
-  if (o === "shared") return p === "owner" ? amount / 2 : -amount / 2;
-  if (o === p) return 0;
-  return p === "owner" ? amount : -amount;
-}
 
 function paymentNote(paidBy: string | undefined, owedBy: string | undefined, ownerName: string, partnerName: string) {
   const paidLabels: Record<string, string> = { owner: ownerName, partner: partnerName };
@@ -70,12 +62,6 @@ export function BranchExpenses({ branchId, isShared, isPartner, ownerName, partn
   const activeFixed = fixedExpenses.filter((e) => !e.endDate);
   const endedFixed = fixedExpenses.filter((e) => e.endDate);
 
-  let net = 0;
-  if (isPartner) {
-    for (const e of activeFixed) net += netToOwner(e.amount || 0, e.paidBy, e.owedBy);
-    for (const e of variableExpenses) net += netToOwner(e.amount || 0, e.paidBy, e.owedBy);
-  }
-
   const createFixed = createFixedExpenseAction.bind(null, branchId);
   const createVariable = createVariableExpenseAction.bind(null, branchId);
 
@@ -87,23 +73,8 @@ export function BranchExpenses({ branchId, isShared, isPartner, ownerName, partn
         </div>
       )}
 
-      {isPartner && (
-        <div className="rounded-card border border-card-border bg-white p-4 shadow-card">
-          <h3 className="mb-2 flex items-center gap-1.5 text-sm font-bold text-ink">
-            <Scale className="h-4 w-4" />
-            מאזן חובות בין {ownerName} ל{partnerName} (סטטוס בלבד, לא קשור להנה&quot;ח המרכזית)
-          </h3>
-          <p className="mb-2 text-xs text-muted">
-            זה רק מי-חייב-למי ביניכם. הוצאה ש{ownerName} שילם בפועל - חלקו בה (לפי &quot;על מי החוב&quot;)
-            כן מתחשבן בהנה&quot;ח המרכזית כרגיל. הוצאה ש{partnerName} שילם בפועל לא מתחשבנת שם כלל, גם אם
-            חלק/כל החוב על {ownerName} - היא רק מקטינה את מה ש{partnerName} יעביר בסוף החודש.
-          </p>
-          {net === 0 && <p className="text-sm text-muted">מאוזן — אין חובות הדדיים</p>}
-          {net > 0 && <p className="text-sm font-bold text-teal">{partnerName} חייב ל{ownerName} ₪{net.toLocaleString()}</p>}
-          {net < 0 && <p className="text-sm font-bold text-red-600">{ownerName} חייב ל{partnerName} ₪{Math.abs(net).toLocaleString()}</p>}
-        </div>
-      )}
-
+      {/* כאן הוצגה "מאזן חובות" שחושבה מרשימת ההוצאות בלבד - בלי הכנסות, בלי העברות, והוצאה
+          קבועה נספרה פעם אחת. זה יצא מספר חוב שאינו נכון, ולכן הוסר: החוב האמיתי חי בהנה"ח. */}
       <div className="rounded-card border border-card-border bg-white p-4 shadow-card">
         <h3 className="mb-3 flex items-center gap-1.5 text-sm font-bold text-ink">
           <Calendar className="h-4 w-4" />

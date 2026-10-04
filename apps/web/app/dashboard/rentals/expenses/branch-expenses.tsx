@@ -12,14 +12,6 @@ const FIELD = "w-full rounded-lg border border-card-border bg-[#f4f6f9] px-3 py-
 const LABEL = "mb-1 block text-xs font-semibold text-muted";
 const BTN = "rounded-[10px] bg-gradient-to-br from-teal to-teal-light px-4 py-2 text-xs font-bold text-white shadow-primary transition hover:opacity-90";
 
-function netToOwner(amount: number, paidBy?: string, owedBy?: string): number {
-  const p = paidBy === "partner" ? "partner" : "owner";
-  const o = owedBy === "partner" ? "partner" : owedBy === "shared" ? "shared" : "owner";
-  if (o === "shared") return p === "owner" ? amount / 2 : -amount / 2;
-  if (o === p) return 0;
-  return p === "owner" ? amount : -amount;
-}
-
 function paymentNote(paidBy: string | undefined, owedBy: string | undefined, ownerName: string, partnerName: string) {
   const paidLabels: Record<string, string> = { owner: ownerName, partner: partnerName };
   const owedLabels: Record<string, string> = {
@@ -63,6 +55,9 @@ type Props = {
   canManage: boolean;
   canAdd: boolean;
   isOwner: boolean;
+  /** היתרה המצטברת מספר ההתחשבנות (buildBranchLedger) - אותו מספר שהשותף רואה כ"חשבון פתוח".
+   *  חיובי = השותף חייב לבעלים, שלילי = הבעלים חייב לשותף. undefined = אין מספר אמיתי להציג. */
+  openBalance?: number;
   branchIncomes: BranchIncome[];
   fixedExpenses: FixedExpense[];
   variableExpenses: VariableExpense[];
@@ -77,6 +72,7 @@ export function BranchExpenses({
   canManage,
   canAdd,
   isOwner,
+  openBalance,
   branchIncomes,
   fixedExpenses,
   variableExpenses,
@@ -84,11 +80,9 @@ export function BranchExpenses({
   const activeFixed = fixedExpenses.filter((e) => !e.endDate);
   const endedFixed = fixedExpenses.filter((e) => e.endDate);
 
-  let net = 0;
-  if (isPartner) {
-    for (const e of activeFixed) net += netToOwner(e.amount || 0, e.paidBy, e.owedBy);
-    for (const e of variableExpenses) net += netToOwner(e.amount || 0, e.paidBy, e.owedBy);
-  }
+  // לא מחשבים כאן "מי חייב למי" מרשימת ההוצאות: חישוב כזה לא רואה הכנסות, העברות, חודשים
+  // של הוצאה קבועה או הוצאות רב-סניפיות, ויוצא מספר שונה מהחשבון הפתוח. מציגים רק את הספר.
+  const balance = openBalance !== undefined && Math.abs(openBalance) >= 1 ? Math.round(openBalance) : 0;
 
   const createFixed = createFixedExpenseAction.bind(null, branchId);
   const createVariable = createVariableExpenseAction.bind(null, branchId);
@@ -101,20 +95,18 @@ export function BranchExpenses({
         </div>
       )}
 
-      {isPartner && (
+      {isPartner && openBalance !== undefined && (
         <div className="rounded-card border border-card-border bg-white p-4 shadow-card">
           <h3 className="mb-2 flex items-center gap-1.5 text-sm font-bold text-ink">
             <Scale className="h-4 w-4" />
-            מאזן חובות בין {ownerName} ל{partnerName} (סטטוס בלבד, לא קשור להנה&quot;ח המרכזית)
+            חשבון פתוח בין {ownerName} ל{partnerName}
           </h3>
           <p className="mb-2 text-xs text-muted">
-            זה רק מי-חייב-למי ביניכם. הוצאה ש{ownerName} שילם בפועל - חלקו בה (לפי &quot;על מי החוב&quot;)
-            כן מתחשבן בהנה&quot;ח המרכזית כרגיל. הוצאה ש{partnerName} שילם בפועל לא מתחשבנת שם כלל, גם אם
-            חלק/כל החוב על {ownerName} - היא רק מקטינה את מה ש{partnerName} יעביר בסוף החודש.
+            היתרה המצטברת מכל החודשים - הכנסות, הוצאות והעברות שבוצעו. זה אותו מספר שמופיע בהנה&quot;ח.
           </p>
-          {net === 0 && <p className="text-sm text-muted">מאוזן — אין חובות הדדיים</p>}
-          {net > 0 && <p className="text-sm font-bold text-teal">{partnerName} חייב ל{ownerName} ₪{net.toLocaleString()}</p>}
-          {net < 0 && <p className="text-sm font-bold text-red-600">{ownerName} חייב ל{partnerName} ₪{Math.abs(net).toLocaleString()}</p>}
+          {balance === 0 && <p className="text-sm text-muted">מאוזן — אין חוב פתוח</p>}
+          {balance > 0 && <p className="text-sm font-bold text-teal">{partnerName} צריך להעביר ל{ownerName} ₪{balance.toLocaleString()}</p>}
+          {balance < 0 && <p className="text-sm font-bold text-red-600">{ownerName} צריך להעביר ל{partnerName} ₪{Math.abs(balance).toLocaleString()}</p>}
         </div>
       )}
 

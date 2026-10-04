@@ -8,6 +8,8 @@ import type { Branch, FixedExpense, VariableExpense, BranchIncome } from "@ultra
 import { SHARED_RENTALS_BRANCH_ID } from "@/lib/expense-shared-scope";
 import { getOwnerName, resolveSharedPartnerName, branchPartnerName } from "@/lib/owner-name";
 import { BranchExpenses } from "../branch-expenses";
+import { loadBranchAccountingRawData } from "@/lib/branch-accounting-data";
+import { buildBranchLedger } from "@/lib/branch-ledger";
 
 export default async function BranchExpensesPage({ params }: { params: { id: string } }) {
   const session = await getServerSession(authOptions);
@@ -61,6 +63,11 @@ export default async function BranchExpensesPage({ params }: { params: { id: str
       .sort((a, b) => b.date.localeCompare(a.date));
   }
 
+  // החשבון הפתוח האמיתי - מאותו ספר שממנו נבנה "חשבון פתוח" בהנה"ח. ל"כל הסניפים" אין ספר אחד,
+  // ולכן שם לא מוצג מספר בכלל.
+  const openBalance =
+    isPartner && branch ? buildBranchLedger(branch, await loadBranchAccountingRawData()).currentBalance : undefined;
+
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
@@ -82,6 +89,7 @@ export default async function BranchExpensesPage({ params }: { params: { id: str
         canManage={isOwner || isPartner}
         canAdd={isOwner || isPartner}
         isOwner={isOwner}
+        openBalance={openBalance}
         branchIncomes={branchIncomes}
         fixedExpenses={visibleFixed}
         variableExpenses={visibleVariable}
