@@ -1123,11 +1123,8 @@ export async function createMilestoneAction(input: {
   const blocked = await quarterWriteBlock(db, input.quarterKey);
   if (blocked) return { ok: false, message: blocked };
 
+  // האחראי הוא רשות גם בשיבוץ לשבוע - בעל העסק והמזכירה עובדים על אותו ממשק.
   const assignTo = input.assignTo ?? [];
-  // לפני שיבוץ לשבוע חייבים אחראי (סעיף 14).
-  if (assignTo.some((a) => a.periodType === "week") && !input.ownerName?.trim()) {
-    return { ok: false, message: "לפני שיבוץ לשבוע יש לבחור אחראי לאבן הדרך" };
-  }
 
   const createdBy = await currentUserLabel();
   const now = Date.now();
@@ -1494,17 +1491,6 @@ export async function assignMilestonesAction(
 
   const milestones = await fetchByIds(db, MILESTONES, ids, toMilestone);
   const open = milestones.filter((m) => !m.deletedAt && m.status !== "done" && m.status !== "cancelled");
-  // לפני שיבוץ לשבוע חייבים אחראי (סעיף 14).
-  if (periodType === "week") {
-    const missing = open.filter((m) => !m.ownerName?.trim());
-    if (missing.length) {
-      return {
-        ok: false,
-        message: `לפני שיבוץ לשבוע יש לבחור אחראי: ${missing.slice(0, 3).map((m) => m.title).join(", ")}${missing.length > 3 ? "..." : ""}`,
-      };
-    }
-  }
-
   const existing = await db
     .collection(ASSIGNMENTS)
     .where("quarterKey", "==", quarterKey)
