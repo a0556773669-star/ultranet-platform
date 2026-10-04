@@ -11,7 +11,10 @@ export function AuditPermsButton() {
     startTransition(async () => {
       try {
         const r = await auditRentalPermissionsAction();
-        setResult(`נבדקו ${r.checked} סניפים עם שותף, תוקנו/נוצרו ${r.fixed} הרשאות משתמשים.`);
+        setResult(
+          `נבדקו ${r.checked} סניפים עם שותף, תוקנו/נוצרו ${r.fixed} הרשאות משתמשים.` +
+            (r.owners ? ` ${r.owners} סניפים שמייל השותף שלהם הוא של בעלים — לא שונו.` : ""),
+        );
       } catch (e) {
         setResult(e instanceof Error ? e.message : 'שגיאה');
       }

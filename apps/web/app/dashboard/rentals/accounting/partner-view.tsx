@@ -14,6 +14,7 @@
  * הוא כולל את כל מה שנגרר מחודשים קודמים, ויורד ל-0 ברגע שהבעלים מסמן שההעברה בוצעה.
  */
 import { ArrowDownLeft, ArrowUpRight, CheckCircle2 } from "lucide-react";
+import type { LaptopSale } from "@ultranet/shared-types";
 import type { BranchFinancials } from "@/lib/branch-accounting-data";
 
 function money(n: number) {
@@ -65,6 +66,8 @@ export interface PartnerBranchView {
   openBalance: number;
   /** הסניף נסגר או נמחק. מוצג בכל זאת - החשבון הפתוח שלו עדיין שלו. */
   closed: boolean;
+  /** מכירות המחשבים שנרשמו בסניף, מהחדשה לישנה */
+  sales?: LaptopSale[];
 }
 
 export function PartnerAccountingView({ view }: { view: PartnerBranchView }) {
@@ -86,6 +89,27 @@ export function PartnerAccountingView({ view }: { view: PartnerBranchView }) {
         <Box label="מאזן עד היום" value={f.balanceToDate} tone={f.balanceToDate >= 0 ? "good" : "bad"} />
       </div>
       <OpenAccount balance={view.openBalance} />
+      {view.sales && view.sales.length > 0 && (
+        <div className="rounded-card border border-card-border bg-white p-4 shadow-card">
+          <div className="mb-1 text-xs font-bold uppercase tracking-wide text-muted">מכירות מחשבים</div>
+          <p className="mb-2 text-[11.5px] text-muted">
+            מכירה היא 100% של הבעלים, ולכן היא לא נכנסת להכנסות שלך למעלה — הסכום מתווסף במלואו להעברה של
+            אותו חודש.
+          </p>
+          <ul className="flex flex-col gap-1 text-[13px]">
+            {view.sales.map((sale) => (
+              <li key={sale.id} className="flex items-center justify-between rounded-md bg-[#f9fafb] px-2.5 py-1.5">
+                <span className="text-ink">
+                  <b>{sale.laptopName}</b>
+                  <span className="mr-2 text-[11px] text-muted">{sale.date}</span>
+                  {sale.buyerName && <span className="mr-2 text-[11px] text-muted">· {sale.buyerName}</span>}
+                </span>
+                <b className="tabular-nums text-ink">{money(sale.price)}</b>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
     </div>
   );
 }

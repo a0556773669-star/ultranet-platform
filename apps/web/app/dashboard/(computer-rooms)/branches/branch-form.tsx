@@ -3,6 +3,7 @@
 import { useState } from "react";
 import type { ChangeEvent } from "react";
 import type { Branch } from "@ultranet/shared-types";
+import { SetupCostField } from "@/components/setup-cost-field";
 
 type BranchFormProps = {
   action: (formData: FormData) => void;
@@ -100,10 +101,11 @@ export function BranchForm({ action, initial }: BranchFormProps) {
         </div>
       )}
 
-      <div>
-        <label className={LABEL}>עלות הקמה</label>
-        <input name="setupCost" type="number" min={0} defaultValue={initial?.setupCost} className={FIELD} />
-      </div>
+      <SetupCostField
+        initialItems={initial?.setupItems}
+        initialTotal={initial?.setupCost}
+        initialCountsToMain={initial?.setupCountsToMain}
+      />
 
       <div>
         <label className={LABEL}>הערות</label>

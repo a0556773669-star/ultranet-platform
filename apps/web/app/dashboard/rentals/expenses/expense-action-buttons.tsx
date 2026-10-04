@@ -3,7 +3,23 @@
 import { useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/lib/toast";
-import { endFixedExpenseAction, deleteFixedExpenseAction, deleteVariableExpenseAction } from "./actions";
+import {
+  endFixedExpenseAction,
+  deleteFixedExpenseAction,
+  deleteVariableExpenseAction,
+  reviseFixedExpenseAmountAction,
+} from "./actions";
+import { PriceUpdateControl } from "@/components/expenses/price-update-control";
+
+/** "עדכון מחיר" — הסכום החודשי משתנה מחודש מסוים והלאה. */
+export function ReviseFixedExpenseControl({ id, branchId, amount }: { id: string; branchId: string; amount: number }) {
+  return (
+    <PriceUpdateControl
+      currentAmount={amount}
+      submit={(fromMonth, newAmount) => reviseFixedExpenseAmountAction(id, branchId, fromMonth, newAmount)}
+    />
+  );
+}
 
 export function EndFixedExpenseControl({ id, branchId }: { id: string; branchId: string }) {
   const [isPending, startTransition] = useTransition();

@@ -16,6 +16,7 @@ export default async function LabelsPage() {
   if (!isOwner && branchId) {
     const snap = await getAdminFirestore().collection("n_laptops").where("branchId", "==", branchId).get();
     myComputers = snap.docs
+      .filter((d) => !(d.data() as { status?: string }).status || (d.data() as { status?: string }).status === "active")
       .map((d) => ({ id: d.id, name: String((d.data() as { name?: string }).name ?? "") }))
       .filter((c) => c.name)
       .sort((a, b) => a.name.localeCompare(b.name, "he", { numeric: true }));

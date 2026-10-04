@@ -1,0 +1,18 @@
+{
+  "name": "tutorial-videos",
+  "private": true,
+  "description": "הפקת סרטוני ההדרכה של מרכז העזרה מתוך המערכת האמיתית (נתוני הדגמה)",
+  "scripts": {
+    "seed": "node seed.cjs",
+    "record:renter": "node seed.cjs && node renter.cjs",
+    "record:owner": "node seed.cjs && node owner.cjs",
+    "tts:renter": "node tts.cjs out/renter",
+    "tts:owner": "node tts.cjs out/owner",
+    "build:renter": "node assemble.cjs out/renter out/renter.mp4",
+    "build:owner": "node assemble.cjs out/owner out/owner.mp4"
+  },
+  "dependencies": {
+    "@fontsource/heebo": "^5.2.5",
+    "playwright": "^1.56.0"
+  }
+}

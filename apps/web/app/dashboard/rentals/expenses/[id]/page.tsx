@@ -10,6 +10,9 @@ import { getOwnerName, resolveSharedPartnerName, branchPartnerName } from "@/lib
 import { BranchExpenses } from "../branch-expenses";
 import { loadBranchAccountingRawData } from "@/lib/branch-accounting-data";
 import { buildBranchLedger } from "@/lib/branch-ledger";
+import { loadRecurringPurchaseIndex } from "@/lib/recurring-purchases";
+import { RecurringPurchasesSummary } from "@/components/recurring-purchases/recurring-purchases-summary";
+import { LegacyMultiBranchExpenses } from "../legacy-multi-branch";
 
 export default async function BranchExpensesPage({ params }: { params: { id: string } }) {
   const session = await getServerSession(authOptions);
@@ -40,16 +43,33 @@ export default async function BranchExpensesPage({ params }: { params: { id: str
     partnerName = resolved.partnerName;
   }
 
-  const [fixedSnap, variableSnap] = await Promise.all([
+  const [fixedSnap, variableSnap, purchaseIndex, rentalsBranchesSnap] = await Promise.all([
     db.collection("n_fixed_expenses").where("branchId", "==", params.id).get(),
     db.collection("n_var_expenses").where("branchId", "==", params.id).get(),
+    loadRecurringPurchaseIndex(),
+    // רק הספר המשותף צריך את רשימת הסניפים - שם בוחרים בין מי ההוצאה מתחלקת.
+    isShared
+      ? db.collection("n_branches").where("branchType", "==", "rentals").get()
+      : Promise.resolve(null),
   ]);
+  const rentalsBranches = (rentalsBranchesSnap?.docs ?? [])
+    .map((d) => ({ ...(d.data() as Omit<Branch, "id">), id: d.id }) as Branch)
+    // סניף סגור כבר לא משתתף בהוצאות של כלל הסניפים — לא מוצע לבחירה ולא נספר בחלוקה המוצגת.
+    .filter((b) => !b.deleted && !b.closedAt)
+    .sort((a, b) => a.name.localeCompare(b.name, "he", { numeric: true }));
   const fixedExpenses = fixedSnap.docs
     .map((d) => ({ ...(d.data() as Omit<FixedExpense, "id">), id: d.id }) as FixedExpense)
     .sort((a, b) => b.startDate.localeCompare(a.startDate));
   const variableExpenses = variableSnap.docs
     .map((d) => ({ ...(d.data() as Omit<VariableExpense, "id">), id: d.id }) as VariableExpense)
     .sort((a, b) => b.date.localeCompare(a.date));
+
+  // רק הסוגים שמופיעים בהוצאות של המסך הזה - הסכומים עצמם הם של כל העסק.
+  const purchaseSummaries = [
+    ...new Set(variableExpenses.map((e) => e.expenseTypeId).filter((id): id is string => Boolean(id))),
+  ]
+    .map((id) => purchaseIndex.byType.get(id))
+    .filter((x): x is NonNullable<typeof x> => Boolean(x));
 
   const hiddenFromPartner = (e: { paidBy?: string; owedBy?: string }) => e.paidBy === "owner" && e.owedBy === "owner";
   const visibleFixed = isOwner || !isPartner ? fixedExpenses : fixedExpenses.filter((e) => !hiddenFromPartner(e));
@@ -93,7 +113,12 @@ export default async function BranchExpensesPage({ params }: { params: { id: str
         branchIncomes={branchIncomes}
         fixedExpenses={visibleFixed}
         variableExpenses={visibleVariable}
+        expenseTypes={purchaseIndex.types}
+        purchaseByType={purchaseIndex.byType}
+        branches={rentalsBranches}
       />
+      {isShared && isOwner && <LegacyMultiBranchExpenses branchNameById={new Map(rentalsBranches.map((b) => [b.id, b.name]))} />}
+      <RecurringPurchasesSummary summaries={purchaseSummaries} />
     </div>
   );
 }

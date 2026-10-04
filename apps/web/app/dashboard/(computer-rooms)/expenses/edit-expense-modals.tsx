@@ -7,6 +7,7 @@ import type { FixedExpense, VariableExpense } from "@ultranet/shared-types";
 import { updateFixedExpenseAction, updateVariableExpenseAction } from "./actions";
 import { useToast } from "@/lib/toast";
 import { CountsToMainField } from "@/components/counts-to-main-field";
+import { SharedBranchScopeField } from "@/components/expenses/shared-branch-scope-field";
 
 const CATEGORIES = ["שכירות", "חשמל ומים", "משכורות", "ציוד ותחזוקה", "שיווק ופרסום", "הדפסות ותקנונים", "ביטוח", "אחר"];
 
@@ -70,12 +71,17 @@ export function EditFixedExpenseModal({
   isPartner,
   ownerName,
   partnerName,
+  isShared,
+  branches = [],
 }: {
   expense: FixedExpense;
   branchId: string;
   isPartner: boolean;
   ownerName: string;
   partnerName: string;
+  /** true בספר המשותף - רק שם יש מה לבחור בין סניפים */
+  isShared?: boolean;
+  branches?: { id: string; name: string }[];
 }) {
   const [open, setOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
@@ -128,6 +134,15 @@ export function EditFixedExpenseModal({
             {isPartner && (
               <PayerFields paidBy={expense.paidBy} owedBy={expense.owedBy} ownerName={ownerName} partnerName={partnerName} />
             )}
+            {isShared && (
+              <div className="col-span-2">
+                <SharedBranchScopeField
+                  branches={branches}
+                  defaultBranchIds={expense.branchIds}
+                  idPrefix={`edit-fixed-${expense.id}`}
+                />
+              </div>
+            )}
             <div className="col-span-2">
               <CountsToMainField defaultChecked={expense.countsToMain === true} />
             </div>
@@ -154,12 +169,16 @@ export function EditVariableExpenseModal({
   isPartner,
   ownerName,
   partnerName,
+  isShared,
+  branches = [],
 }: {
   expense: VariableExpense;
   branchId: string;
   isPartner: boolean;
   ownerName: string;
   partnerName: string;
+  isShared?: boolean;
+  branches?: { id: string; name: string }[];
 }) {
   const [open, setOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
@@ -211,6 +230,15 @@ export function EditVariableExpenseModal({
             </div>
             {isPartner && (
               <PayerFields paidBy={expense.paidBy} owedBy={expense.owedBy} ownerName={ownerName} partnerName={partnerName} />
+            )}
+            {isShared && (
+              <div className="col-span-2">
+                <SharedBranchScopeField
+                  branches={branches}
+                  defaultBranchIds={expense.branchIds}
+                  idPrefix={`edit-variable-${expense.id}`}
+                />
+              </div>
             )}
             <div className="col-span-2">
               <CountsToMainField defaultChecked={expense.countsToMain === true} />

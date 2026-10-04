@@ -5,6 +5,7 @@ import { getAdminFirestore } from "@/lib/firebase-admin";
 import { makeNedarimResolver, nedarimRouteOptions } from "@/lib/nedarim";
 import type { Rental, RentalClient, Laptop, Stick, Branch, CollectionRoute } from "@ultranet/shared-types";
 import { effectiveLaptopRates, effectiveStickRates } from "@/lib/rental-pricing";
+import { isLaptopActive } from "@/lib/laptop-names";
 import { RentalsLists, type ActiveRowData, type HistoryRowData } from "./rentals-lists";
 
 async function loadData() {
@@ -137,7 +138,7 @@ export default async function RentalsPage({ searchParams }: { searchParams?: { m
     if (cached) return cached;
     const list = kind === "stick" ? sticksList : laptopsList;
     const result = list
-      .filter((it) => it.branchId === branchId)
+      .filter((it) => it.branchId === branchId && isLaptopActive(it))
       .map((it) => ({ id: it.id, name: it.name }))
       .sort((a, b) => a.name.localeCompare(b.name, "he", { numeric: true }));
     itemOptionsCache.set(key, result);
@@ -248,8 +249,10 @@ export default async function RentalsPage({ searchParams }: { searchParams?: { m
         </div>
       ) : (
         visibleBranches.map((b) => {
+          // סניף שנסגר (או נמחק) לא מקבל לוח — אין בו מה להשכיר.
+          if (b.closedAt || b.deleted) return null;
           const bLaptops = laptopsList
-            .filter((l) => l.branchId === b.id)
+            .filter((l) => l.branchId === b.id && isLaptopActive(l))
             .sort((x, y) => x.name.localeCompare(y.name, "he", { numeric: true }));
           const bRentedSticks = sticksList
             .filter((s) => s.branchId === b.id && renterName(s.id, "stick"))
@@ -258,39 +261,71 @@ export default async function RentalsPage({ searchParams }: { searchParams?: { m
           return (
             <div key={b.id} className="mb-2">
               {role === "owner" && <h3 className="mb-2 text-sm font-bold text-ink">{b.name}</h3>}
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
+              {/* ריבועים קטנים ולא פסים רחבים: רוחב קבוע של ~120px ממלא את השורה בכמה שנכנס,
+                  כך שבמסך רחב רואים את כל הסניף בשורה-שתיים ולא שש כרטיסיות מתוחות. */}
+              <div className="grid grid-cols-[repeat(auto-fill,minmax(112px,1fr))] gap-2.5 sm:grid-cols-[repeat(auto-fill,minmax(124px,1fr))]">
                 {bLaptops.map((l) => {
                   const renter = renterName(l.id, "laptop");
                   const noInternet = !renter && linkedStickRentedOut(l.id);
                   return (
                     <div
                       key={l.id}
-                      className={`rounded-xl border p-3 text-center text-xs ${
-                        renter ? "border-red-300 bg-red-50" : "border-teal bg-teal-bg"
+                      className={`relative flex aspect-square flex-col items-center justify-center gap-1 overflow-hidden rounded-2xl border p-2 text-center shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${
+                        renter
+                          ? "border-red-200 bg-gradient-to-b from-red-50 to-white"
+                          : "border-teal/40 bg-gradient-to-b from-teal-bg to-white"
                       }`}
                     >
-                      <div className="flex items-center justify-center gap-1 truncate font-bold text-ink">
-                        <LaptopIcon className="h-4 w-4 shrink-0" />
+                      <span
+                        className={`absolute inset-x-0 top-0 h-1 ${renter ? "bg-red-400" : "bg-teal"}`}
+                        aria-hidden
+                      />
+                      <span
+                        className={`flex h-9 w-9 items-center justify-center rounded-full ${
+                          renter ? "bg-red-100 text-red-600" : "bg-white text-teal-dark shadow-sm"
+                        }`}
+                      >
+                        <LaptopIcon className="h-[18px] w-[18px]" />
+                      </span>
+                      <div className="w-full truncate text-[12.5px] font-extrabold leading-tight text-ink" title={l.name}>
                         {l.name}
                       </div>
-                      <div className={`mt-1 text-[11px] font-semibold ${renter ? "text-red-600" : "text-teal-dark"}`}>
+                      <span
+                        className={`rounded-full px-2 py-0.5 text-[10.5px] font-bold ${
+                          renter ? "bg-red-600 text-white" : "bg-teal text-white"
+                        }`}
+                      >
                         {renter ? "מושכר" : "פנוי"}
-                      </div>
-                      {renter && <div className="mt-1 truncate text-[11px] text-muted">{renter}</div>}
-                      {noInternet && <div className="mt-1 text-[11px] font-bold text-red-600">ללא אינטרנט</div>}
+                      </span>
+                      {renter && (
+                        <div className="w-full truncate text-[10.5px] text-muted" title={renter}>
+                          {renter}
+                        </div>
+                      )}
+                      {noInternet && <div className="text-[10.5px] font-bold text-red-600">ללא אינטרנט</div>}
                     </div>
                   );
                 })}
                 {bRentedSticks.map((s) => {
                   const renter = renterName(s.id, "stick");
                   return (
-                    <div key={s.id} className="rounded-xl border border-red-300 bg-red-50 p-3 text-center text-xs">
-                      <div className="flex items-center justify-center gap-1 truncate font-bold text-ink">
-                        <Wifi className="h-4 w-4 shrink-0" />
+                    <div
+                      key={s.id}
+                      className="relative flex aspect-square flex-col items-center justify-center gap-1 overflow-hidden rounded-2xl border border-red-200 bg-gradient-to-b from-red-50 to-white p-2 text-center shadow-sm"
+                    >
+                      <span className="absolute inset-x-0 top-0 h-1 bg-red-400" aria-hidden />
+                      <span className="flex h-9 w-9 items-center justify-center rounded-full bg-red-100 text-red-600">
+                        <Wifi className="h-[18px] w-[18px]" />
+                      </span>
+                      <div className="w-full truncate text-[12.5px] font-extrabold leading-tight text-ink" title={s.name}>
                         {s.name}
                       </div>
-                      <div className="mt-1 text-[11px] font-semibold text-red-600">מושכר</div>
-                      {renter && <div className="mt-1 truncate text-[11px] text-muted">{renter}</div>}
+                      <span className="rounded-full bg-red-600 px-2 py-0.5 text-[10.5px] font-bold text-white">מושכר</span>
+                      {renter && (
+                        <div className="w-full truncate text-[10.5px] text-muted" title={renter}>
+                          {renter}
+                        </div>
+                      )}
                     </div>
                   );
                 })}

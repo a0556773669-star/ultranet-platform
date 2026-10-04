@@ -2,15 +2,22 @@ import { type NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import GoogleProvider from "next-auth/providers/google";
 import { getAdminFirestore } from "@/lib/firebase-admin";
+import type { PermissionKey, UserAssignment, UserRole } from "@ultranet/shared-types";
 
-/** How long a role/branch/perms sync is considered fresh. */
+/** How long a role/branch/perms/assignments sync is considered fresh. */
 const USER_SYNC_TTL_MS = 2 * 60 * 1000;
 
+/**
+ * השדות שנקראים מ-`n_users` אל ה-session. הטיפוסים הם מה ש**אמור** לשבת שם; הדאטה עצמו
+ * מגיע מ-Firestore בלי ולידציה, ולכן `lib/perms.ts` מסנן שיוכים פגומים לפני שהוא נשען עליהם.
+ */
 type SyncedUserFields = {
-  role?: string;
+  role?: UserRole;
   branchId?: string;
-  perms?: unknown;
-  viewClientBranchIds?: unknown;
+  perms?: Partial<Record<PermissionKey, boolean>> | null;
+  /** כל הכובעים של המשתמש. ראה `AppUser.assignments` ו-`lib/perms.ts`. */
+  assignments?: UserAssignment[] | null;
+  viewClientBranchIds?: string[] | null;
 };
 
 /**
@@ -73,6 +80,7 @@ export const authOptions: NextAuthOptions = {
                                         role: user.role,
                                         branchId: user.branchId,
                                         perms: user.perms ?? null,
+                                        assignments: user.assignments ?? null,
                             } as unknown as { id: string; name: string; email: string };
                   },
           }),
@@ -105,7 +113,9 @@ export const authOptions: NextAuthOptions = {
               await db.collection("n_login_codes").doc(email).delete();
 
               const usersSnap = await db.collection("n_users").where("email", "==", email).get();
-              const perms = (usersSnap.docs[0]?.data() as { perms?: unknown } | undefined)?.perms ?? null;
+              const userDoc = usersSnap.docs[0]?.data() as
+                | { perms?: unknown; assignments?: unknown }
+                | undefined;
 
               return {
                 id: email,
@@ -113,7 +123,8 @@ export const authOptions: NextAuthOptions = {
                 email,
                 role: approved.role,
                 branchId: approved.branchId,
-                perms,
+                perms: userDoc?.perms ?? null,
+                assignments: userDoc?.assignments ?? null,
               } as unknown as { id: string; name: string; email: string };
             },
           }),
@@ -138,10 +149,24 @@ export const authOptions: NextAuthOptions = {
                   if (snap.empty) return false;
                   const doc = snap.docs[0];
                   if (!doc) return false;
-                  const data = doc.data() as { role?: string; branchId?: string; name?: string; perms?: unknown };
-                  (user as { role?: string; branchId?: string; name?: string | null; perms?: unknown }).role = data.role;
-                  (user as { role?: string; branchId?: string; name?: string | null; perms?: unknown }).branchId = data.branchId;
-                  (user as { role?: string; branchId?: string; name?: string | null; perms?: unknown }).perms = data.perms ?? null;
+                  const data = doc.data() as {
+                    role?: string;
+                    branchId?: string;
+                    name?: string;
+                    perms?: unknown;
+                    assignments?: unknown;
+                  };
+                  type MutableUser = {
+                    role?: string;
+                    branchId?: string;
+                    name?: string | null;
+                    perms?: unknown;
+                    assignments?: unknown;
+                  };
+                  (user as MutableUser).role = data.role;
+                  (user as MutableUser).branchId = data.branchId;
+                  (user as MutableUser).perms = data.perms ?? null;
+                  (user as MutableUser).assignments = data.assignments ?? null;
                   if (data.name) (user as { name?: string | null }).name = data.name;
                   return true;
             } catch (err) {
@@ -151,10 +176,12 @@ export const authOptions: NextAuthOptions = {
           },
           async jwt({ token, user }) {
       if (user) {
-        token.role = (user as { role?: string }).role;
-        token.branchId = (user as { branchId?: string }).branchId;
-        token.perms = (user as { perms?: unknown }).perms ?? null;
-        token.viewClientBranchIds = (user as { viewClientBranchIds?: unknown }).viewClientBranchIds ?? [];
+        const signedIn = user as SyncedUserFields;
+        token.role = signedIn.role;
+        token.branchId = signedIn.branchId;
+        token.perms = signedIn.perms ?? null;
+        token.assignments = signedIn.assignments ?? null;
+        token.viewClientBranchIds = signedIn.viewClientBranchIds ?? [];
         (token as { branchSyncedAt?: number }).branchSyncedAt = Date.now();
         return token;
       }
@@ -169,6 +196,7 @@ export const authOptions: NextAuthOptions = {
             token.role = data.role;
             token.branchId = data.branchId;
             token.perms = data.perms ?? null;
+            token.assignments = data.assignments ?? null;
             token.viewClientBranchIds = data.viewClientBranchIds ?? [];
           }
         } catch {
@@ -183,6 +211,7 @@ export const authOptions: NextAuthOptions = {
                             (session.user as { role?: unknown }).role = token.role;
                             (session.user as { branchId?: unknown }).branchId = token.branchId;
                             (session.user as { perms?: unknown }).perms = token.perms ?? null;
+        (session.user as { assignments?: unknown }).assignments = token.assignments ?? null;
         (session.user as { viewClientBranchIds?: unknown }).viewClientBranchIds = token.viewClientBranchIds ?? [];
                   }
                   return session;

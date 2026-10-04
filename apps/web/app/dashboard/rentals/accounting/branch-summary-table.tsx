@@ -1,3 +1,10 @@
+"use client";
+
+import { Fragment, useState } from "react";
+import { ChevronDown, ChevronLeft } from "lucide-react";
+import { MonthlyFlowChart } from "@/components/accounting/monthly-flow-chart";
+import type { MonthFlow } from "@/lib/monthly-flow";
+
 const TH = "px-2.5 py-2 text-[11px] font-bold uppercase tracking-wide text-muted whitespace-nowrap";
 const TD = "px-2.5 py-2 whitespace-nowrap";
 
@@ -14,6 +21,12 @@ export interface BranchSummaryRow {
   profitToDate: number;
   /** ההתחשבנות של החודש הנבחר: חיובי = נכנס אליי, שלילי = יוצא ממני */
   incomingThisMonth: number;
+  /** מתוך "ההוצאות שלי" — עלות הוספת המחשבים שנזקפה (`lib/laptop-costs.ts`) */
+  laptopCostToDate: number;
+  /** מתוך "ההכנסות שלי" — מכירות מחשבים (100% שלי) */
+  saleIncomeToDate: number;
+  /** הגרף שנפתח מתחת לשורה: החלק שלי בהוצאות ובהכנסות, חודש-חודש */
+  flow: MonthFlow[];
 }
 
 function money(n: number) {
@@ -32,8 +45,12 @@ function Signed({ value }: { value: number }) {
 
 /**
  * שורה אחת לסניף, חמש עמודות. אין כאן טפסים בכוונה: המסך הזה נשאל, לא נכתב.
+ *
+ * לחיצה על שורה פותחת **מתחתיה** (לא בחלון) גרף של כל חודש — כמה הוצאתי וכמה הכנסתי, בשני
+ * צבעים — ולחיצה נוספת סוגרת. הטבלה כולה של הבעלים בלבד (השותף רואה מסך אחר).
  */
 export function BranchSummaryTable({ rows, month }: { rows: BranchSummaryRow[]; month: string }) {
+  const [openId, setOpenId] = useState<string | null>(null);
   const totals = rows.reduce(
     (acc, r) => ({
       myExpensesToDate: acc.myExpensesToDate + r.myExpensesToDate,
@@ -67,21 +84,44 @@ export function BranchSummaryTable({ rows, month }: { rows: BranchSummaryRow[]; 
                 </td>
               </tr>
             )}
-            {rows.map((r, idx) => (
+            {rows.map((r, idx) => {
+              const open = openId === r.branchId;
+              return (
+              <Fragment key={r.branchId}>
               <tr
-                key={r.branchId}
-                className={`${idx % 2 === 1 ? "bg-[#fafbfc]" : "bg-white"} ${r.closed ? "opacity-60" : ""}`}
+                onClick={() => setOpenId(open ? null : r.branchId)}
+                className={`cursor-pointer transition hover:bg-teal-bg/40 ${
+                  open ? "bg-teal-bg/50" : idx % 2 === 1 ? "bg-[#fafbfc]" : "bg-white"
+                } ${r.closed ? "opacity-60" : ""}`}
+                title={open ? "סגירת הגרף" : "הצגת גרף הוצאות מול הכנסות לפי חודש"}
               >
                 <td className={`${TD} font-bold text-ink`}>
-                  {r.branchName}
-                  {r.closed && <span className="mr-1.5 text-[10px] font-bold text-muted">(נסגר)</span>}
+                  <span className="flex items-center gap-1">
+                    {open ? (
+                      <ChevronDown className="h-3.5 w-3.5 shrink-0 text-teal" />
+                    ) : (
+                      <ChevronLeft className="h-3.5 w-3.5 shrink-0 text-muted" />
+                    )}
+                    {r.branchName}
+                    {r.closed && <span className="mr-1.5 text-[10px] font-bold text-muted">(נסגר)</span>}
+                  </span>
                 </td>
                 <td className={`${TD} font-semibold text-red-600`}>
                   {r.myExpensesToDate > 0 ? money(r.myExpensesToDate) : "-"}
+                  {r.laptopCostToDate > 0 && (
+                    <span className="block text-[10px] font-normal text-muted">
+                      מתוכן מחשבים {money(r.laptopCostToDate)}
+                    </span>
+                  )}
                 </td>
                 <td className={`${TD} text-ink`}>{r.cashPaidToDate > 0 ? money(r.cashPaidToDate) : "-"}</td>
                 <td className={`${TD} font-semibold text-emerald-700`}>
                   {r.myIncomeToDate > 0 ? money(r.myIncomeToDate) : "-"}
+                  {r.saleIncomeToDate > 0 && (
+                    <span className="block text-[10px] font-normal text-muted">
+                      מתוכן מכירות {money(r.saleIncomeToDate)}
+                    </span>
+                  )}
                 </td>
                 <td className={TD}>
                   <Signed value={r.profitToDate} />
@@ -90,7 +130,20 @@ export function BranchSummaryTable({ rows, month }: { rows: BranchSummaryRow[]; 
                   <Signed value={r.incomingThisMonth} />
                 </td>
               </tr>
-            ))}
+              {open && (
+                <tr className="bg-[#f7faf9]">
+                  <td colSpan={6} className="px-3 py-3">
+                    <MonthlyFlowChart flow={r.flow} />
+                    <p className="mt-1.5 px-1 text-[10.5px] leading-relaxed text-muted">
+                      הכנסות = החלק שלי בהשכרות + מכירות מחשבים, אחרי האחוזים שאני מעביר. הוצאות = החלק שלי בהוצאות
+                      הסניף, כולל עלות הוספת מחשבים בחודש שנוספו.
+                    </p>
+                  </td>
+                </tr>
+              )}
+              </Fragment>
+              );
+            })}
           </tbody>
           {rows.length > 0 && (
             <tfoot>
@@ -113,7 +166,7 @@ export function BranchSummaryTable({ rows, month }: { rows: BranchSummaryRow[]; 
       <p className="border-t border-card-border px-4 py-2.5 text-[11px] leading-relaxed text-muted">
         <b>ההוצאות שלי</b> = החלק שלי בעלות, לפי &quot;על מי החוב&quot; של כל שורה. <b>ששילמתי בפועל</b> = כל
         שורה שאני שילמתי, במלוא הסכום — כולל מה ששילמתי עבור הסניף ואמור לחזור אליי.{" "}
-        <b>נכנס החודש</b>: ירוק = מגיע אליי, אדום = אני מעביר.
+        <b>נכנס החודש</b>: ירוק = מגיע אליי, אדום = אני מעביר. לחיצה על שורה פותחת גרף חודשי של הסניף.
       </p>
     </div>
   );

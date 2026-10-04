@@ -4,16 +4,11 @@ import { Banknote, Layers } from "lucide-react";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { getAdminFirestore } from "@/lib/firebase-admin";
-import type { Branch, FixedExpense, MultiBranchExpense, VariableExpense } from "@ultranet/shared-types";
+import type { Branch, FixedExpense, VariableExpense } from "@ultranet/shared-types";
 import { SHARED_RENTALS_BRANCH_ID } from "@/lib/expense-shared-scope";
-import { MULTI_BRANCH_EXPENSES_COLLECTION, splitOf, multiBranchExpenseNote } from "@/lib/multi-branch-expense";
 import { countsToMain } from "@/lib/counts-to-main";
 import { currentMonth, fixedExpenseAccrued } from "@/lib/main-ledger";
 import { BranchExpenseTable, type BranchExpenseRow } from "@/components/expenses/branch-expense-table";
-import { CountsToMainBadge } from "@/components/counts-to-main-field";
-import { DeleteEntryButton } from "../../accounting/delete-entry-button";
-import { MultiBranchExpenseForm } from "./multi-branch-form";
-import { deleteMultiBranchExpenseAction } from "./multi-branch-actions";
 
 export default async function ExpensesHomePage() {
   const session = await getServerSession(authOptions);
@@ -29,17 +24,15 @@ export default async function ExpensesHomePage() {
   }
 
   const db = getAdminFirestore();
-  const [snap, fixedSnap, variableSnap, multiSnap] = await Promise.all([
+  const [snap, fixedSnap, variableSnap] = await Promise.all([
     db.collection("n_branches").where("branchType", "==", "rentals").get(),
     db.collection("n_fixed_expenses").get(),
     db.collection("n_var_expenses").get(),
-    db.collection(MULTI_BRANCH_EXPENSES_COLLECTION).get(),
   ]);
   const branches = snap.docs
     .map((d) => ({ ...(d.data() as Omit<Branch, "id">), id: d.id }) as Branch)
     .filter((b) => !b.deleted)
     .sort((a, b) => a.name.localeCompare(b.name, "he", { numeric: true }));
-  const branchNameById = new Map(branches.map((b) => [b.id, b.name]));
 
   const allFixed = fixedSnap.docs.map((d) => ({ ...(d.data() as Omit<FixedExpense, "id">), id: d.id }) as FixedExpense);
   const allVariable = variableSnap.docs.map(
@@ -64,10 +57,21 @@ export default async function ExpensesHomePage() {
     return { branch, fixedCount: fixed.length, variableCount: variable.length, total, toMain };
   });
 
-  const multiExpenses = multiSnap.docs
-    .map((d) => ({ ...(d.data() as Omit<MultiBranchExpense, "id">), id: d.id }) as MultiBranchExpense)
-    .filter((e) => e.module === "rentals")
-    .sort((a, b) => b.date.localeCompare(a.date));
+  // הספר המשותף כשורה בטבלה, עם המספרים שלו - אחרת הוצאה שנרשמה על כל הסניפים נעלמת מהמסך
+  // ואפשר לראות אותה רק אחרי שכבר התחלקה, בתוך ההנה"ח של סניף מסוים.
+  const sharedFixed = allFixed.filter((e) => e.branchId === SHARED_RENTALS_BRANCH_ID);
+  const sharedVariable = allVariable.filter((e) => e.branchId === SHARED_RENTALS_BRANCH_ID);
+  let sharedTotal = 0;
+  let sharedToMain = 0;
+  for (const e of sharedFixed) {
+    const accrued = fixedExpenseAccrued(e, upto);
+    sharedTotal += accrued;
+    if (countsToMain(e)) sharedToMain += accrued;
+  }
+  for (const e of sharedVariable) {
+    sharedTotal += e.amount || 0;
+    if (countsToMain(e)) sharedToMain += e.amount || 0;
+  }
 
   return (
     <div className="flex flex-col gap-5">
@@ -85,62 +89,27 @@ export default async function ExpensesHomePage() {
             הוצאות על כל הסניפים יחד
           </Link>
         </div>
-        <BranchExpenseTable rows={rows} hrefFor={(id) => `/dashboard/rentals/expenses/${id}`} />
+        <BranchExpenseTable
+          rows={rows}
+          hrefFor={(id) => `/dashboard/rentals/expenses/${id}`}
+          sharedRow={{
+            href: `/dashboard/rentals/expenses/${SHARED_RENTALS_BRANCH_ID}`,
+            label: "הוצאות על כל הסניפים יחד",
+            fixedCount: sharedFixed.length,
+            variableCount: sharedVariable.length,
+            total: sharedTotal,
+            toMain: sharedToMain,
+          }}
+        />
         <p className="mt-1.5 px-1 text-[11.5px] leading-relaxed text-muted">
+          השורה העליונה היא <b>הספר המשותף</b> — כל הוצאה שאינה של סניף אחד, קבועה או חד-פעמית.
+          לכל שורה שם אפשר לקבוע על אילו סניפים היא חלה וכמה אחוז ממנה עליך, והשאר מתחלק שווה
+          בשווה בין אותם סניפים.
+        </p>
+        <p className="mt-1 px-1 text-[11.5px] leading-relaxed text-muted">
           עמודת <b>&quot;מזה לראשי&quot;</b> היא מה שנספר בהנה&quot;ח הראשית. הוצאה שלא סומנה נשארת בספר של
           הסניף בלבד ולא נכנסת לשורה התחתונה של העסק.
         </p>
-      </div>
-
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <MultiBranchExpenseForm branches={branches} module="rentals" />
-
-        <div>
-          <div className="mb-2 flex items-center justify-between text-xs font-bold uppercase tracking-wide text-muted">
-            <span className="flex items-center gap-1.5">
-              <Layers className="h-4 w-4" />
-              הוצאות על כמה סניפים
-            </span>
-            <span className="rounded-full bg-[#f4f6f9] px-2.5 py-0.5 text-ink normal-case">{multiExpenses.length}</span>
-          </div>
-          <div className="rounded-card border border-card-border bg-white px-4 shadow-card">
-            {multiExpenses.length === 0 && (
-              <p className="py-6 text-center text-sm text-muted">עדיין לא נרשמה הוצאה על כמה סניפים</p>
-            )}
-            {multiExpenses.map((e) => {
-              const split = splitOf(e);
-              const bound = deleteMultiBranchExpenseAction.bind(null, e.id);
-              return (
-                <div
-                  key={e.id}
-                  className="flex items-start gap-2.5 border-b border-card-border py-2.5 text-[13px] last:border-b-0"
-                >
-                  <div className="flex-1">
-                    <div className="flex items-center gap-1.5 font-bold text-ink">
-                      {e.desc}
-                      <CountsToMainBadge on={countsToMain(e)} />
-                    </div>
-                    <div className="mt-0.5 text-[11px] text-muted">
-                      {e.date} · {multiBranchExpenseNote(split)}
-                      {e.paidBy === "partner" ? " · שילם: השותף" : " · שילם: אני"}
-                    </div>
-                    <div className="mt-0.5 text-[11px] text-muted">
-                      {e.branchIds.map((id) => branchNameById.get(id) ?? id).join(" · ")}
-                    </div>
-                  </div>
-                  <div className="min-w-[75px] text-left font-extrabold text-red-600">
-                    {Math.round(e.amount).toLocaleString("he-IL")} ₪
-                  </div>
-                  <DeleteEntryButton
-                    confirmText="למחוק את ההוצאה המשותפת? היא תוסר מכל הסניפים שהיא התחלקה ביניהם."
-                    action={bound}
-                    successText="ההוצאה נמחקה"
-                  />
-                </div>
-              );
-            })}
-          </div>
-        </div>
       </div>
     </div>
   );

@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import type { Branch, BranchRentalPricing, Laptop, Stick } from "@ultranet/shared-types";
+import { laptopDisplayName, parseLaptopName } from "@/lib/laptop-names";
 
 const FIELD = "w-full rounded-lg border border-card-border bg-[#f4f6f9] px-3 py-2 text-sm focus:border-teal focus:bg-white focus:outline-none";
 const LABEL = "mb-1 block text-xs font-semibold text-muted";
@@ -31,6 +32,12 @@ export function LaptopForm({
   const [hasStick, setHasStick] = useState(!!initial?.hasStick);
   const [hasPartner, setHasPartner] = useState(!!initial?.hasPartner);
   const [branchId, setBranchId] = useState(initial?.branchId ?? fixedBranchId ?? branches[0]?.id ?? "");
+  // מחשב ותיק שעוד לא עבר האחדת שמות: המספר והגרפיקה נגזרים מהשם החופשי שלו.
+  const parsed = initial ? parseLaptopName(initial.name ?? "") : { number: null, isGraphics: false };
+  const [number, setNumber] = useState<string>(String(initial?.number ?? parsed.number ?? ""));
+  const [isGraphics, setIsGraphics] = useState<boolean>(initial?.isGraphics ?? parsed.isGraphics);
+  const numberValue = Number(number);
+  const previewName = Number.isInteger(numberValue) && numberValue > 0 ? laptopDisplayName(numberValue, isGraphics) : null;
   const defaults = branchPricing?.[branchId];
 
   /** "ברירת מחדל: 50 ₪" מתוך מחירון הסניף, או טקסט ניטרלי אם לא הוגדר שם כלום. */
@@ -56,10 +63,48 @@ export function LaptopForm({
         </div>
       ) : null}
 
-      <div>
-        <label className={LABEL}>שם המחשב</label>
-        <input name="name" required defaultValue={initial?.name} className={FIELD} />
+      <div className="grid grid-cols-[1fr_auto] items-end gap-3">
+        <div>
+          <label className={LABEL}>מספר המחשב</label>
+          <input
+            name="number"
+            type="number"
+            min={1}
+            step={1}
+            required
+            value={number}
+            onChange={(e) => setNumber(e.target.value)}
+            placeholder="למשל 145"
+            className={FIELD}
+          />
+        </div>
+        <label className="mb-2 flex items-center gap-2 text-sm font-semibold text-ink">
+          <input type="checkbox" name="isGraphics" checked={isGraphics} onChange={(e) => setIsGraphics(e.target.checked)} />
+          מחשב גרפיקה
+        </label>
+        <p className="col-span-2 -mt-1 text-[11px] text-muted">
+          השם נקבע אוטומטית:{" "}
+          <b className="text-ink">{previewName ?? "מחשב ___"}</b>
+          {initial && previewName && initial.name !== previewName && (
+            <span className="mr-1">(היום רשום: {initial.name})</span>
+          )}
+        </p>
       </div>
+
+      {isOwner && (
+        <div>
+          <label className={LABEL}>תאריך הוספה לסניף</label>
+          <input
+            name="addedDate"
+            type="date"
+            defaultValue={initial?.addedDate ?? new Date().toISOString().slice(0, 10)}
+            className={FIELD}
+          />
+          <p className="mt-1 text-[11px] text-muted">
+            ממנו נספר המחשב בסניף, ולפיו נקבעת עלות ההוספה שנזקפת לסניף (המחיר שהיה בתוקף ביום הזה).
+          </p>
+        </div>
+      )}
 
       <div className="rounded-lg border border-card-border bg-[#f9fafb] p-3">
         <p className="mb-1 text-xs font-bold text-ink">מחיר מיוחד למחשב הזה (₪) — רשות</p>

@@ -26,12 +26,17 @@ export function IssueReceiptButton({
   receiptIssued,
   receiptDocNumber,
   defaultClientName,
+  compact = false,
 }: {
   incomeId: string;
   amount: number;
   receiptIssued: boolean;
   receiptDocNumber?: string;
   defaultClientName?: string;
+  /** גרסת אייקונים לטבלת הספר הראשי: אותן שתי פעולות בדיוק, בלי הטקסט שלצידן.
+   *  ההסבר שהיה כתוב בשורה עובר ל-`title` — הוא חשוב מדי מכדי להיעלם, אבל
+   *  בטבלה בת שש עמודות אין לו מקום בלי לשבור את השורה לשתיים. */
+  compact?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
@@ -66,41 +71,85 @@ export function IssueReceiptButton({
     });
   }
 
+  const manualTitle =
+    "סימון בלבד — לא מפיק שום מסמך. זו האפשרות הנכונה לתשלום שנסלק דרך נדרים פלוס, שכבר הפיק עליו חשבונית מס קבלה.";
+  const issueTitle = "מפיק מסמך אמיתי ב-EZcount. רק לתשלום שלא נסלק דרך נדרים פלוס.";
+
+  const trigger = compact ? (
+    <div className="flex items-center gap-1">
+      {receiptDocNumber ? (
+        <span
+          title={`הופק מסמך ${receiptDocNumber}`}
+          className="inline-flex h-[22px] items-center gap-0.5 rounded-full bg-teal-bg px-1.5 text-[10px] font-extrabold text-teal-dark"
+        >
+          <Check className="h-3 w-3" />
+          {receiptDocNumber}
+        </span>
+      ) : (
+        <>
+          <button
+            type="button"
+            disabled={isPending}
+            onClick={() => toggleManual(!receiptIssued)}
+            title={`${receiptIssued ? "מסומן כ" : "סמן ש"}יצא מסמך. ${manualTitle}`}
+            aria-label="סימון שיצא מסמך"
+            aria-pressed={receiptIssued}
+            className={`inline-flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-lg border transition disabled:opacity-50 ${
+              receiptIssued
+                ? "border-teal bg-teal-bg text-teal-dark"
+                : "border-card-border bg-white text-muted hover:border-teal hover:text-teal"
+            }`}
+          >
+            <Check className="h-3 w-3" />
+          </button>
+          <button
+            type="button"
+            onClick={() => setOpen(true)}
+            title={issueTitle}
+            aria-label="הפקת מסמך"
+            className="inline-flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-lg border border-card-border bg-white text-ink transition hover:border-teal hover:text-teal"
+          >
+            <Receipt className="h-3 w-3" />
+          </button>
+        </>
+      )}
+    </div>
+  ) : (
+    <div className="flex items-center gap-1.5">
+      {receiptDocNumber ? (
+        <span className="flex items-center gap-1 rounded-full bg-teal-bg px-2 py-0.5 text-[10px] font-extrabold text-teal-dark">
+          <Check className="h-3 w-3" />
+          מסמך {receiptDocNumber}
+        </span>
+      ) : (
+        <>
+          <label className="flex cursor-pointer items-center gap-1 text-[10.5px] font-bold text-muted" title={manualTitle}>
+            <input
+              type="checkbox"
+              checked={receiptIssued}
+              disabled={isPending}
+              onChange={(e) => toggleManual(e.target.checked)}
+              className="h-3.5 w-3.5 accent-teal"
+            />
+            יצא מסמך
+          </label>
+          <button
+            type="button"
+            onClick={() => setOpen(true)}
+            title={issueTitle}
+            className="flex items-center gap-1 rounded-lg border border-card-border bg-white px-2 py-0.5 text-[10.5px] font-bold text-ink transition hover:border-teal hover:text-teal"
+          >
+            <Receipt className="h-3 w-3" />
+            הפק מסמך
+          </button>
+        </>
+      )}
+    </div>
+  );
+
   return (
     <>
-      <div className="flex items-center gap-1.5">
-        {receiptDocNumber ? (
-          <span className="flex items-center gap-1 rounded-full bg-teal-bg px-2 py-0.5 text-[10px] font-extrabold text-teal-dark">
-            <Check className="h-3 w-3" />
-            מסמך {receiptDocNumber}
-          </span>
-        ) : (
-          <>
-            <label
-              className="flex cursor-pointer items-center gap-1 text-[10.5px] font-bold text-muted"
-              title="סימון בלבד — לא מפיק שום מסמך. זו האפשרות הנכונה לתשלום שנסלק דרך נדרים פלוס, שכבר הפיק עליו חשבונית מס קבלה."
-            >
-              <input
-                type="checkbox"
-                checked={receiptIssued}
-                disabled={isPending}
-                onChange={(e) => toggleManual(e.target.checked)}
-                className="h-3.5 w-3.5 accent-teal"
-              />
-              יצא מסמך
-            </label>
-            <button
-              type="button"
-              onClick={() => setOpen(true)}
-              title="מפיק מסמך אמיתי ב-EZcount. רק לתשלום שלא נסלק דרך נדרים פלוס."
-              className="flex items-center gap-1 rounded-lg border border-card-border bg-white px-2 py-0.5 text-[10.5px] font-bold text-ink transition hover:border-teal hover:text-teal"
-            >
-              <Receipt className="h-3 w-3" />
-              הפק מסמך
-            </button>
-          </>
-        )}
-      </div>
+      {trigger}
 
       {open && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setOpen(false)}>

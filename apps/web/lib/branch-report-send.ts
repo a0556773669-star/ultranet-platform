@@ -76,12 +76,20 @@ export async function sendMonthlyReports(params: {
   month: string;
   ownerDisplayName?: string | null;
   skipAlreadySent: boolean;
+  /** רק לסניפים האלה ("שליחה לסניפים נבחרים"). חסר = כל הסניפים. */
+  branchIds?: string[];
 }): Promise<BranchSendOutcome[]> {
   const raw = await loadBranchAccountingRawData();
+  const only = params.branchIds ? new Set(params.branchIds) : null;
   // A branch of mine gets no statement and no transfer instructions: there is nobody on the other
   // side to instruct. Sending one would tell me to transfer money to myself.
   const branches = raw.branches.filter(
-    (b) => b.branchType === "rentals" && !b.deleted && !b.notStarted && b.isMine === false,
+    (b) =>
+      b.branchType === "rentals" &&
+      !b.deleted &&
+      !b.notStarted &&
+      b.isMine === false &&
+      (!only || only.has(b.id)),
   );
 
   const [logoUrl, ownerName, recipients] = await Promise.all([

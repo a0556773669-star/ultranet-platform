@@ -1,82 +1,86 @@
+/**
+ * שורות החוב החודשיות לאנשים שיש להם אחוז מהברוטו של ההשכרות.
+ *
+ * הקובץ הזה הוא רק שכבת הטעינה: הוא מביא מ-Firestore את מה שצריך, והחישוב עצמו יושב
+ * ב-`lib/revenue-shares.ts` — אותן פונקציות בדיוק שמשמשות את `computeBranchFinancials`
+ * כשהיא מורידה את הסכומים האלה מהרווח שלי. שני מסלולים לאותה שאלה היו מגיעים במוקדם
+ * או במאוחר לשני מספרים שונים, וזה בדיוק המקרה שבו זה הכי מסוכן: מספר אחד אומר לי כמה
+ * להעביר, והשני אומר לי כמה נשאר לי.
+ */
 import { getAdminFirestore } from "./firebase-admin";
-import { roundPrice } from "./rental-pricing";
-import type { Laptop, Stick, Rental } from "@ultranet/shared-types";
+import type { Branch, BranchIncome, Laptop, Rental } from "@ultranet/shared-types";
+import {
+  branchRevenueShareLine,
+  computerRevenueShareLines,
+  countsAsCollected,
+  type DatedAmount,
+  type RevenueShareLine,
+} from "./revenue-shares";
 
-export interface PartnerSettlementLine {
-  partnerName: string;
-  pct: number;
-  branchId: string;
-  computerNames: string[];
-  rentalCount: number;
-  totalRevenue: number;
-  amountOwed: number;
-}
+export type { RevenueShareLine };
 
 /**
- * Per-computer partner revenue share for a given month (e.g. "2026-07"): for every laptop
- * flagged `hasPartner`, sums the (final/calc) price of every rental of that laptop - and of its
- * linked stick, if any - that was returned in that month, and applies the laptop's `partnerPct`
- * (default 15). Mirrors the "returned in month" convention `computeBranchFinancials` uses for
- * branch-level settlement, so the two reports agree on which rentals count as "this month".
- * Grouped by (branchId, partnerName, pct) - a branch can have more than one partner across
- * different computers.
+ * כל מה שמגיע לכל אחד על חודש מסוים (למשל "2026-08"), מקובץ לפי (סניף, אדם, אחוז).
+ *
+ * שתי שכבות:
+ *  - **פר-מחשב** — כל מחשב שמסומן `hasPartner`, לפי `partnerPct` שלו, על ההשכרות שלו
+ *    ושל הסטיק הצמוד לו. אין תאריך התחלה: נספר מהיום הראשון שהמחשב הושכר.
+ *  - **פר-סניף** — הסדר מתוך `BRANCH_REVENUE_SHARES`, על כל ההשכרות של הסניף מתאריך
+ *    ההתחלה ואילך. חודש ההתחלה מתחלק לפי תאריך ההשכרה ולא נלקח במלואו.
+ *
+ * ההשכרה נספרת בחודש שבו היא **הוחזרה**, ורק אם שולמה — בדיוק כמו בהתחשבנות מול סניף
+ * (`computeBranchFinancials`), כדי ששני הדוחות יסכימו מה נכנס לחודש הזה. השכרה שהוחזרה
+ * ולא שולמה לא מייצרת חוב: אין טעם להעביר אחוז מכסף שעוד לא נגבה.
  */
-export async function computePartnerSettlement(month: string): Promise<PartnerSettlementLine[]> {
+export async function computeRevenueShareLines(month: string): Promise<RevenueShareLine[]> {
   const db = getAdminFirestore();
   // Projected down to the fields this function actually reads. Every returned rental ever is
   // scanned here (the month filter is applied in memory below), so the documents' full contents -
   // notes, client ids, pricing breakdowns - were being shipped for nothing.
-  const [laptopsSnap, sticksSnap, rentalsSnap] = await Promise.all([
+  const [branchesSnap, laptopsSnap, sticksSnap, rentalsSnap, branchIncomeSnap] = await Promise.all([
+    db.collection("n_branches").select("name", "branchType", "isMine", "deleted").get(),
     db.collection("n_laptops").select("hasPartner", "partnerPct", "partnerName", "branchId", "name").get(),
     db.collection("n_sticks").select("linkedLaptopId").get(),
     db
       .collection("n_rentals")
       .where("status", "==", "returned")
-      .select("paid", "returnDate", "kind", "itemId", "finalPrice", "calcPrice")
+      .select("paid", "returnDate", "kind", "itemId", "branchId", "finalPrice", "calcPrice")
       .get(),
+    db.collection("n_branch_income").select("branchId", "amount", "date").get(),
   ]);
 
   const laptops = laptopsSnap.docs.map((d) => ({ ...(d.data() as Omit<Laptop, "id">), id: d.id }) as Laptop);
-  const partneredLaptops = laptops.filter((l) => l.hasPartner);
-  if (partneredLaptops.length === 0) return [];
-  const laptopById = new Map(partneredLaptops.map((l) => [l.id, l]));
-
-  const sticks = sticksSnap.docs.map((d) => ({ ...(d.data() as Omit<Stick, "id">), id: d.id }) as Stick);
-  const stickToLaptop = new Map<string, Laptop>();
-  for (const s of sticks) {
-    if (s.linkedLaptopId && laptopById.has(s.linkedLaptopId)) {
-      stickToLaptop.set(s.id, laptopById.get(s.linkedLaptopId)!);
-    }
-  }
-
+  const sticks = sticksSnap.docs.map((d) => ({
+    id: d.id,
+    linkedLaptopId: (d.data() as { linkedLaptopId?: string }).linkedLaptopId,
+  }));
   const rentals = rentalsSnap.docs.map((d) => ({ ...(d.data() as Omit<Rental, "id">), id: d.id }) as Rental);
 
-  const lines = new Map<string, PartnerSettlementLine>();
+  const lines = computerRevenueShareLines(laptops, sticks, rentals, (m) => m === month);
+
+  // The per-branch arrangement needs the branch's whole gross, so it reads the same two income
+  // sources computeBranchFinancials does: real rentals plus the owner's manual income rows.
+  const incomeByBranch = new Map<string, DatedAmount[]>();
+  const push = (branchId: string, line: DatedAmount) => {
+    const arr = incomeByBranch.get(branchId) ?? [];
+    arr.push(line);
+    incomeByBranch.set(branchId, arr);
+  };
   for (const r of rentals) {
-    // Skip rentals that were returned but never actually paid (client still owes) - counting
-    // those would tell the owner to pay the partner a share of money nobody collected yet.
-    if (!r.paid) continue;
-    if (!r.returnDate || r.returnDate.slice(0, 7) !== month) continue;
-    const laptop = r.kind === "laptop" ? laptopById.get(r.itemId) : stickToLaptop.get(r.itemId);
-    if (!laptop) continue;
-
-    const pct = laptop.partnerPct ?? 15;
-    const partnerName = laptop.partnerName?.trim() || "שותף ללא שם";
-    const key = `${laptop.branchId}|${partnerName}|${pct}`;
-    let line = lines.get(key);
-    if (!line) {
-      line = { partnerName, pct, branchId: laptop.branchId, computerNames: [], rentalCount: 0, totalRevenue: 0, amountOwed: 0 };
-      lines.set(key, line);
-    }
-    if (!line.computerNames.includes(laptop.name)) line.computerNames.push(laptop.name);
-    line.rentalCount += 1;
-    line.totalRevenue += roundPrice(r.finalPrice ?? r.calcPrice ?? 0);
+    if (!countsAsCollected(r)) continue;
+    push(r.branchId, { date: r.returnDate as string, amount: r.finalPrice ?? r.calcPrice ?? 0 });
+  }
+  for (const d of branchIncomeSnap.docs) {
+    const i = { ...(d.data() as Omit<BranchIncome, "id">), id: d.id } as BranchIncome;
+    if (!i.date) continue;
+    push(i.branchId, { date: i.date, amount: i.amount || 0 });
   }
 
-  for (const line of lines.values()) {
-    // שקלים שלמים בלבד - אין אגורות בשום סכום במודול ההשכרות.
-    line.amountOwed = roundPrice((line.totalRevenue * line.pct) / 100);
+  const branches = branchesSnap.docs.map((d) => ({ ...(d.data() as Omit<Branch, "id">), id: d.id }) as Branch);
+  for (const branch of branches) {
+    const line = branchRevenueShareLine(branch, incomeByBranch.get(branch.id) ?? [], month);
+    if (line) lines.push(line);
   }
 
-  return [...lines.values()].sort((a, b) => b.amountOwed - a.amountOwed);
+  return lines.sort((a, b) => b.amount - a.amount);
 }

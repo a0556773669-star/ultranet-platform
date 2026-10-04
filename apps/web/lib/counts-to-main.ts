@@ -29,3 +29,21 @@ export const COUNTS_TO_MAIN_HINT =
 export function countsToMainBadge(row: { countsToMain?: boolean } | null | undefined): string {
   return countsToMain(row) ? 'ראשי' : 'סניף בלבד';
 }
+
+/**
+ * עלות הקמה של סניף — החריג היחיד לכלל "`undefined` = לא מתחשבן".
+ *
+ * הבעלים ביקש שעלויות ההקמה ייכנסו להנה"ח הראשית, ועלות הקמה אינה "שורה שמישהו הזין"
+ * אלא שדה אחד לסניף שגלוי בטופס. לכן ברירת המחדל כאן דלוקה, והצ'קבוקס בחלון הפירוט
+ * משמש להחריג סניף מסוים - לא לצרף אותו. הכלל חי כאן ולא במסך, בדיוק כמו אחיו למעלה.
+ */
+export function setupCostCountsToMain(branch: { setupCountsToMain?: boolean } | null | undefined): boolean {
+  return branch?.setupCountsToMain !== false;
+}
+
+/** קורא את הדגל מטופס הסניף. `SetupCostField` שולח אותו תמיד כ-"true"/"false" מפורש. */
+export function setupCostCountsToMainFromForm(formData: FormData): boolean | undefined {
+  const raw = formData.get("setupCountsToMain");
+  if (raw === null) return undefined;
+  return raw !== "false";
+}

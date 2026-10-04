@@ -171,11 +171,12 @@ export async function closeBranch(branchId: string, closedAt: string): Promise<C
 
   const db = getAdminFirestore();
   const branchRef = db.collection("n_branches").doc(branchId);
-  const [branchSnap, txSnap, itemsSnap, fixedSnap] = await Promise.all([
+  const [branchSnap, txSnap, itemsSnap, fixedSnap, recurringVarSnap] = await Promise.all([
     branchRef.get(),
     db.collection(TX_COLLECTION).get(),
     db.collection(ITEMS_COLLECTION).where("location", "==", branchId).get(),
     db.collection("n_fixed_expenses").where("branchId", "==", branchId).get(),
+    db.collection("n_recurring_var_expenses").where("branchId", "==", branchId).get(),
   ]);
   if (!branchSnap.exists) return fail("הסניף לא נמצא");
   const branch = branchSnap.data() as Branch;
@@ -206,6 +207,15 @@ export async function closeBranch(branchId: string, closedAt: string): Promise<C
   }
   // The legacy recurring collection needs the same treatment, or the branch keeps billing there.
   for (const d of fixedSnap.docs) {
+    const e = d.data() as { endDate?: string; startDate?: string };
+    if (e.endDate) continue;
+    if (e.startDate && e.startDate > closedAt) continue;
+    writes.push((b) => b.update(d.ref, { endDate: closedAt }));
+    recurringEnded += 1;
+  }
+  // וגם ההוצאות הקבועות המשתנות של הסניף (חשמל וכו') — אחרת התזכורת החודשית ממשיכה לבקש סכום
+  // לסניף שכבר לא קיים.
+  for (const d of recurringVarSnap.docs) {
     const e = d.data() as { endDate?: string; startDate?: string };
     if (e.endDate) continue;
     if (e.startDate && e.startDate > closedAt) continue;

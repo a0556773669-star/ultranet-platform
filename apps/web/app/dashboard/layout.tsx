@@ -7,7 +7,7 @@ import { SignOutButton } from "./sign-out-button";
 import { cookies } from "next/headers";
 import { DEVICE_TRUST_COOKIE, verifyDeviceToken } from "@/lib/device-trust";
 import { TopNav } from "./top-nav";
-import type { PermKey } from "@/lib/perms";
+import { getAssignments, isOwnerSession, topRole, unionPerms } from "@/lib/perms";
 
 import { NAV_ITEMS, visibleFor } from "@/lib/nav-items";
 import { getLogoSrc } from "@/lib/branding";
@@ -23,12 +23,17 @@ export default async function DashboardLayout({ children }: { children: ReactNod
     redirect("/verify-device");
   }
 
-  const role = session.user?.role ?? "";
-  const perms = (session.user as { perms?: Partial<Record<PermKey, boolean>> } | undefined)?.perms;
+  // הניווט הוא של **האדם**, לא של מודול מסוים: מי שהוא שותף בסניף השכרות וגם עובד בחדר
+  // מחשבים צריך לראות את שני הפריטים. לכן כאן נלקח איחוד ההרשאות של כל הכובעים; ההכרעה
+  // איזה כובע חל בפועל נעשית בכניסה למודול עצמו (`requireModuleAccess`).
+  const assignments = getAssignments(session);
+  const role = topRole(assignments);
+  const perms = unionPerms(assignments);
+  const isOwner = isOwnerSession(session);
   const name = session.user?.name ?? session.user?.email ?? "";
 
   const items = NAV_ITEMS.filter((item) => visibleFor(role, perms, item));
-  if (role === "owner") {
+  if (isOwner) {
     items.push({ href: "/dashboard/users", label: "משתמשים", icon: Users });
   }
   const navItems = items.map((item) => ({

@@ -2,8 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { scopedSession } from "@/lib/perms";
 import { getAdminFirestore } from "@/lib/firebase-admin";
 import { FieldValue } from "firebase-admin/firestore";
 import { resolveEzcountCreds, createEzcountReceipt, EZCOUNT_DOC_TYPES } from "@/lib/ezcount";
@@ -16,12 +15,12 @@ import {
   roundPrice,
 } from "@/lib/rental-pricing";
 
+/**
+ * ה-session של **מודול ההשכרות**: `role` ו-`branchId` כאן הם של הכובע שהמשתמש מחזיק
+ * בהשכרות, גם אם יש לו כובע אחר במודול אחר. ראה `scopedSession`.
+ */
 async function requireSession() {
-  const session = await getServerSession(authOptions);
-  if (!session) {
-    throw new Error("יש להתחבר");
-  }
-  return session;
+  return scopedSession("rentals");
 }
 
 function stripUndefined<T extends Record<string, unknown>>(obj: T): T {
@@ -444,6 +443,18 @@ export async function createRentalAction(formData: FormData) {
       .join(", ");
     redirect(`/dashboard/rentals/new?error=missing&missingFields=${encodeURIComponent(missing)}${mineParam}`);
   }
+  // מחשב/סטיק שנמכר או הוצא מהסניף לא ניתן להשכרה, גם אם הגיע מטופס ישן שעוד הציג אותו.
+  {
+    const itemSnap = await getAdminFirestore()
+      .collection(kind === "stick" ? "n_sticks" : "n_laptops")
+      .doc(itemId)
+      .get();
+    const itemStatus = (itemSnap.data() as { status?: string } | undefined)?.status;
+    if (itemStatus && itemStatus !== "active") {
+      throw new Error("הפריט הזה כבר לא פעיל בסניף (נמכר או הוצא)");
+    }
+  }
+
 
   const activeForItem = await getAdminFirestore()
     .collection("n_rentals")
@@ -553,9 +564,12 @@ export async function updateRentalItemAction(rentalId: string, itemId: string) {
 
   const itemCollection = rental.kind === "stick" ? "n_sticks" : "n_laptops";
   const itemDoc = await db.collection(itemCollection).doc(itemId).get();
-  const item = itemDoc.data() as { branchId?: string } | undefined;
+  const item = itemDoc.data() as { branchId?: string; status?: string } | undefined;
   if (!item || item.branchId !== rental.branchId) {
     throw new Error("הפריט שנבחר לא שייך לסניף הזה");
+  }
+  if (rental.status === "active" && item.status && item.status !== "active") {
+    throw new Error("הפריט הזה כבר לא פעיל בסניף (נמכר או הוצא)");
   }
 
   if (rental.status === "active") {

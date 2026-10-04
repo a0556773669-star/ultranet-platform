@@ -11,6 +11,7 @@ import { buildBranchLedger } from "@/lib/branch-ledger";
 import { MonthPicker } from "./month-picker";
 import { PartnerAccountingView } from "./partner-view";
 import { BranchSummaryTable, type BranchSummaryRow } from "./branch-summary-table";
+import type { MonthFlow } from "@/lib/monthly-flow";
 
 /** The months the picker offers: the last two years up to (never past) the current month. */
 function selectableMonths(now: string): string[] {
@@ -29,7 +30,7 @@ function selectableMonths(now: string): string[] {
  *
  * מה שהיה כאן קודם ניסה להיות כל המודול: טבלת התחשבנות חודשית, כרטיסי סניפים, היסטוריית
  * ספר מלאה, טפסי הכנסה והוצאה, שליחת דוחות ושורת שותפי מחשבים. כמעט כל זה ענה על שאלות
- * שנשאלות במקום אחר - טבלת ההתחשבנות עברה להנה"ח הראשית (`/dashboard/accounting/transfers`),
+ * שנשאלות במקום אחר - טבלת ההתחשבנות עברה להנה"ח הראשית (`/dashboard/accounting/mobile`),
  * שם היא יושבת ליד הכסף שהיא מזיזה; הכנסות נרשמות במסך הראשי; והוצאות במסך ההוצאות.
  *
  * מה שנשאר הוא מה שבאמת נשאל כאן, פר סניף: כמה מההוצאות היו שלי, כמה מזה יצא לי מהכיס,
@@ -92,6 +93,7 @@ export default async function RentalsAccountingPage({
                 financials: computeBranchFinancials(b, raw, thisMonth),
                 openBalance: buildBranchLedger(b, raw).currentBalance,
                 closed: isClosed(b),
+                sales: [...(raw.salesByBranch.get(b.id) ?? [])].sort((x, y) => y.date.localeCompare(x.date)),
               }}
             />
           ))
@@ -101,6 +103,19 @@ export default async function RentalsAccountingPage({
   }
 
   const visible = allRentals.filter((b) => showClosed || !isClosed(b));
+
+  // הגרף שנפתח מתחת לכל שורה: 24 החודשים שעד החודש הנבחר (מחודש הפתיחה, אם הוא מאוחר יותר),
+  // כמה הוצאתי וכמה הכנסתי בכל חודש — החלק שלי, בדיוק כמו בעמודות הטבלה.
+  const chartMonths = monthOptions.filter((m) => m <= month).reverse();
+  const flowOf = (branch: (typeof allRentals)[number]): MonthFlow[] => {
+    const opened = (branch.openedAt || branch.founded || "").slice(0, 7);
+    return chartMonths
+      .filter((m) => !opened || m >= opened)
+      .map((m) => {
+        const f = computeBranchFinancials(branch, raw, m);
+        return { month: m, income: f.ownerIncomeThisMonth, expense: f.ownerExpenseThisMonth };
+      });
+  };
 
   const rows: BranchSummaryRow[] = visible
     .map((branch) => {
@@ -114,6 +129,9 @@ export default async function RentalsAccountingPage({
         myIncomeToDate: f.ownerEarnedToDate,
         profitToDate: f.ownerBalanceToDate,
         incomingThisMonth: f.settlementNetToOwner,
+        laptopCostToDate: f.laptopCostToDate,
+        saleIncomeToDate: f.saleIncomeToDate,
+        flow: flowOf(branch),
       };
     })
     .sort((a, b) => a.branchName.localeCompare(b.branchName, "he", { numeric: true }));
@@ -145,7 +163,7 @@ export default async function RentalsAccountingPage({
         <p className="px-1 text-[11.5px] leading-relaxed text-muted">
           טבלת ההתחשבנות החודשית (כמה כל סניף צריך להעביר, כולל יתרות מחודשים קודמים) עברה להנה&quot;ח
           הראשית.{" "}
-          <Link href="/dashboard/accounting/transfers" className="inline-flex items-center gap-1 font-bold text-teal underline">
+          <Link href="/dashboard/accounting/mobile" className="inline-flex items-center gap-1 font-bold text-teal underline">
             למסך ההעברות
             <ArrowLeft className="h-3.5 w-3.5" />
           </Link>

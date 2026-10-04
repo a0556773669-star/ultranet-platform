@@ -1,5 +1,6 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import { getAssignments, isOwnerSession, unionPerms } from "@/lib/perms";
 import { getAdminFirestore } from "@/lib/firebase-admin";
 import { resolveNedarimCreds } from "@/lib/nedarim";
 import { NextRequest, NextResponse } from "next/server";
@@ -13,9 +14,8 @@ export async function POST(req: NextRequest) {
     if (!session) {
       return NextResponse.json({ success: false, message: "יש להתחבר" }, { status: 401 });
     }
-    const role = session.user?.role;
-    const perms = (session.user as { perms?: Partial<Record<string, boolean>> } | undefined)?.perms;
-    if (role !== "owner" && !perms?.charging) {
+    const perms = unionPerms(getAssignments(session));
+    if (!isOwnerSession(session) && !perms.charging) {
       return NextResponse.json({ success: false, message: "אין לך הרשאה לבצע חיוב" }, { status: 403 });
     }
 

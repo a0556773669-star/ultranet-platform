@@ -9,6 +9,9 @@ import type {
   BranchTransfer,
   BranchIncome,
   MultiBranchExpense,
+  Stick,
+  LaptopSale,
+  LaptopCostRate,
 } from "@ultranet/shared-types";
 import {
   ownerExpenseBurden,
@@ -17,6 +20,17 @@ import {
   monthsBetween,
 } from "./branch-accounting";
 import { MULTI_BRANCH_EXPENSES_COLLECTION, splitOf } from "./multi-branch-expense";
+import { SHARED_RENTALS_BRANCH_ID, sharedExpenseDivision } from "./expense-shared-scope";
+import {
+  branchRevenueShareFor,
+  computerRevenueShareLines,
+  revenueShareForMonth,
+  revenueShareToDate as revenueShareToDateOf,
+} from "./revenue-shares";
+import { LAPTOP_COST_RATES_COLLECTION, laptopCostLines } from "./laptop-costs";
+import { lastDayOfMonth, nextMonth, previousMonth } from "./fixed-expense-revision";
+
+export const LAPTOP_SALES_COLLECTION = "n_laptop_sales";
 
 export function currentMonth(): string {
   return new Date().toISOString().slice(0, 7);
@@ -39,8 +53,26 @@ interface DatedExpenseLine {
    * every downstream calculation reads `ownerShare` rather than re-deriving from `owedBy`.
    */
   ownerShare: number;
-  /** set only on a multi-branch expense line - the owner's percentage of it, for display. */
+  /** set only on a line whose split is a free percentage (a shared expense that divides between
+   *  the branches, or a legacy multi-branch one) - the owner's percentage of it, for display. */
   ownerPct?: number;
+  category?: string;
+  /** עלות הוספת מחשב (`lib/laptop-costs.ts`) — רכש של הבעלים, לא תפעול. */
+  capital?: boolean;
+}
+
+/**
+ * The owner's share of one expense line, in ₪.
+ *
+ * `ownerPct` wins when it is there: it is the free percentage of a shared expense that divides
+ * between the branches (see lib/expense-shared-scope.ts), and `owedBy`'s three buckets cannot
+ * express it. Every other line is the plain owner / partner / 50-50 rule it always was.
+ */
+function lineOwnerShare(amount: number, e: { ownerPct?: number; owedBy?: string }): number {
+  if (typeof e.ownerPct === "number" && Number.isFinite(e.ownerPct)) {
+    return (amount * Math.min(100, Math.max(0, e.ownerPct))) / 100;
+  }
+  return ownerExpenseBurden(amount, e.owedBy);
 }
 
 /** Expands recurring fixed expenses into one line per active month, plus all variable expense
@@ -64,7 +96,9 @@ function expandExpenseLines(
         month,
         desc: e.name || "הוצאה קבועה",
         recurring: true,
-        ownerShare: ownerExpenseBurden(amount, e.owedBy),
+        ownerShare: lineOwnerShare(amount, e),
+        ownerPct: e.ownerPct,
+        category: e.category,
       });
     }
   }
@@ -77,7 +111,9 @@ function expandExpenseLines(
       month: e.month,
       desc: e.desc || "הוצאה חד פעמית",
       recurring: false,
-      ownerShare: ownerExpenseBurden(amount, e.owedBy),
+      ownerShare: lineOwnerShare(amount, e),
+      ownerPct: e.ownerPct,
+      category: e.category,
     });
   }
   // One line per multi-branch expense: this branch's slice of it, with the owner's percentage
@@ -155,6 +191,9 @@ interface DatedIncomeLine {
   amount: number;
   collectedByOwner: boolean;
   month: string;
+  /** התאריך המלא, לא רק החודש. הסדר אחוזים שמתחיל ב-23/08 חותך באמצע החודש, וחודש
+   *  לבדו לא יודע לענות על זה. ראו `lib/revenue-shares.ts`. */
+  date: string;
 }
 
 function buildIncomeLines(rentals: Rental[], routesById: Map<string, CollectionRoute>): DatedIncomeLine[] {
@@ -171,6 +210,7 @@ function buildIncomeLines(rentals: Rental[], routesById: Map<string, CollectionR
         amount,
         collectedByOwner: isCollectedByOwner(r.paymentMethod, route),
         month: (r.returnDate as string).slice(0, 7),
+        date: r.returnDate as string,
       };
     });
 }
@@ -183,6 +223,7 @@ function buildManualIncomeLines(entries: BranchIncome[]): DatedIncomeLine[] {
     amount: i.amount || 0,
     collectedByOwner: i.collectedByOwner ?? false,
     month: i.date.slice(0, 7),
+    date: i.date,
   }));
 }
 
@@ -227,6 +268,20 @@ export interface BranchFinancials {
   settlementExpenseThisMonth: number;
   /** Number of income events counted this month (paid+returned rentals plus manual income rows). */
   rentalCountThisMonth: number;
+  /** מה שמגיע החודש לאנשים שיש להם אחוז מהברוטו (`lib/revenue-shares.ts`) — כבר מנוכה
+   *  מכל שדות הרווח של הבעלים כאן, ומוצג בנפרד כדי שאפשר יהיה להסביר את ההפרש. */
+  revenueShareThisMonth: number;
+  /** אותו דבר, מצטבר עד סוף החודש המבוקש. */
+  revenueShareToDate: number;
+  /** ההכנסה שלי מהסניף בחודש: החלק שלי בהשכרות + מכירות, אחרי האחוזים שאני מעביר. */
+  ownerIncomeThisMonth: number;
+  /** החלק שלי בהוצאות החודש, כולל עלות הוספת מחשבים. */
+  ownerExpenseThisMonth: number;
+  /** מכירות מחשבים בחודש — 100% שלי, וכלולות ב-`settlementNetToOwner`. */
+  saleIncomeThisMonth: number;
+  saleIncomeToDate: number;
+  /** סך עלות ההוספה של מחשבים שנזקפה לסניף עד החודש המבוקש. */
+  laptopCostToDate: number;
 }
 
 export interface BranchAccountingRawData {
@@ -235,6 +290,9 @@ export interface BranchAccountingRawData {
   variableByBranch: Map<string, VariableExpense[]>;
   rentalsByBranch: Map<string, Rental[]>;
   laptopsByBranch: Map<string, Laptop[]>;
+  /** כל הסטיקים, לצורך המיפוי סטיק -> המחשב שהוא צמוד אליו: השכרת סטיק של מחשב
+   *  שיש עליו שותפות נספרת לאותה שותפות. ראו `lib/revenue-shares.ts`. */
+  sticks: Pick<Stick, "id" | "linkedLaptopId">[];
   routesById: Map<string, CollectionRoute>;
   transfersByBranchMonth: Map<string, BranchTransfer>; // key: `${branchId}|${month}`
   branchIncomeByBranch: Map<string, BranchIncome[]>;
@@ -243,6 +301,12 @@ export interface BranchAccountingRawData {
   multiBranchByBranch: Map<string, MultiBranchExpense[]>;
   /** Every multi-branch expense, once, for the management list on /rentals/expenses. */
   multiBranchExpenses: MultiBranchExpense[];
+  /** מכירות מחשבים לפי סניף (`n_laptop_sales`) — 100% לבעלים, ראו `LaptopSale`. */
+  salesByBranch: Map<string, LaptopSale[]>;
+  /** גרסאות עלות ההוספה של מחשב (`n_laptop_cost_rates`). */
+  laptopCostRates: LaptopCostRate[];
+  /** תאריך ההשכרה הראשונה של כל מחשב — נפילה לעלות של מחשב ותיק בלי `addedDate`. */
+  firstRentalByLaptop: Map<string, string>;
 }
 
 export async function loadBranchAccountingRawData(): Promise<BranchAccountingRawData> {
@@ -253,20 +317,26 @@ export async function loadBranchAccountingRawData(): Promise<BranchAccountingRaw
     variableSnap,
     rentalsSnap,
     laptopsSnap,
+    sticksSnap,
     routesSnap,
     transfersSnap,
     branchIncomeSnap,
     multiBranchSnap,
+    salesSnap,
+    costRatesSnap,
   ] = await Promise.all([
     db.collection("n_branches").get(),
     db.collection("n_fixed_expenses").get(),
     db.collection("n_var_expenses").get(),
     db.collection("n_rentals").get(),
     db.collection("n_laptops").get(),
+    db.collection("n_sticks").select("linkedLaptopId").get(),
     db.collection("n_collection_routes").get(),
     db.collection("n_branch_transfers").get(),
     db.collection("n_branch_income").get(),
     db.collection(MULTI_BRANCH_EXPENSES_COLLECTION).get(),
+    db.collection(LAPTOP_SALES_COLLECTION).get(),
+    db.collection(LAPTOP_COST_RATES_COLLECTION).get(),
   ]);
 
   const branches = branchesSnap.docs.map((d) => ({ ...(d.data() as Omit<Branch, "id">), id: d.id }) as Branch);
@@ -288,11 +358,16 @@ export async function loadBranchAccountingRawData(): Promise<BranchAccountingRaw
   }
 
   const rentalsByBranch = new Map<string, Rental[]>();
+  const firstRentalByLaptop = new Map<string, string>();
   for (const d of rentalsSnap.docs) {
     const r = { ...(d.data() as Omit<Rental, "id">), id: d.id } as Rental;
     const arr = rentalsByBranch.get(r.branchId) ?? [];
     arr.push(r);
     rentalsByBranch.set(r.branchId, arr);
+    if (r.kind === "laptop" && r.startDate) {
+      const prev = firstRentalByLaptop.get(r.itemId);
+      if (!prev || r.startDate < prev) firstRentalByLaptop.set(r.itemId, r.startDate);
+    }
   }
 
   const laptopsByBranch = new Map<string, Laptop[]>();
@@ -302,6 +377,11 @@ export async function loadBranchAccountingRawData(): Promise<BranchAccountingRaw
     arr.push(l);
     laptopsByBranch.set(l.branchId, arr);
   }
+
+  const sticks = sticksSnap.docs.map((d) => ({
+    id: d.id,
+    linkedLaptopId: (d.data() as { linkedLaptopId?: string }).linkedLaptopId,
+  }));
 
   const routesById = new Map<string, CollectionRoute>();
   for (const d of routesSnap.docs) {
@@ -322,6 +402,63 @@ export async function loadBranchAccountingRawData(): Promise<BranchAccountingRaw
     branchIncomeByBranch.set(i.branchId, arr);
   }
 
+  // הספר המשותף שמתחלק: הוצאה ב-`shared-rentals` שנושאת `ownerPct` נכנסת לספר של כל סניף
+  // שהיא חלה עליו, כפרוסה שלו ממנה - בדיוק כמו הוצאה רב-סניפית, רק שהיא חיה באותו קולקשן
+  // ככל הוצאה אחרת (ולכן גם קבועה יכולה להתחלק, מה שלא היה אפשרי עד היום).
+  //
+  // **סניף סגור לא משלם על הוצאות של כלל הסניפים.** מהחודש שאחרי `closedAt` הוא יוצא מהחלוקה,
+  // והסניפים שנשארו מתחלקים בכל הסכום. חודש הסגירה עצמו עוד נספר עליו — בדיוק כמו ההוצאות
+  // הקבועות שלו, שנעצרות בתאריך הסגירה. לכן הוצאה קבועה משותפת נחתכת לתקופות: בכל תקופה
+  // קבוצת הסניפים החיים קבועה, ולכל תקופה יש פרוסה משלה.
+  const rentalsBranches = branches.filter((b) => b.branchType === "rentals" && !b.deleted);
+  const liveRentalsBranchIdsAt = (month: string) =>
+    rentalsBranches.filter((b) => !b.closedAt || b.closedAt.slice(0, 7) >= month).map((b) => b.id);
+  // החודשים שבהם קבוצת הסניפים החיים משתנה: החודש שאחרי כל סגירה.
+  const changeMonths = [
+    ...new Set(rentalsBranches.filter((b) => b.closedAt).map((b) => nextMonth(b.closedAt!.slice(0, 7)))),
+  ].sort();
+
+  for (const e of fixedByBranch.get(SHARED_RENTALS_BRANCH_ID) ?? []) {
+    if (!e.startDate) continue;
+    const startMonth = e.startDate.slice(0, 7);
+    const endMonth = e.endDate ? e.endDate.slice(0, 7) : null;
+    const cuts = changeMonths.filter((m) => m > startMonth && (!endMonth || m <= endMonth));
+    const segmentStarts = [startMonth, ...cuts];
+    segmentStarts.forEach((segStart, i) => {
+      const nextStart = segmentStarts[i + 1];
+      const division = sharedExpenseDivision(e, liveRentalsBranchIdsAt(segStart));
+      if (!division) return;
+      const segment = {
+        startDate: i === 0 ? e.startDate : `${segStart}-01`,
+        endDate: nextStart ? lastDayOfMonth(previousMonth(nextStart)) : e.endDate,
+      };
+      for (const branchId of division.branchIds) {
+        const arr = fixedByBranch.get(branchId) ?? [];
+        // הסכום מוחלף בפרוסה של הסניף, ו-`ownerPct` נשאר - כך `lineOwnerShare` מגיע בדיוק
+        // ל-`perBranchOwnerShare` בלי שאף מסך יצטרך לדעת שהשורה הגיעה מהספר המשותף.
+        const copy: FixedExpense = {
+          ...e,
+          ...segment,
+          branchId,
+          amount: division.perBranchLineTotal,
+          ...(e.lastAmount != null ? { lastAmount: e.lastAmount / division.branchCount } : {}),
+        };
+        if (!copy.endDate) delete copy.endDate;
+        arr.push(copy);
+        fixedByBranch.set(branchId, arr);
+      }
+    });
+  }
+  for (const e of variableByBranch.get(SHARED_RENTALS_BRANCH_ID) ?? []) {
+    const division = sharedExpenseDivision(e, liveRentalsBranchIdsAt(e.month || (e.date ?? "").slice(0, 7)));
+    if (!division) continue;
+    for (const branchId of division.branchIds) {
+      const arr = variableByBranch.get(branchId) ?? [];
+      arr.push({ ...e, branchId, amount: division.perBranchLineTotal });
+      variableByBranch.set(branchId, arr);
+    }
+  }
+
   const multiBranchExpenses = multiBranchSnap.docs.map(
     (d) => ({ ...(d.data() as Omit<MultiBranchExpense, "id">), id: d.id }) as MultiBranchExpense
   );
@@ -334,18 +471,59 @@ export async function loadBranchAccountingRawData(): Promise<BranchAccountingRaw
     }
   }
 
+  const salesByBranch = new Map<string, LaptopSale[]>();
+  for (const d of salesSnap.docs) {
+    const sale = { ...(d.data() as Omit<LaptopSale, "id">), id: d.id } as LaptopSale;
+    const arr = salesByBranch.get(sale.branchId) ?? [];
+    arr.push(sale);
+    salesByBranch.set(sale.branchId, arr);
+  }
+  const laptopCostRates = costRatesSnap.docs.map(
+    (d) => ({ ...(d.data() as Omit<LaptopCostRate, "id">), id: d.id }) as LaptopCostRate,
+  );
+
   return {
     branches,
     fixedByBranch,
     variableByBranch,
     rentalsByBranch,
     laptopsByBranch,
+    sticks,
     routesById,
     transfersByBranchMonth,
     branchIncomeByBranch,
     multiBranchByBranch,
     multiBranchExpenses,
+    salesByBranch,
+    laptopCostRates,
+    firstRentalByLaptop,
   };
+}
+
+/**
+ * עלות ההוספה של כל מחשב בסניף, כשורת הוצאה: הבעלים שילם, החוב כולו עליו. לכן היא נכנסת
+ * ל"ההוצאות שלי" ול"ששילמתי בפועל", ואינה נוגעת בשותף (0 בחלקו, 0 בהתחשבנות). ראו
+ * `lib/laptop-costs.ts`.
+ */
+function laptopCostExpenseLines(branch: Branch, raw: BranchAccountingRawData, uptoMonth: string): DatedExpenseLine[] {
+  const laptops = raw.laptopsByBranch.get(branch.id) ?? [];
+  return laptopCostLines(laptops, branch, raw.laptopCostRates, raw.firstRentalByLaptop)
+    .filter((l) => l.month <= uptoMonth)
+    .map((l) => ({
+      amount: l.amount,
+      paidBy: "owner",
+      owedBy: "owner",
+      month: l.month,
+      desc: `עלות הוספה — ${l.laptopName}`,
+      recurring: false,
+      ownerShare: l.amount,
+      capital: true,
+    }));
+}
+
+/** מכירות המחשבים של הסניף עד סוף `uptoMonth`. */
+function saleLines(branch: Branch, raw: BranchAccountingRawData): { month: string; amount: number }[] {
+  return (raw.salesByBranch.get(branch.id) ?? []).map((s) => ({ month: s.month, amount: s.price || 0 }));
 }
 
 /** ownerPct for a branch's own split (not counting parent-branch cuts). */
@@ -355,6 +533,22 @@ function branchOwnerPct(branch: Branch): number {
   return branch.myPct ?? 100 - (branch.partnerPct ?? 0);
 }
 
+/**
+ * שורות ההכנסה של סניף עם התאריך המלא שלהן — השכרות שנגבו + שורות ההכנסה הידניות.
+ * זו בדיוק ההכנסה שעליה נגזר אחוז פר-סניף, ולכן היא מיוצאת ולא נבנית שוב במסכים.
+ */
+export function branchDatedIncomeLines(
+  branch: Branch,
+  raw: BranchAccountingRawData,
+): { date: string; amount: number }[] {
+  const rentals = raw.rentalsByBranch.get(branch.id) ?? [];
+  const branchIncome = raw.branchIncomeByBranch.get(branch.id) ?? [];
+  return [...buildIncomeLines(rentals, raw.routesById), ...buildManualIncomeLines(branchIncome)].map((i) => ({
+    date: i.date,
+    amount: i.amount,
+  }));
+}
+
 export function computeBranchFinancials(branch: Branch, raw: BranchAccountingRawData, month: string): BranchFinancials {
   const fixed = raw.fixedByBranch.get(branch.id) ?? [];
   const variable = raw.variableByBranch.get(branch.id) ?? [];
@@ -362,8 +556,17 @@ export function computeBranchFinancials(branch: Branch, raw: BranchAccountingRaw
   const branchIncome = raw.branchIncomeByBranch.get(branch.id) ?? [];
   const multiBranch = raw.multiBranchByBranch.get(branch.id) ?? [];
 
-  const expenseLines = expandExpenseLines(fixed, variable, multiBranch, month);
+  const expenseLines = [
+    ...expandExpenseLines(fixed, variable, multiBranch, month),
+    ...laptopCostExpenseLines(branch, raw, month),
+  ];
   const incomeLines = [...buildIncomeLines(rentals, raw.routesById), ...buildManualIncomeLines(branchIncome)];
+
+  // מכירת מחשב: 100% לבעלים, לא מתחלקת עם השותף ולא נכנסת לאחוזים מהברוטו. השותף הוא שמחזיק
+  // בכסף, ולכן המחיר כולו נוסף למה שהוא מעביר באותו חודש.
+  const sales = saleLines(branch, raw).filter((l) => l.month <= month);
+  const saleIncomeThisMonth = sales.filter((l) => l.month === month).reduce((sum, l) => sum + l.amount, 0);
+  const saleIncomeToDate = sales.reduce((sum, l) => sum + l.amount, 0);
 
   const ownerPct = branchOwnerPct(branch);
   const partnerPct = 100 - ownerPct;
@@ -388,19 +591,60 @@ export function computeBranchFinancials(branch: Branch, raw: BranchAccountingRaw
   const settlementExpense = thisMonthExpenses.reduce((sum, e) => sum + lineNetToOwner(e), 0);
 
   const ownerIncomeThisMonth = thisMonthIncome.reduce((sum, i) => sum + (i.amount * ownerPct) / 100, 0);
-  const ownerNetProfitThisMonth =
-    ownerIncomeThisMonth - thisMonthExpenses.reduce((sum, e) => sum + e.ownerShare, 0);
+  const ownerExpenseThisMonth = thisMonthExpenses.reduce((sum, e) => sum + e.ownerShare, 0);
 
   /**
-   * שורה שהבעלים שילם והחוב כולה עליו היא שורה שהסניף לא לוקח בה חלק - `ownerShare === amount`
-   * ו-`paidBy` אינו השותף. אלה הרכישות, והן יוצאות מהמדד התפעולי. ההשוואה מול `amount` נעשית
-   * בסבילות של אגורה, כי `ownerShare` יכול להגיע מחלוקת אחוזים ולא מהעתקה.
+   * אחוזים שמעולם לא היו שלי (`lib/revenue-shares.ts`): 30% מהברוטו של הסניף הראשי
+   * לאלישבע רומנו מ-23/08, ו-15% מהמחשבים שמסומנים בשותפות לשלמה גולדשמידט.
+   *
+   * הם יורדים **רק מהרווח שלי** ולא מ-`incomeThisMonth`/`settlementNetToOwner`: החוב
+   * הזה הוא שלי מול אדם שלישי, ואין לו שום קשר להתחשבנות מול השותף בסניף. שותף
+   * שהיה רואה את חלקו קטן בגלל הסדר שלי איתה היה משלם על משהו שלא הסכים לו.
    */
-  const isOwnerOnlyOutlay = (e: (typeof thisMonthExpenses)[number]) =>
-    e.paidBy !== "partner" && Math.abs(e.ownerShare - e.amount) < 0.01;
+  const laptopsHere = raw.laptopsByBranch.get(branch.id) ?? [];
+  const computerShareThisMonth = computerRevenueShareLines(
+    laptopsHere,
+    raw.sticks,
+    rentals,
+    (m) => m === month,
+  ).reduce((sum, l) => sum + l.amount, 0);
+  const computerShareToDate = computerRevenueShareLines(
+    laptopsHere,
+    raw.sticks,
+    rentals,
+    (m) => m <= month,
+  ).reduce((sum, l) => sum + l.amount, 0);
+
+  const branchShare = branchRevenueShareFor(branch);
+  const revenueShareThisMonth =
+    revenueShareForMonth(incomeLines, branchShare, month).amount + computerShareThisMonth;
+  const revenueShareToDate = revenueShareToDateOf(incomeLines, branchShare, month).amount + computerShareToDate;
+
+  const ownerNetProfitThisMonth =
+    ownerIncomeThisMonth + saleIncomeThisMonth - ownerExpenseThisMonth - revenueShareThisMonth;
+
+  /**
+   * רכש יוצא מהמדד התפעולי: עלות הוספת מחשב (`capital`), ובנוסף **הוצאה חד-פעמית** שהבעלים
+   * שילם והחוב כולה עליו — בסניף של שותף זו קנייה שהסניף לא לוקח בה חלק, ובסניף שלי רק כשהיא
+   * סווגה "ציוד ותחזוקה".
+   *
+   * עד 09/2026 הכלל היה "כל שורה שהבעלים שילם והחוב כולה עליו", וזה נתן שתי תשובות שגויות:
+   * (1) בסניף **שלי** כל ההוצאות הן כאלה, ולכן אינטרנט, שכירות וסינון לא ירדו מהרווח בכלל
+   * והמעקב הראה רווח מנופח; (2) הוצאה **קבועה** שהבעלים נושא לבד (אינטרנט שעליי בסניף של שותף)
+   * היא עלות תפעול של כל חודש, לא רכש — והיא נעלמה מהמדד. הוצאה קבועה נספרת עכשיו תמיד.
+   * ההשוואה מול `amount` נעשית בסבילות של אגורה, כי `ownerShare` יכול להגיע מחלוקת אחוזים.
+   */
+  const isPurchase = (e: (typeof thisMonthExpenses)[number]) => {
+    if (e.capital) return true;
+    if (e.recurring) return false;
+    const ownerOnly = e.paidBy !== "partner" && Math.abs(e.ownerShare - e.amount) < 0.01;
+    if (!ownerOnly) return false;
+    return branch.isMine === false || e.category === "ציוד ותחזוקה";
+  };
   const ownerOperatingProfitThisMonth =
     ownerIncomeThisMonth -
-    thisMonthExpenses.filter((e) => !isOwnerOnlyOutlay(e)).reduce((sum, e) => sum + e.ownerShare, 0);
+    thisMonthExpenses.filter((e) => !isPurchase(e)).reduce((sum, e) => sum + e.ownerShare, 0) -
+    revenueShareThisMonth;
 
   /*
    * כאן חושבה `computerProfitTrend` - רצועת רווח-פר-מחשב של 12 חודשים לכל סניף. היא נמחקה
@@ -433,14 +677,22 @@ export function computeBranchFinancials(branch: Branch, raw: BranchAccountingRaw
     incomeToDate,
     expenseToDate,
     balanceToDate: incomeToDate - expenseToDate,
-    settlementNetToOwner: settlementIncome + settlementExpense,
+    settlementNetToOwner: settlementIncome + settlementExpense + saleIncomeThisMonth,
     ownerNetProfitThisMonth,
     ownerOperatingProfitThisMonth,
+    ownerIncomeThisMonth: ownerIncomeThisMonth + saleIncomeThisMonth - revenueShareThisMonth,
+    ownerExpenseThisMonth,
+    saleIncomeThisMonth,
+    saleIncomeToDate,
+    laptopCostToDate: expenseLines.filter((e) => e.capital).reduce((sum, e) => sum + e.amount, 0),
     ownerInvestedToDate: expenseLines.reduce((sum, e) => sum + e.ownerShare, 0),
-    ownerEarnedToDate: incomeLines.reduce((sum, i) => sum + (i.amount * ownerPct) / 100, 0),
+    ownerEarnedToDate:
+      incomeLines.reduce((sum, i) => sum + (i.amount * ownerPct) / 100, 0) + saleIncomeToDate - revenueShareToDate,
     ownerBalanceToDate:
-      incomeLines.reduce((sum, i) => sum + (i.amount * ownerPct) / 100, 0) -
-      expenseLines.reduce((sum, e) => sum + e.ownerShare, 0),
+      incomeLines.reduce((sum, i) => sum + (i.amount * ownerPct) / 100, 0) +
+      saleIncomeToDate -
+      expenseLines.reduce((sum, e) => sum + e.ownerShare, 0) -
+      revenueShareToDate,
     ownerPaidCashToDate: expenseLines
       .filter((e) => e.paidBy !== "partner")
       .reduce((sum, e) => sum + e.amount, 0),
@@ -449,5 +701,7 @@ export function computeBranchFinancials(branch: Branch, raw: BranchAccountingRaw
     grossIncomeThisMonth,
     settlementExpenseThisMonth,
     rentalCountThisMonth,
+    revenueShareThisMonth,
+    revenueShareToDate,
   };
 }

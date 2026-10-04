@@ -39,19 +39,22 @@ export default async function RentalBranchesPage() {
   // count them was the single heaviest read on this page.
   const [branchesSnap, laptopsSnap, rentalsSnap] = await Promise.all([
     db.collection("n_branches").where("branchType", "==", "rentals").get(),
-    db.collection("n_laptops").select("branchId").get(),
+    db.collection("n_laptops").select("branchId", "status").get(),
     db.collection("n_rentals").select("branchId").get(),
   ]);
   const branches = branchesSnap.docs
     .map((d) => ({ ...(d.data() as Omit<Branch, "id">), id: d.id }) as Branch)
     .filter((b) => !b.deleted)
-    .sort((a, b) => a.name.localeCompare(b.name, "he"));
+    // סניף סגור נשאר ברשימה (הוא לא נמחק), בסוף ומסומן.
+    .sort((a, b) => Number(!!a.closedAt) - Number(!!b.closedAt) || a.name.localeCompare(b.name, "he"));
 
   // Live count - every computer actually registered under this branch right now (n_laptops),
   // not a trend/estimate - so it always matches what's really on /dashboard/rentals/laptops.
   const laptopCountByBranch = new Map<string, number>();
   for (const d of laptopsSnap.docs) {
     const l = d.data() as Omit<Laptop, "id">;
+    // מחשב שנמכר או הוצא כבר לא בסניף.
+    if (l.status && l.status !== "active") continue;
     laptopCountByBranch.set(l.branchId, (laptopCountByBranch.get(l.branchId) ?? 0) + 1);
   }
 
@@ -111,12 +114,20 @@ export default async function RentalBranchesPage() {
                   const ModelIcon = MODEL_ICONS[modelOf(b)] ?? Building2;
                   const laptopCount = laptopCountByBranch.get(b.id) ?? 0;
                   return (
-                    <tr key={b.id} className={idx % 2 === 1 ? "bg-[#fafbfc]" : "bg-white"}>
+                    <tr
+                      key={b.id}
+                      className={`${idx % 2 === 1 ? "bg-[#fafbfc]" : "bg-white"} ${b.closedAt ? "opacity-60" : ""}`}
+                    >
                       <td className={`${TD} font-bold text-ink`}>
                         <Link href={`/dashboard/rentals/branches/${b.id}`} className="hover:underline">
                           {b.name}
                         </Link>
-                        {(b.notStarted || (rentalCountByBranch.get(b.id) ?? 0) === 0) && (
+                        {b.closedAt && (
+                          <span className="mr-1.5 rounded-full bg-[#eef1f4] px-2 py-0.5 text-[10.5px] font-extrabold text-muted">
+                            סניף סגור מ-{b.closedAt}
+                          </span>
+                        )}
+                        {!b.closedAt && (b.notStarted || (rentalCountByBranch.get(b.id) ?? 0) === 0) && (
                           <span className="mr-1.5 rounded-full bg-[#fdf3e3] px-2 py-0.5 text-[10.5px] font-extrabold text-[#7a4a12]">
                             {b.notStarted ? "עדיין לא התחיל לפעול" : "לא התחיל השכרות"}
                           </span>

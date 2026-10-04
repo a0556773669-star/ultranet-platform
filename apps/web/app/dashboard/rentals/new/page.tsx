@@ -2,6 +2,7 @@ import { requireModuleAccess } from "@/lib/perms";
 import { getAdminFirestore } from "@/lib/firebase-admin";
 import type { Branch, RentalClient, Laptop, Stick, CollectionRoute, Rental } from "@ultranet/shared-types";
 import { effectiveLaptopRates, effectiveStickRates } from "@/lib/rental-pricing";
+import { isLaptopActive } from "@/lib/laptop-names";
 import { NewRentalForm } from "./new-rental-form";
 
 export default async function NewRentalPage({
@@ -25,7 +26,7 @@ export default async function NewRentalPage({
   ]);
   const allBranches = branchesSnap.docs
     .map((d) => ({ ...(d.data() as Omit<Branch, "id">), id: d.id }) as Branch)
-    .filter((b) => !b.deleted);
+    .filter((b) => !b.deleted && !b.closedAt);
   const branches = role === "owner" ? (onlyMine ? allBranches.filter((b) => b.isMine === true) : allBranches) : allBranches.filter((b) => b.id === myBranchId);
   const clients = clientsSnap.docs.map(
     (d) => ({ ...(d.data() as Omit<RentalClient, "id">), id: d.id }) as RentalClient
@@ -34,9 +35,12 @@ export default async function NewRentalPage({
   const pricingByBranch = new Map(allBranches.map((b) => [b.id, b.rentalPricing]));
   const laptops = laptopsSnap.docs
     .map((d) => ({ ...(d.data() as Omit<Laptop, "id">), id: d.id }) as Laptop)
+    // מחשב שנמכר או הוצא מהסניף לא מוצע להשכרה.
+    .filter((l) => isLaptopActive(l))
     .map((l) => ({ ...l, ...effectiveLaptopRates(l, pricingByBranch.get(l.branchId)) }));
   const sticks = sticksSnap.docs
     .map((d) => ({ ...(d.data() as Omit<Stick, "id">), id: d.id }) as Stick)
+    .filter((s) => isLaptopActive(s))
     .map((s) => ({ ...s, ...effectiveStickRates(s, pricingByBranch.get(s.branchId)) }));
   const routes = routesSnap.docs.map(
     (d) => ({ ...(d.data() as Omit<CollectionRoute, "id">), id: d.id }) as CollectionRoute

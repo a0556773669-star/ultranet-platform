@@ -27,20 +27,34 @@ function money(n: number) {
  * לטבלה בשליש מהגובה, ומרוויחה שתי עמודות שלא היו שם קודם: כמה יצא בסניף עד היום, וכמה
  * מזה בכלל מגיע להנה"ח הראשית.
  */
+/**
+ * הספר המשותף כשורה בטבלה - עם המספרים שלו, לא רק קישור.
+ *
+ * הוצאה שנרשמה על כל הסניפים לא שייכת לאף שורה בטבלה, ולכן היא הייתה נעלמת מהמסך לגמרי:
+ * רואים אותה רק אחרי שהיא כבר התחלקה, בתוך ההנה"ח של סניף מסוים. השורה הזו מציגה אותה
+ * במקום שבו מחפשים אותה, והיא נספרת גם בשורת הסה"כ למטה.
+ */
+export interface SharedExpenseSummaryRow {
+  href: string;
+  label?: string;
+  fixedCount: number;
+  variableCount: number;
+  total: number;
+  toMain: number;
+}
+
 export function BranchExpenseTable({
   rows,
   hrefFor,
-  sharedHref,
-  sharedLabel,
+  sharedRow,
 }: {
   rows: BranchExpenseRow[];
   hrefFor: (branchId: string) => string;
-  sharedHref?: string;
-  sharedLabel?: string;
+  sharedRow?: SharedExpenseSummaryRow;
 }) {
   const totals = rows.reduce(
     (acc, r) => ({ total: acc.total + r.total, toMain: acc.toMain + r.toMain }),
-    { total: 0, toMain: 0 },
+    { total: sharedRow?.total ?? 0, toMain: sharedRow?.toMain ?? 0 },
   );
 
   return (
@@ -58,13 +72,22 @@ export function BranchExpenseTable({
             </tr>
           </thead>
           <tbody className="tabular-nums">
-            {sharedHref && (
+            {sharedRow && (
               <tr className="border-b border-dashed border-card-border bg-[#f8fafc]">
-                <td className={`${TD} font-bold text-ink`} colSpan={6}>
-                  <Link href={sharedHref} className="flex items-center gap-1.5 hover:underline">
+                <td className={`${TD} font-bold text-ink`}>
+                  <Link href={sharedRow.href} className="flex items-center gap-1.5 hover:underline">
                     <Layers className="h-4 w-4 text-muted" />
-                    {sharedLabel ?? "הוצאות על כל הסניפים יחד"}
+                    {sharedRow.label ?? "הוצאות על כל הסניפים יחד"}
                   </Link>
+                </td>
+                <td className={`${TD} text-muted`}>משותף</td>
+                <td className={`${TD} text-muted`}>{sharedRow.fixedCount}</td>
+                <td className={`${TD} text-muted`}>{sharedRow.variableCount}</td>
+                <td className={`${TD} font-semibold text-red-600`}>
+                  {sharedRow.total > 0 ? money(sharedRow.total) : "-"}
+                </td>
+                <td className={`${TD} font-semibold text-teal-dark`}>
+                  {sharedRow.toMain > 0 ? money(sharedRow.toMain) : "-"}
                 </td>
               </tr>
             )}
@@ -91,7 +114,7 @@ export function BranchExpenseTable({
               </tr>
             ))}
           </tbody>
-          {rows.length > 0 && (
+          {(rows.length > 0 || sharedRow) && (
             <tfoot>
               <tr className="border-t-2 border-card-border bg-[#f4f6f9]">
                 <td className={`${TD} font-black text-ink`} colSpan={4}>

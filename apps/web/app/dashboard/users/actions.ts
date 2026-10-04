@@ -3,29 +3,88 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { getAdminFirestore } from "@/lib/firebase-admin";
-import { requireOwner } from "@/lib/perms";
+import { PERM_KEYS, requireOwner } from "@/lib/perms";
 import { invalidateUserSyncCache } from "@/lib/auth";
-import type { UserRole } from "@ultranet/shared-types";
+import type { BranchType, PermissionKey, UserAssignment, UserRole } from "@ultranet/shared-types";
 
-const PERM_KEYS = ["branches", "computers", "rentals", "coworking", "accounting", "tasks", "charging", "shop", "duxus"] as const;
+const ROLES: readonly UserRole[] = ["owner", "partner", "employee"];
+const BRANCH_TYPES: readonly BranchType[] = ["computers", "rentals", "coworking"];
+
+/**
+ * הטופס שולח את השיוכים כ-JSON אחד. הוא מגיע מהדפדפן ולכן נבדק כאן שדה-שדה: תפקיד שאינו
+ * מוכר, מפתח הרשאה שהומצא או סוג סניף שגוי פשוט נזרקים, ולא נכתבים ל-Firestore.
+ */
+function parseAssignments(raw: string): UserAssignment[] {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return [];
+  }
+  if (!Array.isArray(parsed)) return [];
+
+  const out: UserAssignment[] = [];
+  for (const entry of parsed) {
+    if (!entry || typeof entry !== "object") continue;
+    const row = entry as Record<string, unknown>;
+    const role = ROLES.find((r) => r === row.role);
+    if (!role) continue;
+
+    const branchId = typeof row.branchId === "string" ? row.branchId : "";
+    const branchType = BRANCH_TYPES.find((t) => t === row.branchType);
+
+    const perms: Partial<Record<PermissionKey, boolean>> = {};
+    const rawPerms = (row.perms ?? {}) as Record<string, unknown>;
+    for (const key of PERM_KEYS) {
+      perms[key] = rawPerms[key] === true;
+    }
+
+    const assignment: UserAssignment = { role, branchId, perms };
+    if (branchType) assignment.branchType = branchType;
+    out.push(assignment);
+  }
+  return out;
+}
 
 function parseUserForm(formData: FormData) {
   const name = String(formData.get("name") ?? "").trim();
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
   const pass = String(formData.get("pass") ?? "");
-  const role = String(formData.get("role") ?? "employee") as UserRole;
-  const branchId = String(formData.get("branchId") ?? "");
-  const perms: Partial<Record<(typeof PERM_KEYS)[number], boolean>> = {};
-  for (const key of PERM_KEYS) {
-    perms[key] = formData.get(`perm_${key}`) === "on";
-  }
+
+  const assignments = parseAssignments(String(formData.get("assignments") ?? "[]"));
+  // תמיד יש שיוך אחד לפחות: בלעדיו אין למשתמש תפקיד, וגם `n_approved_emails` צריך אחד.
+  const primary: UserAssignment = assignments[0] ?? { role: "employee", branchId: "", perms: {} };
+  const normalized = assignments.length > 0 ? assignments : [primary];
+
   const viewClientBranchIds: string[] = [];
   for (const [key, value] of formData.entries()) {
     if (key.startsWith("viewBranch_") && value === "on") {
       viewClientBranchIds.push(key.slice("viewBranch_".length));
     }
   }
-  return { name, email, pass, role, branchId, perms, viewClientBranchIds };
+
+  return {
+    name,
+    email,
+    pass,
+    assignments: normalized,
+    // השדות ההיסטוריים ממשיכים לשקף את השיוך הראשון — `app.html` ו-`n_approved_emails`
+    // קוראים אותם, ולכן הם לא יכולים להתרוקן. ראה `AppUser`.
+    role: primary.role,
+    branchId: primary.branchId,
+    perms: primary.perms ?? {},
+    viewClientBranchIds,
+  };
+}
+
+/** בעלים ללא סניף נשמר כ-`"all"` — ההתנהגות ההיסטורית, ועכשיו על כל שיוך בנפרד. */
+function withOwnerBranch(data: ReturnType<typeof parseUserForm>) {
+  const assignments: UserAssignment[] = data.assignments.map((a) => ({
+    ...a,
+    branchId: a.role === "owner" ? a.branchId || "all" : a.branchId,
+  }));
+  // השדה ההיסטורי `branchId` הוא תמיד זה של השיוך הראשון — ראה `parseUserForm`.
+  return { branchId: assignments[0]?.branchId ?? "", assignments };
 }
 
 export async function createUserAction(formData: FormData) {
@@ -39,7 +98,7 @@ export async function createUserAction(formData: FormData) {
   if (!existing.empty) {
     throw new Error("כבר קיים משתמש עם אימייל זה");
   }
-  const branchId = data.role === "owner" ? (data.branchId || "all") : data.branchId;
+  const { branchId, assignments } = withOwnerBranch(data);
   await db.collection("n_users").add({
     name: data.name,
     email: data.email,
@@ -47,6 +106,7 @@ export async function createUserAction(formData: FormData) {
     role: data.role,
     branchId,
     perms: data.perms,
+    assignments,
     viewClientBranchIds: data.viewClientBranchIds,
   });
   await db.collection("n_approved_emails").doc(data.email).set({
@@ -68,7 +128,7 @@ export async function updateUserAction(id: string, formData: FormData) {
   const docRef = db.collection("n_users").doc(id);
   const doc = await docRef.get();
   const prevEmail = doc.exists ? (doc.data()?.email as string | undefined) : undefined;
-  const branchId = data.role === "owner" ? (data.branchId || "all") : data.branchId;
+  const { branchId, assignments } = withOwnerBranch(data);
 
   const update: Record<string, unknown> = {
     name: data.name,
@@ -76,6 +136,7 @@ export async function updateUserAction(id: string, formData: FormData) {
     role: data.role,
     branchId,
     perms: data.perms,
+    assignments,
     viewClientBranchIds: data.viewClientBranchIds,
   };
   if (data.pass) {
