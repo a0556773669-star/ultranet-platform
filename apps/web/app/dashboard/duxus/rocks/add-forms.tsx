@@ -74,18 +74,13 @@ export function AddRockForm({
   );
 }
 
-/**
- * הוספת אבן דרך בשורה אחת. האחראי אינו חובה ברבעון, אך **לפני שיבוץ לשבוע** השרת
- * ידרוש אותו (סעיף 14) - ולכן הטופס במסך השבוע מגיע עם `requireOwner`.
- */
+/** הוספת אבן דרך בשורה אחת. האחראי הוא רשות בכל רמה - גם בשיבוץ לשבוע. */
 export function AddMilestoneForm({
   placeholder = "שם אבן הדרך",
-  requireOwner = false,
   onSubmit,
   onCancel,
 }: {
   placeholder?: string;
-  requireOwner?: boolean;
   onSubmit: (input: { title: string; ownerName: string; dueDate: string; priority: MilestonePriority }) => void;
   onCancel: () => void;
 }) {
@@ -93,7 +88,7 @@ export function AddMilestoneForm({
   const [ownerName, setOwnerName] = useState("");
   const [dueDate, setDueDate] = useState("");
   const [priority, setPriority] = useState<MilestonePriority>("normal");
-  const blocked = !title.trim() || (requireOwner && !ownerName);
+  const blocked = !title.trim();
 
   return (
     <div className="flex flex-wrap items-center gap-2 rounded-lg border border-dashed border-card-border bg-white p-2">
@@ -119,7 +114,6 @@ export function AddMilestoneForm({
       <button
         type="button"
         disabled={blocked}
-        title={requireOwner && !ownerName ? "לפני שיבוץ לשבוע יש לבחור אחראי" : undefined}
         onClick={() => {
           if (blocked) return;
           onSubmit({ title: title.trim(), ownerName, dueDate, priority });

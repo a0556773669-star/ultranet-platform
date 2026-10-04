@@ -242,7 +242,6 @@ export function WeekClient({
                 {addOpen ? (
                   <AddMilestoneForm
                     placeholder="משימה שוטפת לשבוע"
-                    requireOwner
                     onSubmit={(input) => {
                       setAddOpen(false);
                       board.createMilestone({
