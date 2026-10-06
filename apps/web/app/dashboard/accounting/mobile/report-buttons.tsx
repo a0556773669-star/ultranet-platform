@@ -131,7 +131,7 @@ export function ReportButtons({
         className="inline-flex items-center gap-1.5 rounded-[10px] bg-gradient-to-br from-teal to-teal-light px-3 py-1.5 text-sm font-bold text-white shadow-primary transition hover:opacity-90"
       >
         <Send className="h-4 w-4" />
-        שלח לכל הסניפים
+        שלח לכל הסניפים — {monthLabel}
       </button>
       <button
         type="button"
@@ -139,7 +139,7 @@ export function ReportButtons({
         className="inline-flex items-center gap-1.5 rounded-[10px] border border-teal bg-white px-3 py-1.5 text-sm font-bold text-teal-dark transition hover:bg-teal-bg"
       >
         <ListChecks className="h-4 w-4" />
-        שלח לסניפים נבחרים
+        שלח לסניפים נבחרים — {monthLabel}
       </button>
 
       {selectOpen && (
