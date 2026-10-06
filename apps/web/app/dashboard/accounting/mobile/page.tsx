@@ -25,6 +25,7 @@ import { CompactTransfersTable } from "./compact-transfers-table";
 import { UnifiedBranchesTable } from "./unified-branches-table";
 import { WideTableModal } from "./wide-table-modal";
 import { ReportButtons } from "./report-buttons";
+import { reportMonthFor } from "@/lib/branch-report-send";
 import { PartnerPayoutTable } from "./partner-payout-table";
 import { TransfersMonthPicker } from "./month-picker";
 
@@ -128,14 +129,20 @@ export default async function MobileAccountingPage({
   ]);
 
   const transferRows = buildBranchTransferRows(settlingBranches, raw, month);
+
+  // חודש הדו"ח החודשי: רק חודש שכבר נסגר. כשבבורר נבחר החודש הנוכחי (ברירת המחדל), הדו"ח הוא
+  // על החודש הקודם - דו"ח על חודש פתוח כולל את ההוצאות הקבועות שלו בלי ההכנסות, וזה בדיוק מה
+  // שלא שולחים לשותף. חודש עבר שנבחר במפורש נשאר כמו שהוא, כדי שאפשר יהיה לשלוח שוב חודש ישן.
+  const reportMonth = month < now ? month : reportMonthFor(now);
+  const reportRows = reportMonth === month ? transferRows : buildBranchTransferRows(settlingBranches, raw, reportMonth);
   const recipientById = new Map(recipients.map((r) => [r.branchId, r]));
-  const sendRows = transferRows.map((row) => ({
+  const sendRows = reportRows.map((row) => ({
     branchId: row.branch.id,
     branchName: row.branch.name,
     email: recipientById.get(row.branch.id)?.email ?? null,
-    // מה שעוד נשאר להעביר החודש: "צריך להעביר" פחות מה שכבר סומן כהועבר.
+    // מה שעוד נשאר להעביר: "צריך להעביר" פחות מה שכבר סומן כהועבר.
     totalDue: row.totalDue - row.transferredAmount,
-    sent: !!raw.transfersByBranchMonth.get(`${row.branch.id}|${month}`)?.reportSentAt,
+    sent: !!raw.transfersByBranchMonth.get(`${row.branch.id}|${reportMonth}`)?.reportSentAt,
   }));
 
   const query = (nextEnd: string) => `?end=${nextEnd}&month=${month}`;
@@ -261,8 +268,8 @@ export default async function MobileAccountingPage({
           <div className="flex flex-wrap items-center gap-2">
             <TransfersMonthPicker month={month} months={monthOptions} />
             <ReportButtons
-              month={month}
-              monthLabel={monthLabel(month)}
+              month={reportMonth}
+              monthLabel={monthLabel(reportMonth)}
               recipients={recipients}
               ownerEmail={ownerEmail}
               mailerError={mailerConfigError()}
@@ -273,6 +280,13 @@ export default async function MobileAccountingPage({
               <UnifiedBranchesTable rows={transferRows} month={month} />
             </WideTableModal>
           </div>
+
+          {reportMonth !== month && (
+            <p className="px-1 text-[11.5px] leading-relaxed text-muted">
+              הדו&quot;ח החודשי נשלח על <b className="text-ink">{monthLabel(reportMonth)}</b> — החודש שנסגר.{" "}
+              {monthLabel(month)} עוד לא נגמר, ולכן לא שולחים עליו דו&quot;ח.
+            </p>
+          )}
 
           <CompactTransfersTable rows={transferRows} month={month} />
 

@@ -35,6 +35,12 @@ export interface BranchMonthReport {
   expenseTotal: number;
   /** Balance carried in from previous months. */
   openingBalance: number;
+  /**
+   * העברה שנרשמה על החודש הקודם, כשיש כזו. בלעדיה היתרה מחודש קודם היא מספר אחד שכבר "בלע"
+   * את ההעברה, והשותף (וגם הבעלים) לא יכול לראות בדו"ח אם הכסף שהוא העביר נספר. כאן היא
+   * מפורקת: החוב של החודש הקודם, ההעברה, ומה שנשאר.
+   */
+  previousTransfer: { month: string; totalDueBefore: number; amount: number } | null;
   /** This month's settlement on its own. */
   netToOwner: number;
   /** openingBalance + netToOwner - the bottom line. */
@@ -51,7 +57,14 @@ export function buildBranchMonthReport(
   month: string
 ): BranchMonthReport {
   const f = computeBranchFinancials(branch, raw, month);
-  const ledgerRow = buildBranchLedger(branch, raw).rows.find((r) => r.month === month);
+  const ledgerRows = buildBranchLedger(branch, raw).rows;
+  const ledgerIndex = ledgerRows.findIndex((r) => r.month === month);
+  const ledgerRow = ledgerIndex >= 0 ? ledgerRows[ledgerIndex] : undefined;
+  const prevRow = ledgerIndex > 0 ? ledgerRows[ledgerIndex - 1] : undefined;
+  const previousTransfer =
+    prevRow && Math.abs(prevRow.transferredAmount) > 0.5
+      ? { month: prevRow.month, totalDueBefore: prevRow.totalDue, amount: prevRow.transferredAmount }
+      : null;
   const openingBalance = ledgerRow?.openingBalance ?? 0;
   const totalDue = ledgerRow?.totalDue ?? f.settlementNetToOwner;
   const transferredAmount = ledgerRow?.transferredAmount ?? 0;
@@ -69,6 +82,7 @@ export function buildBranchMonthReport(
     expenseLines: settlementExpenseLinesForMonth(branch, raw, month),
     expenseTotal: f.settlementExpenseThisMonth,
     openingBalance,
+    previousTransfer,
     netToOwner: f.settlementNetToOwner,
     totalDue,
     transferredAmount,
@@ -296,6 +310,20 @@ ${
       <td style="padding:18px 20px 4px">
         <div style="font-size:13px;font-weight:800;color:${MUTED};letter-spacing:.02em">חישוב ההתחשבנות</div>
         <table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse;margin-top:6px">
+          ${
+            report.previousTransfer
+              ? summaryRow(
+                  `חוב ${monthLabel(report.previousTransfer.month)} לפני העברה`,
+                  signed(report.previousTransfer.totalDueBefore),
+                  MUTED,
+                ) +
+                summaryRow(
+                  `העברה שהתקבלה על ${monthLabel(report.previousTransfer.month)}`,
+                  signed(-report.previousTransfer.amount),
+                  MUTED,
+                )
+              : ""
+          }
           ${summaryRow("יתרה מחודש קודם", signed(report.openingBalance), report.openingBalance >= 0 ? GREEN : RED)}
           ${summaryRow("התחשבנות החודש", signed(report.netToOwner), report.netToOwner >= 0 ? GREEN : RED)}
           ${summaryRow('סה"כ כולל חודש קודם', signed(report.totalDue), report.totalDue >= 0 ? GREEN : RED)}

@@ -2,7 +2,8 @@ import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import { requireOwner } from "@/lib/perms";
 import { getOwnerName } from "@/lib/owner-name";
-import { loadBranchAccountingRawData, currentMonth } from "@/lib/branch-accounting-data";
+import { loadBranchAccountingRawData } from "@/lib/branch-accounting-data";
+import { reportMonthFor } from "@/lib/branch-report-send";
 import {
   buildBranchMonthReport,
   loadReportLogoUrl,
@@ -27,7 +28,7 @@ export default async function ReportPreviewPage({
   // statement, so previewing one would show a report that will never be sent.
   const branches = raw.branches.filter((b) => b.branchType === "rentals" && !b.deleted && b.isMine === false);
 
-  const month = /^\d{4}-\d{2}$/.test(searchParams?.month ?? "") ? (searchParams!.month as string) : currentMonth();
+  const month = /^\d{4}-\d{2}$/.test(searchParams?.month ?? "") ? (searchParams!.month as string) : reportMonthFor();
   const branch = searchParams?.branchId ? branches.find((b) => b.id === searchParams.branchId) : branches[0];
 
   const backHref = `/dashboard/rentals/accounting?month=${month}`;

@@ -20,6 +20,8 @@ import { loadMainLedger } from "@/lib/main-ledger";
 import { loadCoworkingData, paymentForMonth, currentMonth as coworkingMonth } from "@/lib/coworking";
 import { loadRecurringVariableExpenses } from "@/lib/recurring-expenses";
 import { HomeRecurringReminders } from "@/components/recurring-expenses/home-recurring-reminders";
+import { loadPendingReportReminder } from "@/lib/branch-report-send";
+import { monthLabel as heMonthLabel } from "@/lib/branch-month-report";
 
 /** באיזו הרשאה מותנה כל scope של הוצאה קבועה משתנה בתזכורת שבדף הבית. */
 const RECURRING_SCOPE_PERM: Record<ExpenseScope, PermKey> = {
@@ -211,11 +213,33 @@ export default async function DashboardHomePage() {
     categories.push({ href: "/dashboard/maintenance", label: "בדיקת נתונים", icon: Stethoscope });
   }
 
+  // הדו"ח החודשי לשותפים נשלח רק בלחיצת כפתור - ולכן מה-1 לחודש ועד שהוא נשלח, הבעלים
+  // רואה כאן תזכורת לשלוח אותו (ראו loadPendingReportReminder).
+  const reportReminder = isOwner ? await loadPendingReportReminder().catch(() => null) : null;
+
   return (
     <div>
       <div className="mb-4">
         <HomeClock name={name} />
       </div>
+
+      {reportReminder && (
+        <Link
+          href={`/dashboard/accounting/mobile?month=${reportReminder.month}`}
+          className="mb-4 flex items-center gap-3 rounded-card border-2 border-amber-400 bg-amber-50 p-4 shadow-card transition hover:bg-amber-100"
+        >
+          <AlertTriangle className="h-6 w-6 shrink-0 text-amber-600" />
+          <div className="flex-1">
+            <div className="text-[15px] font-extrabold text-amber-900">
+              {`עליך לשלוח את הדו"ח החודשי של ${heMonthLabel(reportReminder.month)} לסניפים`}
+            </div>
+            <div className="mt-0.5 text-[12.5px] text-amber-800">
+              {`עוד לא נשלח אל: ${reportReminder.branchNames.join(", ")}. לפני השליחה כדאי לעבור על התצוגה המקדימה ולוודא שכל ההעברות וההוצאות של החודש נרשמו.`}
+            </div>
+          </div>
+          <ArrowLeft className="h-5 w-5 shrink-0 text-amber-700" />
+        </Link>
+      )}
 
         {rentedLaptops && (
           <div className="card">

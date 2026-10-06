@@ -11,7 +11,8 @@
  */
 import { getAdminFirestore } from "./firebase-admin";
 import type { Branch } from "@ultranet/shared-types";
-import { loadBranchAccountingRawData, type BranchAccountingRawData } from "./branch-accounting-data";
+import { currentMonth, loadBranchAccountingRawData, type BranchAccountingRawData } from "./branch-accounting-data";
+import { previousMonth } from "./fixed-expense-revision";
 import {
   buildBranchMonthReport,
   branchMonthReportSubject,
@@ -51,6 +52,24 @@ export function buildBranchReportEmail(params: {
   };
 }
 
+/**
+ * החודש שהדו"ח החודשי עוסק בו כברירת מחדל: **החודש הקודם**, זה שכבר נסגר.
+ *
+ * דו"ח על החודש הנוכחי הוא דו"ח על חודש שעוד לא נגמר - הוא כולל כבר את ההוצאות הקבועות של
+ * החודש החדש (שכירות וכו' נזקפות מה-1 לחודש) בלי ההכנסות שלו, ושותף שמקבל אותו רואה חוב
+ * שלא קיים. לכן הוא לעולם לא נשלח.
+ */
+export function reportMonthFor(now: string = currentMonth()): string {
+  return previousMonth(now);
+}
+
+/** null כשמותר לשלוח דו"ח על החודש הזה; אחרת הסיבה בעברית. מותר רק חודש שכבר נסגר. */
+export function reportMonthError(month: string): string | null {
+  if (!/^\d{4}-\d{2}$/.test(month)) return "חודש לא תקין";
+  if (month >= currentMonth()) return 'אי אפשר לשלוח דו"ח על חודש שעוד לא נגמר - רק על חודש שנסגר';
+  return null;
+}
+
 export interface BranchSendOutcome {
   branchId: string;
   branchName: string;
@@ -79,6 +98,10 @@ export async function sendMonthlyReports(params: {
   /** רק לסניפים האלה ("שליחה לסניפים נבחרים"). חסר = כל הסניפים. */
   branchIds?: string[];
 }): Promise<BranchSendOutcome[]> {
+  // השומר האחרון: גם אם מסך כלשהו יעביר את החודש הנוכחי, לשותפים לא ייצא דו"ח על חודש פתוח.
+  const monthError = reportMonthError(params.month);
+  if (monthError) return [{ branchId: "", branchName: "", email: null, ok: false, message: monthError }];
+
   const raw = await loadBranchAccountingRawData();
   const only = params.branchIds ? new Set(params.branchIds) : null;
   // A branch of mine gets no statement and no transfer instructions: there is nobody on the other
@@ -129,4 +152,35 @@ export async function sendMonthlyReports(params: {
   }
 
   return outcomes;
+}
+
+/**
+ * התזכורת שבדף הבית: "עליך לשלוח את הדו"ח החודשי".
+ *
+ * השליחה ידנית בלבד (ה-cron הושבת), ולכן משהו צריך להזכיר לשלוח. מחזיר את החודש הקודם ואת
+ * הסניפים שיש להם כתובת מייל ועוד לא קיבלו את הדו"ח שלו; null כשאין למי לשלוח. התזכורת
+ * נשארת מה-1 לחודש ועד שהדו"ח נשלח לכולם - לא נעלמת ב-2 לחודש אם לא שלחו.
+ */
+export async function loadPendingReportReminder(): Promise<{ month: string; branchNames: string[] } | null> {
+  const month = reportMonthFor();
+  const db = getAdminFirestore();
+  const [branchesSnap, transfersSnap] = await Promise.all([
+    db.collection("n_branches").get(),
+    db.collection("n_branch_transfers").where("month", "==", month).get(),
+  ]);
+  const branches = branchesSnap.docs
+    .map((d) => ({ ...(d.data() as Omit<Branch, "id">), id: d.id }) as Branch)
+    // אותו סינון בדיוק כמו ב-sendMonthlyReports - מי שלא יקבל מייל לא צריך תזכורת.
+    .filter((b) => b.branchType === "rentals" && !b.deleted && !b.notStarted && b.isMine === false);
+  const sent = new Set(
+    transfersSnap.docs
+      .map((d) => d.data() as { branchId?: string; reportSentAt?: string })
+      .filter((t) => t.reportSentAt && t.branchId)
+      .map((t) => t.branchId as string),
+  );
+  const unsent = branches.filter((b) => !sent.has(b.id));
+  if (unsent.length === 0) return null;
+  const recipients = await loadReportRecipients(unsent);
+  const branchNames = recipients.filter((r) => r.email).map((r) => r.branchName);
+  return branchNames.length > 0 ? { month, branchNames } : null;
 }
