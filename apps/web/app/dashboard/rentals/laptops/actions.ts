@@ -456,10 +456,10 @@ export async function reactivateLaptopAction(id: string): Promise<LaptopExitResu
   await db
     .collection("n_laptops")
     .doc(id)
-    .set({ status: FieldValue.delete(), endedAt: FieldValue.delete(), endNote: FieldValue.delete() }, { merge: true });
+    .set({ status: FieldValue.delete(), endedAt: FieldValue.delete(), endNote: FieldValue.delete(), endReason: FieldValue.delete() }, { merge: true });
   const stickSnap = await db.collection("n_sticks").where("linkedLaptopId", "==", id).limit(1).get();
   if (!stickSnap.empty) {
-    await stickSnap.docs[0]!.ref.set({ status: FieldValue.delete(), endedAt: FieldValue.delete() }, { merge: true });
+    await stickSnap.docs[0]!.ref.set({ status: FieldValue.delete(), endedAt: FieldValue.delete(), endReason: FieldValue.delete() }, { merge: true });
   }
   revalidateRentals();
   return { ok: true, message: "המחשב חזר להיות פעיל" };

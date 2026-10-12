@@ -140,6 +140,7 @@ export interface CloseBranchResult {
   recurringEnded: number;
   itemsReturned: number;
   returnedValue: number;
+  laptopsEnded: number;
 }
 
 /**
@@ -166,19 +167,26 @@ export async function closeBranch(branchId: string, closedAt: string): Promise<C
     recurringEnded: 0,
     itemsReturned: 0,
     returnedValue: 0,
+    laptopsEnded: 0,
   });
   if (!/^\d{4}-\d{2}-\d{2}$/.test(closedAt)) return fail("נא להזין תאריך סגירה תקין");
 
   const db = getAdminFirestore();
   const branchRef = db.collection("n_branches").doc(branchId);
-  const [branchSnap, txSnap, itemsSnap, fixedSnap, recurringVarSnap] = await Promise.all([
+  const [branchSnap, txSnap, itemsSnap, fixedSnap, recurringVarSnap, laptopsSnap, sticksSnap, rentalsSnap] = await Promise.all([
     branchRef.get(),
     db.collection(TX_COLLECTION).get(),
     db.collection(ITEMS_COLLECTION).where("location", "==", branchId).get(),
     db.collection("n_fixed_expenses").where("branchId", "==", branchId).get(),
     db.collection("n_recurring_var_expenses").where("branchId", "==", branchId).get(),
+    db.collection("n_laptops").where("branchId", "==", branchId).get(),
+    db.collection("n_sticks").where("branchId", "==", branchId).get(),
+    db.collection("n_rentals").where("branchId", "==", branchId).where("status", "==", "active").limit(1).get(),
   ]);
   if (!branchSnap.exists) return fail("הסניף לא נמצא");
+  // Same rule as taking a single computer out of a branch: a computer that is out with a customer
+  // can't leave the branch under them. Close the rental first, then the branch.
+  if (!rentalsSnap.empty) return fail("יש בסניף השכרה פעילה — יש לסגור את ההשכרות לפני סגירת הסניף");
   const branch = branchSnap.data() as Branch;
   if (branch.openedAt && closedAt < branch.openedAt) {
     return fail(`תאריך הסגירה מוקדם מתאריך הפתיחה (${branch.openedAt})`);
@@ -247,6 +255,21 @@ export async function closeBranch(branchId: string, closedAt: string): Promise<C
     returnedValue += item.unitCost ?? 0;
   }
 
+  // 4. Take every rental computer (and stick) still active at the branch out of it, as of the
+  //    closing date - exactly what "הוצאת מחשב" does for one computer. Without this the closed
+  //    branch kept showing computers in /laptops and in every count from the next month on.
+  //    `endedAt` = the closing date, so the closing month itself still counts them
+  //    (`laptopActiveInMonth`) and no past month changes. `endReason` marks the ones the closing
+  //    took out, so reopening the branch can bring back exactly those and nothing that was sold or
+  //    removed on its own before.
+  let laptopsEnded = 0;
+  for (const d of [...laptopsSnap.docs, ...sticksSnap.docs]) {
+    const unit = d.data() as { status?: string };
+    if (unit.status && unit.status !== "active") continue;
+    writes.push((b) => b.set(d.ref, { status: "removed", endedAt: closedAt, endReason: "branch_closed" }, { merge: true }));
+    if (d.ref.parent.id === "n_laptops") laptopsEnded += 1;
+  }
+
   const PER_BATCH = 200;
   for (let i = 0; i < writes.length; i += PER_BATCH) {
     const batch = db.batch();
@@ -258,11 +281,12 @@ export async function closeBranch(branchId: string, closedAt: string): Promise<C
     ok: true,
     message:
       `${branch.name} נסגר ב-${closedAt}. ${recurringEnded} הוצאות חוזרות נעצרו, ` +
-      `${itemsReturned} פריטים חזרו למחסן. היתרה הפתוחה נשארה פתוחה — סגירת סניף היא לא מחיקת חוב, ` +
+      `${laptopsEnded} מחשבים הוצאו מהסניף, ${itemsReturned} פריטים חזרו למחסן. היתרה הפתוחה נשארה פתוחה — סגירת סניף היא לא מחיקת חוב, ` +
       "ושום נתון היסטורי לא נמחק.",
     recurringEnded,
     itemsReturned,
     returnedValue,
+    laptopsEnded,
   };
 }
 
@@ -276,11 +300,32 @@ export async function reopenBranch(branchId: string): Promise<{ ok: boolean; mes
   const ref = db.collection("n_branches").doc(branchId);
   const snap = await ref.get();
   if (!snap.exists) return { ok: false, message: "הסניף לא נמצא" };
-  await ref.set({ closedAt: null }, { merge: true });
+  const { FieldValue } = await import("firebase-admin/firestore");
+  const [laptopsSnap, sticksSnap] = await Promise.all([
+    db.collection("n_laptops").where("branchId", "==", branchId).get(),
+    db.collection("n_sticks").where("branchId", "==", branchId).get(),
+  ]);
+  // Only the computers the closing itself took out come back; one sold or removed on its own
+  // before the closing stays out.
+  const restored = [...laptopsSnap.docs, ...sticksSnap.docs].filter(
+    (d) => (d.data() as { endReason?: string }).endReason === "branch_closed",
+  );
+  const batch = db.batch();
+  batch.set(ref, { closedAt: null }, { merge: true });
+  for (const d of restored) {
+    batch.set(
+      d.ref,
+      { status: FieldValue.delete(), endedAt: FieldValue.delete(), endReason: FieldValue.delete() },
+      { merge: true },
+    );
+  }
+  await batch.commit();
+  const laptopsBack = restored.filter((d) => d.ref.parent.id === "n_laptops").length;
   return {
     ok: true,
     message:
-      "הסניף נפתח מחדש. ההוצאות החוזרות שנעצרו לא חוזרות לבד — יש להזין אותן כגרסה חדשה מהחודש הנוכחי, " +
+      `הסניף נפתח מחדש${laptopsBack ? ` ו-${laptopsBack} המחשבים שהוצאו בסגירה חזרו אליו` : ""}. ` +
+      "ההוצאות החוזרות שנעצרו לא חוזרות לבד — יש להזין אותן כגרסה חדשה מהחודש הנוכחי, " +
       "והציוד נשלח אליו מחדש ממסך המלאי.",
   };
 }
