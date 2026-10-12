@@ -19,7 +19,7 @@ export default async function ExpensesHomePage() {
     if (!myBranchId) redirect("/dashboard/rentals");
     const myDoc = await getAdminFirestore().collection("n_branches").doc(myBranchId).get();
     const myBranch = myDoc.exists ? ({ id: myDoc.id, ...(myDoc.data() as Omit<Branch, "id">) } as Branch) : null;
-    if (!myBranch || myBranch.parentBranchId) redirect("/dashboard/rentals");
+    if (!myBranch) redirect("/dashboard/rentals");
     redirect(`/dashboard/rentals/expenses/${myBranchId}`);
   }
 

@@ -6,7 +6,7 @@ const FIELD =
   "w-full rounded-lg border border-card-border bg-[#f4f6f9] px-3 py-2 text-sm focus:border-teal focus:bg-white focus:outline-none";
 const LABEL = "mb-1 block text-xs font-semibold text-muted";
 
-type BranchModel = "classic" | "partnership" | "sub_partnership";
+type BranchModel = "classic" | "partnership";
 
 type Option = { id: string; name: string };
 
@@ -21,9 +21,7 @@ type Initial = {
   partnerEmail?: string;
   myPct?: number;
   partnerPct?: number;
-  parentPct?: number;
   notes?: string;
-  parentBranchId?: string | null;
   collectionRouteId?: string | null;
   allowCollection?: boolean;
   allowReceipts?: boolean;
@@ -33,15 +31,11 @@ type RentalBranchFormProps = {
   action: (formData: FormData) => void;
   initial?: Initial;
   routes: Option[];
-  parentOptions: Option[];
 };
 
-export function RentalBranchForm({ action, initial, routes, parentOptions }: RentalBranchFormProps) {
-  const initialModel: BranchModel = initial?.parentBranchId
-    ? "sub_partnership"
-    : initial?.isMine === false
-      ? "partnership"
-      : "classic";
+export function RentalBranchForm({ action, initial, routes }: RentalBranchFormProps) {
+  // אין תתי-סניפים: כל סניף הוא שלי או בשותפות ישירה מולי.
+  const initialModel: BranchModel = initial?.isMine === false ? "partnership" : "classic";
 
   const [model, setModel] = useState<BranchModel>(initialModel);
 
@@ -89,7 +83,6 @@ export function RentalBranchForm({ action, initial, routes, parentOptions }: Ren
         <select value={model} onChange={(e) => setModel(e.target.value as BranchModel)} className={FIELD}>
           <option value="classic">{"קלאסי (סניף שלי)"}</option>
           <option value="partnership">{"שותפות"}</option>
-          <option value="sub_partnership">{"תת שותפות"}</option>
         </select>
       </div>
 
@@ -113,33 +106,13 @@ export function RentalBranchForm({ action, initial, routes, parentOptions }: Ren
         </div>
       )}
 
-      {(model === "partnership" || model === "sub_partnership") && (
+      {model === "partnership" && (
         <>
-          {model === "sub_partnership" && (
-            <div>
-              <label className={LABEL}>{"סניף אב (מי השותף הראשי)"}</label>
-              <select name="parentBranchId" defaultValue={initial?.parentBranchId ?? ""} className={FIELD}>
-                <option value="">{"בחר סניף אב"}</option>
-                {parentOptions.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
-
-          <div className={model === "sub_partnership" ? "grid grid-cols-1 gap-4 sm:grid-cols-3" : "grid grid-cols-1 gap-4 sm:grid-cols-2"}>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
               <label className={LABEL}>{"שלי (%)"}</label>
               <input type="number" name="myPct" min={0} max={100} defaultValue={initial?.myPct ?? 50} className={FIELD} />
             </div>
-            {model === "sub_partnership" && (
-              <div>
-                <label className={LABEL}>{"סניף האם (%)"}</label>
-                <input type="number" name="parentPct" min={0} max={100} defaultValue={initial?.parentPct ?? 25} className={FIELD} />
-              </div>
-            )}
             <div>
               <label className={LABEL}>{"השותף (%)"}</label>
               <input type="number" name="partnerPct" min={0} max={100} defaultValue={initial?.partnerPct ?? 50} className={FIELD} />

@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
 import { authOptions, invalidateUserSyncCache } from "@/lib/auth";
 import { getAdminFirestore } from "@/lib/firebase-admin";
+import { FieldValue } from "firebase-admin/firestore";
 import type { Branch, PermissionKey, UserAssignment, UserRole } from "@ultranet/shared-types";
 import { closeBranch, reopenBranch } from "@/lib/history";
 
@@ -67,9 +68,7 @@ function parseRentalBranchForm(formData: FormData): Omit<Branch, "id"> {
   const partnerEmail = String(formData.get("partnerEmail") ?? "").trim() || undefined;
   const myPct = Number(formData.get("myPct")) || 0;
   const partnerPct = Number(formData.get("partnerPct")) || 0;
-  const parentPct = Number(formData.get("parentPct")) || undefined;
   const notes = String(formData.get("notes") ?? "").trim() || undefined;
-  const parentBranchId = String(formData.get("parentBranchId") ?? "").trim() || null;
   const collectionRouteId = String(formData.get("collectionRouteId") ?? "").trim() || null;
   const allowCollection = formData.get("allowCollection") === "on";
   const allowReceipts = formData.get("allowReceipts") === "on";
@@ -86,9 +85,9 @@ function parseRentalBranchForm(formData: FormData): Omit<Branch, "id"> {
     partnerEmail,
     myPct,
     partnerPct,
-    parentPct,
     notes,
-    parentBranchId,
+    // אין תתי-סניפים בהשכרות - כל שמירה מנקה שיוך ישן לסניף-אב.
+    parentBranchId: null,
     collectionRouteId,
     allowCollection,
     allowReceipts,
@@ -113,7 +112,10 @@ export async function createRentalBranchAction(formData: FormData) {
 export async function updateRentalBranchAction(id: string, formData: FormData) {
   await requireOwner();
   const data = parseRentalBranchForm(formData);
-  await getAdminFirestore().collection("n_branches").doc(id).set(stripUndefined(data), { merge: true });
+  await getAdminFirestore()
+    .collection("n_branches")
+    .doc(id)
+    .set({ ...stripUndefined(data), parentPct: FieldValue.delete() }, { merge: true });
   if (data.partnerEmail) {
     await upsertPartnerUser(data.partnerEmail, data.partnerName, id);
   }
