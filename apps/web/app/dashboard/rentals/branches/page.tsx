@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { Building2, Handshake, Leaf, Plus, Laptop as LaptopIcon, type LucideIcon } from "lucide-react";
+import { Building2, Handshake, Plus, Laptop as LaptopIcon, type LucideIcon } from "lucide-react";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { getAdminFirestore } from "@/lib/firebase-admin";
@@ -10,17 +10,14 @@ import { AuditPermsButton } from "./audit-perms-button";
 const MODEL_LABELS: Record<string, string> = {
   classic: "קלאסי",
   partnership: "שותפות",
-  sub_partnership: "תת שותפות",
 };
 
 const MODEL_ICONS: Record<string, LucideIcon> = {
   classic: Building2,
   partnership: Handshake,
-  sub_partnership: Leaf,
 };
 
 function modelOf(b: Branch): keyof typeof MODEL_LABELS {
-  if (b.parentBranchId) return "sub_partnership";
   if (b.isMine === false) return "partnership";
   return "classic";
 }

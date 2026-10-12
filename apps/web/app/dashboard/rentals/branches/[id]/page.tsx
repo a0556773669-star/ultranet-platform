@@ -20,19 +20,11 @@ export default async function RentalBranchDetailPage({ params }: { params: { id:
   if (!doc.exists) notFound();
   const branch = { id: doc.id, ...(doc.data() as Omit<Branch, "id">) } as Branch;
 
-  const [routesSnap, branchesSnap] = await Promise.all([
-    db.collection("n_collection_routes").get(),
-    db.collection("n_branches").where("branchType", "==", "rentals").get(),
-  ]);
+  const routesSnap = await db.collection("n_collection_routes").get();
 
   const routes = routesSnap.docs
     .map((d) => ({ ...(d.data() as Omit<CollectionRoute, "id">), id: d.id }) as CollectionRoute)
     .map((r) => ({ id: r.id, name: r.name }));
-
-  const parentOptions = branchesSnap.docs
-    .map((d) => ({ ...(d.data() as Omit<Branch, "id">), id: d.id }) as Branch)
-    .filter((b) => b.id !== branch.id && (!b.deleted || b.id === branch.parentBranchId))
-    .map((b) => ({ id: b.id, name: b.deleted ? `${b.name} (נמחק)` : b.name }));
 
   const boundUpdate = updateRentalBranchAction.bind(null, branch.id);
   const boundDelete = deleteRentalBranchAction.bind(null, branch.id);
@@ -64,7 +56,7 @@ export default async function RentalBranchDetailPage({ params }: { params: { id:
           </form>
         </div>
       </div>
-      <RentalBranchForm action={boundUpdate} initial={branch} routes={routes} parentOptions={parentOptions} />
+      <RentalBranchForm action={boundUpdate} initial={branch} routes={routes} />
     </div>
   );
 }

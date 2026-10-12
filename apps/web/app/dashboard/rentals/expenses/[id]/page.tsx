@@ -34,7 +34,6 @@ export default async function BranchExpensesPage({ params }: { params: { id: str
     const doc = await db.collection("n_branches").doc(params.id).get();
     if (!doc.exists) notFound();
     branch = { id: doc.id, ...(doc.data() as Omit<Branch, "id">) } as Branch;
-    if (!isOwner && branch.parentBranchId) redirect("/dashboard/rentals");
     isPartner = branch.isMine === false;
     partnerName = branchPartnerName(branch);
   } else {
