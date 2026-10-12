@@ -364,7 +364,12 @@ export interface Laptop {
   endedAt?: string;
   /** הוצאה (לא מכירה): הערה חופשית של הבעלים - לאן לקח את המחשב. */
   endNote?: string;
+  /** `"branch_closed"` = המחשב הוצא כי הסניף נסגר (`closeBranch`), ולא ידנית. "פתיחה מחדש" של
+   *  הסניף מחזירה בדיוק את המחשבים האלה. */
+  endReason?: LaptopEndReason;
 }
+
+export type LaptopEndReason = "branch_closed";
 
 export type LaptopStatus = "active" | "sold" | "removed";
 
@@ -460,6 +465,8 @@ export interface Stick {
    *  הפעילות, ולא נמחק. חסר = `active`. */
   status?: LaptopStatus;
   endedAt?: string;
+  /** כמו `Laptop.endReason`. */
+  endReason?: LaptopEndReason;
 }
 
 /** collection: n_rental_clients */

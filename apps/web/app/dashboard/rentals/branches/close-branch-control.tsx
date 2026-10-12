@@ -48,7 +48,7 @@ export function CloseBranchControl({
           type="button"
           disabled={isPending}
           onClick={() => {
-            if (confirm(`לפתוח מחדש את ${branchName}? ההוצאות שנעצרו לא יחזרו לבד.`)) {
+            if (confirm(`לפתוח מחדש את ${branchName}? המחשבים שהוצאו בסגירה יחזרו אליו; ההוצאות שנעצרו לא יחזרו לבד.`)) {
               run(() => reopenRentalBranchAction(branchId));
             }
           }}
@@ -79,6 +79,7 @@ export function CloseBranchControl({
             <ul className="list-inside list-disc text-[12.5px] text-muted">
               <li>כל ההוצאות הקבועות של הסניף נעצרות בתאריך הסגירה (החודש הזה הוא האחרון שנספר).</li>
               <li>המעקב אחרי הסניף נעצר, והוא יוצא מהרשימות הפעילות.</li>
+              <li>כל המחשבים והסטיקים שעדיין בסניף יוצאים ממנו מתאריך הסגירה (בהיסטוריה הם נשארים).</li>
               <li>שום דבר לא נמחק — הסניף נשאר רשום כ&quot;סניף סגור&quot; עם כל ההיסטוריה שלו.</li>
               <li>יתרה פתוחה מול השותף נשארת פתוחה עד שמסמנים שהועברה.</li>
             </ul>
