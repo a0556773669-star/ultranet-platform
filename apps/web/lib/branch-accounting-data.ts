@@ -194,6 +194,8 @@ interface DatedIncomeLine {
   /** התאריך המלא, לא רק החודש. הסדר אחוזים שמתחיל ב-23/08 חותך באמצע החודש, וחודש
    *  לבדו לא יודע לענות על זה. ראו `lib/revenue-shares.ts`. */
   date: string;
+  /** היום שבו ההשכרה התחילה — הסדר אחוזים פר-סניף נספר לפיו ולא לפי `date`. */
+  startedAt?: string;
 }
 
 function buildIncomeLines(rentals: Rental[], routesById: Map<string, CollectionRoute>): DatedIncomeLine[] {
@@ -211,6 +213,7 @@ function buildIncomeLines(rentals: Rental[], routesById: Map<string, CollectionR
         collectedByOwner: isCollectedByOwner(r.paymentMethod, route),
         month: (r.returnDate as string).slice(0, 7),
         date: r.returnDate as string,
+        startedAt: r.startDate,
       };
     });
 }

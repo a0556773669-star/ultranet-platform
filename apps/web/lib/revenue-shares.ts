@@ -28,8 +28,9 @@ export interface BranchRevenueShare {
   /** אחוז מהברוטו של הסניף. */
   pct: number;
   /**
-   * ISO date. **נספר פר-השכרה ולא פר-חודש**: הסדר שמתחיל ב-23/08 לא לוקח אחוז
-   * מהשכרה שנסגרה ב-22/08, וגם לא מחודש אוגוסט כולו. חודש ההתחלה מתחלק.
+   * ISO date. **נספר פר-השכרה ולא פר-חודש, לפי היום שבו ההשכרה התחילה**: הסדר שמתחיל
+   * ב-23/08 לא לוקח אחוז מהשכרה שיצאה ב-22/08 — גם אם היא הוחזרה ושולמה אחרי ה-23/08 —
+   * וגם לא מחודש אוגוסט כולו. ההשכרה עדיין נזקפת לחודש שבו היא הוחזרה (כמו בכל מקום אחר).
    */
   startDate: string;
   /** ISO date (רשות) — היום האחרון שנספר, כשההסדר הסתיים. */
@@ -94,7 +95,10 @@ export function resolveBranchRevenueShares(branches: Branch[]): { share: BranchR
 
 /** שורת הכנסה עם התאריך המלא שלה — בלעדיו אי אפשר לחתוך הסדר שמתחיל באמצע חודש. */
 export interface DatedAmount {
+  /** היום שבו הכסף נזקף (החזרת ההשכרה / תאריך שורת ההכנסה) — קובע את החודש. */
   date: string;
+  /** היום שבו ההשכרה **התחילה** — קובע אם היא בכלל בתוך ההסדר. שורה ידנית: כמו `date`. */
+  startedAt?: string;
   amount: number;
 }
 
@@ -107,9 +111,11 @@ export interface RevenueShareAmount {
 
 const EMPTY: RevenueShareAmount = { gross: 0, amount: 0 };
 
-function withinRange(date: string, share: BranchRevenueShare): boolean {
-  if (date < share.startDate) return false;
-  if (share.endDate && date > share.endDate) return false;
+/** האם השורה שייכת להסדר: לפי היום שבו ההשכרה התחילה, לא היום שבו היא הוחזרה. */
+function withinRange(line: DatedAmount, share: BranchRevenueShare): boolean {
+  const started = line.startedAt || line.date;
+  if (started < share.startDate) return false;
+  if (share.endDate && started > share.endDate) return false;
   return true;
 }
 
@@ -121,7 +127,7 @@ export function revenueShareForMonth(
 ): RevenueShareAmount {
   if (!share) return EMPTY;
   const gross = lines
-    .filter((l) => !!l.date && l.date.slice(0, 7) === month && withinRange(l.date, share))
+    .filter((l) => !!l.date && l.date.slice(0, 7) === month && withinRange(l, share))
     .reduce((sum, l) => sum + l.amount, 0);
   return { gross, amount: roundPrice((gross * share.pct) / 100) };
 }
@@ -134,7 +140,7 @@ export function revenueShareToDate(
 ): RevenueShareAmount {
   if (!share) return EMPTY;
   const gross = lines
-    .filter((l) => !!l.date && l.date.slice(0, 7) <= uptoMonth && withinRange(l.date, share))
+    .filter((l) => !!l.date && l.date.slice(0, 7) <= uptoMonth && withinRange(l, share))
     .reduce((sum, l) => sum + l.amount, 0);
   return { gross, amount: roundPrice((gross * share.pct) / 100) };
 }
@@ -253,7 +259,7 @@ export function branchRevenueShareLine(
   const share = branchRevenueShareFor(branch);
   if (!share) return null;
   const inRange = incomeLines.filter(
-    (l) => !!l.date && l.date.slice(0, 7) === month && withinRange(l.date, share),
+    (l) => !!l.date && l.date.slice(0, 7) === month && withinRange(l, share),
   );
   if (inRange.length === 0) return null;
   const { gross, amount } = revenueShareForMonth(incomeLines, share, month);
