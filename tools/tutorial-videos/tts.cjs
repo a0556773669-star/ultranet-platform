@@ -45,10 +45,10 @@ async function cloudSynth(text, voice, id) {
 }
 
 /** Gemini API (AI Studio): מחזיר PCM גולמי 24kHz/16bit/mono — עוטפים ב-WAV. */
-async function geminiSynth(text, voice) {
+async function geminiSynth(text, voice, prompt = PROMPT) {
   const model = MODEL || "gemini-2.5-pro-preview-tts";
   const body = {
-    contents: [{ parts: [{ text: `${PROMPT}\n\n${text}` }] }],
+    contents: [{ parts: [{ text: `${prompt}\n\n${text}` }] }],
     generationConfig: { responseModalities: ["AUDIO"], speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: voice } } } },
   };
   for (let attempt = 1; ; attempt++) {
@@ -71,12 +71,33 @@ async function geminiSynth(text, voice) {
   }
 }
 
+/** המכסה החינמית של Gemini היא בקשות בודדות ביום, ולכן כל הקריינות נוצרת בבקשה אחת, עם הפסקה
+ *  ארוכה בין קטע לקטע, ואחר כך נחתכת לקטעים לפי N-1 השתיקות הארוכות ביותר. */
+async function geminiBatch(segs, voice, out) {
+  const prompt = PROMPT + " The transcript has numbered paragraphs. Do not read the numbers. Pause for a full two seconds of silence between paragraphs.";
+  const text = segs.map((s, i) => `${i + 1}. ${s.text}`).join("\n\n");
+  const all = path.join(out, "_all.wav");
+  if (!fs.existsSync(all)) fs.writeFileSync(all, Buffer.from(await geminiSynth(text, voice, prompt), "base64"));
+  const log = require("child_process").spawnSync("ffmpeg", ["-hide_banner", "-i", all, "-af", "silencedetect=noise=-40dB:d=0.45", "-f", "null", "-"], { encoding: "utf8" }).stderr;
+  const sil = [...log.matchAll(/silence_start: ([\d.]+)[\s\S]*?silence_end: ([\d.]+)/g)].map((m) => ({ s: +m[1], e: +m[2] }));
+  const cuts = sil.filter((x) => x.s > 0.2).sort((a, b) => (b.e - b.s) - (a.e - a.s)).slice(0, segs.length - 1).sort((a, b) => a.s - b.s);
+  if (cuts.length !== segs.length - 1) throw new Error(`found ${cuts.length} pauses, need ${segs.length - 1}`);
+  let from = 0;
+  segs.forEach((seg, i) => {
+    const to = i < cuts.length ? cuts[i].s + 0.15 : null;
+    execFileSync("ffmpeg", ["-hide_banner", "-loglevel", "error", "-y", "-i", all, "-ss", String(from), ...(to ? ["-to", String(to)] : []), "-af", "silenceremove=start_periods=1:start_threshold=-45dB,areverse,silenceremove=start_periods=1:start_threshold=-45dB,areverse", path.join(out, `${seg.id}.wav`)]);
+    if (to) from = cuts[i].e - 0.1;
+    console.log("  ", seg.id);
+  });
+}
+
 (async () => {
   const tl = JSON.parse(fs.readFileSync(path.join(recDir, "timeline.json"), "utf8"));
   const out = path.join(recDir, "..", "audio", path.basename(recDir));
   fs.mkdirSync(out, { recursive: true });
   const voice = await pickVoice();
   console.log("voice:", voice);
+  if (GEMINI_KEY && !process.env.TTS_PER_SEGMENT) return geminiBatch(tl.segments, voice, out);
   for (const seg of tl.segments) {
     const file = path.join(out, `${seg.id}.wav`);
     if (fs.existsSync(file)) continue;

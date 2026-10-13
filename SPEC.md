@@ -1953,7 +1953,7 @@ HTML עשיר (`rich-editor.tsx` עצמאי למודול). חיפוש לפי ש�
 הסרטונים נוצרים אוטומטית מהמערכת האמיתית עם `tools/tutorial-videos` (ראו ה-README שם): הקלטת מסך בדפדפן על
 Firestore Emulator עם נתוני הדגמה, כתוביות בעברית צרובות, וקריינות.
 בנוסף יש סרטון קצר (כדקה וחצי) למשכירים — "הוספת מחשב, סים ומחירים" (`tools/tutorial-videos/laptop-add.cjs`,
-פלט `out/laptop-add.mp4`, מועתק ל-`public/help-videos/laptop-add.mp4`): פתיח וסגירה עם הלוגו (`public/icons/icon-512.png`), איור של כרטיס סים, וקריינות מואצת (`TTS_RATE`).
+פלט `out/laptop-add.mp4`, מועתק ל-`public/help-videos/laptop-add.mp4`): פתיח וסגירה עם הלוגו (`public/icons/icon-512.png`), איור של כרטיס סים, וקריינות בקול Gemini דרך ה-API של AI Studio (`GEMINI_API_KEY`; כל הקריינות בבקשה אחת ונחתכת לקטעים לפי השתיקות, בגלל מכסת הבקשות היומית בחשבון חינמי).
 
 ### חנות AI (`/shop` ציבורי + `/dashboard/shop` ניהול) — perm: shop
 
