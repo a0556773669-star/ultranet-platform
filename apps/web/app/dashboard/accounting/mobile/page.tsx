@@ -1,11 +1,7 @@
 import Link from "next/link";
-import { Laptop, ChevronRight, ChevronLeft, UserCog, Users, ArrowRightLeft, LineChart } from "lucide-react";
+import { Laptop, ChevronRight, ChevronLeft, Users, ArrowRightLeft, LineChart } from "lucide-react";
 import { requireOwner } from "@/lib/perms";
-import {
-  loadBranchAccountingRawData,
-  branchDatedIncomeLines,
-  currentMonth,
-} from "@/lib/branch-accounting-data";
+import { loadBranchAccountingRawData, currentMonth } from "@/lib/branch-accounting-data";
 import { monthsBetween } from "@/lib/branch-accounting";
 import { buildLaptopBranchTracking, trackingWindow } from "@/lib/laptop-branch-tracking";
 import { buildBranchTransferRows } from "@/lib/branch-transfer-rows";
@@ -13,7 +9,6 @@ import {
   BRANCH_REVENUE_SHARES,
   ambiguousRevenueShares,
   resolveBranchRevenueShares,
-  revenueShareForMonth,
 } from "@/lib/revenue-shares";
 import { loadReportRecipients, loadOwnerEmail } from "@/lib/branch-report-recipients";
 import { monthLabel } from "@/lib/branch-month-report";
@@ -27,11 +22,8 @@ import { WideTableModal } from "./wide-table-modal";
 import { ReportButtons } from "./report-buttons";
 import { reportMonthFor } from "@/lib/branch-report-send";
 import { PartnerPayoutTable } from "./partner-payout-table";
+import { BranchShareCard } from "./branch-share-card";
 import { TransfersMonthPicker } from "./month-picker";
-
-function money(n: number) {
-  return `${Math.round(n).toLocaleString("he-IL")} ₪`;
-}
 
 /** מזיז את חלון 12 החודשים ב-`delta` חודשים. */
 function shiftMonth(month: string, delta: number): string {
@@ -96,14 +88,10 @@ export default async function MobileAccountingPage({
     .sort((a, b) => a.name.localeCompare(b.name, "he", { numeric: true }));
   const tracking = buildLaptopBranchTracking(trackedBranches, raw, months);
 
-  // ההסדרים הפר-סניפיים (30% מהסניף הראשי לאלישבע רומנו). מוצגים כאן, ליד הרווח
-  // שהם יוצאים ממנו, אבל החוב עצמו מנוהל בטבלת האחוזים שבצד השני של המסך.
+  // ההסדרים הפר-סניפיים (30% מהסניף הראשי לאלישבע רומנו). מוצגים כאן, ליד הרווח שהם
+  // יוצאים ממנו, חודש אחרי חודש עם סימון "העברתי" - אותה יתרה בדיוק כמו בטבלת האחוזים בצד השני.
   const ambiguous = ambiguousRevenueShares(raw.branches);
-  const branchShares = resolveBranchRevenueShares(raw.branches).map(({ share, branch }) => ({
-    share,
-    branch,
-    ...revenueShareForMonth(branchDatedIncomeLines(branch, raw), share, end),
-  }));
+  const branchShares = resolveBranchRevenueShares(raw.branches);
 
   // ---- חודש ההעברות ----
   const monthOptions = selectableMonths(now);
@@ -224,37 +212,7 @@ export default async function MobileAccountingPage({
           )}
 
           {branchShares.length > 0 && (
-            <div className="rounded-card border border-card-border bg-white p-4 shadow-card">
-              <h3 className="mb-1 flex items-center gap-1.5 text-sm font-extrabold text-ink">
-                <UserCog className="h-4 w-4" />
-                אחוזים מהברוטו של הסניף
-              </h3>
-              <p className="text-[11.5px] leading-relaxed text-muted">
-                מי שמתפעל את המחשבים של הסניף מקבל אחוז מהברוטו שלו. הסכום הזה <b>כבר ירד</b> מהרווח
-                שבטבלה למעלה — הוא מעולם לא היה שלי. מה שנשאר להעביר בפועל, כולל חודשים קודמים, נמצא
-                בטבלת האחוזים שבצד השני של המסך, ואין צורך לרשום אותו שוב כהוצאה.
-              </p>
-              <div className="mt-2.5 flex flex-col gap-2">
-                {branchShares.map(({ share, branch, gross, amount }) => (
-                  <div
-                    key={`${share.personName}|${branch.id}`}
-                    className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-lg border border-card-border bg-[#f9fafb] px-3 py-2 text-[13px]"
-                  >
-                    <span className="font-extrabold text-ink">{share.personName}</span>
-                    <span className="text-muted">
-                      {share.pct}% מ<b className="text-ink">{branch.name}</b>
-                    </span>
-                    <span className="text-[11px] text-muted">החל מ-{share.startDate}</span>
-                    <span className="text-muted">
-                      ברוטו {end}: <b className="text-ink">{money(gross)}</b>
-                    </span>
-                    <span className="text-muted">
-                      מגיע לה: <b className="text-red-600">{money(amount)}</b>
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
+            <BranchShareCard shares={branchShares} payouts={payouts} currentMonth={now} />
           )}
         </section>
 

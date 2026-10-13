@@ -533,22 +533,6 @@ function branchOwnerPct(branch: Branch): number {
   return branch.myPct ?? 100 - (branch.partnerPct ?? 0);
 }
 
-/**
- * שורות ההכנסה של סניף עם התאריך המלא שלהן — השכרות שנגבו + שורות ההכנסה הידניות.
- * זו בדיוק ההכנסה שעליה נגזר אחוז פר-סניף, ולכן היא מיוצאת ולא נבנית שוב במסכים.
- */
-export function branchDatedIncomeLines(
-  branch: Branch,
-  raw: BranchAccountingRawData,
-): { date: string; amount: number }[] {
-  const rentals = raw.rentalsByBranch.get(branch.id) ?? [];
-  const branchIncome = raw.branchIncomeByBranch.get(branch.id) ?? [];
-  return [...buildIncomeLines(rentals, raw.routesById), ...buildManualIncomeLines(branchIncome)].map((i) => ({
-    date: i.date,
-    amount: i.amount,
-  }));
-}
-
 export function computeBranchFinancials(branch: Branch, raw: BranchAccountingRawData, month: string): BranchFinancials {
   const fixed = raw.fixedByBranch.get(branch.id) ?? [];
   const variable = raw.variableByBranch.get(branch.id) ?? [];
