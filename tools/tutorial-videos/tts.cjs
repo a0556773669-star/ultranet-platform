@@ -1,5 +1,7 @@
 // Generates Hebrew narration per segment with Google Cloud Text-to-Speech (male voice).
-// usage: GOOGLE_TTS_API_KEY=... node tts.cjs out/renter [voiceName]
+// usage: GOOGLE_TTS_API_KEY=... [TTS_RATE=1.15] node tts.cjs out/renter [voiceName]
+// TTS_RATE מאיץ את הקריינות (דרך ffmpeg, כי לא כל קולות Chirp3 מקבלים speakingRate).
+const { execFileSync } = require("child_process");
 const fs = require("fs");
 const path = require("path");
 
@@ -39,7 +41,12 @@ async function pickVoice() {
     const res = await fetch(`${API}/text:synthesize?key=${KEY}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
     if (!res.ok) throw new Error(`${seg.id}: ${res.status} ${await res.text()}`);
     const { audioContent } = await res.json();
-    fs.writeFileSync(file, Buffer.from(audioContent, "base64"));
+    const rate = parseFloat(process.env.TTS_RATE || "1");
+    if (rate !== 1) {
+      fs.writeFileSync(file + ".raw.wav", Buffer.from(audioContent, "base64"));
+      execFileSync("ffmpeg", ["-hide_banner", "-loglevel", "error", "-y", "-i", file + ".raw.wav", "-af", `atempo=${rate}`, file]);
+      fs.rmSync(file + ".raw.wav");
+    } else fs.writeFileSync(file, Buffer.from(audioContent, "base64"));
     console.log("  ", seg.id);
   }
 })().catch((e) => { console.error(e.message || e); process.exit(1); });

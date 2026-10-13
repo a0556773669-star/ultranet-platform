@@ -83,9 +83,10 @@ class Recorder {
     this.n = 0;
   }
 
-  async start(email, { login = true } = {}) {
+  /** `zoom` > 1 enlarges the UI (smaller CSS viewport, same 1920×1080 output) — for short clips. */
+  async start(email, { login = true, zoom = 1 } = {}) {
     this.browser = await chromium.launch({ ...(process.env.CHROME_PATH ? { executablePath: process.env.CHROME_PATH } : {}) });
-    this.context = await this.browser.newContext({ viewport: { width: 1600, height: 900 }, deviceScaleFactor: 1.2, locale: "he-IL", timezoneId: "Asia/Jerusalem" });
+    this.context = await this.browser.newContext({ viewport: { width: Math.round(1600 / zoom), height: Math.round(900 / zoom) }, deviceScaleFactor: 1.2 * zoom, locale: "he-IL", timezoneId: "Asia/Jerusalem" });
     await this.context.addInitScript(INIT(fontCss()));
     await this.context.addCookies([{ name: "ultranet_trusted_device", value: deviceToken(email), url: BASE }]);
     this.page = await this.context.newPage();
@@ -142,8 +143,8 @@ class Recorder {
   }
 
   /** A title card segment rendered at assembly time (no screen frames). */
-  card(id, title, subtitle, text) {
-    this.segments.push({ id, text, card: { title, subtitle } });
+  card(id, title, subtitle, text, extra = {}) {
+    this.segments.push({ id, text, card: { title, subtitle, ...extra } });
   }
 
   loc(sel) { return typeof sel === "string" ? this.page.locator(sel).first() : sel; }

@@ -62,7 +62,22 @@ function chunks(text) {
     await page.screenshot({ path: file, omitBackground: true });
   }
 
+  const LOGO = path.resolve(__dirname, "../../apps/web/public/icons/icon-512.png");
+  async function renderLogoCard(card, file) {
+    const logo = fs.readFileSync(LOGO).toString("base64");
+    await page.setContent(`<html dir="rtl"><head><style>${css}
+      html,body{margin:0;width:1920px;height:1080px;font-family:H;background:#fff}
+      body{display:flex;flex-direction:column;align-items:center;justify-content:center;color:#0f2a3a}
+      img{width:760px;height:760px;object-fit:cover;object-position:center;margin:-170px 0 -150px}
+      h1{font-size:76px;font-weight:800;margin:0 0 14px;color:#1a8a76}
+      h2{font-size:40px;font-weight:400;margin:0;color:#5b6b78}
+      .bar{position:absolute;bottom:0;left:0;right:0;height:18px;background:linear-gradient(90deg,#1a8a76,#22b09a 60%,#d62828)}
+      </style></head><body><img src="data:image/png;base64,${logo}">${card.title ? `<h1>${card.title}</h1>` : ""}${card.subtitle ? `<h2>${card.subtitle}</h2>` : ""}<div class="bar"></div></body></html>`);
+    await page.screenshot({ path: file });
+  }
+
   async function renderCard(card, file) {
+    if (card.logo) return renderLogoCard(card, file);
     await page.setContent(`<html dir="rtl"><head><style>${css}
       html,body{margin:0;width:1920px;height:1080px;font-family:H}
       body{background:radial-gradient(circle at 70% 30%,#22b09a 0%,#1a8a76 45%,#0f5e4c 100%);display:flex;flex-direction:column;align-items:center;justify-content:center;color:#fff}
@@ -87,8 +102,9 @@ function chunks(text) {
     const silentClip = `${base}-pic.mp4`;
     if (seg.card) {
       await renderCard(seg.card, `${base}-card.png`);
-      picDur = Math.max(audio ? 0 : estSeconds(seg.text) + 0.8, 3.5);
-      ff(["-loop", "1", "-t", String(picDur), "-i", `${base}-card.png`, "-vf", `fps=${FPS},format=yuv420p`, "-c:v", "libx264", "-preset", "medium", "-crf", "18", silentClip]);
+      picDur = Math.max(audio ? audioDur + 0.45 : estSeconds(seg.text) + 0.8, 3.5);
+      const fade = seg.card.logo ? `,fade=t=in:st=0:d=0.5:color=white${i === tl.segments.length ? `,fade=t=out:st=${(picDur - 0.7).toFixed(2)}:d=0.7:color=white` : ""}` : "";
+      ff(["-loop", "1", "-t", String(picDur), "-i", `${base}-card.png`, "-vf", `fps=${FPS}${fade},format=yuv420p`, "-c:v", "libx264", "-preset", "medium", "-crf", "18", silentClip]);
     } else {
       const inSeg = frames.filter((f) => f.t >= seg.start && f.t < seg.end);
       const before = [...frames].reverse().find((f) => f.t < seg.start);
