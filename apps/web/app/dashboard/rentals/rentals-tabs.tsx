@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Building2, Banknote, Laptop, Tag, Users, ClipboardList, Briefcase, BarChart3, Coins, type LucideIcon } from "lucide-react";
+import { Building2, Banknote, Laptop, Tag, Users, ClipboardList, Briefcase, BarChart3, Coins, Gauge, type LucideIcon } from "lucide-react";
 
 type TabItem = { href: string; label: string; icon: LucideIcon; ownerOnly?: boolean };
 
@@ -20,6 +20,8 @@ const TABS: TabItem[] = [
   { href: "/dashboard/rentals/labels", label: "מדבקות", icon: Tag },
   { href: "/dashboard/rentals/accounting", label: "הנה\"ח", icon: BarChart3 },
   { href: "/dashboard/rentals/branches", label: "סניפים", icon: Building2, ownerOnly: true },
+  // מדד סניפים — שבעה שלבים מהפתיחה ועד 150 ₪ נטו למחשב, לכל הסניפים במסך אחד. בעלים בלבד.
+  { href: "/dashboard/rentals/progress", label: "מדד סניפים", icon: Gauge, ownerOnly: true },
 ];
 
 export function RentalsTabs({ isOwner }: { isOwner: boolean }) {
