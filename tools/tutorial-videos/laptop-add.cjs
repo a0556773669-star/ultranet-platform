@@ -1,29 +1,46 @@
 // סרטון קצר למשכירים: הוספת מחשב, מספר סים ומחירים (~דקה וחצי)
 const { Recorder, sleep } = require("./engine.cjs");
 
-/** איור של כרטיס סים כפי שהוא מגיע מהחברה, עם מספר הטלפון מודגש — מוצג מעל המסך לכמה שניות. */
+/** איור: משמאל כרטיס הפלסטיק שהסים הגיע בו (מספר הטלפון), מימין הסים עצמו (המספר הארוך הקטן).
+ *  `focusSim(page)` מעביר את ההדגשה מהכרטיס אל המספר שעל הסים. */
+const ICCID = "8997201 2345 6789 0123";
 async function showSimCard(page, number) {
-  await page.evaluate((number) => {
+  await page.evaluate(([number, iccid]) => {
     const d = document.createElement("div");
     d.id = "__simcard";
+    const HL = "border:4px solid #f39c12;box-shadow:0 0 0 8px rgba(243,156,18,.22);";
     d.innerHTML = `
-      <div style="position:fixed;inset:0;background:rgba(10,20,30,.45);z-index:2147483600;display:flex;align-items:center;justify-content:center;animation:__simIn .35s ease-out">
-        <div style="direction:rtl;width:560px;height:340px;border-radius:26px;background:linear-gradient(135deg,#ffffff,#eef3f6);box-shadow:0 20px 60px rgba(0,0,0,.35);position:relative;font-family:'HeeboRec',sans-serif;overflow:hidden">
-          <div style="position:absolute;top:0;right:0;left:0;height:70px;background:linear-gradient(90deg,#1a8a76,#22b09a);color:#fff;font-size:30px;font-weight:800;display:flex;align-items:center;padding:0 30px">כרטיס סים</div>
-          <div style="position:absolute;left:44px;top:110px;width:150px;height:190px;border:3px dashed #9aa7b1;border-radius:16px;display:flex;align-items:center;justify-content:center">
-            <div style="width:84px;height:66px;border-radius:10px;background:linear-gradient(135deg,#e9c46a,#c9a227);box-shadow:inset 0 0 0 2px rgba(0,0,0,.15)"></div>
+      <div style="position:fixed;inset:0;background:rgba(10,20,30,.5);z-index:2147483600;display:flex;align-items:center;justify-content:center;gap:44px;direction:rtl;font-family:'HeeboRec',sans-serif;animation:__simIn .35s ease-out">
+        <div style="text-align:center">
+          <div style="width:470px;height:300px;border-radius:24px;background:linear-gradient(135deg,#fff,#eef3f6);box-shadow:0 20px 60px rgba(0,0,0,.35);position:relative;overflow:hidden">
+            <div style="position:absolute;top:0;right:0;left:0;height:62px;background:linear-gradient(90deg,#1a8a76,#22b09a);color:#fff;font-size:26px;font-weight:800;display:flex;align-items:center;padding:0 26px">כרטיס הפלסטיק של הסים</div>
+            <div style="position:absolute;left:30px;top:96px;width:120px;height:160px;border:3px dashed #9aa7b1;border-radius:14px"></div>
+            <div style="position:absolute;right:28px;top:100px;font-size:21px;color:#5b6b78">מספר הטלפון:</div>
+            <div id="__hlPhone" style="position:absolute;right:22px;top:138px;font-size:36px;font-weight:800;color:#0f2a3a;direction:ltr;padding:4px 12px;border-radius:12px;${HL}">${number}</div>
           </div>
-          <div style="position:absolute;right:34px;top:118px;font-size:24px;color:#5b6b78;font-weight:500">מספר הטלפון של הסים:</div>
-          <div style="position:absolute;right:30px;top:160px;font-size:46px;font-weight:800;color:#0f2a3a;direction:ltr;padding:6px 16px;border:4px solid #f39c12;border-radius:14px;box-shadow:0 0 0 8px rgba(243,156,18,.22)">${number}</div>
-          <div style="position:absolute;right:34px;top:256px;font-size:20px;color:#8a98a4;direction:ltr">ICCID 8997201 0000 0000 0000</div>
+          <div style="margin-top:16px;color:#fff;font-size:26px;font-weight:700">1. על כרטיס הפלסטיק</div>
+        </div>
+        <div style="text-align:center">
+          <div style="width:300px;height:300px;display:flex;align-items:center;justify-content:center">
+            <div style="width:250px;height:170px;border-radius:14px 44px 14px 14px;background:linear-gradient(135deg,#fafafa,#dfe5ea);box-shadow:0 20px 60px rgba(0,0,0,.35);position:relative">
+              <div style="position:absolute;left:24px;top:28px;width:84px;height:66px;border-radius:10px;background:linear-gradient(135deg,#e9c46a,#c9a227)"></div>
+              <div id="__hlIccid" style="position:absolute;left:12px;right:12px;bottom:16px;font-size:15px;font-weight:600;color:#33434f;direction:ltr;text-align:center;padding:4px 2px;border-radius:8px;border:4px solid transparent">${iccid}</div>
+            </div>
+          </div>
+          <div style="margin-top:16px;color:#fff;font-size:26px;font-weight:700">2. אין כרטיס? המספר הארוך על הסים</div>
         </div>
       </div>`;
     const st = document.createElement("style");
     st.textContent = "@keyframes __simIn{from{opacity:0;transform:scale(.96)}to{opacity:1;transform:none}}";
     d.appendChild(st);
     document.documentElement.appendChild(d);
-  }, number);
+  }, [number, ICCID]);
 }
+const focusSim = (page) => page.evaluate(() => {
+  const a = document.getElementById("__hlPhone"), b = document.getElementById("__hlIccid");
+  a.style.border = "4px solid transparent"; a.style.boxShadow = "none";
+  b.style.border = "4px solid #f39c12"; b.style.boxShadow = "0 0 0 8px rgba(243,156,18,.22)"; b.style.transform = "scale(1.08)";
+});
 const hideSimCard = (page) => page.evaluate(() => document.getElementById("__simcard")?.remove());
 
 (async () => {
@@ -66,11 +83,13 @@ const hideSimCard = (page) => page.evaluate(() => document.getElementById("__sim
     await sleep(500);
     await r.highlight("input[name=simNumber]", 1400);
   });
-  await r.seg("simwhere", "איפה המספר? הוא מודפס על כרטיס הפלסטיק שהסים הגיע בו — מספר הטלפון, שמתחיל באפס חמש.", async () => {
+  await r.seg("simwhere", "איפה המספר? הוא מודפס על כרטיס הפלסטיק שהסים הגיע בו — מספר הטלפון, שמתחיל באפס חמש. אין לכם את הכרטיס? כתבו את המספר הארוך והקטן שמודפס על הסים עצמו.", async () => {
     await showSimCard(p, "053-716-0000");
-    await sleep(3200);
+    await sleep(4200);
+    await focusSim(p);
+    await sleep(4200);
   }, { minExtra: 0.3 });
-  await r.seg("simtype", "מקלידים אותו כאן. אפשר גם לתת לסטיק מחיר מיוחד, כשמשכירים אותו לבד. שדה ריק — מחירון הסניף.", async () => {
+  await r.seg("simtype", "מקלידים את המספר כאן. אפשר גם לתת לסטיק מחיר מיוחד, כשמשכירים אותו לבד. שדה ריק — מחירון הסניף.", async () => {
     await hideSimCard(p);
     await r.type("input[name=simNumber]", "053-7160000", 70);
     await r.hlCard("מחיר מיוחד לסטיק הזה", 1800, { minWidth: 400 });

@@ -11,7 +11,7 @@
     "build:renter": "node assemble.cjs out/renter out/renter.mp4",
     "build:owner": "node assemble.cjs out/owner out/owner.mp4",
     "record:laptop-add": "node seed.cjs && node laptop-add.cjs",
-    "tts:laptop-add": "TTS_RATE=1.15 node tts.cjs out/laptop-add he-IL-Chirp3-HD-Charon",
+    "tts:laptop-add": "TTS_MODEL=gemini-2.5-pro-tts node tts.cjs out/laptop-add Charon",
     "build:laptop-add": "node assemble.cjs out/laptop-add out/laptop-add.mp4"
   },
   "dependencies": {
