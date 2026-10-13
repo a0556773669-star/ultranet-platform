@@ -548,7 +548,7 @@ export async function loadTransactionModel(): Promise<TransactionModel> {
     };
     for (const r of rentals) {
       if (!countsAsCollected(r)) continue;
-      addIncome(r.branchId, { date: r.returnDate as string, amount: r.finalPrice ?? r.calcPrice ?? 0 });
+      addIncome(r.branchId, { date: r.returnDate as string, startedAt: r.startDate, amount: r.finalPrice ?? r.calcPrice ?? 0 });
     }
     for (const d of branchIncomeSnap.docs) {
       const i = doc<BranchIncome>(d);

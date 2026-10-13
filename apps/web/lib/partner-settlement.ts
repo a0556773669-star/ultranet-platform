@@ -44,7 +44,7 @@ export async function computeRevenueShareLines(month: string): Promise<RevenueSh
     db
       .collection("n_rentals")
       .where("status", "==", "returned")
-      .select("paid", "returnDate", "kind", "itemId", "branchId", "finalPrice", "calcPrice")
+      .select("status", "paid", "startDate", "returnDate", "kind", "itemId", "branchId", "finalPrice", "calcPrice")
       .get(),
     db.collection("n_branch_income").select("branchId", "amount", "date").get(),
   ]);
@@ -68,7 +68,7 @@ export async function computeRevenueShareLines(month: string): Promise<RevenueSh
   };
   for (const r of rentals) {
     if (!countsAsCollected(r)) continue;
-    push(r.branchId, { date: r.returnDate as string, amount: r.finalPrice ?? r.calcPrice ?? 0 });
+    push(r.branchId, { date: r.returnDate as string, startedAt: r.startDate, amount: r.finalPrice ?? r.calcPrice ?? 0 });
   }
   for (const d of branchIncomeSnap.docs) {
     const i = { ...(d.data() as Omit<BranchIncome, "id">), id: d.id } as BranchIncome;
