@@ -1849,3 +1849,24 @@ export interface HelpQuestion {
   helpful?: boolean;
   createdAt: string; // ISO
 }
+
+/** שלבי "מדד הסניפים" שהבעלים מסמן ידנית. 1, 4 ו-7 מחושבים אוטומטית ולא נשמרים. */
+export type BranchProgressManualStage = "2" | "3" | "5" | "6";
+
+export interface BranchProgressMark {
+  done: boolean;
+  at?: string;
+  by?: string;
+}
+
+/**
+ * collection: `n_branch_progress` — מדד ההתקדמות של סניף השכרות (`/dashboard/rentals/progress`).
+ *
+ * מזהה המסמך הוא ה-`branchId`. מחזיק רק את הסימונים הידניים (שלבים 2/3/5/6);
+ * שלב 1 (פתיחה), 4 (מחשבים וסימים הוזנו) ו-7 (150 ₪ נטו למחשב) נגזרים מהנתונים בזמן קריאה.
+ */
+export interface BranchProgress {
+  id: string;
+  marks: Partial<Record<BranchProgressManualStage, BranchProgressMark>>;
+  updatedAt?: string;
+}
