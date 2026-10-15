@@ -7,6 +7,7 @@ import { cookies } from "next/headers";
 import { DEVICE_TRUST_COOKIE, verifyDeviceToken } from "@/lib/device-trust";
 import { SideNav } from "./side-nav";
 import { GlobalSearch } from "./global-search";
+import { DensityToggle } from "./density-toggle";
 import { getAssignments, isOwnerSession, topRole, unionPerms } from "@/lib/perms";
 
 import { NAV_ITEMS, visibleFor } from "@/lib/nav-items";
@@ -69,6 +70,7 @@ export default async function DashboardLayout({ children }: { children: ReactNod
             {role && (
               <span className="rounded-full border border-teal px-2 py-0.5 text-xs text-teal-dark">{role}</span>
             )}
+            <DensityToggle />
             <SignOutButton />
           </div>
         </header>

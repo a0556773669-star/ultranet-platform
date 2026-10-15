@@ -28,3 +28,17 @@ body {
     @apply rounded-lg px-2.5 py-1.5 text-[13px] font-bold text-muted transition hover:bg-gray-100;
   }
 }
+
+/* צפיפות תצוגה קומפקטית — העדפה אישית שנשמרת בדפדפן (מסמך המשך 1, סעיף 34; `density-toggle.tsx`).
+   משנה רק ריווח, לא תוכן. */
+html[data-density="compact"] main td,
+html[data-density="compact"] main th {
+  padding-top: 0.25rem !important;
+  padding-bottom: 0.25rem !important;
+}
+html[data-density="compact"] main .card {
+  padding: 0.65rem;
+}
+html[data-density="compact"] main {
+  padding: 1rem;
+}
