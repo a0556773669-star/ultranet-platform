@@ -7,6 +7,7 @@ import type { QuarterBoard } from "../actions";
 import { useBoard } from "../use-board";
 import { MilestoneRow } from "../milestone-row";
 import { MilestonePanel } from "../milestone-panel";
+import { MilestoneIndexProvider } from "../milestone-index";
 import { AddMilestoneForm, AddRockForm } from "../add-forms";
 import { ReviewPanel } from "../review-panel";
 import { QuarterBar } from "../quarter-bar";
@@ -179,100 +180,104 @@ export function QuarterClient({
   }
 
   return (
-    <div>
-      {board.toastNode}
-      {board.deleteDialogNode}
-      <QuarterBar quarter={boardData.quarter} quarters={quarters} />
+    <MilestoneIndexProvider milestones={board.milestones}>
+      <div>
+        {board.toastNode}
+        {board.deleteDialogNode}
+        <QuarterBar quarter={boardData.quarter} quarters={quarters} />
 
-      <ReviewPanel
-        period="quarterly"
-        periodKey={board.quarterKey}
-        title="סיכום ישיבה רבעונית"
-        agenda={QUARTERLY_AGENDA}
-        initialNotes={reviewNotes}
-        previousReviews={previousReviews}
-        readOnly={board.readOnly}
-      />
-
-      <section className="card">
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-          <h2 className="flex items-center gap-1.5 text-base font-extrabold text-ink">
-            <Mountain className="h-4.5 w-4.5" />
-            הסלעים של הרבעון
-            <span className="text-xs font-semibold text-muted">
-              {activeTopRocks.length} מתוך {board.settings.recommendedRocksPerQuarter} מומלצים
-            </span>
-          </h2>
-          {!board.readOnly && (
-            <button
-              type="button"
-              onClick={handleNewRock}
-              className="flex items-center gap-1 text-xs font-semibold text-teal hover:underline"
-            >
-              <Plus className="h-3.5 w-3.5" />
-              סלע חדש
-            </button>
-          )}
-        </div>
-
-        {overLimit && !board.readOnly && (
-          <div className="mb-3 flex items-center gap-1.5 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">
-            <AlertTriangle className="h-3.5 w-3.5" />
-            הגעתם למספר הסלעים שהשיטה ממליצה עליו לרבעון. אפשר להוסיף עוד, אבל כדאי לשקול לפני.
-          </div>
-        )}
-
-        {openNewRock && !board.readOnly && (
-          <div className="mb-3">
-            <AddRockForm
-              placeholder="שם הסלע"
-              onSubmit={(input) => {
-                setOpenNewRock(false);
-                board.createRock({ ...input, parentRockId: null });
-              }}
-              onCancel={() => setOpenNewRock(false)}
-            />
-          </div>
-        )}
-
-        <RockMilestoneTree
-          topRocks={topRocks}
-          subRocksByParent={subRocksByParent}
-          milestonesByRock={milestonesByRock}
-          renderMilestone={renderMilestone}
-          renderRockExtra={renderRockExtra}
-          renderRockFooter={renderRockFooter}
-          warningContext={{ today, weekWarningActive: weekWarning, selectedIds: board.weekIds }}
-          foreignRockIds={foreignRockIds}
-          emptyMessage={
-            board.readOnly
-              ? "לא נרשמו סלעים ברבעון הזה."
-              : "עדיין אין סלעים ברבעון הזה. מתחילים מסלע אחד, מפרקים אותו לתתי-סלעים ולאבני דרך, ואז בוחרים מה נכנס לחודש ולשבוע."
-          }
-        />
-
-        {adhocTasks.length > 0 && (
-          <div className="mt-4">
-            <div className="mb-2 text-xs font-bold text-muted">משימות שוטפות ({adhocTasks.length})</div>
-            <div className="flex flex-col gap-1.5">{adhocTasks.map(renderMilestone)}</div>
-          </div>
-        )}
-      </section>
-
-      {board.openMilestone && (
-        <MilestonePanel
-          milestone={board.openMilestone}
-          rocks={board.rocks}
-          assignments={board.assignments}
-          toneContext={board.toneContext(board.openMilestone)}
+        <ReviewPanel
+          period="quarterly"
+          periodKey={board.quarterKey}
+          title="סיכום ישיבה רבעונית"
+          agenda={QUARTERLY_AGENDA}
+          initialNotes={reviewNotes}
+          previousReviews={previousReviews}
           readOnly={board.readOnly}
-          onClose={() => board.setOpenMilestoneId(null)}
-          onSave={board.saveMilestone}
-          onStatus={board.setStatus}
-          onReopen={board.reopen}
-          onDelete={board.removeMilestone}
         />
-      )}
-    </div>
+
+        <section className="card">
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <h2 className="flex items-center gap-1.5 text-base font-extrabold text-ink">
+              <Mountain className="h-4.5 w-4.5" />
+              הסלעים של הרבעון
+              <span className="text-xs font-semibold text-muted">
+                {activeTopRocks.length} מתוך {board.settings.recommendedRocksPerQuarter} מומלצים
+              </span>
+            </h2>
+            {!board.readOnly && (
+              <button
+                type="button"
+                onClick={handleNewRock}
+                className="flex items-center gap-1 text-xs font-semibold text-teal hover:underline"
+              >
+                <Plus className="h-3.5 w-3.5" />
+                סלע חדש
+              </button>
+            )}
+          </div>
+
+          {overLimit && !board.readOnly && (
+            <div className="mb-3 flex items-center gap-1.5 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">
+              <AlertTriangle className="h-3.5 w-3.5" />
+              הגעתם למספר הסלעים שהשיטה ממליצה עליו לרבעון. אפשר להוסיף עוד, אבל כדאי לשקול לפני.
+            </div>
+          )}
+
+          {openNewRock && !board.readOnly && (
+            <div className="mb-3">
+              <AddRockForm
+                placeholder="שם הסלע"
+                onSubmit={(input) => {
+                  setOpenNewRock(false);
+                  board.createRock({ ...input, parentRockId: null });
+                }}
+                onCancel={() => setOpenNewRock(false)}
+              />
+            </div>
+          )}
+
+          <RockMilestoneTree
+            topRocks={topRocks}
+            subRocksByParent={subRocksByParent}
+            milestonesByRock={milestonesByRock}
+            renderMilestone={renderMilestone}
+            renderRockExtra={renderRockExtra}
+            renderRockFooter={renderRockFooter}
+            warningContext={{ today, weekWarningActive: weekWarning, selectedIds: board.weekIds }}
+            foreignRockIds={foreignRockIds}
+            emptyMessage={
+              board.readOnly
+                ? "לא נרשמו סלעים ברבעון הזה."
+                : "עדיין אין סלעים ברבעון הזה. מתחילים מסלע אחד, מפרקים אותו לתתי-סלעים ולאבני דרך, ואז בוחרים מה נכנס לחודש ולשבוע."
+            }
+          />
+
+          {adhocTasks.length > 0 && (
+            <div className="mt-4">
+              <div className="mb-2 text-xs font-bold text-muted">משימות שוטפות ({adhocTasks.length})</div>
+              <div className="flex flex-col gap-1.5">{adhocTasks.map(renderMilestone)}</div>
+            </div>
+          )}
+        </section>
+
+        {board.openMilestone && (
+          <MilestonePanel
+            milestone={board.openMilestone}
+            rocks={board.rocks}
+            assignments={board.assignments}
+            toneContext={board.toneContext(board.openMilestone)}
+            readOnly={board.readOnly}
+            onClose={() => board.setOpenMilestoneId(null)}
+            onSave={board.saveMilestone}
+            onStatus={board.setStatus}
+            onReopen={board.reopen}
+            onDelete={board.removeMilestone}
+            onOpenMilestone={board.setOpenMilestoneId}
+            onSplit={board.splitMilestone}
+          />
+        )}
+      </div>
+    </MilestoneIndexProvider>
   );
 }

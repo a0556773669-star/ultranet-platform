@@ -1,9 +1,10 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { Check, RotateCcw } from "lucide-react";
+import { Check, Inbox, Link2, RotateCcw } from "lucide-react";
 import type { Milestone, MilestoneStatus } from "@ultranet/shared-types";
 import { MILESTONE_STATUSES, STATUS_LABEL, STATUS_SHORT, TONES, milestoneTone, type ToneContext } from "./task-status";
+import { openDependencies, useMilestoneIndex } from "./milestone-index";
 
 /**
  * שורת אבן דרך - הרכיב היחיד שמצייר משימה בכל המסכים (שבוע, חודש, רבעון, ארכיון),
@@ -47,6 +48,10 @@ export function MilestoneRow({
   const done = milestone.status === "done";
   const cancelled = milestone.status === "cancelled";
   const pending = milestone.id.startsWith("temp-");
+  const index = useMilestoneIndex();
+  // תלות שלא הושלמה (סעיף 49) - תג מידע בלבד, אין חסימה של סימון או שינוי סטטוס.
+  const blockers = done || cancelled ? [] : openDependencies(milestone, index);
+  const nextAction = !done && !cancelled ? milestone.nextAction?.trim() : "";
 
   return (
     <div
@@ -97,10 +102,28 @@ export function MilestoneRow({
             {milestone.notes}
           </span>
         )}
+        {nextAction ? (
+          <span className="max-w-full truncate text-[11px] font-semibold text-teal-dark">הפעולה הבאה: {nextAction}</span>
+        ) : null}
       </button>
 
       <div className="flex shrink-0 items-center gap-1.5">
         {extraBadges}
+        {milestone.inbox ? (
+          <span className="flex items-center gap-0.5 rounded-full border border-card-border bg-[#f4f6f9] px-1.5 py-0.5 text-[11px] font-bold text-muted" title="ממתין לבחירה בישיבה">
+            <Inbox className="h-3 w-3" />
+            תיבת קליטה
+          </span>
+        ) : null}
+        {blockers.length > 0 ? (
+          <span
+            className="flex items-center gap-0.5 rounded-full border border-amber-300 bg-amber-50 px-1.5 py-0.5 text-[11px] font-bold text-amber-700"
+            title={`תלוי ב־: ${blockers.map((b) => b.title).join(", ")}`}
+          >
+            <Link2 className="h-3 w-3" />
+            תלוי ב־{blockers.length}
+          </span>
+        ) : null}
         {milestone.reopenCount ? (
           <span className="flex items-center gap-0.5 rounded-full border border-card-border bg-[#f4f6f9] px-1.5 py-0.5 text-[11px] font-bold text-muted" title="נפתחה מחדש">
             <RotateCcw className="h-3 w-3" />

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { X, CheckSquare, Square, Search } from "lucide-react";
 import type { Milestone, MilestoneStatus, Rock } from "@ultranet/shared-types";
 import { MILESTONE_STATUSES, STATUS_LABEL, TONES, milestoneTone, type ToneContext } from "./task-status";
@@ -9,7 +9,10 @@ import { ROCK_OWNERS } from "./owners";
 const FIELD =
   "rounded-lg border border-card-border bg-[#f4f6f9] px-2.5 py-1.5 text-xs focus:border-teal focus:bg-white focus:outline-none";
 
-type Group = { rock: Rock | null; parent: Rock | null; milestones: Milestone[] };
+type Group = { key: string; rock: Rock | null; parent: Rock | null; inbox: boolean; milestones: Milestone[] };
+
+/** מפתח קבוצה מיוחד לרעיונות מתיבת הקליטה (סעיף 25) - הם מוצגים בקבוצה נפרדת. */
+const INBOX_GROUP = "__inbox";
 
 /**
  * מצב הבחירה המהירה של ישיבה חודשית/שבועית (סעיף 7.4).
@@ -30,6 +33,10 @@ export function MeetingPicker({
   onConfirm,
   onClose,
   isPending = false,
+  stepper,
+  renderAside,
+  onBack,
+  onSkip,
 }: {
   title: string;
   subtitle: string;
@@ -41,6 +48,14 @@ export function MeetingPicker({
   onConfirm: (ids: string[]) => void;
   onClose: () => void;
   isPending?: boolean;
+  /** סרגל שלבים כשהבחירה היא שלב בתוך "ניהול ישיבה" */
+  stepper?: ReactNode;
+  /** אזור מידע מעל סרגל האישור שמתעדכן עם הבחירה (למשל עומס לפי אחראי) */
+  renderAside?: (selected: Set<string>) => ReactNode;
+  /** חזרה לשלב הקודם בהליך הישיבה */
+  onBack?: () => void;
+  /** המשך בלי לבחור דבר (מעבר לסיכום) */
+  onSkip?: () => void;
 }) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [text, setText] = useState("");
@@ -73,13 +88,27 @@ export function MeetingPicker({
 
   const groups = useMemo<Group[]>(() => {
     const map = new Map<string, Milestone[]>();
-    shown.forEach((m) => map.set(m.rockId, [...(map.get(m.rockId) ?? []), m]));
+    shown.forEach((m) => {
+      const key = m.inbox ? INBOX_GROUP : m.rockId;
+      map.set(key, [...(map.get(key) ?? []), m]);
+    });
     return Array.from(map.entries())
-      .map(([rockId, milestones]) => {
-        const rock = rocksById.get(rockId) ?? null;
-        return { rock, parent: rock?.parentRockId ? (rocksById.get(rock.parentRockId) ?? null) : null, milestones };
+      .map(([key, milestones]) => {
+        const rock = key === INBOX_GROUP ? null : (rocksById.get(key) ?? null);
+        return {
+          key: key || "adhoc",
+          rock,
+          parent: rock?.parentRockId ? (rocksById.get(rock.parentRockId) ?? null) : null,
+          inbox: key === INBOX_GROUP,
+          milestones,
+        };
       })
-      .sort((a, b) => (a.parent?.title ?? a.rock?.title ?? "").localeCompare(b.parent?.title ?? b.rock?.title ?? ""));
+      // תיבת הקליטה תמיד אחרונה, כדי שהסלעים יישארו במוקד.
+      .sort((a, b) =>
+        a.inbox !== b.inbox
+          ? Number(a.inbox) - Number(b.inbox)
+          : (a.parent?.title ?? a.rock?.title ?? "").localeCompare(b.parent?.title ?? b.rock?.title ?? "")
+      );
   }, [shown, rocksById]);
 
   const selectable = (m: Milestone) => !alreadyAssigned.has(m.id);
@@ -114,6 +143,8 @@ export function MeetingPicker({
             <X className="h-4.5 w-4.5" />
           </button>
         </header>
+
+        {stepper}
 
         {/* סינון - לא מאפס בחירות */}
         <div className="flex flex-wrap items-center gap-2 border-b border-card-border px-4 py-2.5">
@@ -192,11 +223,17 @@ export function MeetingPicker({
               {groups.map((g) => {
                 const groupSelectable = g.milestones.filter(selectable).map((m) => m.id);
                 return (
-                  <div key={g.rock?.id ?? "adhoc"} className="rounded-[11px] border border-card-border">
+                  <div key={g.key} className="rounded-[11px] border border-card-border">
                     <div className="flex items-center justify-between gap-2 border-b border-card-border bg-[#f9fafb] px-3 py-1.5">
                       <span className="text-xs font-bold text-ink">
-                        {g.parent ? `${g.parent.title} ‹ ` : ""}
-                        {g.rock?.title ?? "משימות שוטפות"}
+                        {g.inbox ? (
+                          "תיבת קליטה - רעיונות שממתינים לבחירה"
+                        ) : (
+                          <>
+                            {g.parent ? `${g.parent.title} ‹ ` : ""}
+                            {g.rock?.title ?? "משימות שוטפות"}
+                          </>
+                        )}
                       </span>
                       {groupSelectable.length > 0 && (
                         <button
@@ -244,13 +281,26 @@ export function MeetingPicker({
           )}
         </div>
 
+        {renderAside ? <div className="border-t border-card-border px-4 py-2.5">{renderAside(selected)}</div> : null}
+
         {/* סרגל פעולה דביק - נשאר גלוי בגלילה */}
-        <footer className="sticky bottom-0 flex items-center justify-between gap-3 rounded-b-card border-t border-card-border bg-white px-4 py-3">
+        <footer className="sticky bottom-0 flex flex-wrap items-center justify-between gap-3 rounded-b-card border-t border-card-border bg-white px-4 py-3">
           <span className="text-sm font-bold text-ink">נבחרו {selected.size} אבני דרך</span>
-          <div className="flex items-center gap-2">
-            <button type="button" onClick={onClose} className="text-xs font-semibold text-muted hover:underline">
-              ביטול
-            </button>
+          <div className="flex flex-wrap items-center gap-2">
+            {onBack ? (
+              <button type="button" onClick={onBack} className="text-xs font-semibold text-muted hover:underline">
+                חזרה
+              </button>
+            ) : (
+              <button type="button" onClick={onClose} className="text-xs font-semibold text-muted hover:underline">
+                ביטול
+              </button>
+            )}
+            {onSkip ? (
+              <button type="button" onClick={onSkip} className="btn-outline px-3 py-1.5 text-xs">
+                בלי בחירה נוספת - לסיכום
+              </button>
+            ) : null}
             <button
               type="button"
               onClick={() => onConfirm(Array.from(selected))}
