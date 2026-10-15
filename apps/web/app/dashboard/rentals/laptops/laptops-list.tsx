@@ -4,12 +4,14 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Wifi, Users, Check, Minus, History, ChevronDown, ChevronUp } from "lucide-react";
-import type { Branch, Laptop, LaptopSale } from "@ultranet/shared-types";
+import type { Branch, Laptop, LaptopRepair, LaptopSale } from "@ultranet/shared-types";
 import { effectiveLaptopRates } from "@/lib/rental-pricing";
 import { isLaptopActive, LAPTOP_STATUS_LABELS, laptopStatus } from "@/lib/laptop-names";
 import { useToast } from "@/lib/toast";
+import { openRepairsByLaptop, repairLabel } from "@/lib/laptop-repairs";
 import { DeleteLaptopButton } from "./delete-button";
 import { LaptopExitModal, type BranchFixedExpenseOption } from "./laptop-exit-modal";
+import { LaptopRepairModal } from "./laptop-repair-modal";
 import { deleteLaptopSaleAction, reactivateLaptopAction } from "./actions";
 
 type SortKey = "name" | "branch" | "price";
@@ -52,6 +54,8 @@ export function LaptopsList({
   expensesByBranch,
   sales,
   initialBranchIds,
+  repairs,
+  rentedLaptopIds,
 }: {
   laptops: Laptop[];
   branches: Branch[];
@@ -65,6 +69,10 @@ export function LaptopsList({
   sales: LaptopSale[];
   /** סינון סניף התחלתי — מגיע מ-`?branch=` (קישור מכרטיס הסניף). */
   initialBranchIds?: string[];
+  /** כל תקופות התיקון (`n_laptop_repairs`) של המחשבים המוצגים */
+  repairs: LaptopRepair[];
+  /** מחשבים עם השכרה פעילה — לא נשלחים לתיקון עד שמחזירים */
+  rentedLaptopIds: string[];
 }) {
   const laptops = useMemo(() => allLaptops.filter((l) => isLaptopActive(l)), [allLaptops]);
   const exited = useMemo(
@@ -76,6 +84,12 @@ export function LaptopsList({
   );
   const [exit, setExit] = useState<{ mode: "sell" | "remove"; laptop: Laptop } | null>(null);
   const [showExited, setShowExited] = useState(false);
+  const [moreFor, setMoreFor] = useState<Laptop | null>(null);
+  const [repairOnly, setRepairOnly] = useState(false);
+  const today = new Date().toISOString().slice(0, 10);
+  const openRepairs = useMemo(() => openRepairsByLaptop(repairs), [repairs]);
+  const rentedSet = useMemo(() => new Set(rentedLaptopIds), [rentedLaptopIds]);
+  const inRepairCount = useMemo(() => laptops.filter((l) => openRepairs.has(l.id)).length, [laptops, openRepairs]);
   const router = useRouter();
   const { showSuccess, showError, toastNode } = useToast();
   const [selectedBranchIds, setSelectedBranchIds] = useState<string[]>(initialBranchIds ?? []);
@@ -99,10 +113,11 @@ export function LaptopsList({
     return laptops.filter(
       (l) =>
         (set.size === 0 || set.has(l.branchId)) &&
+        (!repairOnly || openRepairs.has(l.id)) &&
         (typeFilter === "all" || (typeFilter === "graphics") === isGraphics(l)) &&
         (!q || l.name.includes(q) || String(l.number ?? "").includes(q) || (l.simNumber ?? "").includes(q)),
     );
-  }, [laptops, selectedBranchIds, typeFilter, numberQuery]);
+  }, [laptops, selectedBranchIds, typeFilter, numberQuery, repairOnly, openRepairs]);
 
   const sorted = useMemo(() => {
     const dir = sortDir === "asc" ? 1 : -1;
@@ -128,7 +143,8 @@ export function LaptopsList({
         ? "bg-gradient-to-br from-teal to-teal-light text-white shadow-primary"
         : "border border-card-border bg-white text-ink hover:bg-[#f4f6f9]"
     }`;
-  const filterActive = typeFilter !== "all" || numberQuery.trim() !== "" || selectedBranchIds.length > 0;
+  const filterActive =
+    typeFilter !== "all" || numberQuery.trim() !== "" || selectedBranchIds.length > 0 || repairOnly;
 
   return (
     <div>
@@ -150,6 +166,19 @@ export function LaptopsList({
         <button type="button" onClick={() => setTypeFilter("graphics")} className={chip(typeFilter === "graphics")}>
           גרפיקה
         </button>
+        {(inRepairCount > 0 || repairOnly) && (
+          <button
+            type="button"
+            onClick={() => setRepairOnly((v) => !v)}
+            className={
+              repairOnly
+                ? "rounded-[10px] bg-amber-500 px-3 py-1.5 text-xs font-bold text-white transition"
+                : "rounded-[10px] border border-amber-200 bg-white px-3 py-1.5 text-xs font-bold text-amber-700 transition hover:bg-amber-50"
+            }
+          >
+            {`בתיקון (${inRepairCount})`}
+          </button>
+        )}
         {filterActive && (
           <>
             <span className="text-xs text-muted">{`מוצגים ${filtered.length} מתוך ${laptops.length}`}</span>
@@ -159,6 +188,7 @@ export function LaptopsList({
                 setTypeFilter("all");
                 setNumberQuery("");
                 setSelectedBranchIds([]);
+                setRepairOnly(false);
               }}
               className="text-xs font-bold text-teal hover:underline"
             >
@@ -243,12 +273,21 @@ export function LaptopsList({
                 {sorted.map((l, idx) => {
                   const deleteAction = deleteActions[l.id];
                   const eff = effectiveLaptopRates(l, branchPricingOf(l.branchId));
+                  const repair = openRepairs.get(l.id);
                   return (
                     <tr key={l.id} className={idx % 2 === 1 ? "bg-[#fafbfc]" : "bg-white"}>
                       <td className={`${TD} font-bold text-ink`}>
                         <Link href={`/dashboard/rentals/laptops/${l.id}`} className="hover:underline">
                           {l.name}
                         </Link>
+                        {repair && (
+                          <span
+                            className="mr-1.5 rounded-full bg-amber-50 px-2 py-0.5 text-[10.5px] font-bold text-amber-800"
+                            title={`מ-${repair.from}`}
+                          >
+                            {repairLabel(repair, today)}
+                          </span>
+                        )}
                       </td>
                       {isOwner && <td className={`${TD} text-muted`}>{branchName(l.branchId)}</td>}
                       <td className={TD}>{priceCell(eff.dayPrice, l.dayPrice, eff.noInternetDayPrice)}</td>
@@ -314,6 +353,14 @@ export function LaptopsList({
                               הוצאה
                             </button>
                           )}
+                          <button
+                            type="button"
+                            onClick={() => setMoreFor(l)}
+                            className="rounded-lg border border-card-border bg-white px-3 py-1.5 text-xs font-bold text-ink hover:bg-[#f4f6f9]"
+                            title="תיקון והיסטוריית תיקונים"
+                          >
+                            עוד
+                          </button>
                           {canDelete && deleteAction && <DeleteLaptopButton action={deleteAction} />}
                         </div>
                       </td>
@@ -446,6 +493,20 @@ export function LaptopsList({
           onClose={() => setExit(null)}
           onDone={(message) => {
             setExit(null);
+            showSuccess(message);
+          }}
+        />
+      )}
+      {moreFor && (
+        <LaptopRepairModal
+          laptopId={moreFor.id}
+          laptopName={moreFor.name}
+          repairs={repairs.filter((r) => r.laptopId === moreFor.id)}
+          rented={rentedSet.has(moreFor.id)}
+          canRepair={canSell}
+          onClose={() => setMoreFor(null)}
+          onDone={(message) => {
+            setMoreFor(null);
             showSuccess(message);
           }}
         />

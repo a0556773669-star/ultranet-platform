@@ -15,6 +15,16 @@ import {
   laptopRatesFor,
   roundPrice,
 } from "@/lib/rental-pricing";
+import { isRepairOpen, LAPTOP_REPAIRS_COLLECTION } from "@/lib/laptop-repairs";
+
+/** האם למחשב יש תקופת תיקון פתוחה (`n_laptop_repairs` בלי `to`) — חוסם השכרה חדשה שלו. */
+async function laptopInRepair(laptopId: string): Promise<boolean> {
+  const snap = await getAdminFirestore()
+    .collection(LAPTOP_REPAIRS_COLLECTION)
+    .where("laptopId", "==", laptopId)
+    .get();
+  return snap.docs.some((d) => isRepairOpen(d.data() as { to?: string }));
+}
 
 /**
  * ה-session של **מודול ההשכרות**: `role` ו-`branchId` כאן הם של הכובע שהמשתמש מחזיק
@@ -464,7 +474,10 @@ export async function createRentalAction(formData: FormData) {
       throw new Error("הפריט הזה כבר לא פעיל בסניף (נמכר או הוצא)");
     }
   }
-
+  // מחשב בתיקון (תקופה פתוחה ב-n_laptop_repairs) לא ניתן להשכרה חדשה עד "חזר מתיקון".
+  if (kind === "laptop" && (await laptopInRepair(itemId))) {
+    redirect(`/dashboard/rentals/new?error=in-repair${mineParam}`);
+  }
 
   const activeForItem = await getAdminFirestore()
     .collection("n_rentals")
@@ -601,6 +614,9 @@ export async function updateRentalItemAction(rentalId: string, itemId: string) {
       .get();
     if (!clash.empty && clash.docs[0]!.id !== rentalId) {
       throw new Error("הפריט הזה כבר מושכר בהשכרה פעילה אחרת");
+    }
+    if (rental.kind === "laptop" && itemId !== rental.itemId && (await laptopInRepair(itemId))) {
+      throw new Error("המחשב שנבחר נמצא בתיקון ולא ניתן להשכרה עד שיסומן \"חזר מתיקון\"");
     }
   }
 
