@@ -73,6 +73,8 @@ type Props = {
   expectedReturnDate?: string;
   handoverItems?: string[];
   deliveryCount?: number;
+  /** עמודות שהמשתמש הסתיר בתצוגה שלו (בחירת עמודות, פריט 33) — "item" | "branch" | "start" | "price" */
+  hiddenColumns?: string[];
 };
 
 const BTN =
@@ -110,7 +112,12 @@ export function ActiveRentalRow({
   expectedReturnDate,
   handoverItems,
   deliveryCount,
+  hiddenColumns = [],
 }: Props) {
+  const col = (key: string) => !hiddenColumns.includes(key);
+  const showBranchCell = showBranch && col("branch");
+  // לקוח + כפתור הפתיחה תמיד גלויים; השאר לפי בחירת העמודות.
+  const visibleColCount = 2 + [col("item"), showBranchCell, col("start"), col("price")].filter(Boolean).length;
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [expanded, setExpanded] = useState(false);
@@ -288,27 +295,31 @@ export function ActiveRentalRow({
             </div>
           )}
         </td>
+        {col("item") && (
         <td className="px-[11px] py-2 text-muted">
           {itemName}
           {deliveryCount && deliveryCount > 1 && (
             <div className="text-[11px]" title="נמסרו יחד; כל פריט מוחזר ומשולם בנפרד">{`מסירה משותפת · ${deliveryCount} פריטים`}</div>
           )}
         </td>
-        {showBranch && <td className="px-[11px] py-2 text-muted">{branchName}</td>}
+        )}
+        {showBranchCell && <td className="px-[11px] py-2 text-muted">{branchName}</td>}
+        {col("start") && (
         <td className="px-[11px] py-2 text-muted">
           {startDate}
           {expectedReturnDate && (
             <div className="text-[11px]" title="החזרה משוערת — לתכנון בלבד">{`החזרה משוערת: ${expectedReturnDate}`}</div>
           )}
         </td>
-        <td className="px-[11px] py-2 font-semibold text-ink">{finalPrice.toLocaleString()} ₪</td>
+        )}
+        {col("price") && <td className="px-[11px] py-2 font-semibold text-ink">{finalPrice.toLocaleString()} ₪</td>}
         <td className="px-[11px] py-2">
           <span className="text-xs font-bold text-teal-dark">{expanded ? "הסתרה ▲" : "החזרה ▼"}</span>
         </td>
       </tr>
       {expanded && (
         <tr className="border-t border-card-border bg-[#f8fafc]">
-          <td colSpan={showBranch ? 6 : 5} className="px-[11px] py-4">
+          <td colSpan={visibleColCount} className="px-[11px] py-4">
             <div className="flex flex-col gap-3" onClick={(e) => e.stopPropagation()}>
               <div>
                 <label className="mb-1 block text-xs font-semibold text-muted">פריט (מחשב/סטיק)</label>

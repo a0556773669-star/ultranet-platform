@@ -65,7 +65,7 @@ export function TrackingTable({ tracking }: { tracking: LaptopBranchTracking }) 
                   {monthLabel(m)}
                 </th>
               ))}
-              <th className="whitespace-nowrap px-2.5 py-2">ממוצע</th>
+              <th className="whitespace-nowrap px-2.5 py-2" title="למחשב: סך הרווח ÷ סך המחשבים השקולים בחודשים המוצגים">ממוצע משוקלל</th>
             </tr>
           </thead>
           <tbody className="tabular-nums">
@@ -96,7 +96,7 @@ export function TrackingTable({ tracking }: { tracking: LaptopBranchTracking }) 
                     );
                   }
                   const title =
-                    `${c.computerCount} מחשבים · רווח ${fmt(c.netProfit)} ₪` +
+                    `${Number.isInteger(c.computerCount) ? c.computerCount : c.computerCount.toFixed(1)} מחשבים שקולים · רווח ${fmt(c.netProfit)} ₪` +
                     (c.saleIncome > 0 ? ` · מכירות ${fmt(c.saleIncome)} ₪ (לא כלול)` : "");
                   const good = mode === "perComputer" ? c.isHealthy : c.netProfit >= 0;
                   return (
@@ -152,8 +152,8 @@ export function TrackingTable({ tracking }: { tracking: LaptopBranchTracking }) 
       </div>
       <p className="border-t border-card-border px-4 py-2.5 text-[11px] leading-relaxed text-muted">
         <b>רווח כולל</b> = הרווח התפעולי שלי מהסניף באותו חודש: החלק שלי בהכנסות מהשכרות, פחות החלק שלי
-        בהוצאות, פחות האחוזים שאני מעביר — <b>נטו, בלי מע&quot;מ</b> (הסכום מחולק ב-1.18 פעם אחת). <b>רווח למחשב</b> = אותו מספר מחולק במספר המחשבים שהיו בסניף
-        באותו חודש (מחשב נספר מהחודש שנוסף ועד החודש שנמכר/הוצא בו). ירוק = עומד ביעד של {target} ₪ נטו למחשב
+        בהוצאות, פחות האחוזים שאני מעביר — <b>נטו, בלי מע&quot;מ</b> (הסכום מחולק ב-1.18 פעם אחת). <b>רווח למחשב</b> = אותו מספר מחולק ב<b>מחשבים שקולים</b>: לכל מחשב, ימי הזמינות שלו בחודש חלקי
+        ימי החודש — מחשב שנוסף באמצע החודש נספר כחלק, וימי תיקון לא נספרים. ירוק = עומד ביעד של {target} ₪ נטו למחשב
         לחודש; אדום = מתחת ליעד. תא ריק = הסניף עדיין לא היה קיים (או כבר נסגר).
         <br />
         <b>מה לא נספר כאן:</b> רכש — עלות הוספת מחשבים, והוצאה חד-פעמית שאני שילמתי והחוב כולו עליי (בסניף

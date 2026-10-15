@@ -9,9 +9,16 @@ import { RentalBranchForm } from "../../rental-branch-form";
 import { DeleteRentalBranchButton } from "../../delete-button";
 import { CloseBranchControl } from "../../close-branch-control";
 import { updateRentalBranchAction, deleteRentalBranchAction } from "../../actions";
+import { docVersion } from "@/lib/edit-conflict";
 
 /** עריכת פרטי הסניף — מסך נפרד מכרטיס הצפייה (אפיון שדרוג v2, סעיף 6). התוכן ללא שינוי. */
-export default async function RentalBranchEditPage({ params }: { params: { id: string } }) {
+export default async function RentalBranchEditPage({
+  params,
+  searchParams,
+}: {
+  params: { id: string };
+  searchParams?: { error?: string };
+}) {
   const session = await getServerSession(authOptions);
   if (!session) redirect("/login");
   if (session.user?.role !== "owner") redirect("/dashboard/rentals");
@@ -63,7 +70,14 @@ export default async function RentalBranchEditPage({ params }: { params: { id: s
           </form>
         </div>
       </div>
-      <RentalBranchForm action={boundUpdate} initial={branch} routes={routes} />
+      {/* אחרי שמירה שנחסמה (עריכה מקבילה) הטופס נבנה מחדש עם הערכים העדכניים */}
+      <RentalBranchForm
+        key={searchParams?.error === "conflict" ? `conflict-${docVersion(doc)}` : "edit"}
+        action={boundUpdate}
+        initial={branch}
+        routes={routes}
+        editGuard={{ id: branch.id, loadedAt: docVersion(doc), conflict: searchParams?.error === "conflict" }}
+      />
     </div>
   );
 }

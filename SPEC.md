@@ -291,7 +291,8 @@ pnpm dev        # turbo run dev — מריץ web + api
 | `n_period_assignments` | `PeriodAssignment` | **השיוך של אבן דרך לתקופת עבודה - לא עותק שלה.** מזהה המסמך דטרמיניסטי: `${milestoneId}__${periodType}__${periodKey}`, וכך אילוץ "אבן דרך אחת לכל תקופה" נאכף ברמת בסיס הנתונים ולא רק בממשק. שדות: `milestoneId`, `quarterKey` (**הרבעון שבו נעשה השיוך**, לא בהכרח רבעון הבית של אבן הדרך - כך שאילתת שוויון אחת מחזירה את כל שיוכי הלוח), `periodType` (`quarter`/`month`/`week`), `periodKey`, `assignedAt`/`assignedBy`, `outcome` (`open` כל עוד התקופה פתוחה; בסגירת התקופה ננעל ל-`done`/`missed`/`cancelled`), `closedAt` |
 | `n_task_activity` | `TaskActivity` | יומן הפעולות של המודול - כל פעולה משמעותית עם מי, מתי, ומה השתנה: `entityType`, `entityId`, `action` (`create`/`update`/`assign`/`unassign`/`status`/`complete`/`reopen`/`cancel`/`move`/`delete`/`restore`/`view`/`comment`/`decision`), `field`/`oldValue`/`newValue`, `milestoneId`/`personalTaskId`/`quarterKey` (להקשר ולשליפה מהירה בשאילתת שוויון יחידה), `note` (סיבה), `userName`, `at`. `decision` = החלטת "ניהול ישיבה" על משימה שלא הושלמה: `newValue` הוא `continue`/`replan`/`pause`, `field` הוא `week`/`month`. **משרת גם את הטאב "משימות ליוני"** (`entityType: "personal_task"`) - אותו יומן, ישות נוספת. אינו ניתן לעריכה דרך הממשק |
 | `n_task_settings` | `TaskSettings` | מסמך יחיד במזהה `default`: `weekStartDay`, `warningWeekday` (מתי מופיעה האזהרה הכתומה) ו-`recommendedRocksPerQuarter`. שבוע העבודה ומועד האזהרה הם **הגדרה ולא קבוע בקוד**. בנוסף שלוש רשימות הגישה לטאב "משימות ליוני": `personalOwnerEmails` (בעל הרשימה - הכול), `personalEditorEmails` (הזנה ועריכה) ו-`personalViewerEmails` (צפייה). נשמרות באותיות קטנות; שלוש רשימות ריקות = הטאב מוצג לבעלים בלבד |
-| `n_personal_tasks` | `PersonalTask` | משימות הטאב "משימות ליוני" (`/dashboard/duxus/personal`) - `title` (השדה היחיד שחובה), `description`, `contactName`/`contactPhone` (טלפון כטקסט חופשי; פורמט לא תקין אינו חוסם שמירה), `priority` (`normal`/`important`/`urgent`), `status` (`new`/`open`/`in_progress`/`waiting`/`done`/`cancelled`), `dueDate` ("YYYY-MM-DD") ו-`dueTime` ("HH:MM", רשות) - **מחרוזות ולא חותמת זמן**, בדיוק כמו `Milestone.dueDate`, כדי ש"היום" יהיה אותו יום בשרת ובדפדפן, `pinned` (הצמדה לראש הרשימה), `lastNote` (שיקוף ההערה האחרונה לתצוגה בשורה), `viewedAt` (פתיחה ראשונה - מה שמסיר את חיווי "חדש"), `completedAt`/`completedBy`, `cancelledAt`/`cancelledBy`/`cancelReason` (חובה בביטול), `reopenCount`, `deletedAt`/`deletedBy` (מחיקה לוגית בלבד), `updatedAt` (נעילה אופטימית). **אינן משתמשות ב-`Rock`/`Milestone`/`PeriodAssignment`** - אין כאן רבעון ואין שיוך לתקופות, ו-`importBatch`/`importKey` (רשומות שנוצרו או אוחדו בייבוא חד-פעמי, ראו "ייבוא משימות ליוני") |
+| `n_personal_tasks` | `PersonalTask` | משימות הטאב "משימות ליוני" (`/dashboard/duxus/personal`) - `title` (השדה היחיד שחובה), `description`, `contactName`/`contactPhone` (טלפון כטקסט חופשי; פורמט לא תקין אינו חוסם שמירה), `priority` (`normal`/`important`/`urgent`), `status` (`new`/`open`/`in_progress`/`waiting`/`done`/`cancelled`), `dueDate` ("YYYY-MM-DD") ו-`dueTime` ("HH:MM", רשות) - **מחרוזות ולא חותמת זמן**, בדיוק כמו `Milestone.dueDate`, כדי ש"היום" יהיה אותו יום בשרת ובדפדפן, `pinned` (הצמדה לראש הרשימה), `lastNote` (שיקוף ההערה האחרונה לתצוגה בשורה), `viewedAt` (פתיחה ראשונה - מה שמסיר את חיווי "חדש"), `completedAt`/`completedBy`, `cancelledAt`/`cancelledBy`/`cancelReason` (חובה בביטול), `reopenCount`, `deletedAt`/`deletedBy` (מחיקה לוגית בלבד), `updatedAt` (נעילה אופטימית). **אינן משתמשות ב-`Rock`/`Milestone`/`PeriodAssignment`** - אין כאן רבעון ואין שיוך לתקופות, ו-`importBatch`/`importKey` (רשומות שנוצרו או אוחדו בייבוא חד-פעמי, ראו "ייבוא משימות ליוני"). `branchId`/`templateId` (רשות, 2026-10-15) — רק במשימות שנוצרו בהחלת תבנית פתיחת סניף; משימה רגילה/ישנה בלי השדות |
+| `n_branch_templates` | `BranchTemplate` | **חדש (2026-10-15, מסמך המשך סעיף 50)** — תבניות פתיחת סניף השכרות: `name`, `steps[]` (`{title, note?}`), `approvedBy`/`approvedAt` (השמירה בידי הבעלים היא האישור), `createdBy/At`, `updatedBy/At`, `archivedAt` (הוצאה משימוש, לא מחיקה). בעלים בלבד. נכתב רק בפעולה מפורשת ב-`/dashboard/rentals/branches/templates` |
 | `n_personal_task_comments` | `PersonalTaskComment` | הערות כרונולוגיות על משימה אישית - `taskId`, `body`, `createdBy`, `createdAt`, `editedAt`. ההערה האחרונה מוכפלת ל-`lastNote` על המשימה, כדי שהרשימה לא תשלוף שרשור לכל שורה |
 | `n_rock_reviews` | `RockReview` | סיכום ישיבת רבעון/חודש/שבוע - מזהה דטרמיניסטי `${period}_${periodKey}` (upsert, רשומה אחת לתקופה). בנוסף ל-`notes`: `participants`, `meetingDate` ו-`locked` (ישיבה נעולה = סיכום סופי, עד שנפתחת מחדש במפורש) |
 | `n_help_questions` | `HelpQuestion` | כל שאלה שנשאלה במרכז העזרה (`/dashboard/help`): `question`, `answer`, `source` (`ai` = העוזר החכם, `faq` = הותאמה שאלה נפוצה, `none` = לא נמצאה תשובה), `matchedIds` (השאלות הנפוצות שהוצעו), `audience` (`owner`/`renter`), `userEmail`/`userName`, `helpful` (סימון 👍/👎 של השואל; חסר = לא סומן), `createdAt` (ISO). נכתב רק ע"י מרכז העזרה ו-`app.html` לא קורא אותו. הבעלים רואה אותו ב-`/dashboard/help/questions` |
@@ -1363,6 +1364,10 @@ pnpm dev        # turbo run dev — מריץ web + api
 טבלה אחת: חודשים לרוחב (חלון של 12, עם ניווט אחורה/קדימה), סניפים לאורך. בכל תא הרווח
 **התפעולי** שלי מהסניף באותו חודש מחולק במספר המחשבים שהיו בו באותו חודש — מחשב שנוסף באמצע
 נספר רק מהחודש שנוסף בו (`computersActiveInMonth` לפי `addedDate`). ירוק = עומד ביעד
+**מ-2026-10-15 המכנה הוא "מחשבים שקולים"** (החלטת יוני): לכל מחשב — ימי הזכאות והזמינות שלו בחודש ÷ ימי
+החודש (`lib/equivalent-computers.ts`): מחשב שנוסף באמצע החודש נספר כחלק, יום היציאה (מכירה/הוצאה) לא נספר,
+וימי תיקון (`n_laptop_repairs`) יוצאים מהמכנה; מכנה 0 = "לא ניתן לחשב". הממוצע בטבלה **משוקלל**: Σ רווח ÷ Σ
+מחשבים שקולים. לפני כן כל מחשב שהיה בסניף ולו יום בחודש נספר שלם, והממוצע היה ממוצע של ממוצעים.
 `PROFIT_PER_COMPUTER_TARGET` = **150 ₪ נטו, בלי מע"מ** (מ-2026-10-15, החלטת יוני; עד אז הרווח הוצג כולל מע"מ מול 177). הרווח התפעולי
 מחולק ב-1.18 **פעם אחת, בסוף** (`exVat` ב-`lib/branch-accounting.ts`) — לא מכל שורה — ולכן אין כפל ניכוי, והסיווג
 ירוק/אדום זהה בדיוק לקודם; רק המספרים המוצגים (למחשב ו"כולל") ירדו לנטו. רישומי הכסף לא השתנו. **תא ריק = הסניף לא היה קיים** — לא אפס; ההבחנה
@@ -2275,6 +2280,54 @@ app שרץ בדפדפן ניתן ל"התקנה" כאפליקציה עם אייק
   צורך בטיפול, השוואה לחודש קודם רק כששניהם ניתנים לחישוב, "לא ניתן לחשב" במכנה אפס, החודש הנוכחי "בתהליך".
 - **משרד שיתופי:** שם השוכר על משבצת העמדה.
 
+**שלב 4 (2026-10-15):**
+- **מכנה הרווחיות = מחשבים שקולים** (ראו סעיף ניידים) וממוצע משוקלל; סטיק של מחשב בתיקון לא מושכר בנפרד.
+- **ניידים:** עמודת "ניצול ציוד" בתקציר החודש (ימי השכרה ÷ ימי זמינות, `utilizationInMonth` — לא משפיע על כסף),
+  וגרף השוואת 2–3 סניפים (`branch-compare-chart.tsx`) — אותה נוסחה, חודש חסר = רווח בקו, החודש הנוכחי חלול,
+  ותצוגת טבלה.
+- **בורר סניפים** (`components/branch-picker.tsx`, `lib/branch-selection.ts`): אחד/כמה/כולם/ניקוי, נשמר ב-`?b=`,
+  והשרת מסנן רק בתוך רשימת המותרים. כרגע במסך ההשכרות (בעלים).
+- **הנה"ח ראשית:** "תקציר לפי תקופה" (החודש, הקודם, השנה, הכול) — אותן שורות של הסה"כ, מסוננות לפי חודש.
+
+**שלב 4 — מסמך המשך סעיפים 50, 39, 40:**
+- **תבנית פתיחת סניף (50):** `/dashboard/rentals/branches/templates` (בעלים, `requireOwner`; קישור "תבניות פתיחה"
+  ברשימת הסניפים) — יצירה/עריכה של רשימת צעדים, כולל הדבקת רשימה מתוך נוהל קיים (כל שורה = צעד). "שמירה ואישור"
+  ממלא `approvedBy/At`; "הוצאה משימוש" במקום מחיקה. **החלה** — רק מכרטיס הסניף (`rentals/branches/[id]`), ורק לסניף
+  השכרות פתוח **שאין בו אף רשומה ב-`n_rentals`**; סניף ותיק לא מקבל אפשרות החלה. `applyBranchTemplateAction` בודק
+  בשרת את כל התנאים, ו**מעתיק** כל צעד למשימה חדשה ב-`n_personal_tasks` ("משימות ליוני") באותה צורה בדיוק של משימה
+  רגילה (`lib/personal-task-doc.ts`, משותף ל-`createPersonalTaskAction`) + `branchId`/`templateId` + רישום יומן
+  `create` ב-`n_task_activity`. התבנית לא משתנה בהחלה ועריכתה לא נוגעת במשימות שנוצרו. "כבר הוחלה" מזוהה
+  מהמשימות עצמן (`branchId` + `templateId`, לא מחוקות) — החלה חוזרת דורשת אישור מפורש שני. ההחלה מוגבלת
+  לבעלים; היא אינה נבדקת מול רשימות הגישה של "משימות ליוני" (המשימות נכנסות לרשימה של יוני ממילא). כרטיס
+  הסניף מציג את המשימות שנוצרו מתבנית ואת הסטטוס שלהן.
+- **סיור אחרי שדרוג (39):** `app/dashboard/upgrade-tour.tsx` — כרטיס חד־פעמי בדף הבית, "הבא/הקודם/דילוג/סיום".
+  הצעדים נבנים בשרת לפי מה שהמשתמש רואה (תפריט צד, חיפוש "/", סדר מסך ההשכרות וניסוח כפתור ההחזרה — למי שיש
+  `rentals`, נהלים והדרכות, בדיקת קבלה — לבעלים). הסגירה נשמרת ב-`localStorage` לפי מייל + גרסת סיור
+  (`ultranet.tour.v2-2026-10:<email>`) — **אין כתיבה ל-DB**. גרסה חדשה של הסיור = שינוי הקבוע `TOUR_VERSION`.
+- **בדיקת קבלה (40):** `/dashboard/maintenance/acceptance` (בעלים, `requireOwner`; קישור ממסך "בדיקת נתונים") —
+  רשימה סטטית לפי סעיף 14 פריטים 5–7 באפיון הבסיס: השוואת רשומות/סכומים, השכרה ללקוח קיים/חדש, החזרה ללא תשלום
+  ועם כל אמצעי, מחירון (פעילה/חדשה/היסטורית), תיקון, העברה חודשית/רב־חודשית, הוצאות חוזרות, והרשאות בעל סניף
+  (חיפוש/קישורים/יצוא/תוכן). אזהרה בולטת: **בלי עסקאות דמה בנתוני אמת**. המסך לא קורא ולא כותב נתונים; הסימונים
+  ב-`localStorage` בלבד (`ultranet.acceptance.v1:<email>`).
+**מניעת דריסה בעריכה מקבילה (מסמך המשך, פריט 37):** בלי שדה חדש במסד הנתונים. הגרסה היא `updateTime`
+— מטא-דאטה ש-Firestore מעדכן בכל כתיבה. הדף מעביר לטופס `updateTime.toMillis()` כשדה נסתר `loadedAt`
+(`lib/edit-conflict.ts`, `components/edit-conflict-guard.tsx`), והפעולה בשרת קוראת את המסמך מחדש: אם הוא
+חדש *ממש* מ-`loadedAt` — לא נכתב כלום, מוצגת ההודעה "הרשומה שונתה על ידי מישהו אחר…", והטיוטה שהמשתמש
+שלח נשמרת ב-localStorage של הדפדפן (מפתח לכל רשומה, תפוגה שבוע) עם כפתור "שחזור הטיוטה" אל תוך הטופס שמציג
+את הגרסה העדכנית. אין מיזוג אוטומטי, בטח לא של סכומים — המשתמש בודק ושומר שוב. בלי `loadedAt` (דף ישן)
+ההתנהגות כמו קודם. חל על: עריכת לקוח השכרות (`updateClientAction`), עריכת מחשב (`updateLaptopAction`;
+הבדיקה על מסמך המחשב בלבד, לא על הסטיק המקושר), עריכת סניף השכרות (`updateRentalBranchAction`), וחלונות
+עריכת הוצאה קבועה/חד-פעמית בהוצאות ההשכרות (`updateFixedExpenseAction`/`updateVariableExpenseAction` מחזירות
+`{ conflict: true }`; בחד-פעמית הבדיקה קודמת למחיקת ההוצאה המקושרת בספר הראשי). כל כתיבה למסמך נחשבת שינוי
+(גם פעולה אוטומטית); פעולות של המשתמש עצמו באותו דף שמרעננות אותו (שמירת כרטיס, סגירת סניף) מעדכנות את
+הגרסה בטופס ואינן נחשבות התנגשות. אבני הדרך ומשימות ליוני כבר נעולות לפי `updatedAt` — ללא שינוי.
+
+**בחירת עמודות בטבלה (פריט 33):** תפריט "עוד" קטן ליד הטבלה (`components/column-chooser.tsx`) ובו "עמודות" —
+העדפה אישית ב-localStorage בלבד (`ultranet-columns:<טבלה>`), שום דבר לא נמחק או נשמר בשרת. מוצעות רק
+עמודות שהטבלה כבר מציגה למשתמש (סניף לבעלים, חיוב למי שמורשה לחייב), ועמודת השם/הלקוח והפעולות תמיד
+גלויות. חל על: השכרות פעילות (`manage/rentals-lists.tsx` + `active-rental-row.tsx`), טבלת הלקוחות
+(`clients/clients-table.tsx`) ורשימת המחשבים (`laptops/laptops-list.tsx`).
+
 המיפוי המלא, הממצאים, ההחלטות והסטטוס של כל סעיף: `docs/upgrade-v2-mapping.md`.
 
 ## 10. עקרונות מפתח והחלטות ארכיטקטורה
@@ -2331,6 +2384,8 @@ app שרץ בדפדפן ניתן ל"התקנה" כאפליקציה עם אייק
 | `apps/web/lib/branch-transfer-rows.ts` | שורת ההתחשבנות של סניף בחודש נתון (יתרה, צריך להעביר, הועבר, קבלה) — המקור המשותף לטבלת ההעברות המצומצמת ולטבלה הרחבה שנפתחת בחלון, כדי ששתיהן לא יראו שני סכומים לאותו סניף |
 | `apps/web/lib/computer-room-accounting.ts` | חישובי "השקעה מול רווח" פר סניף חדר מחשבים. כולל `branchMonthlyIncomeRows()` — מה שכבר רשום לכל סניף בכל חודש, לטופס ההזנה החודשי. ההשקעה נקראת משכבת הנכסים כשקיימת שם, ונופלת ל-`Branch.setupCost` רק כשלא; כולל `payback` — כמה מההשקעה כבר חזרה, `setupBreakdown` — פירוט ההקמה לחלון שנפתח מהקובייה, ו-`monthlyFlow` — הוצאות והכנסות חודש-חודש לגרף (הוצאה קבועה נפרסת על כל חודש שהייתה פעילה בו, חד-פעמית נזקפת לחודש התאריך שלה, והקמה לא נכנסת) |
 | `apps/web/app/dashboard/coworking/` | המסך המאוחד "סניפים ועמדות": ארבעה ריבועים 1–4 בימין וקוביית הסניף בשמאל (`branch-tile.tsx`), שורה אחת לכל עמדה, וסימון תשלום חודשי שנרשם ישירות בהנה"ח הראשית. `station-actions.ts` הוא הבעלים היחיד של המנויים והתשלומים (כולל `updateStationRentalAction` — "עריכת פרטים"); `rent-station-button.tsx` ו-`rental-edit-button.tsx` הם החלונות שהחליפו את הטפסים הפרושים; `rental-history.tsx` הוא ההיסטוריה כטבלה שנפתחת ונסגרת (ומשמש גם לסעיף "השכרות ללא סניף פעיל"); `accounting/add-expense-button.tsx` הוא חלון הזנת ההוצאות של המודול |
+| `apps/web/lib/edit-conflict.ts` + `apps/web/components/edit-conflict-guard.tsx` | מניעת דריסה בעריכה מקבילה לפי `updateTime` של המסמך (שדה נסתר `loadedAt`), ושמירת/שחזור טיוטה מקומית — ראה "שדרוג מצטבר v2" |
+| `apps/web/components/column-chooser.tsx` | בחירת עמודות אישית לטבלה (localStorage, תפריט "עוד") |
 | `apps/web/components/setup-cost-field.tsx` | שדה עלות ההקמה בטופס סניף (חדרי מחשבים **ומשרד שיתופי**): מציג את הסה"כ, וכפתור פותח חלון צד להוספת שורה לכל הוצאה (`Branch.setupItems`) ולסימון אם ההקמה נכנסת לראשי. הסה"כ תמיד מחושב מהשורות, לא מוקלד |
 | `apps/web/lib/expense-shared-scope.ts` | סנטינלים `SHARED_RENTALS_BRANCH_ID`/`SHARED_COMPUTERS_BRANCH_ID`/`SHARED_COWORKING_BRANCH_ID` להוצאות משותפות לכל הסניפים |
 | `apps/web/lib/multi-branch-expense.ts` | פיצול הוצאה חד-פעמית בין כמה סניפים לפי אחוז הבעלים (`splitMultiBranchExpense`). מודול טהור - גם טופס ה-client וגם החישוב בשרת מייבאים אותו |

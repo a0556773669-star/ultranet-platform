@@ -13,6 +13,7 @@ import { DeleteLaptopButton } from "./delete-button";
 import { LaptopExitModal, type BranchFixedExpenseOption } from "./laptop-exit-modal";
 import { LaptopRepairModal } from "./laptop-repair-modal";
 import { deleteLaptopSaleAction, reactivateLaptopAction } from "./actions";
+import { ColumnsMenu, useHiddenColumns, type ColumnOption } from "@/components/column-chooser";
 
 type SortKey = "name" | "branch" | "price";
 
@@ -98,6 +99,17 @@ export function LaptopsList({
   const [numberQuery, setNumberQuery] = useState("");
   const [sortKey, setSortKey] = useState<SortKey>("name");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+  // בחירת עמודות (פריט 33): רק עמודות שכבר מוצגות למשתמש הזה; "שם" והפעולות תמיד גלויות.
+  const cols = useHiddenColumns("rental-laptops");
+  const columnOptions: ColumnOption[] = [
+    ...(isOwner ? [{ key: "branch", label: "סניף" }] : []),
+    { key: "day", label: "מחיר ליום" },
+    { key: "week", label: "מחיר לשבוע" },
+    { key: "month", label: "מחיר לחודש" },
+    { key: "stick", label: "סטיק" },
+    { key: "partner", label: "שותפות" },
+  ];
+  const showBranchCol = isOwner && cols.show("branch");
 
   const branchName = (id: string) => branches.find((b) => b.id === id)?.name ?? "-";
   const branchPricingOf = (id: string) => branches.find((b) => b.id === id)?.rentalPricing;
@@ -196,6 +208,9 @@ export function LaptopsList({
             </button>
           </>
         )}
+        <div className="mr-auto">
+          <ColumnsMenu columns={columnOptions} hidden={cols.hidden} onToggle={cols.toggle} onReset={cols.reset} />
+        </div>
       </div>
       {isOwner && branches.length > 1 && (
         <div className="mb-3 flex flex-wrap items-center gap-2">
@@ -260,12 +275,12 @@ export function LaptopsList({
               <thead>
                 <tr className="border-b border-card-border bg-[#f4f6f9]">
                   <th className={TH}>שם</th>
-                  {isOwner && <th className={TH}>סניף</th>}
-                  <th className={TH}>מחיר ליום</th>
-                  <th className={TH}>מחיר לשבוע</th>
-                  <th className={TH}>מחיר לחודש</th>
-                  <th className={TH}>סטיק</th>
-                  <th className={TH}>שותפות</th>
+                  {showBranchCol && <th className={TH}>סניף</th>}
+                  {cols.show("day") && <th className={TH}>מחיר ליום</th>}
+                  {cols.show("week") && <th className={TH}>מחיר לשבוע</th>}
+                  {cols.show("month") && <th className={TH}>מחיר לחודש</th>}
+                  {cols.show("stick") && <th className={TH}>סטיק</th>}
+                  {cols.show("partner") && <th className={TH}>שותפות</th>}
                   <th className={TH}></th>
                 </tr>
               </thead>
@@ -289,10 +304,17 @@ export function LaptopsList({
                           </span>
                         )}
                       </td>
-                      {isOwner && <td className={`${TD} text-muted`}>{branchName(l.branchId)}</td>}
-                      <td className={TD}>{priceCell(eff.dayPrice, l.dayPrice, eff.noInternetDayPrice)}</td>
-                      <td className={TD}>{priceCell(eff.weekPrice, l.weekPrice, eff.noInternetWeekPrice)}</td>
-                      <td className={TD}>{priceCell(eff.monthPrice, l.monthPrice, eff.noInternetMonthPrice)}</td>
+                      {showBranchCol && <td className={`${TD} text-muted`}>{branchName(l.branchId)}</td>}
+                      {cols.show("day") && (
+                        <td className={TD}>{priceCell(eff.dayPrice, l.dayPrice, eff.noInternetDayPrice)}</td>
+                      )}
+                      {cols.show("week") && (
+                        <td className={TD}>{priceCell(eff.weekPrice, l.weekPrice, eff.noInternetWeekPrice)}</td>
+                      )}
+                      {cols.show("month") && (
+                        <td className={TD}>{priceCell(eff.monthPrice, l.monthPrice, eff.noInternetMonthPrice)}</td>
+                      )}
+                      {cols.show("stick") && (
                       <td className={TD}>
                         {l.hasStick ? (
                           <span className="flex items-center gap-1 text-teal-dark">
@@ -303,6 +325,8 @@ export function LaptopsList({
                           <Minus className="h-3.5 w-3.5 text-muted" />
                         )}
                       </td>
+                      )}
+                      {cols.show("partner") && (
                       <td className={TD}>
                         {l.hasPartner ? (
                           /* שותפות בלי שם היא חוב בלי נושה: היא כבר יורדת מהרווח ומופיעה
@@ -326,6 +350,7 @@ export function LaptopsList({
                           <Minus className="h-3.5 w-3.5 text-muted" />
                         )}
                       </td>
+                      )}
                       <td className={TD}>
                         <div className="flex items-center gap-2">
                           <Link

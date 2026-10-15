@@ -6,6 +6,7 @@ import { Check, Search, X } from "lucide-react";
 import type { RentalClient, Branch } from "@ultranet/shared-types";
 import { TokenChargeButton } from "../manage/token-charge-button";
 import { CopyButton } from "@/components/copy-button";
+import { ColumnsMenu, useHiddenColumns, type ColumnOption } from "@/components/column-chooser";
 
 type Scope = "mine" | "all";
 
@@ -37,6 +38,21 @@ export function ClientsTable({
   const [recentOnly, setRecentOnly] = useState(false);
   const [openChargeId, setOpenChargeId] = useState<string | null>(null);
   const [chargeResult, setChargeResult] = useState<Record<string, string>>({});
+  // בחירת עמודות (פריט 33): רק עמודות שכבר מוצגות למשתמש הזה; "שם" ו"עריכה" תמיד גלויות.
+  const cols = useHiddenColumns("rental-clients");
+  const columnOptions: ColumnOption[] = [
+    { key: "phone", label: "טלפון" },
+    { key: "deposit", label: "פיקדון" },
+    { key: "terms", label: "תקנון" },
+    ...(showBranchColumn ? [{ key: "branch", label: "סניף" }] : []),
+    ...(canCharge ? [{ key: "charge", label: "חיוב" }] : []),
+  ];
+  const showPhone = cols.show("phone");
+  const showDeposit = cols.show("deposit");
+  const showTerms = cols.show("terms");
+  const showBranch = showBranchColumn && cols.show("branch");
+  const showCharge = canCharge && cols.show("charge");
+  const visibleColCount = 2 + [showPhone, showDeposit, showTerms, showBranch, showCharge].filter(Boolean).length;
 
   const myScopeSet = useMemo(() => new Set(myScopeBranchIds), [myScopeBranchIds]);
   const branchName = (id: string) => branches.find((b) => b.id === id)?.name ?? "-";
@@ -108,6 +124,7 @@ export function ClientsTable({
             className="w-full rounded-[10px] border border-card-border bg-white py-1.5 pl-3 pr-9 text-xs focus:border-teal focus:outline-none"
           />
         </div>
+        <ColumnsMenu columns={columnOptions} hidden={cols.hidden} onToggle={cols.toggle} onReset={cols.reset} />
       </div>
       {(search || recentOnly) && (
         <p className="mb-2 flex items-center gap-2 text-xs font-semibold text-muted">
@@ -130,13 +147,13 @@ export function ClientsTable({
           <thead className="bg-[#f4f6f9] text-muted">
             <tr>
               <th className="px-[11px] py-[9px] text-right text-[11px] font-bold uppercase tracking-wide">שם</th>
-              <th className="px-[11px] py-[9px] text-right text-[11px] font-bold uppercase tracking-wide">טלפון</th>
-              <th className="px-[11px] py-[9px] text-right text-[11px] font-bold uppercase tracking-wide">פיקדון</th>
-              <th className="px-[11px] py-[9px] text-right text-[11px] font-bold uppercase tracking-wide">תקנון</th>
-              {showBranchColumn && (
+              {showPhone && <th className="px-[11px] py-[9px] text-right text-[11px] font-bold uppercase tracking-wide">טלפון</th>}
+              {showDeposit && <th className="px-[11px] py-[9px] text-right text-[11px] font-bold uppercase tracking-wide">פיקדון</th>}
+              {showTerms && <th className="px-[11px] py-[9px] text-right text-[11px] font-bold uppercase tracking-wide">תקנון</th>}
+              {showBranch && (
                 <th className="px-[11px] py-[9px] text-right text-[11px] font-bold uppercase tracking-wide">סניף</th>
               )}
-              {canCharge && (
+              {showCharge && (
                 <th className="px-[11px] py-[9px] text-right text-[11px] font-bold uppercase tracking-wide"></th>
               )}
               <th className="px-[11px] py-[9px] text-right text-[11px] font-bold uppercase tracking-wide"></th>
@@ -150,12 +167,15 @@ export function ClientsTable({
                 <Fragment key={c.id}>
                 <tr className="border-t border-card-border transition hover:bg-[#f8fafc]">
                   <td className="px-[11px] py-2 font-semibold text-ink">{c.name}</td>
+                  {showPhone && (
                   <td className="px-[11px] py-2 text-muted">
                     <span className="inline-flex items-center gap-1">
                       <span dir="ltr">{c.phone ?? "-"}</span>
                       {c.phone && <CopyButton value={c.phone} label="טלפון" />}
                     </span>
                   </td>
+                  )}
+                  {showDeposit && (
                   <td className="px-[11px] py-2">
                     {(!c.depositType || c.depositType === "none") && (
                       <span className="rounded-full bg-[#fdecea] px-2 py-0.5 text-[11px] font-bold text-red-600">
@@ -176,6 +196,8 @@ export function ClientsTable({
                       </span>
                     )}
                   </td>
+                  )}
+                  {showTerms && (
                   <td className="px-[11px] py-2">
                     {c.signedTerms ? (
                       <Check className="h-4 w-4 text-teal" />
@@ -183,8 +205,9 @@ export function ClientsTable({
                       <X className="h-4 w-4 text-red-500" />
                     )}
                   </td>
-                  {showBranchColumn && <td className="px-[11px] py-2 text-muted">{branchName(c.branchId)}</td>}
-                  {canCharge && (
+                  )}
+                  {showBranch && <td className="px-[11px] py-2 text-muted">{branchName(c.branchId)}</td>}
+                  {showCharge && (
                     <td className="px-[11px] py-2">
                       {hasToken && (
                         <button
@@ -209,9 +232,9 @@ export function ClientsTable({
                     </Link>
                   </td>
                 </tr>
-                {canCharge && openChargeId === c.id && (
+                {showCharge && openChargeId === c.id && (
                   <tr>
-                    <td colSpan={showBranchColumn ? 7 : 6} className="border-t border-card-border bg-[#f8fafc] px-[11px] py-3">
+                    <td colSpan={visibleColCount} className="border-t border-card-border bg-[#f8fafc] px-[11px] py-3">
                       <TokenChargeButton
                         clientId={c.id}
                         initialAmount={0}

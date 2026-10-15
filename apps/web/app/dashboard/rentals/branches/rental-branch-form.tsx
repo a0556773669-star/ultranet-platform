@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { EditConflictGuard } from "@/components/edit-conflict-guard";
 
 const FIELD =
   "w-full rounded-lg border border-card-border bg-[#f4f6f9] px-3 py-2 text-sm focus:border-teal focus:bg-white focus:outline-none";
@@ -31,9 +32,11 @@ type RentalBranchFormProps = {
   action: (formData: FormData) => void;
   initial?: Initial;
   routes: Option[];
+  /** בעריכה: מזהה הסניף, גרסת המסמך (updateTime) בעת הטעינה, והאם השמירה הקודמת נחסמה */
+  editGuard?: { id: string; loadedAt?: number; conflict: boolean };
 };
 
-export function RentalBranchForm({ action, initial, routes }: RentalBranchFormProps) {
+export function RentalBranchForm({ action, initial, routes, editGuard }: RentalBranchFormProps) {
   // אין תתי-סניפים: כל סניף הוא שלי או בשותפות ישירה מולי.
   const initialModel: BranchModel = initial?.isMine === false ? "partnership" : "classic";
 
@@ -41,6 +44,14 @@ export function RentalBranchForm({ action, initial, routes }: RentalBranchFormPr
 
   return (
     <form action={action} className="flex flex-col gap-4 rounded-card border border-card-border bg-white p-5 shadow-card">
+      {editGuard && (
+        <EditConflictGuard
+          draftKey={`rental-branch:${editGuard.id}`}
+          loadedAt={editGuard.loadedAt}
+          conflict={editGuard.conflict}
+          mode="page"
+        />
+      )}
       <input type="hidden" name="isMine" value={model === "classic" ? "on" : "off"} />
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -80,7 +91,8 @@ export function RentalBranchForm({ action, initial, routes }: RentalBranchFormPr
 
       <div>
         <label className={LABEL}>{"סוג הסניף"}</label>
-        <select value={model} onChange={(e) => setModel(e.target.value as BranchModel)} className={FIELD}>
+        {/* name רק כדי ששחזור טיוטה יחזיר את סוג הסניף; השרת קורא את isMine הנסתר בלבד */}
+        <select name="branchModel" value={model} onChange={(e) => setModel(e.target.value as BranchModel)} className={FIELD}>
           <option value="classic">{"קלאסי (סניף שלי)"}</option>
           <option value="partnership">{"שותפות"}</option>
         </select>

@@ -6,6 +6,7 @@ import type { Branch, Laptop, Stick } from "@ultranet/shared-types";
 import { LaptopForm } from "../laptop-form";
 import { updateLaptopAction, deleteLaptopAction } from "../actions";
 import { DeleteLaptopButton } from "../delete-button";
+import { docVersion } from "@/lib/edit-conflict";
 
 export default async function EditLaptopPage({
   params,
@@ -64,7 +65,9 @@ export default async function EditLaptopPage({
           לחשבון שלך לא משוייך סניף. פנה לבעלים כדי שישייך לך סניף בעמוד המשתמשים.
         </div>
       )}
+      {/* אחרי שמירה שנחסמה (עריכה מקבילה) הטופס נבנה מחדש עם הערכים העדכניים */}
       <LaptopForm
+        key={searchParams?.error === "conflict" ? `conflict-${docVersion(doc)}` : "edit"}
         action={updateLaptopAction.bind(null, laptop.id)}
         branches={branches}
         isOwner={isOwner}
@@ -72,6 +75,8 @@ export default async function EditLaptopPage({
         initialStick={initialStick}
         branchPricing={branchPricing}
         fixedBranchId={laptop.branchId}
+        loadedAt={docVersion(doc)}
+        conflict={searchParams?.error === "conflict"}
       />
     </div>
   );

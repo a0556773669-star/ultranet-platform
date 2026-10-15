@@ -12,6 +12,7 @@ import {
   type PermKey,
 } from "@/lib/perms";
 import HomeClock from "./home-clock";
+import { UpgradeTour, type TourStep } from "./upgrade-tour";
 import type { ExpenseScope, Laptop, RecurringVariableExpense, Rental } from "@ultranet/shared-types";
 import { loadMainLedger } from "@/lib/main-ledger";
 import { loadCoworkingData, paymentForMonth, currentMonth as coworkingMonth } from "@/lib/coworking";
@@ -231,12 +232,56 @@ export default async function DashboardHomePage() {
   const canRent = has("rentals");
   const tasks = homeTasks;
 
+  // סיור אחרי השדרוג (מסמך המשך סעיף 39) — רק צעדים שהמשתמש באמת יכול להגיע אליהם.
+  const tourSteps: TourStep[] = [
+    {
+      title: "התפריט עבר לצד",
+      body: "כל האזורים — השכרות, משרד שיתופי, כספים, משימות — נמצאים בתפריט הצד. אפשר לכווץ אותו, ו\"כלים וניהול\" מרוכזים בתחתיתו.",
+    },
+    {
+      title: "חיפוש מכל מקום",
+      body: "שורת החיפוש בכותרת מוצאת לקוחות, ציוד ומשימות לפי ההרשאות שלך. קיצור: מקש \"/\" כשלא מקלידים בשדה.",
+    },
+    ...(canRent
+      ? [
+          {
+            title: "מסך ההשכרות בסדר חדש",
+            body: "למעלה חיפוש (שם, טלפון או מספר מחשב) ו\"השכרה חדשה\"; אחריהם ריבועי הציוד, ואז השכרות פעילות ← חובות ← היסטוריה.",
+            href: "/dashboard/rentals/manage",
+            linkLabel: "למסך ההשכרות",
+          },
+          {
+            title: "כפתור ההחזרה אומר מה הוא עושה",
+            body: "\"החזרה ללא תשלום — השארת חוב\" רושם החזרה וההשכרה עוברת לחובות; כשכבר סומן תשלום הכפתור נקרא \"השלמת ההחזרה\". \"הסתרה ▲\" רק מקפל את הפירוט.",
+          },
+        ]
+      : []),
+    {
+      title: "נהלים והדרכות",
+      body: "תחת \"כלים וניהול\": חיפוש וסינון לפי תחום וסוג, ורק התוכן שמותר לך לראות.",
+      href: "/dashboard/tutorials",
+      linkLabel: "לנהלים והדרכות",
+    },
+    ...(isOwner
+      ? [
+          {
+            title: "בדיקת קבלה לפני מעבר",
+            body: "רשימת פעולות מייצגות להשוואה מול המערכת הקודמת — בלי עסקאות דמה בנתוני אמת.",
+            href: "/dashboard/maintenance/acceptance",
+            linkLabel: "לבדיקת הקבלה",
+          },
+        ]
+      : []),
+  ];
+
   return (
     <div className="mx-auto flex max-w-6xl flex-col gap-4">
       <HomeClock name={name} />
       <div className="-mt-3 text-[11px] text-muted">
         {`הנתונים בעמוד נטענו ב-${new Date().toLocaleTimeString("he-IL", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Jerusalem" })} · רענון העמוד טוען מחדש`}
       </div>
+
+      <UpgradeTour email={session.user?.email ?? ""} steps={tourSteps} />
 
       {reportReminder && (
         <Link

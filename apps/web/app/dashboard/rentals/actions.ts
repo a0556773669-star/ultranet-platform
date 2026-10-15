@@ -9,6 +9,7 @@ import { resolveEzcountCreds, createEzcountReceipt, EZCOUNT_DOC_TYPES } from "@/
 import type { RentalClient, Laptop, Stick, Rental, Branch, RentalRatesSnapshot } from "@ultranet/shared-types";
 import { parseClientsWorkbook } from "@/lib/client-excel";
 import { cleanItems } from "@/lib/equipment-checklist";
+import { changedSinceLoaded } from "@/lib/edit-conflict";
 import {
   effectiveLaptopRates,
   effectiveStickRates,
@@ -254,6 +255,11 @@ export async function updateClientAction(id: string, formData: FormData) {
   const name = String(formData.get("name") ?? "").trim();
   if (!branchId || !name) {
     redirect(`/dashboard/rentals/clients/${id}?error=missing`);
+  }
+  // מניעת דריסה: הלקוח השתנה מאז שהטופס נפתח — לא כותבים כלום (הטיוטה נשמרה בדפדפן).
+  const currentSnap = await getAdminFirestore().collection("n_rental_clients").doc(id).get();
+  if (changedSinceLoaded(currentSnap, formData)) {
+    redirect(`/dashboard/rentals/clients/${id}?error=conflict`);
   }
   const depositType = String(formData.get("depositType") ?? "none") as "none" | "check" | "credit";
   const data: Omit<RentalClient, "id"> = {
@@ -528,6 +534,10 @@ export async function createRentalAction(formData: FormData) {
     // אותו כלל גם בתוך המסירה הזו: סטיק של מחשב שנמסר עכשיו "עם סטיק" לא נספר כפריט נוסף לחיוב.
     if (r.kind === "stick") {
       const linkedLaptopId = itemData?.linkedLaptopId;
+      // סטיק של מחשב שבתיקון לא מושכר בנפרד עד שהמחשב חוזר (החלטת יוני, 2026-10-15).
+      if (linkedLaptopId && (await laptopInRepair(linkedLaptopId))) {
+        redirect(`/dashboard/rentals/new?error=in-repair${mineParam}`);
+      }
       if (linkedLaptopId) {
         if (bundledLaptopIds.has(linkedLaptopId)) {
           redirect(`/dashboard/rentals/new?error=already-rented${mineParam}`);

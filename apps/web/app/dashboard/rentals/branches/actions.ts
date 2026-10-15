@@ -8,6 +8,7 @@ import { getAdminFirestore } from "@/lib/firebase-admin";
 import { FieldValue } from "firebase-admin/firestore";
 import type { Branch, PermissionKey, UserAssignment, UserRole } from "@ultranet/shared-types";
 import { closeBranch, reopenBranch } from "@/lib/history";
+import { changedSinceLoaded } from "@/lib/edit-conflict";
 
 async function requireOwner() {
   const session = await getServerSession(authOptions);
@@ -111,6 +112,11 @@ export async function createRentalBranchAction(formData: FormData) {
 
 export async function updateRentalBranchAction(id: string, formData: FormData) {
   await requireOwner();
+  // מניעת דריסה: הסניף השתנה מאז שהטופס נפתח — לא כותבים כלום (הטיוטה נשמרה בדפדפן).
+  const currentSnap = await getAdminFirestore().collection("n_branches").doc(id).get();
+  if (changedSinceLoaded(currentSnap, formData)) {
+    redirect(`/dashboard/rentals/branches/${id}/edit?error=conflict`);
+  }
   const data = parseRentalBranchForm(formData);
   await getAdminFirestore()
     .collection("n_branches")

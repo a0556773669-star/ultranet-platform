@@ -84,7 +84,7 @@ export default async function NewRentalPage({
             : searchParams?.error === "duplicate-item"
               ? "אותו פריט נבחר פעמיים באותה מסירה. לא נשמר דבר - יש לבחור כל פריט פעם אחת."
               : searchParams?.error === "in-repair"
-              ? "המחשב הזה בתיקון - לא ניתן להשכיר אותו עד שיסומן \"חזר מתיקון\" במלאי המחשבים."
+              ? "המחשב הזה (או המחשב שהסטיק שייך אליו) בתיקון - לא ניתן להשכיר עד שיסומן \"חזר מתיקון\" במסך המחשבים."
               : searchParams?.error === "already-rented"
               ? "מחשב/סטיק זה כבר מושכר כרגע - יש להחזיר את ההשכרה הפעילה שלו לפני פתיחת השכרה חדשה."
               : searchParams?.missingFields

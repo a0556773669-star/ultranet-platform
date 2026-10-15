@@ -25,7 +25,14 @@ const STATUS_LABEL: Record<Status, string> = { good: "עומד ביעד", below:
  * חישוב נוסף; ההשוואה מוצגת רק כששני החודשים ניתנים לחישוב, אחרת "אין השוואה". החודש הנוכחי
  * מסומן "בתהליך". חודש סגור קלנדרית אינו הוכחה שכל נתוניו הוזנו.
  */
-export function MonthSummary({ tracking }: { tracking: LaptopBranchTracking }) {
+export function MonthSummary({
+  tracking,
+  utilization,
+}: {
+  tracking: LaptopBranchTracking;
+  /** אחוז ניצול ציוד בחודש האחרון שהסתיים (0..1; null = לא ניתן לחשב) — מדד נפרד מהרווחיות */
+  utilization: Record<string, number | null>;
+}) {
   const [prevMonth, closedMonth, currentMonth] = tracking.months as [string, string, string];
   const rows = tracking.rows
     .map((row) => {
@@ -61,18 +68,21 @@ export function MonthSummary({ tracking }: { tracking: LaptopBranchTracking }) {
           <thead className="bg-[#f4f6f9] text-muted">
             <tr>
               <th className="px-3 py-2 text-right text-[11px] font-bold">סניף</th>
-              <th className="px-3 py-2 text-right text-[11px] font-bold">מחשבים</th>
+              <th className="px-3 py-2 text-right text-[11px] font-bold">מחשבים שקולים</th>
               <th className="px-3 py-2 text-right text-[11px] font-bold">רווח נטו שלי</th>
               <th className="px-3 py-2 text-right text-[11px] font-bold">נטו למחשב</th>
               <th className="px-3 py-2 text-right text-[11px] font-bold">{`מול ${monthLabel(prevMonth)}`}</th>
               <th className="px-3 py-2 text-right text-[11px] font-bold">{`${monthLabel(currentMonth)} (בתהליך)`}</th>
+              <th className="px-3 py-2 text-right text-[11px] font-bold" title="ימי השכרה ÷ ימי זמינות, בלי ימי תיקון. לא משפיע על הרווחיות">
+                ניצול ציוד
+              </th>
             </tr>
           </thead>
           <tbody className="tabular-nums">
             {rows.map(({ row, cur, live, status, delta }) => (
               <tr key={row.branch.id} className="border-t border-card-border">
                 <td className="px-3 py-2 font-bold text-ink">{row.branch.name}</td>
-                <td className="px-3 py-2">{cur?.existed ? cur.computerCount : "—"}</td>
+                <td className="px-3 py-2">{cur?.existed ? (Number.isInteger(cur.computerCount) ? cur.computerCount : cur.computerCount.toFixed(1)) : "—"}</td>
                 <td className="px-3 py-2">{cur?.existed ? `${fmt(cur.netProfit)} ₪` : "—"}</td>
                 <td className="px-3 py-2">
                   {status === "na" ? (
@@ -95,11 +105,14 @@ export function MonthSummary({ tracking }: { tracking: LaptopBranchTracking }) {
                 <td className="px-3 py-2 text-muted">
                   {live?.profitPerComputer != null ? `${fmt(live.profitPerComputer)} ₪` : "—"}
                 </td>
+                <td className="px-3 py-2 text-muted">
+                  {utilization[row.branch.id] == null ? "—" : `${Math.round(utilization[row.branch.id]! * 100)}%`}
+                </td>
               </tr>
             ))}
             {rows.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-3 py-6 text-center text-sm text-muted">
+                <td colSpan={7} className="px-3 py-6 text-center text-sm text-muted">
                   אין סניפים פעילים בחודשים האלה
                 </td>
               </tr>

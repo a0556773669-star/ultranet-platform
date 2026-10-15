@@ -23,7 +23,7 @@ import {
   type BranchAccountingRawData,
 } from "./branch-accounting-data";
 import { exVat, monthsBetween, PROFIT_PER_COMPUTER_TARGET } from "./branch-accounting";
-import { laptopActiveInMonth } from "./laptop-names";
+import { equivalentComputersInMonth } from "./equivalent-computers";
 
 export interface TrackingCell {
   month: string;
@@ -44,7 +44,7 @@ export interface TrackingRow {
   branch: Branch;
   isMineBranch: boolean;
   cells: TrackingCell[];
-  /** ממוצע הרווח למחשב על החודשים שהסניף היה בהם פעיל */
+  /** ממוצע משוקלל של הרווח למחשב: Σ רווח ÷ Σ מחשבים שקולים, על החודשים שאפשר לחשב בהם */
   average: number | null;
   /** ממוצע הרווח הכולל (לא למחשב) על אותם חודשים */
   averageTotal: number | null;
@@ -89,6 +89,7 @@ export function buildLaptopBranchTracking(
     const opened = firstActiveMonth(branch);
     const closed = lastActiveMonth(branch);
     const laptops = raw.laptopsByBranch.get(branch.id) ?? [];
+    const repairs = raw.repairsByBranch.get(branch.id) ?? [];
 
     const cells: TrackingCell[] = months.map((month) => {
       const existed = !branch.notStarted && (!opened || opened <= month) && (!closed || month <= closed);
@@ -104,9 +105,12 @@ export function buildLaptopBranchTracking(
         };
       }
       const f = computeBranchFinancials(branch, raw, month);
-      // מחשב נספר מהחודש שנוסף ועד החודש שיצא בו (מכירה/הוצאה) כולל — `laptopActiveInMonth`.
-      // עד 09/2026 נספרו כאן רק תאריכי ההוספה, כך שמחשב שיצא מהסניף המשיך לחלק את הרווח לנצח.
-      const computerCount = laptops.filter((l) => laptopActiveInMonth(l, month)).length;
+      // **מחשבים שקולים** (החלטת יוני, 2026-10-15; אפיון שדרוג v2 סעיף 5): לכל מחשב — ימי הזכאות
+      // והזמינות שלו בחודש ÷ ימי החודש. מחשב שנוסף באמצע החודש נספר כחלק, ימי תיקון יוצאים, ויום
+      // היציאה (מכירה/הוצאה) לא נספר. הכללים המדויקים: `lib/equivalent-computers.ts`.
+      // עד 2026-10-15: כל מחשב שהיה בסניף ולו יום אחד בחודש נספר כמחשב שלם (`laptopActiveInMonth`).
+      const equivalent = equivalentComputersInMonth(laptops, repairs, month).equivalent;
+      const computerCount = equivalent ?? 0;
       // נטו בלי מע"מ — ראו `exVat` / `PROFIT_PER_COMPUTER_TARGET` ב-branch-accounting.ts.
       const netProfit = exVat(f.ownerOperatingProfitThisMonth);
       const perComputer = computerCount > 0 ? netProfit / computerCount : 0;
@@ -122,9 +126,12 @@ export function buildLaptopBranchTracking(
       };
     });
 
-    const live = cells.filter((c) => c.profitPerComputer !== null);
-    const average =
-      live.length > 0 ? live.reduce((s, c) => s + (c.profitPerComputer ?? 0), 0) / live.length : null;
+    // ממוצע **משוקלל** (מסמך המשך 1, סעיף 22): סך הרווח הנטו בחודשים שאפשר לחשב בהם ÷ סך
+    // חודשי-המחשב השקולים באותם חודשים — לא ממוצע פשוט של ממוצעים, שנותן לחודש עם מחשב אחד אותו
+    // משקל כמו לחודש עם עשרה.
+    const live = cells.filter((c) => c.profitPerComputer !== null && c.computerCount > 0);
+    const liveComputers = live.reduce((s, c) => s + c.computerCount, 0);
+    const average = liveComputers > 0 ? live.reduce((s, c) => s + c.netProfit, 0) / liveComputers : null;
 
     const existed = cells.filter((c) => c.existed);
     const averageTotal =

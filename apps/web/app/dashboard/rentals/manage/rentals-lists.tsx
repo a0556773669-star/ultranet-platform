@@ -5,6 +5,7 @@ import Link from "next/link";
 import { AlertTriangle, ChevronLeft, ChevronRight, Search } from "lucide-react";
 import { ActiveRentalRow } from "./active-rental-row";
 import { HistoryRentalRow } from "./history-rental-row";
+import { ColumnsMenu, useHiddenColumns, type ColumnOption } from "@/components/column-chooser";
 
 /** המחירון בפועל של המחשב אחרי ירושה ממחירון הסניף (effectiveLaptopRates). */
 type LaptopRates = {
@@ -129,6 +130,14 @@ export function RentalsLists({
 }) {
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
+  // בחירת עמודות (פריט 33): רק עמודות שכבר מוצגות למשתמש הזה; "לקוח" תמיד גלויה.
+  const activeCols = useHiddenColumns("rentals-active");
+  const activeColumnOptions: ColumnOption[] = [
+    { key: "item", label: "פריט" },
+    ...(showBranchColumn ? [{ key: "branch", label: "סניף" }] : []),
+    { key: "start", label: "התחלה" },
+    { key: "price", label: "מחיר משוער" },
+  ];
 
   const q = search.trim().toLowerCase();
   const visibleActive = useMemo(
@@ -195,7 +204,15 @@ export function RentalsLists({
 
       <div className="mb-3 mt-4 flex items-center justify-between text-xs font-bold uppercase tracking-wide text-muted">
         <span>השכרות פעילות</span>
-        <span className="rounded-full bg-[#f4f6f9] px-2.5 py-0.5 text-ink normal-case">{visibleActive.length}</span>
+        <span className="flex items-center gap-2">
+          <ColumnsMenu
+            columns={activeColumnOptions}
+            hidden={activeCols.hidden}
+            onToggle={activeCols.toggle}
+            onReset={activeCols.reset}
+          />
+          <span className="rounded-full bg-[#f4f6f9] px-2.5 py-0.5 text-ink normal-case">{visibleActive.length}</span>
+        </span>
       </div>
       {visibleActive.length === 0 ? (
         <div className="mb-8 rounded-card border border-dashed border-card-border bg-white py-10 text-center text-sm text-muted">
@@ -207,12 +224,14 @@ export function RentalsLists({
             <thead className="bg-[#f4f6f9] text-muted">
               <tr>
                 <th className="px-[11px] py-[9px] text-right text-[11px] font-bold uppercase tracking-wide">לקוח</th>
-                <th className="px-[11px] py-[9px] text-right text-[11px] font-bold uppercase tracking-wide">פריט</th>
-                {showBranchColumn && (
+                {activeCols.show("item") && <th className="px-[11px] py-[9px] text-right text-[11px] font-bold uppercase tracking-wide">פריט</th>}
+                {showBranchColumn && activeCols.show("branch") && (
                   <th className="px-[11px] py-[9px] text-right text-[11px] font-bold uppercase tracking-wide">סניף</th>
                 )}
-                <th className="px-[11px] py-[9px] text-right text-[11px] font-bold uppercase tracking-wide">התחלה</th>
-                <th className="px-[11px] py-[9px] text-right text-[11px] font-bold uppercase tracking-wide">מחיר משוער</th>
+                {activeCols.show("start") && <th className="px-[11px] py-[9px] text-right text-[11px] font-bold uppercase tracking-wide">התחלה</th>}
+                {activeCols.show("price") && (
+                  <th className="px-[11px] py-[9px] text-right text-[11px] font-bold uppercase tracking-wide">מחיר משוער</th>
+                )}
                 <th className="px-[11px] py-[9px]"></th>
               </tr>
             </thead>
@@ -251,6 +270,7 @@ export function RentalsLists({
                   expectedReturnDate={r.expectedReturnDate}
                   handoverItems={r.handoverItems}
                   deliveryCount={r.deliveryCount}
+                  hiddenColumns={activeCols.hidden}
                 />
               ))}
             </tbody>

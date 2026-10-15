@@ -1425,6 +1425,38 @@ export interface PersonalTask {
   importBatch?: string;
   /** מזהה המקור היציב בתוך האצווה - הוא שהופך ייבוא חוזר ל-idempotent */
   importKey?: string;
+  /** (רשות, 2026-10-15) סניף ההשכרות שהמשימה נוצרה עבורו בהחלת תבנית פתיחת סניף.
+   *  חסר בכל משימה רגילה/ישנה. */
+  branchId?: string;
+  /** (רשות, 2026-10-15) התבנית (`n_branch_templates`) שממנה נוצרה המשימה. יחד עם `branchId`
+   *  זה מה שמזהה "התבנית כבר הוחלה בסניף הזה" - בלי שדה נוסף על הסניף. */
+  templateId?: string;
+}
+
+/** צעד אחד בתבנית פתיחת סניף. */
+export interface BranchTemplateStep {
+  title: string;
+  note?: string;
+}
+
+/**
+ * collection: n_branch_templates (חדש, 2026-10-15, מסמך המשך סעיף 50) - תבנית צעדים לפתיחת
+ * סניף השכרות. נוצרת ונערכת בידי בעלים בלבד; השמירה היא האישור (`approvedBy`/`approvedAt`).
+ * החלה על סניף **מעתיקה** את הצעדים כמשימות ב-`n_personal_tasks` (עם `branchId`+`templateId`) -
+ * עריכת התבנית לאחר מכן לא משנה משימות שכבר נוצרו, וההחלה לא משנה את התבנית.
+ */
+export interface BranchTemplate {
+  id: string;
+  name: string;
+  steps: BranchTemplateStep[];
+  approvedBy?: string;
+  approvedAt?: number;
+  createdBy?: string;
+  createdAt: number;
+  updatedAt: number;
+  updatedBy?: string;
+  /** הוצאה משימוש (לא מחיקה) - לא מוצעת להחלה, נשארת לתיעוד */
+  archivedAt?: number | null;
 }
 
 /** collection: n_personal_task_comments - הערות כרונולוגיות על משימה אישית */
