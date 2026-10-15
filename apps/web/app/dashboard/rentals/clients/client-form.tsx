@@ -3,6 +3,7 @@
 import { useState } from "react";
 import type { Branch, RentalClient } from "@ultranet/shared-types";
 import { CopyButton } from "@/components/copy-button";
+import { useUnsavedWarning } from "@/lib/use-unsaved-warning";
 
 const FIELD =
   "w-full rounded-lg border border-card-border bg-[#f4f6f9] px-3 py-2 text-sm focus:border-teal focus:bg-white focus:outline-none";
@@ -26,10 +27,14 @@ export function ClientForm({
   const [depositType, setDepositType] = useState<"none" | "check" | "credit">(
     initial?.depositType ?? "none"
   );
+  const [dirty, setDirty] = useState(false);
+  useUnsavedWarning(dirty);
 
   return (
     <form
       action={action}
+      onChange={() => setDirty(true)}
+      onSubmit={() => setDirty(false)}
       className="mb-6 grid grid-cols-1 gap-4 rounded-card border border-card-border bg-white p-5 shadow-card sm:grid-cols-2"
     >
       {isOwner ? (
@@ -79,6 +84,15 @@ export function ClientForm({
       <div className="sm:col-span-2">
         <label className={LABEL}>מאיפה הגיע אלינו (רשות)</label>
         <input name="referralSource" defaultValue={initial?.referralSource} className={FIELD} />
+      </div>
+      <div className="sm:col-span-2">
+        <label className={LABEL}>הערה בולטת על הלקוח (רשות — מוצגת גם בהשכרות שלו)</label>
+        <input
+          name="pinnedNote"
+          defaultValue={initial?.pinnedNote}
+          placeholder="למשל: להתקשר רק אחרי 17:00"
+          className={FIELD}
+        />
       </div>
 
       <div className="flex items-center gap-2">

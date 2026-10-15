@@ -5,7 +5,7 @@ import { requireOwner } from "@/lib/perms";
 import type { AppUser, UserAssignment } from "@ultranet/shared-types";
 import { unionPerms, type PermKey } from "@/lib/perms";
 import { deleteUserAction } from "./actions";
-import { DeleteButton } from "./delete-button";
+import { UsersList, type UserRow } from "./users-list";
 
 const ROLE_LABELS: Record<string, string> = {
   owner: "בעלים",
@@ -45,6 +45,25 @@ export default async function UsersPage() {
     .map((d) => ({ ...(d.data() as Omit<AppUser, "id">), id: d.id }))
     .sort((a, b) => a.name.localeCompare(b.name, "he"));
 
+  const rows: UserRow[] = users.map((u) => {
+    const hats = userHats(u);
+    const granted = unionPerms(hats);
+    return {
+      id: u.id,
+      name: u.name,
+      email: u.email,
+      roles: hats.map((hat) => ROLE_LABELS[hat.role] ?? hat.role),
+      roleKeys: hats.map((hat) => hat.role),
+      branches: hats
+        .map((hat) => (hat.role === "owner" ? "כל הסניפים" : (branchNames.get(hat.branchId) ?? hat.branchId ?? "-")))
+        .join(" · "),
+      perms: Object.entries(PERM_LABELS).map(([key, label]) => ({ label, on: Boolean(granted[key as PermKey]) })),
+      allOwner: hats.every((hat) => hat.role === "owner"),
+    };
+  });
+  const deleteActions: Record<string, () => void> = {};
+  for (const u of users) deleteActions[u.id] = deleteUserAction.bind(null, u.id);
+
   return (
     <div>
       <div className="mb-4 flex items-center justify-between">
@@ -57,81 +76,7 @@ export default async function UsersPage() {
         </Link>
       </div>
 
-      <div className="flex flex-col gap-3">
-        {users.map((u) => {
-          const boundDelete = deleteUserAction.bind(null, u.id);
-          // משתמש עם כמה תפקידים מוצג עם כולם; למשתמש רגיל זה בדיוק השורה האחת שהייתה כאן קודם.
-          const hats = userHats(u);
-          const granted = unionPerms(hats);
-          return (
-            <div key={u.id} className="rounded-card border border-card-border bg-white p-4 shadow-card">
-              <div className="flex items-center justify-between">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="font-bold text-ink">{u.name}</span>
-                    {hats.map((hat, i) => (
-                      <span
-                        key={i}
-                        className="rounded-full border border-teal bg-teal-bg px-2.5 py-0.5 text-[11px] font-bold text-teal-dark"
-                      >
-                        {ROLE_LABELS[hat.role] ?? hat.role}
-                      </span>
-                    ))}
-                  </div>
-                  <div className="mt-1 text-xs text-muted">{u.email}</div>
-                  <div className="mt-1 text-xs text-muted">
-                    {hats
-                      .map((hat) =>
-                        hat.role === "owner"
-                          ? "כל הסניפים"
-                          : (branchNames.get(hat.branchId) ?? hat.branchId ?? "-"),
-                      )
-                      .join(" · ")}
-                  </div>
-                </div>
-                <div className="flex items-center gap-3">
-                  <Link
-                    href={`/dashboard/users/${u.id}`}
-                    className="rounded-lg border border-card-border px-3 py-1.5 text-xs font-bold text-ink transition hover:border-teal hover:text-teal"
-                  >
-                    עריכה
-                  </Link>
-                  <form action={boundDelete}>
-                    <DeleteButton />
-                  </form>
-                </div>
-              </div>
-
-              {/* צ'יפ מסומן = ההרשאה קיימת באיזשהו כובע של המשתמש. הפירוט פר-תפקיד נמצא במסך העריכה. */}
-              {!hats.every((hat) => hat.role === "owner") && (
-                <div className="mt-3 flex flex-wrap gap-1.5">
-                  {Object.entries(PERM_LABELS).map(([key, label]) => {
-                    const active = Boolean(granted[key as PermKey]);
-                    return (
-                      <span
-                        key={key}
-                        className={
-                          active
-                            ? "rounded-full border border-teal bg-teal-bg px-2.5 py-1 text-[11px] font-bold text-teal-dark"
-                            : "rounded-full border border-card-border bg-[#f4f6f9] px-2.5 py-1 text-[11px] font-bold text-muted"
-                        }
-                      >
-                        {label}
-                      </span>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          );
-        })}
-
-        {users.length === 0 && (
-          <div className="rounded-card border border-card-border bg-white p-6 text-center text-sm text-muted shadow-card">
-            אין משתמשים עדיין
-          </div>
-        )}
-      </div>
+      <UsersList rows={rows} deleteActions={deleteActions} />
     </div>
   );
 }

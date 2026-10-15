@@ -156,7 +156,7 @@ export default async function RentalBranchesPage() {
                       </td>
                       <td className={TD}>
                         <Link
-                          href={`/dashboard/rentals/branches/${b.id}`}
+                          href={`/dashboard/rentals/branches/${b.id}/edit`}
                           className="rounded-lg border border-card-border bg-white px-3 py-1.5 text-xs font-bold text-ink hover:bg-[#f4f6f9]"
                         >
                           עריכה

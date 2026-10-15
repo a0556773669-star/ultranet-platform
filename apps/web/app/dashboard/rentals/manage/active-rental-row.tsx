@@ -22,6 +22,7 @@ import {
 import { NedarimChargeCapture } from "../clients/nedarim-charge-capture";
 import { TokenChargeButton } from "./token-charge-button";
 import type { ItemOption } from "./rentals-lists";
+import { EQUIPMENT_ITEMS, itemsForPackage } from "@/lib/equipment-checklist";
 
 /** המחירון בפועל של המחשב אחרי ירושה ממחירון הסניף (effectiveLaptopRates). */
 type LaptopRates = {
@@ -68,6 +69,10 @@ type Props = {
   initialPaid?: boolean;
   initialPaymentMethod?: string;
   ratesLocked?: boolean;
+  clientNote?: string;
+  expectedReturnDate?: string;
+  handoverItems?: string[];
+  deliveryCount?: number;
 };
 
 const BTN =
@@ -101,6 +106,10 @@ export function ActiveRentalRow({
   initialPaid = false,
   initialPaymentMethod,
   ratesLocked = false,
+  clientNote,
+  expectedReturnDate,
+  handoverItems,
+  deliveryCount,
 }: Props) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -110,6 +119,7 @@ export function ActiveRentalRow({
   const [manualPrice, setManualPrice] = useState("");
   const [overrideReason, setOverrideReason] = useState("");
   const [notes, setNotes] = useState(initialNotes ?? "");
+  const [returnItems, setReturnItems] = useState<string[]>([]);
   const [paid, setPaid] = useState(initialPaid);
   const [paymentMethod, setPaymentMethod] = useState<string | null>(initialPaymentMethod ?? null);
   const [showNedarim, setShowNedarim] = useState(false);
@@ -165,6 +175,7 @@ export function ActiveRentalRow({
       finalPrice,
       priceOverrideReason: override && finalPrice !== autoPrice ? overrideReason.trim() : undefined,
       notes: notes.trim() || undefined,
+      returnItems: returnItems.length ? returnItems : undefined,
     };
   }
 
@@ -271,10 +282,25 @@ export function ActiveRentalRow({
           >
             {clientName}
           </Link>
+          {clientNote && (
+            <div className="mt-0.5 w-fit rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-bold text-amber-800">
+              {clientNote}
+            </div>
+          )}
         </td>
-        <td className="px-[11px] py-2 text-muted">{itemName}</td>
+        <td className="px-[11px] py-2 text-muted">
+          {itemName}
+          {deliveryCount && deliveryCount > 1 && (
+            <div className="text-[11px]" title="נמסרו יחד; כל פריט מוחזר ומשולם בנפרד">{`מסירה משותפת · ${deliveryCount} פריטים`}</div>
+          )}
+        </td>
         {showBranch && <td className="px-[11px] py-2 text-muted">{branchName}</td>}
-        <td className="px-[11px] py-2 text-muted">{startDate}</td>
+        <td className="px-[11px] py-2 text-muted">
+          {startDate}
+          {expectedReturnDate && (
+            <div className="text-[11px]" title="החזרה משוערת — לתכנון בלבד">{`החזרה משוערת: ${expectedReturnDate}`}</div>
+          )}
+        </td>
         <td className="px-[11px] py-2 font-semibold text-ink">{finalPrice.toLocaleString()} ₪</td>
         <td className="px-[11px] py-2">
           <span className="text-xs font-bold text-teal-dark">{expanded ? "הסתרה ▲" : "החזרה ▼"}</span>
@@ -396,7 +422,27 @@ export function ActiveRentalRow({
               )}
 
               <div>
-                <label className="mb-1 block text-xs font-semibold text-muted">הערות</label>
+                <label className="mb-1 block text-xs font-semibold text-muted">
+                  בדיקת ציוד בהחזרה (רשות{handoverItems?.length ? ` · נמסרו: ${handoverItems.map((k) => EQUIPMENT_ITEMS.find((i) => i.key === k)?.label ?? k).join(", ")}` : ""})
+                </label>
+                <div className="flex flex-wrap gap-3 text-sm">
+                  {itemsForPackage(kind, pricingVariant).map((it) => (
+                    <label key={it.key} className="flex items-center gap-1.5">
+                      <input
+                        type="checkbox"
+                        checked={returnItems.includes(it.key)}
+                        onChange={(e) =>
+                          setReturnItems((prev) => (e.target.checked ? [...prev, it.key] : prev.filter((k) => k !== it.key)))
+                        }
+                      />
+                      {it.label}
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-muted">הערה על ההשכרה</label>
                 <textarea
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}

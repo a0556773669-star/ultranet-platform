@@ -3,7 +3,10 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { getAdminFirestore } from "@/lib/firebase-admin";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
 import { requireModuleAccess } from "@/lib/perms";
+import { canViewProcedure, readAudience } from "@/lib/procedure-access";
 import type { Procedure, ProcedureStatus } from "@ultranet/shared-types";
 
 const COLLECTION = "n_procedures";
@@ -30,6 +33,8 @@ function toProcedure(id: string, data: Partial<Procedure> | undefined): Procedur
     updatedAt: data?.updatedAt ?? 0,
     createdBy: data?.createdBy ?? "",
     updatedBy: data?.updatedBy ?? "",
+    // חסר נשאר חסר: זו ההרשאה הוותיקה (כל מי שיש לו duxus), ראו `canViewProcedure`.
+    audience: data?.audience,
   };
 }
 
@@ -55,16 +60,43 @@ function readFields(formData: FormData) {
 }
 
 export async function listProcedures(): Promise<Procedure[]> {
-  await requireModuleAccess("duxus");
+  const session = await requireModuleAccess("duxus");
   const snap = await getAdminFirestore().collection(COLLECTION).get();
-  return snap.docs.map((d) => toProcedure(d.id, d.data() as Partial<Procedure>)).sort((a, b) => b.updatedAt - a.updatedAt);
+  return snap.docs
+    .map((d) => toProcedure(d.id, d.data() as Partial<Procedure>))
+    .filter((p) => canViewProcedure(session, p))
+    .sort((a, b) => b.updatedAt - a.updatedAt);
 }
 
 export async function getProcedure(id: string): Promise<Procedure | null> {
-  await requireModuleAccess("duxus");
+  const session = await requireModuleAccess("duxus");
   const doc = await getAdminFirestore().collection(COLLECTION).doc(id).get();
   if (!doc.exists) return null;
-  return toProcedure(doc.id, doc.data() as Partial<Procedure>);
+  const procedure = toProcedure(doc.id, doc.data() as Partial<Procedure>);
+  return canViewProcedure(session, procedure) ? procedure : null;
+}
+
+/**
+ * הנהלים שהמשתמש רשאי לראות — **בלי** לדרוש את מודול duxus, לאזור "נהלים והדרכות" שפתוח לכל
+ * מחובר. ההרשאה כאן היא ההרשאה של כל נוהל (`canViewProcedure`), לא של המודול.
+ */
+export async function listVisibleProcedures(): Promise<Procedure[]> {
+  const session = await getServerSession(authOptions);
+  if (!session) return [];
+  const snap = await getAdminFirestore().collection(COLLECTION).get();
+  return snap.docs
+    .map((d) => toProcedure(d.id, d.data() as Partial<Procedure>))
+    .filter((p) => canViewProcedure(session, p))
+    .sort((a, b) => b.updatedAt - a.updatedAt);
+}
+
+export async function getVisibleProcedure(id: string): Promise<Procedure | null> {
+  const session = await getServerSession(authOptions);
+  if (!session) return null;
+  const doc = await getAdminFirestore().collection(COLLECTION).doc(id).get();
+  if (!doc.exists) return null;
+  const procedure = toProcedure(doc.id, doc.data() as Partial<Procedure>);
+  return canViewProcedure(session, procedure) ? procedure : null;
 }
 
 export async function createProcedureAction(formData: FormData) {
@@ -91,6 +123,8 @@ export async function createProcedureAction(formData: FormData) {
     supersedesId,
     attachmentName: fields.attachmentName,
     attachmentDataUrl: fields.attachmentDataUrl,
+    // נוהל חדש: ברירת המחדל בטופס היא "הנהלה בלבד".
+    audience: readAudience(formData),
     createdAt: now,
     updatedAt: now,
     createdBy: user,
@@ -105,8 +139,18 @@ export async function createProcedureAction(formData: FormData) {
   redirect(`/dashboard/duxus/procedures/${ref.id}`);
 }
 
-export async function updateProcedureAction(id: string, formData: FormData) {
+/** עריכה/ארכוב/מחיקה רק של נוהל שהמשתמש רשאי לראות — גם אם ה-action נקרא ישירות. */
+async function assertCanTouch(id: string) {
   const session = await requireModuleAccess("duxus");
+  const doc = await getAdminFirestore().collection(COLLECTION).doc(id).get();
+  if (doc.exists && !canViewProcedure(session, toProcedure(id, doc.data() as Partial<Procedure>))) {
+    throw new Error("אין הרשאה לנוהל הזה");
+  }
+  return session;
+}
+
+export async function updateProcedureAction(id: string, formData: FormData) {
+  const session = await assertCanTouch(id);
   const fields = readFields(formData);
   const db = getAdminFirestore();
   const ref = db.collection(COLLECTION).doc(id);
@@ -127,6 +171,8 @@ export async function updateProcedureAction(id: string, formData: FormData) {
       version: fields.version,
       status: fields.status,
       ownerName: fields.ownerName,
+      // רק אם הטופס שלח את השדה — כך שנוהל ישן שלא נגעו בהרשאה שלו נשאר בלי `audience` (= כמו קודם).
+      ...(formData.has("audienceMode") ? { audience: readAudience(formData) } : {}),
       ...attachment,
       updatedAt: Date.now(),
       updatedBy: session.user?.name ?? session.user?.email ?? "",
@@ -141,7 +187,7 @@ export async function updateProcedureAction(id: string, formData: FormData) {
 
 /** ארכוב במקום מחיקה - נוהל שהיה בתוקף הוא היסטוריה, לא זבל. */
 export async function archiveProcedureAction(id: string) {
-  const session = await requireModuleAccess("duxus");
+  const session = await assertCanTouch(id);
   await getAdminFirestore()
     .collection(COLLECTION)
     .doc(id)
@@ -151,7 +197,7 @@ export async function archiveProcedureAction(id: string) {
 }
 
 export async function deleteProcedureAction(id: string) {
-  await requireModuleAccess("duxus");
+  await assertCanTouch(id);
   await getAdminFirestore().collection(COLLECTION).doc(id).delete();
   revalidatePath(LIST_PATH);
   redirect(LIST_PATH);

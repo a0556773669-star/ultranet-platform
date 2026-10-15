@@ -5,17 +5,19 @@ import { makeNedarimResolver, nedarimRouteOptions } from "@/lib/nedarim";
 import type { Rental, RentalClient, Laptop, Stick, Branch, CollectionRoute } from "@ultranet/shared-types";
 import { effectiveLaptopRates, effectiveStickRates } from "@/lib/rental-pricing";
 import { isLaptopActive } from "@/lib/laptop-names";
+import { LAPTOP_REPAIRS_COLLECTION, openRepairsByLaptop, repairDaysText } from "@/lib/laptop-repairs";
 import { RentalsLists, type ActiveRowData, type HistoryRowData } from "./rentals-lists";
 
 async function loadData() {
   const db = getAdminFirestore();
-  const [rentalsSnap, clientsSnap, laptopsSnap, sticksSnap, branchesSnap, routesSnap] = await Promise.all([
+  const [rentalsSnap, clientsSnap, laptopsSnap, sticksSnap, branchesSnap, routesSnap, repairsSnap] = await Promise.all([
     db.collection("n_rentals").get(),
     db.collection("n_rental_clients").get(),
     db.collection("n_laptops").get(),
     db.collection("n_sticks").get(),
     db.collection("n_branches").get(),
     db.collection("n_collection_routes").get(),
+    db.collection(LAPTOP_REPAIRS_COLLECTION).get(),
   ]);
   const rentals = rentalsSnap.docs.map((d) => ({ ...(d.data() as Omit<Rental, "id">), id: d.id }) as Rental);
   const clients = new Map(clientsSnap.docs.map((d) => [d.id, d.data() as RentalClient]));
@@ -31,7 +33,10 @@ async function loadData() {
   const branchesList = allBranchesList.filter((b) => b.branchType === "rentals");
   const branches = new Map(branchesList.map((b) => [b.id, b]));
   const routesList = routesSnap.docs.map((d) => ({ ...(d.data() as Omit<CollectionRoute, "id">), id: d.id }) as CollectionRoute);
-  return { rentals, clients, laptops, sticks, laptopsList, sticksList, branches, branchesList, allBranches, routesList };
+  const openRepairs = openRepairsByLaptop(
+    repairsSnap.docs.map((d) => d.data() as { laptopId: string; from: string; to?: string }),
+  );
+  return { rentals, clients, laptops, sticks, laptopsList, sticksList, branches, branchesList, allBranches, routesList, openRepairs };
 }
 
 export default async function RentalsPage({ searchParams }: { searchParams?: { mine?: string } }) {
@@ -43,8 +48,9 @@ export default async function RentalsPage({ searchParams }: { searchParams?: { m
   const canDelete = role === "owner" || role === "partner";
   const onlyMine = searchParams?.mine === "1";
 
-  const { rentals, clients, laptops, sticks, laptopsList, sticksList, branches, branchesList, allBranches, routesList } =
+  const { rentals, clients, laptops, sticks, laptopsList, sticksList, branches, branchesList, allBranches, routesList, openRepairs } =
     await loadData();
+  const todayIso = new Date().toISOString().slice(0, 10);
 
   const myOwnBranchIds = branchesList.filter((b) => b.isMine === true).map((b) => b.id);
   const visible = rentals.filter((r) => (role === "owner" && !onlyMine) || r.branchId === myBranchId || (onlyMine && myOwnBranchIds.includes(r.branchId)));
@@ -150,6 +156,7 @@ export default async function RentalsPage({ searchParams }: { searchParams?: { m
     return {
       clientName: client?.name ?? "-",
       clientPhone: client?.phone,
+      clientNote: client?.pinnedNote,
       clientIdNum: client?.idNum,
       cardLast4: client?.cardLast4,
       hasCardToken: !!(client?.gatewayToken && client?.cardExpiry),
@@ -157,6 +164,10 @@ export default async function RentalsPage({ searchParams }: { searchParams?: { m
       branchName: branches.get(r.branchId)?.name ?? "-",
     };
   }
+
+  // מסירה משותפת: כמה פריטים פעילים חולקים את אותו `deliveryId` (מסמך המשך 1, סעיף 42).
+  const activeByDelivery = new Map<string, number>();
+  for (const r of active) if (r.deliveryId) activeByDelivery.set(r.deliveryId, (activeByDelivery.get(r.deliveryId) ?? 0) + 1);
 
   const activeRows: ActiveRowData[] = active.map((r) => {
     const info = rowInfo(r);
@@ -202,6 +213,10 @@ export default async function RentalsPage({ searchParams }: { searchParams?: { m
       paid: r.paid === true,
       paymentMethod: r.paymentMethod,
       ratesLocked,
+      clientNote: info.clientNote,
+      expectedReturnDate: r.expectedReturnDate,
+      handoverItems: r.handoverItems,
+      deliveryCount: r.deliveryId ? (activeByDelivery.get(r.deliveryId) ?? 1) : undefined,
       tokenRouteName: canCharge ? tokenRouteName : null,
       chargeRoutes: canCharge ? chargeRoutes : [],
       canDelete,
@@ -268,7 +283,7 @@ export default async function RentalsPage({ searchParams }: { searchParams?: { m
                   .sort((x, y) => x.name.localeCompare(y.name, "he", { numeric: true }));
                 if (bLaptops.length === 0 && bRentedSticks.length === 0) return null;
                 return (
-                  <div key={b.id} className="mb-2">
+                  <div key={b.id} id={`branch-${b.id}`} className="mb-2 scroll-mt-4">
                     {role === "owner" && <h3 className="mb-2 text-sm font-bold text-ink">{b.name}</h3>}
                     {/* ריבועים קטנים ולא פסים רחבים: רוחב קבוע של ~120px ממלא את השורה בכמה שנכנס,
                         כך שבמסך רחב רואים את כל הסניף בשורה-שתיים ולא שש כרטיסיות מתוחות. */}
@@ -276,22 +291,34 @@ export default async function RentalsPage({ searchParams }: { searchParams?: { m
                       {bLaptops.map((l) => {
                         const renter = renterName(l.id, "laptop");
                         const noInternet = !renter && linkedStickRentedOut(l.id);
+                        // בתיקון (ענבר) רק כשהמחשב לא מושכר: תיקון לא נפתח על מחשב מושכר, ואם הנתונים
+                        // בכל זאת מראים את שניהם — ההשכרה הפעילה היא מה שחשוב לראות.
+                        const repair = !renter ? openRepairs.get(l.id) : undefined;
+                        const tone = renter ? "red" : repair ? "amber" : "teal";
                         return (
                           <div
                             key={l.id}
                             className={`relative flex aspect-square flex-col items-center justify-center gap-1 overflow-hidden rounded-2xl border p-2 text-center shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${
-                              renter
+                              tone === "red"
                                 ? "border-red-200 bg-gradient-to-b from-red-50 to-white"
+                                : tone === "amber"
+                                ? "border-amber-200 bg-gradient-to-b from-amber-50 to-white"
                                 : "border-teal/40 bg-gradient-to-b from-teal-bg to-white"
                             }`}
                           >
                             <span
-                              className={`absolute inset-x-0 top-0 h-1 ${renter ? "bg-red-400" : "bg-teal"}`}
+                              className={`absolute inset-x-0 top-0 h-1 ${
+                                tone === "red" ? "bg-red-400" : tone === "amber" ? "bg-amber-400" : "bg-teal"
+                              }`}
                               aria-hidden
                             />
                             <span
                               className={`flex h-9 w-9 items-center justify-center rounded-full ${
-                                renter ? "bg-red-100 text-red-600" : "bg-white text-teal-dark shadow-sm"
+                                tone === "red"
+                                  ? "bg-red-100 text-red-600"
+                                  : tone === "amber"
+                                  ? "bg-amber-100 text-amber-700"
+                                  : "bg-white text-teal-dark shadow-sm"
                               }`}
                             >
                               <LaptopIcon className="h-[18px] w-[18px]" />
@@ -301,17 +328,22 @@ export default async function RentalsPage({ searchParams }: { searchParams?: { m
                             </div>
                             <span
                               className={`rounded-full px-2 py-0.5 text-[10.5px] font-bold ${
-                                renter ? "bg-red-600 text-white" : "bg-teal text-white"
+                                tone === "red" ? "bg-red-600 text-white" : tone === "amber" ? "bg-amber-500 text-white" : "bg-teal text-white"
                               }`}
                             >
-                              {renter ? "מושכר" : "פנוי"}
+                              {renter ? "מושכר" : repair ? "בתיקון" : "פנוי"}
                             </span>
                             {renter && (
                               <div className="w-full truncate text-[10.5px] text-muted" title={renter}>
                                 {renter}
                               </div>
                             )}
-                            {noInternet && <div className="text-[10.5px] font-bold text-red-600">ללא אינטרנט</div>}
+                            {repair && (
+                              <div className="w-full truncate text-[10.5px] font-bold text-amber-700" title={`מ-${repair.from}`}>
+                                {repairDaysText(repair, todayIso)}
+                              </div>
+                            )}
+                            {noInternet && !repair && <div className="text-[10.5px] font-bold text-red-600">ללא אינטרנט</div>}
                           </div>
                         );
                       })}

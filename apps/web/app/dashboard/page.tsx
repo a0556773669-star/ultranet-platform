@@ -234,6 +234,9 @@ export default async function DashboardHomePage() {
   return (
     <div className="mx-auto flex max-w-6xl flex-col gap-4">
       <HomeClock name={name} />
+      <div className="-mt-3 text-[11px] text-muted">
+        {`הנתונים בעמוד נטענו ב-${new Date().toLocaleTimeString("he-IL", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Jerusalem" })} · רענון העמוד טוען מחדש`}
+      </div>
 
       {reportReminder && (
         <Link

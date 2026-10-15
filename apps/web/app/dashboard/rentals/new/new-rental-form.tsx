@@ -2,6 +2,8 @@
 
 import { useMemo, useRef, useState, useTransition } from "react";
 import type { ChangeEvent, FormEvent } from "react";
+import { itemsForPackage } from "@/lib/equipment-checklist";
+import { useUnsavedWarning } from "@/lib/use-unsaved-warning";
 import type { Branch, RentalClient, Laptop, Stick, CollectionRoute } from "@ultranet/shared-types";
 import { createRentalAction } from "../actions";
 import { CustomerCombobox } from "../customer-combobox";
@@ -17,6 +19,8 @@ type Props = {
   lockBranch: boolean;
   rentedLaptopIds: string[];
   rentedStickIds: string[];
+  /** מחשבים עם תקופת תיקון פתוחה — מוצגים "— בתיקון" ולא ניתנים לבחירה */
+  repairLaptopIds?: string[];
   onlyMine?: boolean;
 };
 
@@ -34,6 +38,7 @@ export function NewRentalForm({
   lockBranch,
   rentedLaptopIds,
   rentedStickIds,
+  repairLaptopIds,
   onlyMine,
 }: Props) {
   const [branchId, setBranchId] = useState(defaultBranchId);
@@ -43,13 +48,23 @@ export function NewRentalForm({
   const [itemId, setItemId] = useState("");
   const [pricingVariant, setPricingVariant] = useState<"normal" | "noInternet">("normal");
   const notesRef = useRef<HTMLTextAreaElement>(null);
+  // תאריך החזרה משוער — רשות, לתכנון בלבד (מסמך המשך 1, סעיף 43).
+  const [expectedReturnDate, setExpectedReturnDate] = useState("");
+  const [handoverItems, setHandoverItems] = useState<string[]>([]);
+  // פריטים נוספים באותה מסירה (מסמך המשך 1, סעיף 42). כל אחד נשמר כהשכרה נפרדת.
+  type Extra = { kind: "laptop" | "stick"; itemId: string; pricingVariant: "normal" | "noInternet" };
+  const [extras, setExtras] = useState<Extra[]>([]);
   const [formError, setFormError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+
+  // אזהרה ביציאה כשכבר נבחר משהו ועוד לא נשמר (בזמן שמירה — לא מזהירים).
+  useUnsavedWarning(!pending && Boolean(clientId || itemId || startDate || extras.length));
 
   const rentedLaptopSet = useMemo(() => new Set(rentedLaptopIds), [rentedLaptopIds]);
   const rentedStickSet = useMemo(() => new Set(rentedStickIds), [rentedStickIds]);
 
   const branchClients = clients.filter((c) => c.branchId === branchId);
+  const selectedClient = clientId ? clients.find((c) => c.id === clientId) : undefined;
   const branchLaptops = laptops
     .filter((l) => l.branchId === branchId)
     .sort((a, b) => a.name.localeCompare(b.name, "he", { numeric: true }));
@@ -111,6 +126,11 @@ export function NewRentalForm({
       setFormError(`חובה למלא: ${missing} לפני השמירה.`);
       return;
     }
+    const ids = [itemId, ...extras.map((x) => x.itemId).filter(Boolean)];
+    if (new Set(ids).size !== ids.length) {
+      setFormError("אותו פריט נבחר פעמיים במסירה.");
+      return;
+    }
     setFormError(null);
 
     const fd = new FormData();
@@ -121,6 +141,10 @@ export function NewRentalForm({
     fd.set("pricingVariant", pricingVariant);
     fd.set("startDate", startDate);
     fd.set("notes", notesRef.current?.value ?? "");
+    fd.set("expectedReturnDate", expectedReturnDate);
+    for (const k of handoverItems) fd.append("handoverItems", k);
+    const chosenExtras = extras.filter((x) => x.itemId);
+    if (chosenExtras.length) fd.set("extraItems", JSON.stringify(chosenExtras));
     if (onlyMine) fd.set("mine", "1");
     startTransition(() => {
       createRentalAction(fd);
@@ -152,6 +176,34 @@ export function NewRentalForm({
       <div>
         <label className={LABEL}>לקוח</label>
         <CustomerCombobox clients={branchClients} value={clientId} onChange={setClientId} />
+        {selectedClient && (
+          // מצב קצר של הלקוח שנבחר: תקנון ופיקדון (לפי השדות הקיימים, בלי חובה חדשה), והערה בולטת.
+          <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-[11px] font-bold">
+            <span
+              className={`rounded-full px-2 py-0.5 ${
+                selectedClient.signedTerms ? "bg-teal-bg text-teal-dark" : "bg-red-50 text-red-600"
+              }`}
+            >
+              {selectedClient.signedTerms ? "חתם על תקנון" : "לא חתם על תקנון"}
+            </span>
+            <span
+              className={`rounded-full px-2 py-0.5 ${
+                !selectedClient.depositType || selectedClient.depositType === "none"
+                  ? "bg-red-50 text-red-600"
+                  : "bg-teal-bg text-teal-dark"
+              }`}
+            >
+              {selectedClient.depositType === "check"
+                ? "פיקדון: צ׳ק"
+                : selectedClient.depositType === "credit"
+                  ? "פיקדון: אשראי"
+                  : "ללא פיקדון"}
+            </span>
+            {selectedClient.pinnedNote && (
+              <span className="rounded-full bg-amber-50 px-2 py-0.5 text-amber-800">{selectedClient.pinnedNote}</span>
+            )}
+          </div>
+        )}
       </div>
 
       <div>
@@ -192,9 +244,10 @@ export function NewRentalForm({
             <option value="">בחר מחשב</option>
             {branchLaptops.map((l) => {
               const rented = rentedLaptopSet.has(l.id);
+              const inRepair = !rented && !!repairLaptopIds?.includes(l.id);
               return (
-                <option key={l.id} value={l.id} disabled={rented}>
-                  {l.name} ({l.dayPrice} ₪/יום){rented ? " — מושכר כרגע" : ""}
+                <option key={l.id} value={l.id} disabled={rented || inRepair}>
+                  {l.name} ({l.dayPrice} ₪/יום){rented ? " — מושכר כרגע" : inRepair ? " — בתיקון" : ""}
                 </option>
               );
             })}
@@ -290,7 +343,113 @@ export function NewRentalForm({
       )}
 
       <div>
-        <label className={LABEL}>הערות</label>
+        <label className={LABEL}>החזרה משוערת (רשות — לתכנון בלבד, לא משנה מחיר)</label>
+        <input
+          type="date"
+          value={expectedReturnDate}
+          min={startDate || undefined}
+          onChange={(e: ChangeEvent<HTMLInputElement>) => setExpectedReturnDate(e.target.value)}
+          className={FIELD}
+        />
+      </div>
+
+      {itemId && (
+        <div className="rounded-lg border border-card-border p-3">
+          <div className="mb-2 flex items-center justify-between">
+            <span className="text-xs font-semibold text-muted">פריטים נוספים באותה מסירה (רשות)</span>
+            <button
+              type="button"
+              onClick={() => setExtras((prev) => [...prev, { kind: "laptop", itemId: "", pricingVariant: "normal" }])}
+              className="text-xs font-bold text-teal hover:underline"
+            >
+              + פריט נוסף
+            </button>
+          </div>
+          {extras.length === 0 ? (
+            <p className="text-[11px] text-muted">
+              למשל עוד מחשב לאותו לקוח. כל פריט נשמר כהשכרה נפרדת — עם מחירון משלו, ומוחזר ומשולם בנפרד.
+            </p>
+          ) : (
+            <div className="flex flex-col gap-2">
+              {extras.map((x, i) => {
+                const taken = new Set([itemId, ...extras.filter((_, j) => j !== i).map((e) => e.itemId)]);
+                const options =
+                  x.kind === "laptop"
+                    ? branchLaptops.filter(
+                        (l) => !rentedLaptopSet.has(l.id) && !repairLaptopIds?.includes(l.id) && !taken.has(l.id),
+                      )
+                    : branchSticks.filter((st) => !rentedStickSet.has(st.id) && !taken.has(st.id));
+                const update = (patch: Partial<Extra>) =>
+                  setExtras((prev) => prev.map((e, j) => (j === i ? { ...e, ...patch } : e)));
+                return (
+                  <div key={i} className="flex flex-wrap items-center gap-2">
+                    <select
+                      value={x.kind}
+                      onChange={(e) => update({ kind: e.target.value as Extra["kind"], itemId: "", pricingVariant: "normal" })}
+                      className="rounded-lg border border-card-border bg-[#f4f6f9] px-2 py-1.5 text-sm"
+                    >
+                      <option value="laptop">מחשב</option>
+                      <option value="stick">סטיק</option>
+                    </select>
+                    <select
+                      value={x.itemId}
+                      onChange={(e) => update({ itemId: e.target.value })}
+                      className="min-w-[160px] flex-1 rounded-lg border border-card-border bg-[#f4f6f9] px-2 py-1.5 text-sm"
+                    >
+                      <option value="">בחירת פריט…</option>
+                      {options.map((o) => (
+                        <option key={o.id} value={o.id}>
+                          {o.name}
+                        </option>
+                      ))}
+                    </select>
+                    {x.kind === "laptop" && (
+                      <select
+                        value={x.pricingVariant}
+                        onChange={(e) => update({ pricingVariant: e.target.value as Extra["pricingVariant"] })}
+                        className="rounded-lg border border-card-border bg-[#f4f6f9] px-2 py-1.5 text-sm"
+                      >
+                        <option value="normal">עם סטיק</option>
+                        <option value="noInternet">בלי סטיק</option>
+                      </select>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => setExtras((prev) => prev.filter((_, j) => j !== i))}
+                      className="text-xs font-bold text-red-600 hover:underline"
+                    >
+                      הסרה
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {itemId && (
+        <div>
+          <label className={LABEL}>בדיקת ציוד במסירה (רשות)</label>
+          <div className="flex flex-wrap gap-3 text-sm">
+            {itemsForPackage(kind, pricingVariant).map((it) => (
+              <label key={it.key} className="flex items-center gap-1.5">
+                <input
+                  type="checkbox"
+                  checked={handoverItems.includes(it.key)}
+                  onChange={(e) =>
+                    setHandoverItems((prev) => (e.target.checked ? [...prev, it.key] : prev.filter((k) => k !== it.key)))
+                  }
+                />
+                {it.label}
+              </label>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div>
+        <label className={LABEL}>הערה על ההשכרה</label>
         <textarea name="notes" ref={notesRef} rows={2} className={FIELD} />
       </div>
 

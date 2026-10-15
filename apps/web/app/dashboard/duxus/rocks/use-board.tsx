@@ -21,15 +21,18 @@ import {
   getRockDeletionSummary,
   openNextMonthAction,
   openNextWeekAction,
+  recordMeetingDecisionsAction,
   reopenMilestoneAction,
   setMilestoneStatusAction,
   setRockDroppedAction,
+  splitMilestoneAction,
   unassignMilestoneAction,
   updateMilestoneAction,
   updateRockAction,
+  type MeetingDecisionInput,
   type QuarterBoard,
 } from "./actions";
-import { assignmentId, milestoneIdsInPeriod, type ToneContext } from "./task-status";
+import { assignmentId, isOpenMilestone, milestoneIdsInPeriod, type ToneContext } from "./task-status";
 import { useToast } from "@/lib/toast";
 import { buildRocksById, rockBreadcrumb } from "./rock-lookup";
 import type { MilestonePatch } from "./milestone-panel";
@@ -91,6 +94,9 @@ export function useBoard(board: QuarterBoard, today: string, weekWarningActive: 
   );
 
   const breadcrumb = useCallback((rockId: string) => rockBreadcrumb(rockId, rocksById), [rocksById]);
+
+  /** תיבת הקליטה: רעיונות פתוחים שעוד לא נבחרו בישיבה (סעיף 25). */
+  const inboxItems = useMemo(() => milestones.filter((m) => m.inbox && isOpenMilestone(m)), [milestones]);
 
   const openMilestone = useMemo(
     () => milestones.find((m) => m.id === openMilestoneId) ?? null,
@@ -212,10 +218,9 @@ export function useBoard(board: QuarterBoard, today: string, weekWarningActive: 
 
   // --- שיוכי תקופה ---
 
-  /** שיוך מרוכז - רשומה אחת לכל אבן דרך, בלי שכפול, ובאישור אחד (סעיף 7.4). */
-  const assign = useCallback(
+  /** שיוך אופטימי מקומי - אותו מזהה דטרמיניסטי של השרת, כך שאין כפילות. */
+  const addLocalAssignments = useCallback(
     (ids: string[], periodType: PeriodType, periodKey: string) => {
-      if (!ids.length) return;
       const now = Date.now();
       setAssignments((prev) => [
         ...prev,
@@ -231,18 +236,92 @@ export function useBoard(board: QuarterBoard, today: string, weekWarningActive: 
             outcome: "open" as const,
           })),
       ]);
+      // רעיון מתיבת הקליטה שנבחר לתקופה יוצא מהתיבה - בדיוק כמו בשרת.
+      const idSet = new Set(ids);
+      setMilestones((prev) => prev.map((m) => (idSet.has(m.id) && m.inbox ? { ...m, inbox: false } : m)));
+    },
+    [quarterKey]
+  );
+
+  /**
+   * שיוך מרוכז של כמה קבוצות (למשל: רעיון מתיבת הקליטה שנבחר לשבוע נכנס גם לחודש)
+   * בטרנזקציית ממשק אחת והודעה אחת. רשומה אחת לכל אבן דרך, בלי שכפול (סעיף 7.4).
+   */
+  const assignBatch = useCallback(
+    (entries: { ids: string[]; periodType: PeriodType; periodKey: string }[], onDone?: () => void) => {
+      const work = entries.filter((e) => e.ids.length && e.periodKey);
+      if (!work.length) return;
+      work.forEach((e) => addLocalAssignments(e.ids, e.periodType, e.periodKey));
+      const last = work[work.length - 1];
+      if (!last) return;
       startTransition(async () => {
-        const result = await assignMilestonesAction(ids, periodType, periodKey, quarterKey);
-        if (!result.ok) {
-          showError(result.message);
-          router.refresh();
-          return;
+        let count = 0;
+        for (const e of work) {
+          const result = await assignMilestonesAction(e.ids, e.periodType, e.periodKey, quarterKey);
+          if (!result.ok) {
+            showError(result.message);
+            router.refresh();
+            return;
+          }
+          if (e === last) count = result.count;
         }
-        showSuccess(`נוספו ${result.count} אבני דרך ל${periodType === "week" ? "שבוע" : periodType === "month" ? "חודש" : "רבעון"}`);
+        showSuccess(`נוספו ${count} אבני דרך ל${last.periodType === "week" ? "שבוע" : last.periodType === "month" ? "חודש" : "רבעון"}`);
+        onDone?.();
         router.refresh();
       });
     },
-    [quarterKey, router, showError, showSuccess]
+    [addLocalAssignments, quarterKey, router, showError, showSuccess]
+  );
+
+  /** שיוך מרוכז - רשומה אחת לכל אבן דרך, בלי שכפול, ובאישור אחד (סעיף 7.4). */
+  const assign = useCallback(
+    (ids: string[], periodType: PeriodType, periodKey: string) => assignBatch([{ ids, periodType, periodKey }]),
+    [assignBatch]
+  );
+
+  /**
+   * החלטות "ניהול ישיבה" על משימות שלא הושלמו (אפיון המשך, סעיף 29). ממשיכות - שיוך
+   * לתקופה הפתוחה; חזרה לתכנון - בשבוע: שיוך לחודש אם חסר; השהיה - בלי שום שיוך.
+   */
+  const recordDecisions = useCallback(
+    async (periodType: "week" | "month", decisions: MeetingDecisionInput[]): Promise<boolean> => {
+      const periodKey = periodType === "week" ? board.activeWeekKey : board.activeMonthKey;
+      const cont = decisions.filter((d) => d.decision === "continue").map((d) => d.milestoneId);
+      const replan = decisions.filter((d) => d.decision === "replan").map((d) => d.milestoneId);
+      const result = await recordMeetingDecisionsAction({
+        quarterKey,
+        periodType,
+        periodKey,
+        monthKey: board.activeMonthKey,
+        decisions,
+      });
+      if (!result.ok) {
+        showError(result.message);
+        router.refresh();
+        return false;
+      }
+      addLocalAssignments(cont, periodType, periodKey);
+      if (periodType === "week" && board.activeMonthKey) addLocalAssignments(replan, "month", board.activeMonthKey);
+      if (result.count) showSuccess(`נרשמו ${result.count} החלטות`);
+      router.refresh();
+      return true;
+    },
+    [addLocalAssignments, board.activeMonthKey, board.activeWeekKey, quarterKey, router, showError, showSuccess]
+  );
+
+  /** פיצול משימה גדולה לצעדים מקושרים (סעיף 30). המקור נשמר ואינו מסומן כהושלם. */
+  const splitMilestone = useCallback(
+    async (parent: Milestone, steps: string[], assignTo: { periodType: PeriodType; periodKey: string }[]): Promise<boolean> => {
+      const result = await splitMilestoneAction(parent.id, steps, assignTo);
+      if (!result.ok) {
+        showError(result.message);
+        return false;
+      }
+      showSuccess(`נוצרו ${result.count} צעדים מקושרים`);
+      router.refresh();
+      return true;
+    },
+    [router, showError, showSuccess]
   );
 
   const unassign = useCallback(
@@ -266,7 +345,7 @@ export function useBoard(board: QuarterBoard, today: string, weekWarningActive: 
   // --- יצירה ---
 
   const createMilestone = useCallback(
-    (input: {
+    (rawInput: {
       rockId: string;
       title: string;
       ownerName?: string;
@@ -275,7 +354,10 @@ export function useBoard(board: QuarterBoard, today: string, weekWarningActive: 
       origin?: MilestoneOrigin;
       source?: "rock" | "adhoc";
       assignTo?: { periodType: PeriodType; periodKey: string }[];
+      /** תיבת קליטה (סעיף 25): רעיון בלי סלע ובלי שיוך, ממתין לבחירה בישיבה */
+      inbox?: boolean;
     }) => {
+      const input = rawInput.inbox ? { ...rawInput, source: "adhoc" as const, rockId: "", assignTo: [] } : rawInput;
       const id = tempId();
       const now = Date.now();
       setMilestones((prev) => [
@@ -294,6 +376,7 @@ export function useBoard(board: QuarterBoard, today: string, weekWarningActive: 
           reopenCount: 0,
           source: input.source ?? "rock",
           origin: input.origin ?? "quarter",
+          ...(input.inbox ? { inbox: true } : {}),
           order: now,
           createdAt: now,
           updatedAt: now,
@@ -532,6 +615,10 @@ export function useBoard(board: QuarterBoard, today: string, weekWarningActive: 
     saveMilestone,
     removeMilestone,
     assign,
+    assignBatch,
+    recordDecisions,
+    splitMilestone,
+    inboxItems,
     unassign,
     createMilestone,
     createRock,

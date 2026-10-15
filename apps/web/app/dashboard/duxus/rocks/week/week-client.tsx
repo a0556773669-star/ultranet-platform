@@ -7,7 +7,9 @@ import type { QuarterBoard } from "../actions";
 import { useBoard } from "../use-board";
 import { MilestoneRow } from "../milestone-row";
 import { MilestonePanel } from "../milestone-panel";
-import { MeetingPicker } from "../meeting-picker";
+import { MeetingFlow } from "../meeting-flow";
+import { InboxSection } from "../inbox-section";
+import { MilestoneIndexProvider } from "../milestone-index";
 import { AddMilestoneForm } from "../add-forms";
 import { ReviewPanel } from "../review-panel";
 import { QuarterBar } from "../quarter-bar";
@@ -76,12 +78,6 @@ export function WeekClient({
     return board.milestones.filter((m) => ids.has(m.id) && isOpenMilestone(m) && !viewIds.has(m.id));
   }, [board.assignments, board.milestones, board.activeWeekKey, isCurrentWeek, viewIds]);
 
-  /** מועמדות לשבוע: אבני הדרך הפתוחות של החודש הפתוח שעדיין לא נבחרו לשבוע. */
-  const weekCandidates = useMemo(
-    () => board.milestones.filter((m) => board.monthIds.has(m.id) && isOpenMilestone(m)),
-    [board.milestones, board.monthIds]
-  );
-
   const groups = useMemo(() => {
     const map = new Map<string, Milestone[]>();
     openTasks.forEach((m) => map.set(m.rockId, [...(map.get(m.rockId) ?? []), m]));
@@ -107,219 +103,209 @@ export function WeekClient({
   }
 
   return (
-    <div>
-      {board.toastNode}
-      {board.deleteDialogNode}
-      <QuarterBar quarter={boardData.quarter} quarters={quarters} />
+    <MilestoneIndexProvider milestones={board.milestones}>
+      <div>
+        {board.toastNode}
+        {board.deleteDialogNode}
+        <QuarterBar quarter={boardData.quarter} quarters={quarters} />
 
-      <section className="card mb-4">
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-          <div className="flex items-center gap-1.5">
-            <button
-              type="button"
-              aria-label="שבוע קודם"
-              onClick={() => {
-                const i = weekKeys.indexOf(viewWeekKey);
-                const prev = i >= 0 ? weekKeys[i + 1] : undefined;
-                if (prev) setViewWeekKey(prev);
-              }}
-              className="rounded-lg border border-card-border p-1 text-muted hover:bg-[#f4f6f9]"
-            >
-              <ChevronRight className="h-4 w-4" />
-            </button>
-            <h2 className="text-base font-extrabold text-ink">{viewWeekKey ? weekLabel(viewWeekKey) : "עוד לא נפתח שבוע"}</h2>
-            <button
-              type="button"
-              aria-label="שבוע הבא"
-              onClick={() => {
-                const i = weekKeys.indexOf(viewWeekKey);
-                const next = i > 0 ? weekKeys[i - 1] : undefined;
-                if (next) setViewWeekKey(next);
-              }}
-              className="rounded-lg border border-card-border p-1 text-muted hover:bg-[#f4f6f9]"
-            >
-              <ChevronLeft className="h-4 w-4" />
-            </button>
-            {!isCurrentWeek && (
-              <button type="button" onClick={() => setViewWeekKey(board.activeWeekKey)} className="text-xs font-semibold text-teal hover:underline">
-                חזרה לשבוע הפתוח
+        <section className="card mb-4">
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                aria-label="שבוע קודם"
+                onClick={() => {
+                  const i = weekKeys.indexOf(viewWeekKey);
+                  const prev = i >= 0 ? weekKeys[i + 1] : undefined;
+                  if (prev) setViewWeekKey(prev);
+                }}
+                className="rounded-lg border border-card-border p-1 text-muted hover:bg-[#f4f6f9]"
+              >
+                <ChevronRight className="h-4 w-4" />
               </button>
+              <h2 className="text-base font-extrabold text-ink">{viewWeekKey ? weekLabel(viewWeekKey) : "עוד לא נפתח שבוע"}</h2>
+              <button
+                type="button"
+                aria-label="שבוע הבא"
+                onClick={() => {
+                  const i = weekKeys.indexOf(viewWeekKey);
+                  const next = i > 0 ? weekKeys[i - 1] : undefined;
+                  if (next) setViewWeekKey(next);
+                }}
+                className="rounded-lg border border-card-border p-1 text-muted hover:bg-[#f4f6f9]"
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </button>
+              {!isCurrentWeek && (
+                <button type="button" onClick={() => setViewWeekKey(board.activeWeekKey)} className="text-xs font-semibold text-teal hover:underline">
+                  חזרה לשבוע הפתוח
+                </button>
+              )}
+            </div>
+
+            {!board.readOnly && (
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setMeetingOpen(true)}
+                  disabled={!board.activeWeekKey}
+                  className="flex items-center gap-1 rounded-lg border border-card-border px-3 py-1.5 text-xs font-semibold text-ink hover:bg-[#f4f6f9] disabled:opacity-50"
+                >
+                  <Users className="h-3.5 w-3.5" />
+                  ניהול ישיבה
+                </button>
+                <button
+                  type="button"
+                  onClick={board.openNextWeek}
+                  className="flex items-center gap-1 rounded-[10px] bg-gradient-to-br from-teal to-teal-light px-4 py-1.5 text-xs font-bold text-white shadow-primary transition hover:opacity-90"
+                >
+                  <CalendarPlus className="h-3.5 w-3.5" />
+                  {board.activeWeekKey ? "פתיחת שבוע חדש" : "פתיחת השבוע הראשון"}
+                </button>
+              </div>
             )}
           </div>
 
-          {!board.readOnly && (
-            <div className="flex flex-wrap items-center gap-2">
-              <button
-                type="button"
-                onClick={() => setMeetingOpen(true)}
-                disabled={!board.activeWeekKey}
-                className="flex items-center gap-1 rounded-lg border border-card-border px-3 py-1.5 text-xs font-semibold text-ink hover:bg-[#f4f6f9] disabled:opacity-50"
-              >
-                <Users className="h-3.5 w-3.5" />
-                ישיבה שבועית
-              </button>
-              <button
-                type="button"
-                onClick={board.openNextWeek}
-                className="flex items-center gap-1 rounded-[10px] bg-gradient-to-br from-teal to-teal-light px-4 py-1.5 text-xs font-bold text-white shadow-primary transition hover:opacity-90"
-              >
-                <CalendarPlus className="h-3.5 w-3.5" />
-                {board.activeWeekKey ? "פתיחת שבוע חדש" : "פתיחת השבוע הראשון"}
-              </button>
+          {!viewWeekKey ? (
+            <div className="rounded-lg border border-dashed border-card-border p-4 text-sm text-muted">
+              עוד לא נפתח שבוע ברבעון הזה. פתיחת השבוע הראשון תאפשר לבחור אליו אבני דרך מתוך החודש.
             </div>
-          )}
-        </div>
+          ) : (
+            <>
+              <PeriodSummary milestones={tasks} today={today} label="נבחרו לשבוע" />
 
-        {!viewWeekKey ? (
-          <div className="rounded-lg border border-dashed border-card-border p-4 text-sm text-muted">
-            עוד לא נפתח שבוע ברבעון הזה. פתיחת השבוע הראשון תאפשר לבחור אליו אבני דרך מתוך החודש.
-          </div>
-        ) : (
-          <>
-            <PeriodSummary milestones={tasks} today={today} label="נבחרו לשבוע" />
-
-            {carryCandidates.length > 0 && (
-              <div className="mb-3 rounded-[11px] border border-amber-300 bg-amber-50/60 p-3">
-                <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                  <span className="text-xs font-bold text-amber-800">לא הושלם משבוע קודם ({carryCandidates.length})</span>
-                  <button
-                    type="button"
-                    onClick={() => board.assign(carryCandidates.map((m) => m.id), "week", board.activeWeekKey)}
-                    className="text-xs font-semibold text-amber-800 hover:underline"
-                  >
-                    התחייבות מחודשת לכל מה שמוצג
-                  </button>
+              {carryCandidates.length > 0 && (
+                <div className="mb-3 rounded-[11px] border border-amber-300 bg-amber-50/60 p-3">
+                  <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                    <span className="text-xs font-bold text-amber-800">לא הושלם משבוע קודם ({carryCandidates.length})</span>
+                    <button
+                      type="button"
+                      onClick={() => board.assign(carryCandidates.map((m) => m.id), "week", board.activeWeekKey)}
+                      className="text-xs font-semibold text-amber-800 hover:underline"
+                    >
+                      התחייבות מחודשת לכל מה שמוצג
+                    </button>
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    {carryCandidates.map((m) => (
+                      <MilestoneRow
+                        key={m.id}
+                        milestone={m}
+                        toneContext={board.toneContext(m)}
+                        breadcrumb={board.breadcrumb(m.rockId)}
+                        onOpen={(x) => board.setOpenMilestoneId(x.id)}
+                        readOnly
+                        dense
+                        extraBadges={
+                          <button
+                            type="button"
+                            onClick={() => board.assign([m.id], "week", board.activeWeekKey)}
+                            className="rounded-full border border-amber-400 bg-white px-2 py-0.5 text-[11px] font-bold text-amber-700 hover:bg-amber-50"
+                          >
+                            לשבוע הזה
+                          </button>
+                        }
+                      />
+                    ))}
+                  </div>
                 </div>
-                <div className="flex flex-col gap-1.5">
-                  {carryCandidates.map((m) => (
-                    <MilestoneRow
-                      key={m.id}
-                      milestone={m}
-                      toneContext={board.toneContext(m)}
-                      breadcrumb={board.breadcrumb(m.rockId)}
-                      onOpen={(x) => board.setOpenMilestoneId(x.id)}
-                      readOnly
-                      dense
-                      extraBadges={
-                        <button
-                          type="button"
-                          onClick={() => board.assign([m.id], "week", board.activeWeekKey)}
-                          className="rounded-full border border-amber-400 bg-white px-2 py-0.5 text-[11px] font-bold text-amber-700 hover:bg-amber-50"
-                        >
-                          לשבוע הזה
-                        </button>
-                      }
-                    />
+              )}
+
+              {groups.length === 0 && doneTasks.length === 0 ? (
+                <div className="rounded-lg border border-dashed border-card-border p-4 text-sm text-muted">
+                  עוד לא נבחרו משימות לשבוע. פתחו את ״ניהול ישיבה״ ובחרו מתוך אבני הדרך של החודש.
+                </div>
+              ) : (
+                <div className="flex flex-col gap-3">
+                  {groups.map((g) => (
+                    <div key={g.rockId || "adhoc"}>
+                      <div className="mb-1.5 text-[11px] font-bold text-muted">{g.label}</div>
+                      <div className="flex flex-col gap-1.5">{g.list.map(row)}</div>
+                    </div>
                   ))}
                 </div>
-              </div>
-            )}
+              )}
 
-            {groups.length === 0 && doneTasks.length === 0 ? (
-              <div className="rounded-lg border border-dashed border-card-border p-4 text-sm text-muted">
-                עוד לא נבחרו משימות לשבוע. פתחו את הישיבה השבועית ובחרו מתוך אבני הדרך של החודש.
-              </div>
-            ) : (
-              <div className="flex flex-col gap-3">
-                {groups.map((g) => (
-                  <div key={g.rockId || "adhoc"}>
-                    <div className="mb-1.5 text-[11px] font-bold text-muted">{g.label}</div>
-                    <div className="flex flex-col gap-1.5">{g.list.map(row)}</div>
-                  </div>
-                ))}
-              </div>
-            )}
+              {doneTasks.length > 0 && (
+                <details className="mt-3 rounded-lg border border-card-border bg-[#f9fafb] p-3">
+                  <summary className="cursor-pointer text-xs font-bold text-emerald-700">הושלמו השבוע ({doneTasks.length})</summary>
+                  <div className="mt-2 flex flex-col gap-1.5">{doneTasks.map(row)}</div>
+                </details>
+              )}
 
-            {doneTasks.length > 0 && (
-              <details className="mt-3 rounded-lg border border-card-border bg-[#f9fafb] p-3">
-                <summary className="cursor-pointer text-xs font-bold text-emerald-700">הושלמו השבוע ({doneTasks.length})</summary>
-                <div className="mt-2 flex flex-col gap-1.5">{doneTasks.map(row)}</div>
-              </details>
-            )}
+              {!readOnly && (
+                <div className="mt-3">
+                  {addOpen ? (
+                    <AddMilestoneForm
+                      placeholder="משימה שוטפת לשבוע"
+                      onSubmit={(input) => {
+                        setAddOpen(false);
+                        board.createMilestone({
+                          rockId: "",
+                          source: "adhoc",
+                          origin: "week",
+                          ...input,
+                          // משימה שנוספה במהלך השבוע נכנסת גם לחודש הפתוח, כדי שתיספר בתקציר החודשי.
+                          assignTo: (
+                            [
+                              { periodType: "month", periodKey: board.activeMonthKey },
+                              { periodType: "week", periodKey: board.activeWeekKey },
+                            ] as { periodType: PeriodType; periodKey: string }[]
+                          ).filter((a) => a.periodKey),
+                        });
+                      }}
+                      onCancel={() => setAddOpen(false)}
+                    />
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setAddOpen(true)}
+                      className="flex items-center gap-1 text-xs font-semibold text-teal hover:underline"
+                    >
+                      <Plus className="h-3.5 w-3.5" />
+                      הוספת משימה שוטפת לשבוע
+                    </button>
+                  )}
+                </div>
+              )}
+            </>
+          )}
+        </section>
 
-            {!readOnly && (
-              <div className="mt-3">
-                {addOpen ? (
-                  <AddMilestoneForm
-                    placeholder="משימה שוטפת לשבוע"
-                    onSubmit={(input) => {
-                      setAddOpen(false);
-                      board.createMilestone({
-                        rockId: "",
-                        source: "adhoc",
-                        origin: "week",
-                        ...input,
-                        // משימה שנוספה במהלך השבוע נכנסת גם לחודש הפתוח, כדי שתיספר בתקציר החודשי.
-                        assignTo: (
-                          [
-                            { periodType: "month", periodKey: board.activeMonthKey },
-                            { periodType: "week", periodKey: board.activeWeekKey },
-                          ] as { periodType: PeriodType; periodKey: string }[]
-                        ).filter((a) => a.periodKey),
-                      });
-                    }}
-                    onCancel={() => setAddOpen(false)}
-                  />
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => setAddOpen(true)}
-                    className="flex items-center gap-1 text-xs font-semibold text-teal hover:underline"
-                  >
-                    <Plus className="h-3.5 w-3.5" />
-                    הוספת משימה שוטפת לשבוע
-                  </button>
-                )}
-              </div>
-            )}
-          </>
+        <InboxSection board={board} origin="week" />
+
+        {board.activeWeekKey && (
+          <ReviewPanel
+            period="weekly"
+            periodKey={board.activeWeekKey}
+            title="סיכום ישיבה שבועית"
+            agenda={WEEKLY_AGENDA}
+            initialNotes={reviewNotes}
+            previousReviews={previousReviews}
+            readOnly={board.readOnly}
+          />
         )}
-      </section>
 
-      {board.activeWeekKey && (
-        <ReviewPanel
-          period="weekly"
-          periodKey={board.activeWeekKey}
-          title="סיכום ישיבה שבועית"
-          agenda={WEEKLY_AGENDA}
-          initialNotes={reviewNotes}
-          previousReviews={previousReviews}
-          readOnly={board.readOnly}
-        />
-      )}
+        {meetingOpen && <MeetingFlow board={board} kind="week" onClose={() => setMeetingOpen(false)} />}
 
-      {meetingOpen && (
-        <MeetingPicker
-          title="ישיבה שבועית - בחירת ההתחייבות לשבוע"
-          subtitle={`${weekLabel(board.activeWeekKey)} · בחירה מרובה, אישור אחד, בלי לפתוח אף משימה`}
-          candidates={[...carryCandidates, ...weekCandidates.filter((m) => !carryCandidates.some((c) => c.id === m.id))]}
-          rocks={board.rocks}
-          alreadyAssigned={board.weekIds}
-          toneContext={{ today, weekWarningActive: weekWarning }}
-          confirmLabel="הוספה לשבוע"
-          isPending={board.isPending}
-          onConfirm={(ids) => {
-            board.assign(ids, "week", board.activeWeekKey);
-            setMeetingOpen(false);
-          }}
-          onClose={() => setMeetingOpen(false)}
-        />
-      )}
-
-      {board.openMilestone && (
-        <MilestonePanel
-          milestone={board.openMilestone}
-          rocks={board.rocks}
-          assignments={board.assignments}
-          toneContext={board.toneContext(board.openMilestone)}
-          readOnly={board.readOnly}
-          onClose={() => board.setOpenMilestoneId(null)}
-          onSave={board.saveMilestone}
-          onStatus={board.setStatus}
-          onReopen={board.reopen}
-          onDelete={board.removeMilestone}
-        />
-      )}
-    </div>
+        {board.openMilestone && (
+          <MilestonePanel
+            milestone={board.openMilestone}
+            rocks={board.rocks}
+            assignments={board.assignments}
+            toneContext={board.toneContext(board.openMilestone)}
+            readOnly={board.readOnly}
+            onClose={() => board.setOpenMilestoneId(null)}
+            onSave={board.saveMilestone}
+            onStatus={board.setStatus}
+            onReopen={board.reopen}
+            onDelete={board.removeMilestone}
+            onOpenMilestone={board.setOpenMilestoneId}
+            onSplit={board.splitMilestone}
+          />
+        )}
+      </div>
+    </MilestoneIndexProvider>
   );
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState, type FormEvent } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import type { AppUser, Branch, PermissionKey, UserAssignment, UserRole } from "@ultranet/shared-types";
 
@@ -60,6 +60,11 @@ export function UserForm({
 }) {
   const [assignments, setAssignments] = useState<DraftAssignment[]>(() => initialAssignments(initial));
   const [viewBranches, setViewBranches] = useState<string[]>(initial?.viewClientBranchIds ?? []);
+  // לפני שמירה: פירוט מה נוסף ומה הוסר בהרשאות (אפיון שדרוג v2, סעיף 12). רק תצוגה — השמירה
+  // עצמה זהה לקודם.
+  const [review, setReview] = useState<{ added: string[]; removed: string[] } | null>(null);
+  const confirmedRef = useRef(false);
+  const formRef = useRef<HTMLFormElement>(null);
 
   const patch = (index: number, next: Partial<DraftAssignment>) =>
     setAssignments((prev) => prev.map((a, i) => (i === index ? { ...a, ...next } : a)));
@@ -86,8 +91,37 @@ export function UserForm({
     perms: a.perms,
   }));
 
+  function describe(list: DraftAssignment[]): Set<string> {
+    const out = new Set<string>();
+    for (const a of list) {
+      const where =
+        a.role === "owner" ? "כל הסניפים" : (branches.find((b) => b.id === a.branchId)?.name ?? "ללא סניף");
+      const role = ROLE_OPTIONS.find((r) => r.value === a.role)?.label ?? a.role;
+      out.add(`${role} · ${where}`);
+      if (a.role === "owner") continue;
+      for (const p of PERM_OPTIONS) if (a.perms[p.key]) out.add(`${p.label} (${where})`);
+    }
+    return out;
+  }
+
+  function handleSubmit(e: FormEvent<HTMLFormElement>) {
+    if (!initial || confirmedRef.current) return;
+    const before = describe(initialAssignments(initial));
+    const after = describe(assignments);
+    const added = Array.from(after).filter((x) => !before.has(x));
+    const removed = Array.from(before).filter((x) => !after.has(x));
+    if (added.length === 0 && removed.length === 0) return;
+    e.preventDefault();
+    setReview({ added, removed });
+  }
+
   return (
-    <form action={action} className="flex flex-col gap-4 rounded-card border border-card-border bg-white p-5 shadow-card">
+    <form
+      ref={formRef}
+      action={action}
+      onSubmit={handleSubmit}
+      className="flex flex-col gap-4 rounded-card border border-card-border bg-white p-5 shadow-card"
+    >
       <div>
         <label className={LABEL}>שם מלא</label>
         <input name="name" required defaultValue={initial?.name} className={FIELD} />
@@ -233,6 +267,37 @@ export function UserForm({
               value={viewBranches.includes(b.id) ? "on" : ""}
             />
           ))}
+        </div>
+      )}
+
+      {review && (
+        <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-[13px]">
+          <div className="mb-1 font-bold text-amber-900">שינויים בהרשאות — לבדוק לפני שמירה</div>
+          {review.added.length > 0 && (
+            <div className="text-teal-dark">
+              <b>נוסף:</b> {review.added.join(" · ")}
+            </div>
+          )}
+          {review.removed.length > 0 && (
+            <div className="text-red-700">
+              <b>הוסר:</b> {review.removed.join(" · ")}
+            </div>
+          )}
+          <div className="mt-2 flex gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                confirmedRef.current = true;
+                formRef.current?.requestSubmit();
+              }}
+              className="rounded-[10px] bg-gradient-to-br from-teal to-teal-light px-4 py-1.5 text-xs font-bold text-white shadow-primary"
+            >
+              אישור ושמירה
+            </button>
+            <button type="button" onClick={() => setReview(null)} className="btn-outline !py-1.5 !text-xs">
+              חזרה לעריכה
+            </button>
+          </div>
         </div>
       )}
 

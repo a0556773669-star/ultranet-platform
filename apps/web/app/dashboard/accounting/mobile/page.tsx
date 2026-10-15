@@ -16,6 +16,7 @@ import { mailerConfigError, mailerSandboxMode, SANDBOX_NOTICE } from "@/lib/mail
 import { loadPartnerPayouts, monthWindow } from "@/lib/partner-payouts";
 import { AccountingTabs } from "../accounting-tabs";
 import { TrackingTable } from "./tracking-table";
+import { MonthSummary } from "./month-summary";
 import { CompactTransfersTable } from "./compact-transfers-table";
 import { UnifiedBranchesTable } from "./unified-branches-table";
 import { WideTableModal } from "./wide-table-modal";
@@ -87,6 +88,8 @@ export default async function MobileAccountingPage({
     .filter((b) => b.branchType === "rentals" && !b.deleted)
     .sort((a, b) => a.name.localeCompare(b.name, "he", { numeric: true }));
   const tracking = buildLaptopBranchTracking(trackedBranches, raw, months);
+  // תקציר החודש האחרון שהסתיים — תמיד ביחס להיום, בלי קשר לחלון שנבחר בטבלה.
+  const summaryTracking = buildLaptopBranchTracking(trackedBranches, raw, trackingWindow(now, 3));
 
   // ההסדרים הפר-סניפיים (30% מהסניף הראשי לאלישבע רומנו). מוצגים כאן, ליד הרווח שהם
   // יוצאים ממנו, חודש אחרי חודש עם סימון "העברתי" - אותה יתרה בדיוק כמו בטבלת האחוזים בצד השני.
@@ -185,6 +188,8 @@ export default async function MobileAccountingPage({
               )}
             </div>
           </div>
+
+          <MonthSummary tracking={summaryTracking} />
 
           <TrackingTable tracking={tracking} />
 

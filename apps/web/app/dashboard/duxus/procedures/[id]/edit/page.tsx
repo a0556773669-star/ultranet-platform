@@ -2,11 +2,13 @@ import { notFound } from "next/navigation";
 import { requireModuleAccess } from "@/lib/perms";
 import { getProcedure, listProcedures, updateProcedureAction } from "../../../actions";
 import { ProcedureForm } from "../../procedure-form";
+import { loadUsersForAudience } from "@/lib/procedure-users";
 
 export default async function EditProcedurePage({ params }: { params: { id: string } }) {
   await requireModuleAccess("duxus");
   const [procedure, all] = await Promise.all([getProcedure(params.id), listProcedures()]);
   if (!procedure) notFound();
+  const users = await loadUsersForAudience();
   const categories = Array.from(new Set(all.map((p) => p.category ?? "").filter(Boolean)));
 
   return (
@@ -17,6 +19,7 @@ export default async function EditProcedurePage({ params }: { params: { id: stri
         procedure={procedure}
         submitLabel="עדכון"
         categories={categories}
+        users={users}
       />
     </div>
   );

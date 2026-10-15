@@ -2,17 +2,20 @@ import Link from "next/link";
 import { Laptop as LaptopIcon } from "lucide-react";
 import { requireModuleAccess } from "@/lib/perms";
 import { getAdminFirestore } from "@/lib/firebase-admin";
-import type { Laptop, Branch, FixedExpense, LaptopSale } from "@ultranet/shared-types";
+import type { Laptop, Branch, FixedExpense, LaptopSale, LaptopRepair, Rental, Stick } from "@ultranet/shared-types";
 import { LAPTOP_SALES_COLLECTION } from "@/lib/branch-accounting-data";
 import { deleteLaptopAction, syncAllSticksAction } from "./actions";
 import { LaptopsList } from "./laptops-list";
 import { LaptopRenameTool } from "./laptop-rename-tool";
 import type { BranchFixedExpenseOption } from "./laptop-exit-modal";
+import { LAPTOP_REPAIRS_COLLECTION, openRepairsByLaptop } from "@/lib/laptop-repairs";
+import { equipmentSummaryByBranch, idleEquipment } from "@/lib/equipment-overview";
+import { EquipmentSummary, IdleEquipmentList } from "./equipment-overview";
 
 export default async function LaptopsPage({
   searchParams,
 }: {
-  searchParams?: { synced?: string };
+  searchParams?: { synced?: string; branch?: string };
 }) {
   const session = await requireModuleAccess("rentals");
   const role = session.user?.role;
@@ -20,11 +23,15 @@ export default async function LaptopsPage({
   const isOwner = role === "owner";
 
   const db = getAdminFirestore();
-  const [laptopsSnap, branchesSnap, fixedSnap, salesSnap] = await Promise.all([
+  const [laptopsSnap, branchesSnap, fixedSnap, salesSnap, sticksSnap, repairsSnap, rentalsSnap] = await Promise.all([
     db.collection("n_laptops").get(),
     db.collection("n_branches").where("branchType", "==", "rentals").get(),
     db.collection("n_fixed_expenses").get(),
     db.collection(LAPTOP_SALES_COLLECTION).get(),
+    db.collection("n_sticks").get(),
+    db.collection(LAPTOP_REPAIRS_COLLECTION).get(),
+    // רק השדות שצריך לסיכום "ציוד שלא הושכר זמן רב" ולזיהוי מחשב מושכר — קריאה בלבד.
+    db.collection("n_rentals").select("itemId", "kind", "startDate", "status", "returnDate", "endDate", "branchId").get(),
   ]);
   const branches = branchesSnap.docs
     .map((d) => ({ ...(d.data() as Omit<Branch, "id">), id: d.id }) as Branch)
@@ -50,6 +57,25 @@ export default async function LaptopsPage({
     .map((d) => ({ ...(d.data() as Omit<LaptopSale, "id">), id: d.id }) as LaptopSale)
     .filter((sale) => visibleBranchIds.has(sale.branchId));
   const canSell = isOwner || role === "partner";
+
+  // תקופות תיקון, סיכום ציוד (פריט 16) וציוד שלא הושכר (פריט 46) — קריאה בלבד.
+  const visibleLaptopIds = new Set(laptops.map((l) => l.id));
+  const repairs = repairsSnap.docs
+    .map((d) => ({ ...(d.data() as Omit<LaptopRepair, "id">), id: d.id }) as LaptopRepair)
+    .filter((r) => visibleLaptopIds.has(r.laptopId));
+  const repairLaptopIds = new Set(openRepairsByLaptop(repairs).keys());
+  const allSticks = sticksSnap.docs.map((d) => ({ ...(d.data() as Omit<Stick, "id">), id: d.id }) as Stick);
+  const sticks = isOwner ? allSticks : allSticks.filter((s) => s.branchId === myBranchId);
+  const rentals = rentalsSnap.docs.map((d) => d.data() as Pick<Rental, "itemId" | "kind" | "startDate" | "status" | "returnDate" | "endDate" | "branchId">);
+  const rentedLaptopIds = rentals.filter((r) => r.status === "active" && r.kind === "laptop").map((r) => r.itemId);
+  const summaryMap = equipmentSummaryByBranch(laptops, sticks, repairLaptopIds);
+  const branchOrder = new Map(branches.map((b, i) => [b.id, i]));
+  const summaryRows = Array.from(summaryMap.values()).sort(
+    (a, b) => (branchOrder.get(a.branchId) ?? 999) - (branchOrder.get(b.branchId) ?? 999),
+  );
+  const branchNameById = new Map(branches.map((b) => [b.id, b.name]));
+  const branchName = (id: string) => branchNameById.get(id) ?? "-";
+  const idleRows = idleEquipment(laptops, sticks, rentals, today);
 
   const deleteActions = Object.fromEntries(
     laptops.map((l) => [l.id, deleteLaptopAction.bind(null, l.id)])
@@ -92,6 +118,8 @@ export default async function LaptopsPage({
         </div>
       )}
 
+      <EquipmentSummary rows={summaryRows} branchName={branchName} showBranches={isOwner} />
+
       <LaptopsList
         laptops={laptops}
         branches={branches}
@@ -101,6 +129,16 @@ export default async function LaptopsPage({
         deleteActions={deleteActions}
         expensesByBranch={expensesByBranch}
         sales={sales}
+        initialBranchIds={isOwner && searchParams?.branch ? [searchParams.branch] : []}
+        repairs={repairs}
+        rentedLaptopIds={rentedLaptopIds}
+      />
+
+      <IdleEquipmentList
+        rows={idleRows}
+        branchName={branchName}
+        showBranches={isOwner}
+        repairLaptopIds={repairLaptopIds}
       />
     </div>
   );
