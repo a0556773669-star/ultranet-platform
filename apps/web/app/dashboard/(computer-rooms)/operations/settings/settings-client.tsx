@@ -12,6 +12,7 @@ import {
   type SettingsSnapshot,
 } from "../actions";
 import type { OpsBranch } from "@/lib/operations-shared";
+import { STOCK_MODULE_HIDDEN } from "@/lib/feature-flags";
 import type { OpsScope, OpsStockItem, OpsTask, OpsTaskFreq } from "@ultranet/shared-types";
 
 const INPUT =
@@ -28,7 +29,8 @@ function scopeLabel(def: { scope: OpsScope; branchIds: string[] }, branches: Ops
 export function SettingsClient({ snapshot }: { snapshot: SettingsSnapshot }) {
   return (
     <div className="space-y-5">
-      <StockItemsSection branches={snapshot.branches} items={snapshot.items} />
+      {/* המלאי מוסתר מהממשק; פריטי המלאי עצמם נשמרים ב-`n_ops_stock_items` בלי שינוי. */}
+      {!STOCK_MODULE_HIDDEN && <StockItemsSection branches={snapshot.branches} items={snapshot.items} />}
       <TasksSection branches={snapshot.branches} tasks={snapshot.tasks} />
     </div>
   );

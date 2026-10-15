@@ -15,7 +15,7 @@ const ROLE_LABELS: Record<string, string> = {
 
 const PERM_LABELS: Record<string, string> = {
   branches: "סניפים",
-  computers: "מלאי",
+  computers: "חדרי מחשבים",
   tasks: "משימות",
   rentals: "השכרות",
   coworking: "משרד שיתופי",

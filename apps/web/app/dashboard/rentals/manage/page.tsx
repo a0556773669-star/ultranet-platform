@@ -192,6 +192,8 @@ export default async function RentalsPage({ searchParams }: { searchParams?: { m
       laptopRates,
       stickRates,
       hasRoute: !!r.collectionRouteId,
+      paid: r.paid === true,
+      paymentMethod: r.paymentMethod,
       tokenRouteName: canCharge ? tokenRouteName : null,
       chargeRoutes: canCharge ? chargeRoutes : [],
       canDelete,

@@ -26,7 +26,7 @@ export default async function ComputerRoomsLayout({ children }: { children: Reac
           <Monitor className="h-5 w-5" />
           {"חדרי מחשבים"}
         </h1>
-        <p className="text-sm text-muted">{"סניפים, תפעול (מלאי ומשימות), הוצאות והנהלת חשבונות"}</p>
+        <p className="text-sm text-muted">{"סניפים, תפעול, הוצאות והנהלת חשבונות"}</p>
       </div>
       <ComputerRoomsTabs isOwner={scope.isOwner} isManager={scope.isManager} perms={perms} />
       {children}

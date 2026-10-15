@@ -52,6 +52,9 @@ export type ActiveRowData = {
   chargeRoutes: { id: string; name: string; mosadId: string; apiValid: string; defaultForNewCards: boolean }[];
   canDelete: boolean;
   canCharge: boolean;
+  /** מה ששמור ב-`n_rentals.paid` — סימון תשלום יכול לקרות לפני ההחזרה. */
+  paid: boolean;
+  paymentMethod?: string;
 };
 
 export type HistoryRowData = {
@@ -133,6 +136,8 @@ export function RentalsLists({
     if (page > pageCount) setPage(pageCount);
   }, [page, pageCount]);
 
+  const unpaidTotal = useMemo(() => visibleUnpaid.reduce((sum, r) => sum + (r.price || 0), 0), [visibleUnpaid]);
+
   const pagedHistory = useMemo(
     () => visibleHistory.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE),
     [visibleHistory, page]
@@ -202,6 +207,8 @@ export function RentalsLists({
                   chargeRoutes={r.chargeRoutes}
                   canDelete={r.canDelete}
                   canCharge={r.canCharge}
+                  initialPaid={r.paid}
+                  initialPaymentMethod={r.paymentMethod}
                 />
               ))}
             </tbody>
@@ -209,19 +216,28 @@ export function RentalsLists({
         </div>
       )}
 
-      <div className="mb-3 flex items-center justify-between text-xs font-bold uppercase tracking-wide text-muted">
+      {/* חובות פתוחים: פתוח כברירת מחדל כשיש חוב (סעיף 3 באפיון השדרוג). אותה רשומה מופיעה גם
+          בהיסטוריה — זו רשומה אחת, שמוצגת בשני המקומות. */}
+      <details className="group mb-8" open={visibleUnpaid.length > 0 || undefined}>
+      <summary className="mb-3 flex cursor-pointer list-none items-center justify-between text-xs font-bold uppercase tracking-wide text-muted">
         <span className="flex items-center gap-1.5 text-red-600">
+          <ChevronLeft className="h-3.5 w-3.5 transition group-open:-rotate-90" />
           <AlertTriangle className="h-3.5 w-3.5" />
-          השכרות שלא שולמו
+          חובות פתוחים — השכרות שלא שולמו
         </span>
-        <span className="rounded-full bg-red-100 px-2.5 py-0.5 text-red-700 normal-case">{visibleUnpaid.length}</span>
-      </div>
+        <span className="flex items-center gap-2 normal-case">
+          {unpaidTotal > 0 && (
+            <span className="font-extrabold text-red-700">{`סה"כ ₪${unpaidTotal.toLocaleString("he-IL")}`}</span>
+          )}
+          <span className="rounded-full bg-red-100 px-2.5 py-0.5 text-red-700">{visibleUnpaid.length}</span>
+        </span>
+      </summary>
       {visibleUnpaid.length === 0 ? (
-        <div className="mb-8 rounded-card border border-dashed border-card-border bg-white py-6 text-center text-sm text-muted">
+        <div className="rounded-card border border-dashed border-card-border bg-white py-6 text-center text-sm text-muted">
           {q ? "לא נמצאו השכרות שלא שולמו ללקוח זה" : "כל ההשכרות שולמו"}
         </div>
       ) : (
-        <div className="mb-8 overflow-hidden rounded-card border border-red-200 bg-white shadow-card">
+        <div className="overflow-hidden rounded-card border border-red-200 bg-white shadow-card">
           <table className="w-full text-[13px]">
             <HistoryTableHead />
             <tbody>
@@ -232,11 +248,17 @@ export function RentalsLists({
           </table>
         </div>
       )}
+      </details>
 
-      <div className="mb-3 flex items-center justify-between text-xs font-bold uppercase tracking-wide text-muted">
-        <span>היסטוריה אחרונה</span>
+      {/* היסטוריה: סגורה כברירת מחדל, ונפתחת לבד כשמחפשים לקוח (סעיף 3 באפיון השדרוג). */}
+      <details className="group" open={q ? true : undefined}>
+      <summary className="mb-3 flex cursor-pointer list-none items-center justify-between text-xs font-bold uppercase tracking-wide text-muted">
+        <span className="flex items-center gap-1.5">
+          <ChevronLeft className="h-3.5 w-3.5 transition group-open:-rotate-90" />
+          היסטוריה אחרונה
+        </span>
         <span className="rounded-full bg-[#f4f6f9] px-2.5 py-0.5 text-ink normal-case">{visibleHistory.length}</span>
-      </div>
+      </summary>
       {visibleHistory.length === 0 ? (
         <div className="rounded-card border border-dashed border-card-border bg-white py-10 text-center text-sm text-muted">
           {q ? "לא נמצאה היסטוריה ללקוח זה" : "אין היסטוריה עדיין"}
@@ -283,6 +305,7 @@ export function RentalsLists({
           )}
         </>
       )}
+      </details>
     </>
   );
 }
