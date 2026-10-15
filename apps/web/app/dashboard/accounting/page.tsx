@@ -127,6 +127,24 @@ export default async function AccountingHomePage() {
     },
   ];
 
+  // תקציר לפי תקופה (אפיון שדרוג v2, סעיף 8): אותן שורות בדיוק של הסה"כ למעלה — רק מסוננות לפי
+  // תאריך. אין כאן מקור או חישוב נוסף, ולכן אין סכנת ספירה כפולה.
+  const prevMonthKey = (() => {
+    const [y, m] = month.split("-").map(Number) as [number, number];
+    return m === 1 ? `${y - 1}-12` : `${y}-${String(m - 1).padStart(2, "0")}`;
+  })();
+  const periodYear = month.slice(0, 4);
+  const periodRows = [
+    { label: "החודש (בתהליך)", f: (r: { month: string }) => r.month === month },
+    { label: "החודש הקודם", f: (r: { month: string }) => r.month === prevMonthKey },
+    { label: `שנת ${periodYear}`, f: (r: { month: string }) => r.month.startsWith(periodYear) },
+    { label: "מאז ומעולם", f: () => true },
+  ].map((p) => {
+    const income = ledger.income.filter(p.f).reduce((sum, r) => sum + r.amount, 0);
+    const expense = ledger.expenses.filter(p.f).reduce((sum, r) => sum + r.amount, 0);
+    return { label: p.label, income, expense, diff: income - expense };
+  });
+
   // השורות עוברות לטבלה כאובייקטים שטוחים: `MainLedger` מחזיק את השורה הגולמית ב-Map,
   // וקומפוננטת לקוח לא יכולה לקבל Map. מה שהטבלה צריכה מהגולמית — מצב הקבלה ו"למי נמכר" —
   // נשטח לכאן, והשאר נשאר בשרת.
@@ -290,6 +308,32 @@ export default async function AccountingHomePage() {
           </article>
         ))}
       </div>
+
+      <details className="rounded-card border border-card-border bg-white shadow-card">
+        <summary className="cursor-pointer px-4 py-2.5 text-sm font-extrabold text-ink">תקציר לפי תקופה</summary>
+        <div className="overflow-x-auto border-t border-card-border">
+          <table className="w-full text-[13px] tabular-nums">
+            <thead className="bg-[#f4f6f9] text-muted">
+              <tr>
+                <th className="px-3 py-2 text-right text-[11px] font-bold">תקופה</th>
+                <th className="px-3 py-2 text-right text-[11px] font-bold">הכנסות</th>
+                <th className="px-3 py-2 text-right text-[11px] font-bold">הוצאות</th>
+                <th className="px-3 py-2 text-right text-[11px] font-bold">הפרש</th>
+              </tr>
+            </thead>
+            <tbody>
+              {periodRows.map((p) => (
+                <tr key={p.label} className="border-t border-card-border">
+                  <td className="px-3 py-2 font-bold text-ink">{p.label}</td>
+                  <td className="px-3 py-2 text-emerald-600">{money(p.income)}</td>
+                  <td className="px-3 py-2 text-red-600">{money(p.expense)}</td>
+                  <td className={`px-3 py-2 font-bold ${p.diff >= 0 ? "text-teal-dark" : "text-red-600"}`}>{money(p.diff)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </details>
 
       <LedgerWorkspace
         computerBranches={computerBranches}
