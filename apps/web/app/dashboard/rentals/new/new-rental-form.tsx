@@ -3,6 +3,7 @@
 import { useMemo, useRef, useState, useTransition } from "react";
 import type { ChangeEvent, FormEvent } from "react";
 import { itemsForPackage } from "@/lib/equipment-checklist";
+import { useUnsavedWarning } from "@/lib/use-unsaved-warning";
 import type { Branch, RentalClient, Laptop, Stick, CollectionRoute } from "@ultranet/shared-types";
 import { createRentalAction } from "../actions";
 import { CustomerCombobox } from "../customer-combobox";
@@ -55,6 +56,9 @@ export function NewRentalForm({
   const [extras, setExtras] = useState<Extra[]>([]);
   const [formError, setFormError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+
+  // אזהרה ביציאה כשכבר נבחר משהו ועוד לא נשמר (בזמן שמירה — לא מזהירים).
+  useUnsavedWarning(!pending && Boolean(clientId || itemId || startDate || extras.length));
 
   const rentedLaptopSet = useMemo(() => new Set(rentedLaptopIds), [rentedLaptopIds]);
   const rentedStickSet = useMemo(() => new Set(rentedStickIds), [rentedStickIds]);
