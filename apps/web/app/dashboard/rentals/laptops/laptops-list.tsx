@@ -51,6 +51,7 @@ export function LaptopsList({
   deleteActions,
   expensesByBranch,
   sales,
+  initialBranchIds,
 }: {
   laptops: Laptop[];
   branches: Branch[];
@@ -62,6 +63,8 @@ export function LaptopsList({
   /** ההוצאות הקבועות הפעילות של כל סניף, לשאלה "האם להוריד הוצאה חודשית קבועה" */
   expensesByBranch: Record<string, BranchFixedExpenseOption[]>;
   sales: LaptopSale[];
+  /** סינון סניף התחלתי — מגיע מ-`?branch=` (קישור מכרטיס הסניף). */
+  initialBranchIds?: string[];
 }) {
   const laptops = useMemo(() => allLaptops.filter((l) => isLaptopActive(l)), [allLaptops]);
   const exited = useMemo(
@@ -75,7 +78,7 @@ export function LaptopsList({
   const [showExited, setShowExited] = useState(false);
   const router = useRouter();
   const { showSuccess, showError, toastNode } = useToast();
-  const [selectedBranchIds, setSelectedBranchIds] = useState<string[]>([]);
+  const [selectedBranchIds, setSelectedBranchIds] = useState<string[]>(initialBranchIds ?? []);
   // סינון לפי סוג מחשב וחיפוש מספר (מסמך המשך 1, סעיף 9). מחשב ותיק בלי `isGraphics` מזוהה לפי השם.
   const [typeFilter, setTypeFilter] = useState<"all" | "standard" | "graphics">("all");
   const [numberQuery, setNumberQuery] = useState("");

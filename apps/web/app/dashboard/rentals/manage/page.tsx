@@ -268,7 +268,7 @@ export default async function RentalsPage({ searchParams }: { searchParams?: { m
                   .sort((x, y) => x.name.localeCompare(y.name, "he", { numeric: true }));
                 if (bLaptops.length === 0 && bRentedSticks.length === 0) return null;
                 return (
-                  <div key={b.id} className="mb-2">
+                  <div key={b.id} id={`branch-${b.id}`} className="mb-2 scroll-mt-4">
                     {role === "owner" && <h3 className="mb-2 text-sm font-bold text-ink">{b.name}</h3>}
                     {/* ריבועים קטנים ולא פסים רחבים: רוחב קבוע של ~120px ממלא את השורה בכמה שנכנס,
                         כך שבמסך רחב רואים את כל הסניף בשורה-שתיים ולא שש כרטיסיות מתוחות. */}

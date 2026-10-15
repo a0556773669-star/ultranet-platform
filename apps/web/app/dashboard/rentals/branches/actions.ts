@@ -122,6 +122,7 @@ export async function updateRentalBranchAction(id: string, formData: FormData) {
   revalidatePath("/dashboard/branches");
   revalidatePath("/dashboard/rentals/branches");
   revalidatePath(`/dashboard/rentals/branches/${id}`);
+  revalidatePath(`/dashboard/rentals/branches/${id}/edit`);
   redirect("/dashboard/rentals/branches");
 }
 

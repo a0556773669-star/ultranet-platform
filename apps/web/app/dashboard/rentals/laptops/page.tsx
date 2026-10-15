@@ -12,7 +12,7 @@ import type { BranchFixedExpenseOption } from "./laptop-exit-modal";
 export default async function LaptopsPage({
   searchParams,
 }: {
-  searchParams?: { synced?: string };
+  searchParams?: { synced?: string; branch?: string };
 }) {
   const session = await requireModuleAccess("rentals");
   const role = session.user?.role;
@@ -101,6 +101,7 @@ export default async function LaptopsPage({
         deleteActions={deleteActions}
         expensesByBranch={expensesByBranch}
         sales={sales}
+        initialBranchIds={isOwner && searchParams?.branch ? [searchParams.branch] : []}
       />
     </div>
   );
