@@ -17,6 +17,8 @@ import { loadPartnerPayouts, monthWindow } from "@/lib/partner-payouts";
 import { AccountingTabs } from "../accounting-tabs";
 import { TrackingTable } from "./tracking-table";
 import { MonthSummary } from "./month-summary";
+import { BranchCompareChart } from "./branch-compare-chart";
+import { utilizationInMonth } from "@/lib/equivalent-computers";
 import { CompactTransfersTable } from "./compact-transfers-table";
 import { UnifiedBranchesTable } from "./unified-branches-table";
 import { WideTableModal } from "./wide-table-modal";
@@ -90,6 +92,18 @@ export default async function MobileAccountingPage({
   const tracking = buildLaptopBranchTracking(trackedBranches, raw, months);
   // תקציר החודש האחרון שהסתיים — תמיד ביחס להיום, בלי קשר לחלון שנבחר בטבלה.
   const summaryTracking = buildLaptopBranchTracking(trackedBranches, raw, trackingWindow(now, 3));
+  // אחוז ניצול ציוד של החודש האחרון שהסתיים (מסמך המשך 1, סעיף 45) — מדד נפרד מהרווחיות:
+  // ימי השכרה ÷ ימי זמינות, בלי ימי תיקון. קריאה בלבד.
+  const closedMonth = summaryTracking.months[1] ?? now;
+  const utilization: Record<string, number | null> = {};
+  for (const b of trackedBranches) {
+    utilization[b.id] = utilizationInMonth(
+      raw.laptopsByBranch.get(b.id) ?? [],
+      raw.repairsByBranch.get(b.id) ?? [],
+      raw.rentalsByBranch.get(b.id) ?? [],
+      closedMonth,
+    ).ratio;
+  }
 
   // ההסדרים הפר-סניפיים (30% מהסניף הראשי לאלישבע רומנו). מוצגים כאן, ליד הרווח שהם
   // יוצאים ממנו, חודש אחרי חודש עם סימון "העברתי" - אותה יתרה בדיוק כמו בטבלת האחוזים בצד השני.
@@ -189,9 +203,22 @@ export default async function MobileAccountingPage({
             </div>
           </div>
 
-          <MonthSummary tracking={summaryTracking} />
+          <MonthSummary tracking={summaryTracking} utilization={utilization} />
 
           <TrackingTable tracking={tracking} />
+
+          <BranchCompareChart
+            months={tracking.months}
+            target={tracking.target}
+            currentMonth={now}
+            series={tracking.rows
+              .filter((row) => row.cells.some((c) => c.profitPerComputer !== null))
+              .map((row) => ({
+                id: row.branch.id,
+                name: row.branch.name,
+                points: row.cells.map((c) => ({ month: c.month, value: c.profitPerComputer })),
+              }))}
+          />
 
           {/* הסדר שהוגדר ולא נתפס על אף סניף הוא שקט מסוכן: הוא לא מנכה כלום ולא מייצר חוב,
               ואי אפשר לדעת את זה בלי להסתכל בקוד. לכן הוא נאמר כאן במפורש. */}
