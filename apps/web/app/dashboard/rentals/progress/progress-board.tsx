@@ -99,7 +99,7 @@ export function ProgressBoard({
                 />
               </div>
               <div className="text-[11.5px] text-muted">
-                יעד שלב 7: 150 ₪ נטו למחשב בחודש ({target.toLocaleString("he-IL")} ₪ כולל מע&quot;מ)
+                יעד שלב 7: {target.toLocaleString("he-IL")} ₪ נטו למחשב בחודש (בלי מע&quot;מ)
               </div>
             </div>
           </div>

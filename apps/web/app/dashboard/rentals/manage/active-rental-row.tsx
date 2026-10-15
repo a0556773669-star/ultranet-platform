@@ -67,6 +67,7 @@ type Props = {
   canCharge: boolean;
   initialPaid?: boolean;
   initialPaymentMethod?: string;
+  ratesLocked?: boolean;
 };
 
 const BTN =
@@ -99,6 +100,7 @@ export function ActiveRentalRow({
   canCharge,
   initialPaid = false,
   initialPaymentMethod,
+  ratesLocked = false,
 }: Props) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -352,6 +354,13 @@ export function ActiveRentalRow({
                     <span>
                       חישוב: <strong className="text-ink">{quote.breakdown}</strong> ={" "}
                       <strong className="text-ink">{autoPrice.toLocaleString()} ₪</strong>
+                    </span>
+                  )}
+                  {ratesLocked ? (
+                    <span className="text-teal-dark">לפי המחירון שנשמר בפתיחת ההשכרה</span>
+                  ) : (
+                    <span className="text-amber-700">
+                      ההשכרה נפתחה לפני שמירת המחירון — מחושב לפי המחירון הנוכחי. אם המחיר עודכן מאז, יש לתקן ידנית.
                     </span>
                   )}
                   <button

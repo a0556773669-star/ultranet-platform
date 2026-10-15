@@ -124,10 +124,21 @@ export function ownerMonthlyProfit(incomeLines: RentalIncomeLine[], ownerPct: nu
   return incomeShare - expenseBurden;
 }
 
-/** Israel standard VAT rate, used to gross up the ₪150/computer target below. */
+/** Israel standard VAT rate. */
 export const VAT_RATE = 0.18;
-/** Target: 150 ₪ + VAT per computer per month. */
-export const PROFIT_PER_COMPUTER_TARGET = Math.round(150 * (1 + VAT_RATE));
+/**
+ * היעד: 150 ₪ **נטו, בלי מע"מ**, למחשב לחודש (החלטת יוני, 2026-10-15).
+ *
+ * עד אז הרווח הוצג כולל מע"מ מול יעד 177 (= 150 × 1.18). עכשיו הרווח עצמו מוצג בלי מע"מ —
+ * `exVat()` מחלק את הרווח התפעולי ב-1.18 פעם אחת, בסוף, ולא מנכה מע"מ מכל שורה בנפרד, כך
+ * שאין כפל ניכוי. הסיווג ירוק/אדום זהה בדיוק לקודם (רווח ≥ 177 ⇔ רווח/1.18 ≥ 150); רק
+ * המספרים שמוצגים ירדו לנטו.
+ */
+export const PROFIT_PER_COMPUTER_TARGET = 150;
+/** רווח כולל מע"מ → נטו בלי מע"מ. משמש רק את מדד הרווחיות, לא רישומי כסף. */
+export function exVat(amount: number): number {
+  return amount / (1 + VAT_RATE);
+}
 
 /**
  * Computer count active in a given YYYY-MM month, based on each computer's addedDate.

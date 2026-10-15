@@ -47,6 +47,11 @@ export default async function RentalClientsPage({
   const clients = isOwner
     ? allClients
     : allClients.filter((c) => c.branchId === myBranchId || viewClientBranchIds.includes(c.branchId));
+  // זמן יצירת המסמך עצמו — לסינון "נוספו לאחרונה". נתון של Firestore, לא שדה שנכתב. רק
+  // ללקוחות שהמשתמש רשאי לראות.
+  const createTimes = new Map(clientsSnap.docs.map((d) => [d.id, d.createTime.toMillis()]));
+  const createdAtById: Record<string, number> = {};
+  for (const c of clients) createdAtById[c.id] = createTimes.get(c.id) ?? 0;
   // "מה ששלי" = הסניף שלי + סניפים שמוגדרים תחתיו (parentBranchId)
   const myScopeBranchIds = new Set(
     branches.filter((b) => b.id === myBranchId || b.parentBranchId === myBranchId).map((b) => b.id)
@@ -151,6 +156,7 @@ export default async function RentalClientsPage({
         canCharge={canCharge}
         routeNameById={routeNameById}
         isOwner={isOwner}
+        createdAtById={createdAtById}
       />
     </div>
   );

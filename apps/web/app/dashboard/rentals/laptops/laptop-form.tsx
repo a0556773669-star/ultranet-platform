@@ -110,7 +110,8 @@ export function LaptopForm({
         <p className="mb-1 text-xs font-bold text-ink">מחיר מיוחד למחשב הזה (₪) — רשות</p>
         <p className="mb-2 text-[11px] text-muted">
           כל שדה שנשאר ריק מתומחר לפי מחירון ברירת המחדל של הסניף. למלא כאן רק אם למחשב הזה יש
-          מחיר שונה משאר המחשבים בסניף.
+          מחיר שונה משאר המחשבים בסניף. שינוי מחיר חל רק על השכרות שייפתחו מעכשיו — השכרה פעילה
+          ממשיכה במחיר שבו נפתחה.
         </p>
         <div className="grid grid-cols-[auto_1fr_1fr] items-center gap-x-3 gap-y-2">
           <span />

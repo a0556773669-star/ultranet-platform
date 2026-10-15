@@ -76,6 +76,9 @@ export function LaptopsList({
   const router = useRouter();
   const { showSuccess, showError, toastNode } = useToast();
   const [selectedBranchIds, setSelectedBranchIds] = useState<string[]>([]);
+  // סינון לפי סוג מחשב וחיפוש מספר (מסמך המשך 1, סעיף 9). מחשב ותיק בלי `isGraphics` מזוהה לפי השם.
+  const [typeFilter, setTypeFilter] = useState<"all" | "standard" | "graphics">("all");
+  const [numberQuery, setNumberQuery] = useState("");
   const [sortKey, setSortKey] = useState<SortKey>("name");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
 
@@ -87,10 +90,16 @@ export function LaptopsList({
   };
 
   const filtered = useMemo(() => {
-    if (selectedBranchIds.length === 0) return laptops;
     const set = new Set(selectedBranchIds);
-    return laptops.filter((l) => set.has(l.branchId));
-  }, [laptops, selectedBranchIds]);
+    const q = numberQuery.trim();
+    const isGraphics = (l: Laptop) => l.isGraphics ?? /גרפיקה/.test(l.name);
+    return laptops.filter(
+      (l) =>
+        (set.size === 0 || set.has(l.branchId)) &&
+        (typeFilter === "all" || (typeFilter === "graphics") === isGraphics(l)) &&
+        (!q || l.name.includes(q) || String(l.number ?? "").includes(q) || (l.simNumber ?? "").includes(q)),
+    );
+  }, [laptops, selectedBranchIds, typeFilter, numberQuery]);
 
   const sorted = useMemo(() => {
     const dir = sortDir === "asc" ? 1 : -1;
@@ -110,8 +119,51 @@ export function LaptopsList({
     });
   }, [filtered, sortKey, sortDir, branches]);
 
+  const chip = (on: boolean) =>
+    `rounded-[10px] px-3 py-1.5 text-xs font-bold transition ${
+      on
+        ? "bg-gradient-to-br from-teal to-teal-light text-white shadow-primary"
+        : "border border-card-border bg-white text-ink hover:bg-[#f4f6f9]"
+    }`;
+  const filterActive = typeFilter !== "all" || numberQuery.trim() !== "" || selectedBranchIds.length > 0;
+
   return (
     <div>
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        <input
+          type="text"
+          value={numberQuery}
+          onChange={(e) => setNumberQuery(e.target.value)}
+          placeholder="חיפוש מספר מחשב או סים..."
+          className="w-full max-w-[220px] rounded-[10px] border border-card-border bg-white px-3 py-1.5 text-xs focus:border-teal focus:outline-none"
+        />
+        <span className="text-xs font-bold text-muted">סוג:</span>
+        <button type="button" onClick={() => setTypeFilter("all")} className={chip(typeFilter === "all")}>
+          הכל
+        </button>
+        <button type="button" onClick={() => setTypeFilter("standard")} className={chip(typeFilter === "standard")}>
+          רגיל
+        </button>
+        <button type="button" onClick={() => setTypeFilter("graphics")} className={chip(typeFilter === "graphics")}>
+          גרפיקה
+        </button>
+        {filterActive && (
+          <>
+            <span className="text-xs text-muted">{`מוצגים ${filtered.length} מתוך ${laptops.length}`}</span>
+            <button
+              type="button"
+              onClick={() => {
+                setTypeFilter("all");
+                setNumberQuery("");
+                setSelectedBranchIds([]);
+              }}
+              className="text-xs font-bold text-teal hover:underline"
+            >
+              הצג הכול
+            </button>
+          </>
+        )}
+      </div>
       {isOwner && branches.length > 1 && (
         <div className="mb-3 flex flex-wrap items-center gap-2">
           <span className="text-xs font-bold text-muted">סינון לפי סניף:</span>

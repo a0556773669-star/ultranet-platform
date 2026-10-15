@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
+import Link from "next/link";
 import { AlertTriangle, ChevronLeft, ChevronRight, Search } from "lucide-react";
 import { ActiveRentalRow } from "./active-rental-row";
 import { HistoryRentalRow } from "./history-rental-row";
@@ -55,6 +56,8 @@ export type ActiveRowData = {
   /** מה ששמור ב-`n_rentals.paid` — סימון תשלום יכול לקרות לפני ההחזרה. */
   paid: boolean;
   paymentMethod?: string;
+  /** true = המחיר מחושב מהמחירון שנשמר בפתיחת ההשכרה; false = השכרה ישנה, לפי המחירון הנוכחי. */
+  ratesLocked: boolean;
 };
 
 export type HistoryRowData = {
@@ -77,8 +80,11 @@ export type HistoryRowData = {
 
 const PAGE_SIZE = 20;
 
-function matchesSearch(name: string, phone: string | undefined, q: string) {
-  return name.toLowerCase().includes(q) || (phone ?? "").includes(q);
+/** חיפוש לפי שם, טלפון או מספר מחשב/סטיק (שם הפריט, למשל "מחשב 12"). */
+function matchesSearch(name: string, phone: string | undefined, q: string, itemName?: string) {
+  return (
+    name.toLowerCase().includes(q) || (phone ?? "").includes(q) || (itemName ?? "").toLowerCase().includes(q)
+  );
 }
 
 function HistoryTableHead() {
@@ -103,26 +109,31 @@ export function RentalsLists({
   unpaid,
   history,
   showBranchColumn,
+  newRentalHref,
+  tiles,
 }: {
   active: ActiveRowData[];
   unpaid: HistoryRowData[];
   history: HistoryRowData[];
   showBranchColumn: boolean;
+  newRentalHref: string;
+  /** ריבועי הציוד (Server Component) — מוצגים מתחת לחיפוש ומעל ההשכרות הפעילות (סעיף 3). */
+  tiles: ReactNode;
 }) {
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
 
   const q = search.trim().toLowerCase();
   const visibleActive = useMemo(
-    () => (q ? active.filter((r) => matchesSearch(r.clientName, r.clientPhone, q)) : active),
+    () => (q ? active.filter((r) => matchesSearch(r.clientName, r.clientPhone, q, r.itemName)) : active),
     [active, q]
   );
   const visibleUnpaid = useMemo(
-    () => (q ? unpaid.filter((r) => matchesSearch(r.clientName, r.clientPhone, q)) : unpaid),
+    () => (q ? unpaid.filter((r) => matchesSearch(r.clientName, r.clientPhone, q, r.itemName)) : unpaid),
     [unpaid, q]
   );
   const visibleHistory = useMemo(
-    () => (q ? history.filter((r) => matchesSearch(r.clientName, r.clientPhone, q)) : history),
+    () => (q ? history.filter((r) => matchesSearch(r.clientName, r.clientPhone, q, r.itemName)) : history),
     [history, q]
   );
 
@@ -145,16 +156,35 @@ export function RentalsLists({
 
   return (
     <>
-      <div className="relative w-full max-w-xs">
-        <Search className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
-        <input
-          type="text"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="חיפוש לקוח לפי שם או טלפון..."
-          className="w-full rounded-[10px] border border-card-border bg-white py-1.5 pl-3 pr-9 text-xs focus:border-teal focus:outline-none"
-        />
+      {/* סדר המסך (אפיון שדרוג v2, סעיף 3): חיפוש + השכרה חדשה → ריבועי הציוד → פעילות → חובות והיסטוריה. */}
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="relative min-w-0 flex-1 sm:max-w-md">
+          <Search className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="חיפוש לפי שם, טלפון או מספר מחשב..."
+            className="w-full rounded-[10px] border border-card-border bg-white py-2 pl-3 pr-9 text-sm focus:border-teal focus:outline-none"
+          />
+        </div>
+        <Link
+          href={newRentalHref}
+          className="rounded-[10px] bg-gradient-to-br from-teal to-teal-light px-4 py-2 text-sm font-bold text-white shadow-primary transition hover:opacity-90"
+        >
+          + השכרה חדשה
+        </Link>
       </div>
+      {q && (
+        <div className="mt-2 flex items-center gap-2 text-xs text-muted">
+          <span className="rounded-full bg-teal-bg px-2.5 py-0.5 font-bold text-teal-dark">{`סינון פעיל: "${search.trim()}"`}</span>
+          <button type="button" onClick={() => setSearch("")} className="font-bold text-teal hover:underline">
+            הצג הכול
+          </button>
+        </div>
+      )}
+
+      <div className="mt-4 flex flex-col gap-4">{tiles}</div>
 
       <div className="mb-3 mt-4 flex items-center justify-between text-xs font-bold uppercase tracking-wide text-muted">
         <span>השכרות פעילות</span>
@@ -209,6 +239,7 @@ export function RentalsLists({
                   canCharge={r.canCharge}
                   initialPaid={r.paid}
                   initialPaymentMethod={r.paymentMethod}
+                  ratesLocked={r.ratesLocked}
                 />
               ))}
             </tbody>

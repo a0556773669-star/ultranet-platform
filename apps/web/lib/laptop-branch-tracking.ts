@@ -22,7 +22,7 @@ import {
   currentMonth,
   type BranchAccountingRawData,
 } from "./branch-accounting-data";
-import { monthsBetween, PROFIT_PER_COMPUTER_TARGET } from "./branch-accounting";
+import { exVat, monthsBetween, PROFIT_PER_COMPUTER_TARGET } from "./branch-accounting";
 import { laptopActiveInMonth } from "./laptop-names";
 
 export interface TrackingCell {
@@ -107,7 +107,8 @@ export function buildLaptopBranchTracking(
       // מחשב נספר מהחודש שנוסף ועד החודש שיצא בו (מכירה/הוצאה) כולל — `laptopActiveInMonth`.
       // עד 09/2026 נספרו כאן רק תאריכי ההוספה, כך שמחשב שיצא מהסניף המשיך לחלק את הרווח לנצח.
       const computerCount = laptops.filter((l) => laptopActiveInMonth(l, month)).length;
-      const netProfit = f.ownerOperatingProfitThisMonth;
+      // נטו בלי מע"מ — ראו `exVat` / `PROFIT_PER_COMPUTER_TARGET` ב-branch-accounting.ts.
+      const netProfit = exVat(f.ownerOperatingProfitThisMonth);
       const perComputer = computerCount > 0 ? netProfit / computerCount : 0;
       return {
         month,
@@ -116,7 +117,8 @@ export function buildLaptopBranchTracking(
         netProfit,
         saleIncome: f.saleIncomeThisMonth,
         computerCount,
-        isHealthy: computerCount > 0 && perComputer >= PROFIT_PER_COMPUTER_TARGET,
+        // סבולת זעירה: חלוקה ב-1.18 מייצרת שברים כמו 149.99999999999997 ל-177 בדיוק, שעד היום נחשב ירוק.
+        isHealthy: computerCount > 0 && perComputer >= PROFIT_PER_COMPUTER_TARGET - 1e-6,
       };
     });
 

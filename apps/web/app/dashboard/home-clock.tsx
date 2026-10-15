@@ -20,58 +20,36 @@ function greetWord(hour: number) {
   return "לילה טוב";
 }
 
+/**
+ * ברכה ותאריך — שורה קטנה בראש דף הבית (אפיון שדרוג v2, סעיף 1: "ברכה ותאריך קטנים, בלי כרטיס
+ * שעון ענק"). התאריך מתעדכן פעם בדקה; אין שעון שניות.
+ */
 export default function HomeClock({ name }: { name: string }) {
   const [now, setNow] = useState<Date | null>(null);
 
   useEffect(() => {
     setNow(new Date());
-    const id = setInterval(() => setNow(new Date()), 1000);
+    const id = setInterval(() => setNow(new Date()), 60_000);
     return () => clearInterval(id);
   }, []);
 
   const firstName = (name || "").split(" ")[0];
 
-  if (!now) {
-    return (
-      <div className="flex items-center justify-between rounded-card border border-card-border bg-white p-5 shadow-card">
-        <div>
-          <div className="text-[19px] font-extrabold text-ink">
-            {"שלום"}, <span className="text-teal">{firstName}</span>
-          </div>
-        </div>
-        <div className="text-left text-[30px] font-black tabular-nums text-teal-dark">--:--:--</div>
-      </div>
-    );
-  }
-
-  const heDate = new Intl.DateTimeFormat("he-IL-u-ca-hebrew", {
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-  }).format(now);
+  const heDate = now
+    ? new Intl.DateTimeFormat("he-IL-u-ca-hebrew", { day: "numeric", month: "long", year: "numeric" }).format(now)
+    : "";
 
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 rounded-card border border-card-border bg-white p-5 shadow-card">
-      <div>
-        <div className="text-[19px] font-extrabold text-ink">
-          {greetWord(now.getHours())}, <span className="text-teal">{firstName}</span>
-        </div>
-        <div className="mt-1 flex gap-2 text-xs text-muted">
-          <span className="flex items-center gap-1.5">
-            <Calendar className="h-4 w-4" />
-            {"יום "}
-            {DAY_NAMES[now.getDay()]}
-            {", "}
-            {now.toLocaleDateString("he-IL")}
-          </span>
-          <span>·</span>
-          <span>{heDate}</span>
-        </div>
+    <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+      <div className="text-[19px] font-extrabold text-ink">
+        {now ? greetWord(now.getHours()) : "שלום"}, <span className="text-teal">{firstName}</span>
       </div>
-      <div className="text-left">
-        <div className="text-[30px] font-black tabular-nums text-teal-dark">{now.toLocaleTimeString("he-IL")}</div>
-        <div className="text-[11px] text-muted">{"שעון מקומי"}</div>
-      </div>
+      {now && (
+        <div className="flex items-center gap-1.5 text-xs text-muted">
+          <Calendar className="h-3.5 w-3.5" />
+          {`יום ${DAY_NAMES[now.getDay()]} · ${heDate} · ${now.toLocaleDateString("he-IL")}`}
+        </div>
+      )}
     </div>
   );
 }
