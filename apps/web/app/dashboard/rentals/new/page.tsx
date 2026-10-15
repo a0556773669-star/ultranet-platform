@@ -3,6 +3,7 @@ import { getAdminFirestore } from "@/lib/firebase-admin";
 import type { Branch, RentalClient, Laptop, Stick, CollectionRoute, Rental } from "@ultranet/shared-types";
 import { effectiveLaptopRates, effectiveStickRates } from "@/lib/rental-pricing";
 import { isLaptopActive } from "@/lib/laptop-names";
+import { LAPTOP_REPAIRS_COLLECTION, openRepairsByLaptop } from "@/lib/laptop-repairs";
 import { NewRentalForm } from "./new-rental-form";
 
 export default async function NewRentalPage({
@@ -16,13 +17,14 @@ export default async function NewRentalPage({
   const onlyMine = searchParams?.mine === "1";
 
   const db = getAdminFirestore();
-  const [branchesSnap, clientsSnap, laptopsSnap, sticksSnap, routesSnap, activeRentalsSnap] = await Promise.all([
+  const [branchesSnap, clientsSnap, laptopsSnap, sticksSnap, routesSnap, activeRentalsSnap, repairsSnap] = await Promise.all([
     db.collection("n_branches").where("branchType", "==", "rentals").get(),
     db.collection("n_rental_clients").get(),
     db.collection("n_laptops").get(),
     db.collection("n_sticks").get(),
     db.collection("n_collection_routes").get(),
     db.collection("n_rentals").where("status", "==", "active").get(),
+    db.collection(LAPTOP_REPAIRS_COLLECTION).get(),
   ]);
   const allBranches = branchesSnap.docs
     .map((d) => ({ ...(d.data() as Omit<Branch, "id">), id: d.id }) as Branch)
@@ -57,6 +59,11 @@ export default async function NewRentalPage({
     new Set([...activeRentals.filter((r) => r.kind === "stick").map((r) => r.itemId), ...bundledStickIds])
   );
 
+  // מחשב עם תקופת תיקון פתוחה מוצג בטופס כ"— בתיקון" ולא ניתן לבחירה (וגם נחסם בשרת).
+  const repairLaptopIds = Array.from(
+    openRepairsByLaptop(repairsSnap.docs.map((d) => d.data() as { laptopId: string; from: string; to?: string })).keys(),
+  );
+
   const ownerHomeBranchId = myBranchId && myBranchId !== "all" && branches.some((b) => b.id === myBranchId) ? myBranchId : "";
   const defaultBranchId =
     role === "owner" ? (ownerHomeBranchId || branches[0]?.id || "") : (myBranchId ?? "");
@@ -68,11 +75,14 @@ export default async function NewRentalPage({
       {(searchParams?.error === "missing" ||
         searchParams?.error === "no-branch" ||
         searchParams?.error === "already-rented" ||
+        searchParams?.error === "in-repair" ||
         noBranch) && (
         <div className="mb-4 rounded-card border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-700">
           {noBranch || searchParams?.error === "no-branch"
             ? "החשבון שלך לא משויך כרגע לסניף. נסה להתנתק ולהתחבר מחדש (השיוך מתעדכן אוטומטית תוך כ-2 דקות), או פנה לבעלים לשיוך סניף בעמוד המשתמשים."
-            : searchParams?.error === "already-rented"
+            : searchParams?.error === "in-repair"
+              ? "המחשב הזה בתיקון - לא ניתן להשכיר אותו עד שיסומן \"חזר מתיקון\" במלאי המחשבים."
+              : searchParams?.error === "already-rented"
               ? "מחשב/סטיק זה כבר מושכר כרגע - יש להחזיר את ההשכרה הפעילה שלו לפני פתיחת השכרה חדשה."
               : searchParams?.missingFields
                 ? `חובה למלא: ${searchParams.missingFields} לפני השמירה.`
@@ -90,6 +100,7 @@ export default async function NewRentalPage({
           lockBranch={role !== "owner" || onlyMine}
           rentedLaptopIds={rentedLaptopIds}
           rentedStickIds={rentedStickIds}
+          repairLaptopIds={repairLaptopIds}
           onlyMine={onlyMine}
         />
       )}

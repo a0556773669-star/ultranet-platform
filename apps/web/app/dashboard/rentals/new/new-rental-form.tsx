@@ -17,6 +17,8 @@ type Props = {
   lockBranch: boolean;
   rentedLaptopIds: string[];
   rentedStickIds: string[];
+  /** מחשבים עם תקופת תיקון פתוחה — מוצגים "— בתיקון" ולא ניתנים לבחירה */
+  repairLaptopIds?: string[];
   onlyMine?: boolean;
 };
 
@@ -34,6 +36,7 @@ export function NewRentalForm({
   lockBranch,
   rentedLaptopIds,
   rentedStickIds,
+  repairLaptopIds,
   onlyMine,
 }: Props) {
   const [branchId, setBranchId] = useState(defaultBranchId);
@@ -192,9 +195,10 @@ export function NewRentalForm({
             <option value="">בחר מחשב</option>
             {branchLaptops.map((l) => {
               const rented = rentedLaptopSet.has(l.id);
+              const inRepair = !rented && !!repairLaptopIds?.includes(l.id);
               return (
-                <option key={l.id} value={l.id} disabled={rented}>
-                  {l.name} ({l.dayPrice} ₪/יום){rented ? " — מושכר כרגע" : ""}
+                <option key={l.id} value={l.id} disabled={rented || inRepair}>
+                  {l.name} ({l.dayPrice} ₪/יום){rented ? " — מושכר כרגע" : inRepair ? " — בתיקון" : ""}
                 </option>
               );
             })}

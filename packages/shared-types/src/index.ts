@@ -413,6 +413,45 @@ export interface LaptopSaleItems {
   bag: boolean;
 }
 
+/**
+ * collection: n_laptop_repairs — **תקופת תיקון של מחשב נייד** (2026-10, אפיון שדרוג v2 סעיף 5).
+ *
+ * לא כל דיווח תקלה פותח תיקון: רק הפעולה המפורשת "הוצאת מחשב לתיקון" יוצרת מסמך כאן, ו"חזר
+ * מתיקון" ממלא את `to` + `closedAt`/`closedBy`. כל תקופה היא מסמך נפרד — מחשב שנשלח לתיקון
+ * שלוש פעמים מחזיק שלושה מסמכים, ולא נמחקים. תקופה בלי `to` = **פתוחה**: המחשב לא ניתן
+ * להשכרה חדשה (`createRentalAction`) ומוצג "בתיקון". השכרה פעילה לא מסתיימת מתיקון — פתיחת
+ * תיקון נחסמת כל עוד יש למחשב השכרה פעילה.
+ *
+ * גבול יום: המחשב לא זמין ביום `from`, וזמין שוב ביום `to` (ראו `lib/equivalent-computers.ts`).
+ * אין תאריך חזרה צפוי ואין עלות תיקון — נדחו במפורש (פריטים 13/14 באפיון ההמשך).
+ */
+export interface LaptopRepair {
+  id: string;
+  laptopId: string;
+  /** הסניף של המחשב ברגע פתיחת התיקון (לבדיקת הרשאה ולסינון) */
+  branchId: string;
+  /** שם המחשב ברגע הפתיחה — לתצוגה בלבד */
+  laptopName?: string;
+  /** YYYY-MM-DD — יום היציאה לתיקון */
+  from: string;
+  /** YYYY-MM-DD — יום החזרה מתיקון; חסר = התיקון עדיין פתוח */
+  to?: string;
+  /** הערה חופשית (מה התקלה / למה נשלח) */
+  note?: string;
+  /** רשות (פריט 12): שם המעבדה */
+  lab?: string;
+  /** רשות (פריט 12): איש קשר במעבדה */
+  labContact?: string;
+  /** רשות (פריט 12): תיאור הטיפול */
+  treatment?: string;
+  /** הערה ברגע החזרה */
+  returnNote?: string;
+  createdAt: string;
+  createdBy?: string;
+  closedAt?: string;
+  closedBy?: string;
+}
+
 /** שורה אחת בפירוט עלות מחשב (תיק, סטיק, מטען...). */
 export interface LaptopCostItem {
   label: string;

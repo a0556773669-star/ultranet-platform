@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { currentModuleScope, scopedSession } from "@/lib/perms";
 import { getAdminFirestore } from "@/lib/firebase-admin";
 import type { Firestore } from "firebase-admin/firestore";
-import type { Laptop, LaptopSale, LaptopSaleItems, Stick } from "@ultranet/shared-types";
+import type { Laptop, LaptopRepair, LaptopSale, LaptopSaleItems, Stick } from "@ultranet/shared-types";
 import { roundPrice } from "@/lib/rental-pricing";
 import {
   isLaptopActive,
@@ -14,6 +14,7 @@ import {
 } from "@/lib/laptop-names";
 import { LAPTOP_SALES_COLLECTION } from "@/lib/branch-accounting-data";
 import { nextMonth, reviseFixedExpenseAmount } from "@/lib/fixed-expense-revision";
+import { isRepairOpen, LAPTOP_REPAIRS_COLLECTION } from "@/lib/laptop-repairs";
 
 /** ה-session של מודול ההשכרות — ראה `scopedSession`. */
 async function requireSession() {
@@ -553,4 +554,114 @@ export async function applyLaptopRenameAction(): Promise<{ renamed: number; skip
   }
   revalidatePath("/dashboard/rentals", "layout");
   return { renamed, skipped };
+}
+
+/* ------------------------------------------------------------------ *
+ * מחשב בתיקון — תקופות ב-n_laptop_repairs (אפיון שדרוג v2, סעיף 5)
+ * ------------------------------------------------------------------ */
+
+const todayIso = () => new Date().toISOString().slice(0, 10);
+
+/**
+ * "הוצאת מחשב לתיקון" — פותח תקופת תיקון חדשה. אותן הרשאות כמו מכירה: בעלים ושותף של הסניף.
+ *
+ * **לא נוגע בהשכרה פעילה**: אם המחשב מושכר כרגע הפעולה נדחית ומבקשת להחזיר (או להחליף לשוכר
+ * מחשב) קודם. כך תיקון אף פעם לא מסיים השכרה ולא משחרר מחשב מושכר. גם לא נפתחת תקופה שנייה
+ * כשכבר יש אחת פתוחה. נכתב רק מסמך חדש ב-`n_laptop_repairs`; `n_laptops` לא משתנה.
+ */
+export async function openLaptopRepairAction(
+  laptopId: string,
+  input: { from: string; note?: string; lab?: string; labContact?: string; treatment?: string },
+): Promise<LaptopExitResult> {
+  try {
+    const scope = await currentModuleScope("rentals");
+    if (!scope?.granted || !scope.isManager) return { ok: false, message: "הוצאה לתיקון פתוחה לבעלים ולשותף בלבד" };
+    if (!DATE_RE.test(input.from)) return { ok: false, message: "תאריך לא תקין" };
+    if (input.from > todayIso()) return { ok: false, message: "תאריך היציאה לתיקון לא יכול להיות בעתיד" };
+
+    const db = getAdminFirestore();
+    const laptopRef = db.collection("n_laptops").doc(laptopId);
+    const session = await scopedSession("rentals");
+    const by = session.user?.email ?? session.user?.name ?? undefined;
+
+    const result: LaptopExitResult = await db.runTransaction(async (tx) => {
+      const snap = await tx.get(laptopRef);
+      if (!snap.exists) return { ok: false, message: "המחשב לא נמצא" };
+      const laptop = snap.data() as Omit<Laptop, "id">;
+      if (!scope.allows(laptop.branchId)) return { ok: false, message: "אין הרשאה לסניף הזה" };
+      if (!isLaptopActive(laptop)) return { ok: false, message: "המחשב כבר לא פעיל בסניף (נמכר או הוצא)" };
+      const activeRentals = await tx.get(
+        db.collection("n_rentals").where("itemId", "==", laptopId).where("status", "==", "active").limit(1),
+      );
+      const repairs = await tx.get(db.collection(LAPTOP_REPAIRS_COLLECTION).where("laptopId", "==", laptopId));
+      if (!activeRentals.empty) {
+        return {
+          ok: false,
+          message:
+            "המחשב מושכר כרגע. תיקון לא מסיים השכרה — יש להחזיר את ההשכרה (או להחליף לשוכר מחשב אחר) ורק אז להוציא לתיקון.",
+        };
+      }
+      if (repairs.docs.some((d) => isRepairOpen(d.data() as LaptopRepair))) {
+        return { ok: false, message: "המחשב כבר בתיקון" };
+      }
+      const doc: Omit<LaptopRepair, "id"> = stripUndefined({
+        laptopId,
+        branchId: laptop.branchId,
+        laptopName: laptop.name,
+        from: input.from,
+        note: input.note?.trim() || undefined,
+        lab: input.lab?.trim() || undefined,
+        labContact: input.labContact?.trim() || undefined,
+        treatment: input.treatment?.trim() || undefined,
+        createdAt: new Date().toISOString(),
+        createdBy: by,
+      });
+      tx.set(db.collection(LAPTOP_REPAIRS_COLLECTION).doc(), doc);
+      return {
+        ok: true,
+        message: `${laptop.name} סומן בתיקון מ-${input.from}. לא ניתן להשכיר אותו עד שיסומן "חזר מתיקון".`,
+      };
+    });
+    if (result.ok) revalidatePath("/dashboard/rentals", "layout");
+    return result;
+  } catch (e) {
+    return { ok: false, message: e instanceof Error ? e.message : "אירעה שגיאה" };
+  }
+}
+
+/** "חזר מתיקון" — סוגר את התקופה הפתוחה (ממלא `to`), והמחשב חוזר להיות זמין. אותן הרשאות. */
+export async function closeLaptopRepairAction(
+  repairId: string,
+  input: { to: string; returnNote?: string; treatment?: string },
+): Promise<LaptopExitResult> {
+  try {
+    const scope = await currentModuleScope("rentals");
+    if (!scope?.granted || !scope.isManager) return { ok: false, message: "פתוח לבעלים ולשותף בלבד" };
+    if (!DATE_RE.test(input.to)) return { ok: false, message: "תאריך לא תקין" };
+    if (input.to > todayIso()) return { ok: false, message: "תאריך החזרה לא יכול להיות בעתיד" };
+    const db = getAdminFirestore();
+    const ref = db.collection(LAPTOP_REPAIRS_COLLECTION).doc(repairId);
+    const snap = await ref.get();
+    const repair = snap.data() as Omit<LaptopRepair, "id"> | undefined;
+    if (!repair) return { ok: false, message: "תקופת התיקון לא נמצאה" };
+    if (!scope.allows(repair.branchId)) return { ok: false, message: "אין הרשאה לסניף הזה" };
+    if (!isRepairOpen(repair)) return { ok: false, message: "התיקון כבר נסגר" };
+    if (input.to < repair.from) return { ok: false, message: `תאריך החזרה לפני תאריך היציאה (${repair.from})` };
+    const session = await scopedSession("rentals");
+    await ref.set(
+      stripUndefined({
+        to: input.to,
+        returnNote: input.returnNote?.trim() || undefined,
+        // תיאור טיפול שמתברר רק בחזרה — נשמר רק אם הוזן; ריק לא דורס תיאור קיים.
+        treatment: input.treatment?.trim() || undefined,
+        closedAt: new Date().toISOString(),
+        closedBy: session.user?.email ?? session.user?.name ?? undefined,
+      }),
+      { merge: true },
+    );
+    revalidatePath("/dashboard/rentals", "layout");
+    return { ok: true, message: `${repair.laptopName ?? "המחשב"} חזר מתיקון ב-${input.to} וזמין להשכרה.` };
+  } catch (e) {
+    return { ok: false, message: e instanceof Error ? e.message : "אירעה שגיאה" };
+  }
 }
