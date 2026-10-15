@@ -37,7 +37,7 @@ export const NAV_ITEMS: NavItem[] = [
   { href: "/dashboard/accounting", label: "כספים", icon: BarChart3, perm: "accounting", group: "main" },
   { href: "/dashboard/duxus", label: "משימות", icon: Target, perm: "duxus", group: "main" },
   { href: "/dashboard/users", label: "משתמשים", icon: Users, group: "tools", ownerOnly: true },
-  { href: "/dashboard/tutorials", label: "הדרכות", icon: BookOpen, group: "tools" },
+  { href: "/dashboard/tutorials", label: "נהלים והדרכות", icon: BookOpen, group: "tools" },
   { href: "/dashboard/help", label: "עזרה ושאלות", icon: LifeBuoy, group: "tools" },
   { href: "/dashboard/shop", label: "חנות AI", icon: Sparkles, perm: "shop", group: "tools" },
   { href: "/dashboard/maintenance", label: "בדיקת נתונים", icon: Stethoscope, group: "tools", ownerOnly: true },

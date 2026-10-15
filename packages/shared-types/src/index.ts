@@ -1018,6 +1018,20 @@ export interface Procedure {
   updatedAt: number;
   createdBy?: string;
   updatedBy?: string;
+  /**
+   * מי רשאי לצפות (מ-2026-10-15, אפיון שדרוג v2 סעיף 12). **חסר = ההרשאה של היום בדיוק**: כל מי
+   * שיש לו את מודול "משימות ונהלים" (`duxus`) — כך שאף נוהל קיים לא נפתח ולא נסגר בגלל השדה.
+   * נוהל חדש נשמר כברירת מחדל `owner` (הנהלה בלבד). ראו `lib/procedure-access.ts`.
+   */
+  audience?: ProcedureAudience;
+}
+
+/** "duxus" = מי שיש לו את מודול המשימות (ההתנהגות הוותיקה) · "owner" = הנהלה בלבד ·
+ *  "branch_managers" = כל מנהלי הסניפים (שותפים) · "users" = משתמשים נבחרים לפי מייל. */
+export interface ProcedureAudience {
+  mode: "duxus" | "owner" | "branch_managers" | "users";
+  /** רק כש-`mode === "users"`: מיילים באותיות קטנות. */
+  userEmails?: string[];
 }
 
 export type QuarterStatus = "active" | "archived";

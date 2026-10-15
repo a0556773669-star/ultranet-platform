@@ -114,7 +114,7 @@ export default async function CoworkingPage({ searchParams }: { searchParams?: {
               <a
                 key={o.stationNumber}
                 href={`#station-${o.stationNumber}`}
-                className={`flex h-24 w-24 flex-col items-center justify-center rounded-card border-2 text-center transition ${
+                className={`flex h-28 w-28 flex-col items-center justify-center rounded-card border-2 text-center transition ${
                   taken ? "border-teal bg-teal-bg" : "border-card-border bg-white hover:border-teal"
                 }`}
               >
@@ -124,6 +124,10 @@ export default async function CoworkingPage({ searchParams }: { searchParams?: {
                 <span className={`mt-1 text-[11px] font-extrabold ${taken ? "text-teal-dark" : "text-muted"}`}>
                   {taken ? "מושכרת" : "פנויה"}
                 </span>
+                {o.current && (
+                  // שם השוכר על המשבצת (אפיון שדרוג v2, סעיף 9); לחיצה פותחת את פרטי העמדה למטה.
+                  <span className="mt-0.5 max-w-full truncate px-1 text-[11px] font-bold text-ink">{o.current.client.name}</span>
+                )}
                 {taken && (
                   <span className={`mt-0.5 text-[10px] font-bold ${paid ? "text-emerald-600" : "text-red-600"}`}>
                     {paid ? "שולם החודש" : "טרם שולם"}

@@ -1,6 +1,7 @@
 import { requireModuleAccess } from "@/lib/perms";
 import { createProcedureAction, getProcedure, listProcedures } from "../../actions";
 import { ProcedureForm } from "../procedure-form";
+import { loadUsersForAudience } from "@/lib/procedure-users";
 
 /**
  * נוהל חדש, או **גרסה חדשה** של נוהל קיים (`?from=<id>`). בגרסה חדשה השדות מגיעים
@@ -12,6 +13,7 @@ export default async function NewProcedurePage({ searchParams }: { searchParams:
     searchParams.from ? getProcedure(searchParams.from) : Promise.resolve(null),
     listProcedures(),
   ]);
+  const users = await loadUsersForAudience();
   const categories = Array.from(new Set(all.map((p) => p.category ?? "").filter(Boolean)));
 
   return (
@@ -24,6 +26,7 @@ export default async function NewProcedurePage({ searchParams }: { searchParams:
         supersedes={supersedes ?? undefined}
         submitLabel="שמירה"
         categories={categories}
+        users={users}
       />
     </div>
   );
