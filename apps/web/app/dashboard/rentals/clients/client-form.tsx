@@ -4,6 +4,7 @@ import { useState } from "react";
 import type { Branch, RentalClient } from "@ultranet/shared-types";
 import { CopyButton } from "@/components/copy-button";
 import { useUnsavedWarning } from "@/lib/use-unsaved-warning";
+import { EditConflictGuard } from "@/components/edit-conflict-guard";
 
 const FIELD =
   "w-full rounded-lg border border-card-border bg-[#f4f6f9] px-3 py-2 text-sm focus:border-teal focus:bg-white focus:outline-none";
@@ -16,6 +17,8 @@ export function ClientForm({
   myBranchId,
   presetBranchId,
   initial,
+  loadedAt,
+  conflict = false,
 }: {
   action: (formData: FormData) => void;
   branches: Branch[];
@@ -23,6 +26,10 @@ export function ClientForm({
   myBranchId?: string;
   presetBranchId?: string;
   initial?: RentalClient;
+  /** גרסת המסמך (updateTime) בעת הטעינה — מניעת דריסה בעריכה מקבילה */
+  loadedAt?: number;
+  /** השמירה הקודמת נחסמה כי הלקוח השתנה בינתיים */
+  conflict?: boolean;
 }) {
   const [depositType, setDepositType] = useState<"none" | "check" | "credit">(
     initial?.depositType ?? "none"
@@ -37,6 +44,14 @@ export function ClientForm({
       onSubmit={() => setDirty(false)}
       className="mb-6 grid grid-cols-1 gap-4 rounded-card border border-card-border bg-white p-5 shadow-card sm:grid-cols-2"
     >
+      {initial && (
+        <EditConflictGuard
+          draftKey={`rental-client:${initial.id}`}
+          loadedAt={loadedAt}
+          conflict={conflict}
+          mode="page"
+        />
+      )}
       {isOwner ? (
         <div>
           <label className={LABEL}>סניף</label>

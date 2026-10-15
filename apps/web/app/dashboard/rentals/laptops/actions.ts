@@ -15,6 +15,7 @@ import {
 import { LAPTOP_SALES_COLLECTION } from "@/lib/branch-accounting-data";
 import { nextMonth, reviseFixedExpenseAmount } from "@/lib/fixed-expense-revision";
 import { isRepairOpen, LAPTOP_REPAIRS_COLLECTION } from "@/lib/laptop-repairs";
+import { changedSinceLoaded } from "@/lib/edit-conflict";
 
 /** ה-session של מודול ההשכרות — ראה `scopedSession`. */
 async function requireSession() {
@@ -168,6 +169,10 @@ export async function updateLaptopAction(id: string, formData: FormData) {
   const session = await requireSession();
   const role = session.user?.role;
   const existing = await getAdminFirestore().collection("n_laptops").doc(id).get();
+  // מניעת דריסה: המחשב השתנה מאז שהטופס נפתח — לא כותבים כלום (הטיוטה נשמרה בדפדפן).
+  if (changedSinceLoaded(existing, formData)) {
+    redirect(`/dashboard/rentals/laptops/${id}?error=conflict`);
+  }
   const existingBranchId = (existing.data() as Omit<Laptop, "id"> | undefined)?.branchId ?? "";
   const branchId = role === "owner" ? String(formData.get("branchId") ?? "").trim() : existingBranchId;
   const data = parseLaptopForm(formData, branchId);

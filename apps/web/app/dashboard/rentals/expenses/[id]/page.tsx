@@ -13,6 +13,18 @@ import { buildBranchLedger } from "@/lib/branch-ledger";
 import { loadRecurringPurchaseIndex } from "@/lib/recurring-purchases";
 import { RecurringPurchasesSummary } from "@/components/recurring-purchases/recurring-purchases-summary";
 import { LegacyMultiBranchExpenses } from "../legacy-multi-branch";
+import type { QueryDocumentSnapshot } from "firebase-admin/firestore";
+import { docVersion } from "@/lib/edit-conflict";
+
+/** updateTime של כל מסמך לפי מזהה — גרסת הטעינה לבדיקת עריכה מקבילה (lib/edit-conflict.ts). */
+function versionsOf(docs: QueryDocumentSnapshot[]): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const d of docs) {
+    const v = docVersion(d);
+    if (v !== undefined) out[d.id] = v;
+  }
+  return out;
+}
 
 export default async function BranchExpensesPage({ params }: { params: { id: string } }) {
   const session = await getServerSession(authOptions);
@@ -115,6 +127,8 @@ export default async function BranchExpensesPage({ params }: { params: { id: str
         expenseTypes={purchaseIndex.types}
         purchaseByType={purchaseIndex.byType}
         branches={rentalsBranches}
+        fixedVersions={versionsOf(fixedSnap.docs)}
+        variableVersions={versionsOf(variableSnap.docs)}
       />
       {isShared && isOwner && <LegacyMultiBranchExpenses branchNameById={new Map(rentalsBranches.map((b) => [b.id, b.name]))} />}
       <RecurringPurchasesSummary summaries={purchaseSummaries} />

@@ -9,6 +9,7 @@ import { DeleteClientButton } from "../delete-client-button";
 import { ClientCardSection } from "../client-card-section";
 import { ClientChargeSection } from "../client-charge-section";
 import { resolveNedarimCreds, listNedarimRoutes } from "@/lib/nedarim";
+import { docVersion } from "@/lib/edit-conflict";
 
 export default async function EditClientPage({
   params,
@@ -60,12 +61,16 @@ export default async function EditClientPage({
           חובה לבחור סניף ולמלא שם לקוח לפני השמירה.
         </div>
       )}
+      {/* אחרי שמירה שנחסמה (עריכה מקבילה) הטופס נבנה מחדש עם הערכים העדכניים */}
       <ClientForm
+        key={searchParams?.error === "conflict" ? `conflict-${docVersion(clientDoc)}` : "edit"}
         action={boundUpdate}
         branches={branches}
         isOwner={isOwner}
         myBranchId={myBranchId}
         initial={client}
+        loadedAt={docVersion(clientDoc)}
+        conflict={searchParams?.error === "conflict"}
       />
       {routes.length > 0 && (
         <ClientCardSection
