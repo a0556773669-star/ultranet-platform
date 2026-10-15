@@ -2,6 +2,7 @@
 import { useState } from "react";
 import type { Branch, BranchRentalPricing, Laptop, Stick } from "@ultranet/shared-types";
 import { laptopDisplayName, parseLaptopName } from "@/lib/laptop-names";
+import { EditConflictGuard } from "@/components/edit-conflict-guard";
 
 const FIELD = "w-full rounded-lg border border-card-border bg-[#f4f6f9] px-3 py-2 text-sm focus:border-teal focus:bg-white focus:outline-none";
 const LABEL = "mb-1 block text-xs font-semibold text-muted";
@@ -18,6 +19,10 @@ type Props = {
   branchPricing?: Record<string, BranchRentalPricing | undefined>;
   /** הסניף של המחשב כשהמשתמש אינו owner (אין לו בורר סניף בטופס) */
   fixedBranchId?: string;
+  /** גרסת המסמך (updateTime) בעת הטעינה — מניעת דריסה בעריכה מקבילה */
+  loadedAt?: number;
+  /** השמירה הקודמת נחסמה כי המחשב השתנה בינתיים */
+  conflict?: boolean;
 };
 
 export function LaptopForm({
@@ -28,6 +33,8 @@ export function LaptopForm({
   initialStick,
   branchPricing,
   fixedBranchId,
+  loadedAt,
+  conflict = false,
 }: Props) {
   const [hasStick, setHasStick] = useState(!!initial?.hasStick);
   const [hasPartner, setHasPartner] = useState(!!initial?.hasPartner);
@@ -45,6 +52,9 @@ export function LaptopForm({
 
   return (
     <form action={action} className="flex flex-col gap-4 rounded-card border border-card-border bg-white p-5 shadow-card">
+      {initial && (
+        <EditConflictGuard draftKey={`laptop:${initial.id}`} loadedAt={loadedAt} conflict={conflict} mode="page" />
+      )}
       {isOwner ? (
         <div>
           <label className={LABEL}>סניף</label>

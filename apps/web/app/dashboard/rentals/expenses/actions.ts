@@ -15,6 +15,7 @@ import { createLinkedOwnerLedgerExpense, deleteLinkedOwnerLedgerExpense } from "
 import { resolveExpenseTypeIdFromForm } from "@/lib/recurring-purchases";
 import { countsToMainFromForm } from "@/lib/counts-to-main";
 import { reviseFixedExpenseAmount, type RevisionResult } from "@/lib/fixed-expense-revision";
+import { changedSinceLoaded, type EditConflictResult } from "@/lib/edit-conflict";
 
 async function requireOwner() {
   const session = await getServerSession(authOptions);
@@ -63,7 +64,7 @@ async function loadOwnedFixedExpense(id: string, branchId: string) {
   const doc = await ref.get();
   const data = doc.data() as Omit<FixedExpense, "id"> | undefined;
   if (!data || data.branchId !== branchId) throw new Error("ההוצאה לא נמצאה בסניף הזה");
-  return { ref, data };
+  return { ref, data, doc };
 }
 
 async function loadOwnedVariableExpense(id: string, branchId: string) {
@@ -71,7 +72,7 @@ async function loadOwnedVariableExpense(id: string, branchId: string) {
   const doc = await ref.get();
   const data = doc.data() as Omit<VariableExpense, "id"> | undefined;
   if (!data || data.branchId !== branchId) throw new Error("ההוצאה לא נמצאה בסניף הזה");
-  return { ref, data };
+  return { ref, data, doc };
 }
 
 export async function createFixedExpenseAction(branchId: string, formData: FormData) {
@@ -125,9 +126,18 @@ export async function deleteFixedExpenseAction(id: string, branchId: string) {
   revalidatePath("/dashboard");
 }
 
-export async function updateFixedExpenseAction(id: string, branchId: string, formData: FormData) {
+/**
+ * מחזיר `{ conflict: true }` (ולא כותב כלום) כשההוצאה השתנתה מאז שחלון העריכה נפתח — מניעת
+ * דריסה בעריכה מקבילה, בלי מיזוג סכומים. ראה `lib/edit-conflict.ts`.
+ */
+export async function updateFixedExpenseAction(
+  id: string,
+  branchId: string,
+  formData: FormData
+): Promise<EditConflictResult | undefined> {
   await requireBranchAccess(branchId);
-  const { ref } = await loadOwnedFixedExpense(id, branchId);
+  const { ref, doc } = await loadOwnedFixedExpense(id, branchId);
+  if (changedSinceLoaded(doc, formData)) return { conflict: true };
   const name = String(formData.get("name") ?? "").trim();
   const amount = Number(formData.get("amount")) || 0;
   const startDate = String(formData.get("startDate") ?? "").trim();
@@ -205,7 +215,12 @@ export async function createVariableExpenseAction(branchId: string, formData: Fo
   revalidatePath("/dashboard");
 }
 
-export async function updateVariableExpenseAction(id: string, branchId: string, formData: FormData) {
+/** ראה `updateFixedExpenseAction` — הבדיקה קודמת למחיקת ההוצאה המקושרת בספר הראשי. */
+export async function updateVariableExpenseAction(
+  id: string,
+  branchId: string,
+  formData: FormData
+): Promise<EditConflictResult | undefined> {
   await requireBranchAccess(branchId);
   const desc = String(formData.get("desc") ?? "").trim();
   const amount = Number(formData.get("amount")) || 0;
@@ -219,7 +234,8 @@ export async function updateVariableExpenseAction(id: string, branchId: string, 
   const month = date.slice(0, 7);
 
   const db = getAdminFirestore();
-  const { ref, data: existing } = await loadOwnedVariableExpense(id, branchId);
+  const { ref, data: existing, doc } = await loadOwnedVariableExpense(id, branchId);
+  if (changedSinceLoaded(doc, formData)) return { conflict: true };
   await deleteLinkedOwnerLedgerExpense(existing.linkedAhExpenseId);
 
   let branchLabel = "כל סניפי ההשכרות";

@@ -8,6 +8,7 @@ import { updateFixedExpenseAction, updateVariableExpenseAction } from "./actions
 import { useToast } from "@/lib/toast";
 import { CountsToMainField } from "@/components/counts-to-main-field";
 import { SharedExpenseSplitField } from "@/components/expenses/shared-expense-split-field";
+import { EditConflictGuard, clearEditDraft } from "@/components/edit-conflict-guard";
 
 const CATEGORIES = ["שכירות", "חשמל ומים", "משכורות", "ציוד ותחזוקה", "שיווק ופרסום", "הדפסות ותקנונים", "ביטוח", "אחר"];
 
@@ -73,6 +74,7 @@ export function EditFixedExpenseModal({
   partnerName,
   isShared = false,
   branches = [],
+  loadedAt,
 }: {
   expense: FixedExpense;
   branchId: string;
@@ -82,21 +84,35 @@ export function EditFixedExpenseModal({
   /** בספר המשותף נוסף לחלון גם *איך ההוצאה מתחלקת* - על אילו סניפים וכמה אחוז על הבעלים */
   isShared?: boolean;
   branches?: { id: string; name: string }[];
+  /** גרסת המסמך (updateTime) כפי שנטען בדף — מניעת דריסה בעריכה מקבילה (פריט 37) */
+  loadedAt?: number;
 }) {
   const [open, setOpen] = useState(false);
+  const [conflict, setConflict] = useState(false);
   const [isPending, startTransition] = useTransition();
   const router = useRouter();
   const { showSuccess, showError, toastNode } = useToast();
   const update = updateFixedExpenseAction.bind(null, expense.id, branchId);
+  const draftKey = `fixed-expense:${expense.id}`;
 
   function handleSubmit(formData: FormData) {
     startTransition(async () => {
       try {
-        await update(formData);
+        const res = await update(formData);
+        if (res?.conflict) {
+          // לא נשמר דבר. הטיוטה נשארת בדפדפן; הדף מתרענן ברקע, ובפתיחה הבאה של החלון יוצגו
+          // הנתונים העדכניים עם אפשרות לשחזר את הטיוטה — בלי מיזוג סכומים אוטומטי.
+          setConflict(true);
+          router.refresh();
+          return;
+        }
+        clearEditDraft(draftKey);
         router.refresh();
         setOpen(false);
         showSuccess("ההוצאה עודכנה בהצלחה");
       } catch (err) {
+        // שגיאה רגילה — הטופס נשאר פתוח עם התוכן, אין צורך בטיוטה שמורה
+        clearEditDraft(draftKey);
         showError(err instanceof Error ? err.message : "אירעה שגיאה בעדכון ההוצאה");
       }
     });
@@ -104,12 +120,20 @@ export function EditFixedExpenseModal({
 
   return (
     <>
-      <button type="button" onClick={() => setOpen(true)} className="rounded-lg border border-card-border bg-white px-2 py-1 text-xs font-bold text-ink hover:bg-[#f4f6f9]">
+      <button
+        type="button"
+        onClick={() => {
+          setConflict(false);
+          setOpen(true);
+        }}
+        className="rounded-lg border border-card-border bg-white px-2 py-1 text-xs font-bold text-ink hover:bg-[#f4f6f9]"
+      >
         עריכה
       </button>
       {open && (
         <Modal title="עריכת הוצאה קבועה" onClose={() => setOpen(false)}>
           <form action={handleSubmit} className="grid grid-cols-2 gap-2">
+            <EditConflictGuard draftKey={draftKey} loadedAt={loadedAt} conflict={conflict} mode="modal" />
             <div className="col-span-2">
               <label className={LABEL}>שם ההוצאה</label>
               <input name="name" defaultValue={expense.name} className={FIELD} required />
@@ -174,6 +198,7 @@ export function EditVariableExpenseModal({
   partnerName,
   isShared = false,
   branches = [],
+  loadedAt,
 }: {
   expense: VariableExpense;
   branchId: string;
@@ -183,21 +208,35 @@ export function EditVariableExpenseModal({
   /** ראה `EditFixedExpenseModal` */
   isShared?: boolean;
   branches?: { id: string; name: string }[];
+  /** גרסת המסמך (updateTime) כפי שנטען בדף — מניעת דריסה בעריכה מקבילה (פריט 37) */
+  loadedAt?: number;
 }) {
   const [open, setOpen] = useState(false);
+  const [conflict, setConflict] = useState(false);
   const [isPending, startTransition] = useTransition();
   const router = useRouter();
   const { showSuccess, showError, toastNode } = useToast();
   const update = updateVariableExpenseAction.bind(null, expense.id, branchId);
+  const draftKey = `variable-expense:${expense.id}`;
 
   function handleSubmit(formData: FormData) {
     startTransition(async () => {
       try {
-        await update(formData);
+        const res = await update(formData);
+        if (res?.conflict) {
+          // לא נשמר דבר. הטיוטה נשארת בדפדפן; הדף מתרענן ברקע, ובפתיחה הבאה של החלון יוצגו
+          // הנתונים העדכניים עם אפשרות לשחזר את הטיוטה — בלי מיזוג סכומים אוטומטי.
+          setConflict(true);
+          router.refresh();
+          return;
+        }
+        clearEditDraft(draftKey);
         router.refresh();
         setOpen(false);
         showSuccess("ההוצאה עודכנה בהצלחה");
       } catch (err) {
+        // שגיאה רגילה — הטופס נשאר פתוח עם התוכן, אין צורך בטיוטה שמורה
+        clearEditDraft(draftKey);
         showError(err instanceof Error ? err.message : "אירעה שגיאה בעדכון ההוצאה");
       }
     });
@@ -205,12 +244,20 @@ export function EditVariableExpenseModal({
 
   return (
     <>
-      <button type="button" onClick={() => setOpen(true)} className="rounded-lg border border-card-border bg-white px-2 py-1 text-xs font-bold text-ink hover:bg-[#f4f6f9]">
+      <button
+        type="button"
+        onClick={() => {
+          setConflict(false);
+          setOpen(true);
+        }}
+        className="rounded-lg border border-card-border bg-white px-2 py-1 text-xs font-bold text-ink hover:bg-[#f4f6f9]"
+      >
         עריכה
       </button>
       {open && (
         <Modal title="עריכת הוצאה חד פעמית" onClose={() => setOpen(false)}>
           <form action={handleSubmit} className="grid grid-cols-2 gap-2">
+            <EditConflictGuard draftKey={draftKey} loadedAt={loadedAt} conflict={conflict} mode="modal" />
             <div className="col-span-2">
               <label className={LABEL}>תיאור</label>
               <input name="desc" defaultValue={expense.desc} className={FIELD} required />

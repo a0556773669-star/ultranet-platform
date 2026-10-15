@@ -71,6 +71,9 @@ type Props = {
   purchaseByType?: Map<string, RecurringPurchaseTypeSummary>;
   /** סניפי ההשכרות החיים - נדרשים רק בספר המשותף, לבחירת הסניפים שההוצאה מתחלקת ביניהם */
   branches?: Branch[];
+  /** updateTime של כל הוצאה (לפי מזהה) כפי שנטענה — לחלונות העריכה, מניעת דריסה בעריכה מקבילה */
+  fixedVersions?: Record<string, number>;
+  variableVersions?: Record<string, number>;
 };
 
 export function BranchExpenses({
@@ -89,6 +92,8 @@ export function BranchExpenses({
   expenseTypes = [],
   purchaseByType,
   branches = [],
+  fixedVersions = {},
+  variableVersions = {},
 }: Props) {
   const activeFixed = fixedExpenses.filter((e) => !e.endDate);
   const endedFixed = fixedExpenses.filter((e) => e.endDate);
@@ -260,7 +265,7 @@ export function BranchExpenses({
                   )}
                 </div>
                 <div className="flex items-center gap-2">
-                  {canManage && <EditFixedExpenseModal expense={e} branchId={branchId} isPartner={isPartner} ownerName={ownerName} partnerName={partnerName} isShared={isShared} branches={branchOptions} />}
+                  {canManage && <EditFixedExpenseModal expense={e} loadedAt={fixedVersions[e.id]} branchId={branchId} isPartner={isPartner} ownerName={ownerName} partnerName={partnerName} isShared={isShared} branches={branchOptions} />}
                   {canManage && <ReviseFixedExpenseControl id={e.id} branchId={branchId} amount={e.amount || 0} />}
                   {canManage && <EndFixedExpenseControl id={e.id} branchId={branchId} />}
                   {canManage && <DeleteFixedExpenseButton id={e.id} branchId={branchId} />}
@@ -280,7 +285,7 @@ export function BranchExpenses({
                       <p className="text-xs text-muted">{e.startDate} – {e.endDate}{isPartner ? ` · ${paymentNote(e.paidBy, e.owedBy, ownerName, partnerName)}` : ""}</p>
                     </div>
                     <div className="flex items-center gap-2">
-                      {canManage && <EditFixedExpenseModal expense={e} branchId={branchId} isPartner={isPartner} ownerName={ownerName} partnerName={partnerName} isShared={isShared} branches={branchOptions} />}
+                      {canManage && <EditFixedExpenseModal expense={e} loadedAt={fixedVersions[e.id]} branchId={branchId} isPartner={isPartner} ownerName={ownerName} partnerName={partnerName} isShared={isShared} branches={branchOptions} />}
                       {canManage && <DeleteFixedExpenseButton id={e.id} branchId={branchId} />}
                     </div>
                   </div>
@@ -314,7 +319,7 @@ export function BranchExpenses({
                   )}
                 </div>
                 <div className="flex items-center gap-2">
-                  {canManage && <EditVariableExpenseModal expense={e} branchId={branchId} isPartner={isPartner} ownerName={ownerName} partnerName={partnerName} isShared={isShared} branches={branchOptions} />}
+                  {canManage && <EditVariableExpenseModal expense={e} loadedAt={variableVersions[e.id]} branchId={branchId} isPartner={isPartner} ownerName={ownerName} partnerName={partnerName} isShared={isShared} branches={branchOptions} />}
                   {canManage && <DeleteVariableExpenseButton id={e.id} branchId={branchId} />}
                 </div>
               </div>
