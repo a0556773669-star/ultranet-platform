@@ -18,6 +18,7 @@ import type {
   TaskSettings,
 } from "@ultranet/shared-types";
 import { DEFAULT_TASK_SETTINGS } from "@ultranet/shared-types";
+import { newPersonalTaskDoc, personalTaskActivityDoc } from "@/lib/personal-task-doc";
 import { todayIso } from "../rocks/date-utils";
 import { PERSONAL_STATUSES, isActivePersonalTask } from "./personal-task-ui";
 
@@ -197,18 +198,7 @@ type ActivityEntry = {
  */
 function logActivity(db: Firestore, batch: WriteBatch | null, userName: string, entry: ActivityEntry): Promise<void> {
   const ref = db.collection(ACTIVITY).doc();
-  const payload = {
-    entityType: "personal_task" as const,
-    entityId: entry.taskId,
-    personalTaskId: entry.taskId,
-    action: entry.action,
-    field: entry.field ?? "",
-    oldValue: entry.oldValue ?? "",
-    newValue: entry.newValue ?? "",
-    note: entry.note ?? "",
-    userName,
-    at: Date.now(),
-  };
+  const payload = personalTaskActivityDoc(userName, entry);
   if (batch) {
     batch.set(ref, payload);
     return Promise.resolve();
@@ -338,24 +328,7 @@ export async function createPersonalTaskAction(input: PersonalTaskInput): Promis
   const now = Date.now();
   const ref = ctx.db.collection(TASKS).doc();
   const batch = ctx.db.batch();
-  batch.set(ref, {
-    ...fields,
-    status: "new" as PersonalTaskStatus,
-    pinned: false,
-    lastNote: "",
-    createdBy: ctx.user,
-    createdAt: now,
-    viewedAt: null,
-    completedBy: "",
-    completedAt: null,
-    cancelledBy: "",
-    cancelledAt: null,
-    cancelReason: "",
-    reopenCount: 0,
-    deletedAt: null,
-    updatedAt: now,
-    updatedBy: ctx.user,
-  });
+  batch.set(ref, newPersonalTaskDoc(fields, ctx.user, now));
   logActivity(ctx.db, batch, ctx.user, { taskId: ref.id, action: "create", newValue: fields.title });
   await batch.commit();
 

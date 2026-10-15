@@ -76,6 +76,9 @@ export default async function RentalBranchesPage() {
         </div>
         <div className="flex items-center gap-2">
           <AuditPermsButton />
+          <Link href="/dashboard/rentals/branches/templates" className="btn-outline">
+            {"תבניות פתיחה"}
+          </Link>
           <Link
             href="/dashboard/rentals/branches/new"
             className="flex items-center gap-1.5 rounded-lg bg-gradient-to-br from-teal to-teal-light px-4 py-2 text-sm font-bold text-white shadow-primary transition hover:opacity-90"

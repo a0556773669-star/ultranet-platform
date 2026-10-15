@@ -6,7 +6,10 @@ import { authOptions } from "@/lib/auth";
 import { getAdminFirestore } from "@/lib/firebase-admin";
 import { isLaptopActive } from "@/lib/laptop-names";
 import { loadBranchProgressBoard, STAGES } from "@/lib/branch-progress";
+import { branchHasRentals, loadBranchTemplates, loadBranchTemplateTasks } from "@/lib/branch-templates";
+import { PERSONAL_STATUS_LABEL } from "@/app/dashboard/duxus/personal/personal-task-ui";
 import type { Branch, Laptop, Rental, Stick } from "@ultranet/shared-types";
+import { ApplyTemplate } from "./apply-template";
 
 /**
  * כרטיס צפייה בסניף השכרות (אפיון שדרוג v2, סעיף 6): לחיצה על סניף פותחת קודם את הכרטיס —
@@ -19,12 +22,15 @@ export default async function RentalBranchViewPage({ params }: { params: { id: s
   if (session.user?.role !== "owner") redirect("/dashboard/rentals");
 
   const db = getAdminFirestore();
-  const [doc, laptopsSnap, sticksSnap, activeSnap, progress] = await Promise.all([
+  const [doc, laptopsSnap, sticksSnap, activeSnap, progress, hasRentals, templates, templateTasks] = await Promise.all([
     db.collection("n_branches").doc(params.id).get(),
     db.collection("n_laptops").where("branchId", "==", params.id).get(),
     db.collection("n_sticks").where("branchId", "==", params.id).get(),
     db.collection("n_rentals").where("branchId", "==", params.id).where("status", "==", "active").get(),
     loadBranchProgressBoard().catch(() => null),
+    branchHasRentals(db, params.id),
+    loadBranchTemplates(db).catch(() => []),
+    loadBranchTemplateTasks(db, params.id).catch(() => []),
   ]);
   if (!doc.exists) notFound();
   const branch = { id: doc.id, ...(doc.data() as Omit<Branch, "id">) } as Branch;
@@ -37,6 +43,15 @@ export default async function RentalBranchViewPage({ params }: { params: { id: s
   const active = activeSnap.docs.map((d) => d.data() as Rental);
   const rentedLaptops = active.filter((r) => r.kind === "laptop").length;
   const row = progress?.rows.find((r) => r.branchId === branch.id);
+
+  // תבנית פתיחה (סעיף 50): מוצעת רק לסניף השכרות פתוח שאין בו אף השכרה. סניף ותיק לא מקבל
+  // אפשרות החלה; אם כבר נוצרו לו משימות מתבנית — הן מוצגות בכל מקרה.
+  const canApplyTemplate = branch.branchType === "rentals" && !branch.closedAt && !branch.deleted && !hasRentals;
+  const applicableTemplates = templates
+    .filter((t) => !t.archivedAt && t.approvedAt && t.steps.length > 0)
+    .map((t) => ({ id: t.id, name: t.name, steps: t.steps.length }));
+  const templateNames = new Map(templates.map((t) => [t.id, t.name]));
+  const visibleTemplateTasks = templateTasks.filter((t) => !t.deleted);
 
   const isPartnership = branch.isMine === false;
   const status = branch.closedAt
@@ -153,6 +168,44 @@ export default async function RentalBranchViewPage({ params }: { params: { id: s
           </ol>
         )}
       </div>
+
+      {(canApplyTemplate || visibleTemplateTasks.length > 0) && (
+        <div className="card">
+          <div className="mb-2 flex items-center justify-between text-xs font-bold text-muted">
+            <span>תבנית פתיחת סניף</span>
+            <Link href="/dashboard/rentals/branches/templates" className="font-bold text-teal hover:underline">
+              ניהול תבניות
+            </Link>
+          </div>
+          {canApplyTemplate &&
+            (applicableTemplates.length > 0 ? (
+              <ApplyTemplate branchId={branch.id} branchName={branch.name} templates={applicableTemplates} />
+            ) : (
+              <div className="text-sm text-muted">אין עדיין תבנית מאושרת.</div>
+            ))}
+          {visibleTemplateTasks.length > 0 && (
+            <div className={canApplyTemplate ? "mt-3" : ""}>
+              <div className="mb-1 flex items-center justify-between text-[12px] text-muted">
+                <span>{`משימות שנוצרו מתבנית (${visibleTemplateTasks.length})`}</span>
+                <Link href="/dashboard/duxus/personal" className="font-bold text-teal hover:underline">
+                  למשימות ליוני
+                </Link>
+              </div>
+              <ul className="flex flex-col">
+                {visibleTemplateTasks.map((t) => (
+                  <li key={t.id} className="flex items-center gap-2 border-b border-card-border py-1.5 text-[13px] last:border-b-0">
+                    <span className={`flex-1 ${t.status === "done" ? "text-muted line-through" : "text-ink"}`}>{t.title}</span>
+                    <span className="text-[11px] text-muted">{templateNames.get(t.templateId) ?? ""}</span>
+                    <span className="rounded-full bg-[#f4f6f9] px-2 py-0.5 text-[11px] font-bold text-muted">
+                      {PERSONAL_STATUS_LABEL[t.status] ?? t.status}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
