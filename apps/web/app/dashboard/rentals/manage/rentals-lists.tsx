@@ -63,6 +63,8 @@ export type ActiveRowData = {
   /** החזרה משוערת — לתכנון בלבד. */
   expectedReturnDate?: string;
   handoverItems?: string[];
+  /** כמה פריטים פעילים באותה מסירה (רק כשנמסרו כמה יחד). */
+  deliveryCount?: number;
 };
 
 export type HistoryRowData = {
@@ -248,6 +250,7 @@ export function RentalsLists({
                   clientNote={r.clientNote}
                   expectedReturnDate={r.expectedReturnDate}
                   handoverItems={r.handoverItems}
+                  deliveryCount={r.deliveryCount}
                 />
               ))}
             </tbody>

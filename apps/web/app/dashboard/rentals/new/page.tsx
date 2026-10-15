@@ -76,11 +76,14 @@ export default async function NewRentalPage({
         searchParams?.error === "no-branch" ||
         searchParams?.error === "already-rented" ||
         searchParams?.error === "in-repair" ||
+        searchParams?.error === "duplicate-item" ||
         noBranch) && (
         <div className="mb-4 rounded-card border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-700">
           {noBranch || searchParams?.error === "no-branch"
             ? "החשבון שלך לא משויך כרגע לסניף. נסה להתנתק ולהתחבר מחדש (השיוך מתעדכן אוטומטית תוך כ-2 דקות), או פנה לבעלים לשיוך סניף בעמוד המשתמשים."
-            : searchParams?.error === "in-repair"
+            : searchParams?.error === "duplicate-item"
+              ? "אותו פריט נבחר פעמיים באותה מסירה. לא נשמר דבר - יש לבחור כל פריט פעם אחת."
+              : searchParams?.error === "in-repair"
               ? "המחשב הזה בתיקון - לא ניתן להשכיר אותו עד שיסומן \"חזר מתיקון\" במלאי המחשבים."
               : searchParams?.error === "already-rented"
               ? "מחשב/סטיק זה כבר מושכר כרגע - יש להחזיר את ההשכרה הפעילה שלו לפני פתיחת השכרה חדשה."

@@ -50,6 +50,9 @@ export function NewRentalForm({
   // תאריך החזרה משוער — רשות, לתכנון בלבד (מסמך המשך 1, סעיף 43).
   const [expectedReturnDate, setExpectedReturnDate] = useState("");
   const [handoverItems, setHandoverItems] = useState<string[]>([]);
+  // פריטים נוספים באותה מסירה (מסמך המשך 1, סעיף 42). כל אחד נשמר כהשכרה נפרדת.
+  type Extra = { kind: "laptop" | "stick"; itemId: string; pricingVariant: "normal" | "noInternet" };
+  const [extras, setExtras] = useState<Extra[]>([]);
   const [formError, setFormError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
@@ -119,6 +122,11 @@ export function NewRentalForm({
       setFormError(`חובה למלא: ${missing} לפני השמירה.`);
       return;
     }
+    const ids = [itemId, ...extras.map((x) => x.itemId).filter(Boolean)];
+    if (new Set(ids).size !== ids.length) {
+      setFormError("אותו פריט נבחר פעמיים במסירה.");
+      return;
+    }
     setFormError(null);
 
     const fd = new FormData();
@@ -131,6 +139,8 @@ export function NewRentalForm({
     fd.set("notes", notesRef.current?.value ?? "");
     fd.set("expectedReturnDate", expectedReturnDate);
     for (const k of handoverItems) fd.append("handoverItems", k);
+    const chosenExtras = extras.filter((x) => x.itemId);
+    if (chosenExtras.length) fd.set("extraItems", JSON.stringify(chosenExtras));
     if (onlyMine) fd.set("mine", "1");
     startTransition(() => {
       createRentalAction(fd);
@@ -338,6 +348,81 @@ export function NewRentalForm({
           className={FIELD}
         />
       </div>
+
+      {itemId && (
+        <div className="rounded-lg border border-card-border p-3">
+          <div className="mb-2 flex items-center justify-between">
+            <span className="text-xs font-semibold text-muted">פריטים נוספים באותה מסירה (רשות)</span>
+            <button
+              type="button"
+              onClick={() => setExtras((prev) => [...prev, { kind: "laptop", itemId: "", pricingVariant: "normal" }])}
+              className="text-xs font-bold text-teal hover:underline"
+            >
+              + פריט נוסף
+            </button>
+          </div>
+          {extras.length === 0 ? (
+            <p className="text-[11px] text-muted">
+              למשל עוד מחשב לאותו לקוח. כל פריט נשמר כהשכרה נפרדת — עם מחירון משלו, ומוחזר ומשולם בנפרד.
+            </p>
+          ) : (
+            <div className="flex flex-col gap-2">
+              {extras.map((x, i) => {
+                const taken = new Set([itemId, ...extras.filter((_, j) => j !== i).map((e) => e.itemId)]);
+                const options =
+                  x.kind === "laptop"
+                    ? branchLaptops.filter(
+                        (l) => !rentedLaptopSet.has(l.id) && !repairLaptopIds?.includes(l.id) && !taken.has(l.id),
+                      )
+                    : branchSticks.filter((st) => !rentedStickSet.has(st.id) && !taken.has(st.id));
+                const update = (patch: Partial<Extra>) =>
+                  setExtras((prev) => prev.map((e, j) => (j === i ? { ...e, ...patch } : e)));
+                return (
+                  <div key={i} className="flex flex-wrap items-center gap-2">
+                    <select
+                      value={x.kind}
+                      onChange={(e) => update({ kind: e.target.value as Extra["kind"], itemId: "", pricingVariant: "normal" })}
+                      className="rounded-lg border border-card-border bg-[#f4f6f9] px-2 py-1.5 text-sm"
+                    >
+                      <option value="laptop">מחשב</option>
+                      <option value="stick">סטיק</option>
+                    </select>
+                    <select
+                      value={x.itemId}
+                      onChange={(e) => update({ itemId: e.target.value })}
+                      className="min-w-[160px] flex-1 rounded-lg border border-card-border bg-[#f4f6f9] px-2 py-1.5 text-sm"
+                    >
+                      <option value="">בחירת פריט…</option>
+                      {options.map((o) => (
+                        <option key={o.id} value={o.id}>
+                          {o.name}
+                        </option>
+                      ))}
+                    </select>
+                    {x.kind === "laptop" && (
+                      <select
+                        value={x.pricingVariant}
+                        onChange={(e) => update({ pricingVariant: e.target.value as Extra["pricingVariant"] })}
+                        className="rounded-lg border border-card-border bg-[#f4f6f9] px-2 py-1.5 text-sm"
+                      >
+                        <option value="normal">עם סטיק</option>
+                        <option value="noInternet">בלי סטיק</option>
+                      </select>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => setExtras((prev) => prev.filter((_, j) => j !== i))}
+                      className="text-xs font-bold text-red-600 hover:underline"
+                    >
+                      הסרה
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
 
       {itemId && (
         <div>

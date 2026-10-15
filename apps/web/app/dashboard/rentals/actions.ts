@@ -463,96 +463,131 @@ export async function createRentalAction(formData: FormData) {
       .join(", ");
     redirect(`/dashboard/rentals/new?error=missing&missingFields=${encodeURIComponent(missing)}${mineParam}`);
   }
-  // מחשב/סטיק שנמכר או הוצא מהסניף לא ניתן להשכרה, גם אם הגיע מטופס ישן שעוד הציג אותו.
-  {
-    const itemSnap = await getAdminFirestore()
-      .collection(kind === "stick" ? "n_sticks" : "n_laptops")
-      .doc(itemId)
-      .get();
-    const itemStatus = (itemSnap.data() as { status?: string } | undefined)?.status;
-    if (itemStatus && itemStatus !== "active") {
+  // כמה פריטים במסירה אחת (מסמך המשך 1, סעיף 42): הפריט הראשי + פריטים נוספים מהטופס. **לכל
+  // פריט רשומת השכרה משלה** — מחירון, סטטוס והיסטוריה נפרדים — עם `deliveryId` משותף. כל
+  // הבדיקות רצות על כל הפריטים לפני כתיבה, והכתיבה היא batch אחד: או שכל המסירה נשמרת או
+  // ששום דבר לא נשמר, כך שלא נשארת מסירה חלקית ומטעה.
+  type Requested = { kind: "laptop" | "stick"; itemId: string; pricingVariant: "normal" | "noInternet"; extra: boolean };
+  const requested: Requested[] = [{ kind, itemId, pricingVariant, extra: false }];
+  try {
+    const extras = JSON.parse(String(formData.get("extraItems") ?? "[]")) as Partial<Requested>[];
+    for (const e of Array.isArray(extras) ? extras : []) {
+      if (!e?.itemId || (e.kind !== "laptop" && e.kind !== "stick")) continue;
+      requested.push({
+        kind: e.kind,
+        itemId: String(e.itemId),
+        pricingVariant: e.pricingVariant === "noInternet" ? "noInternet" : "normal",
+        extra: true,
+      });
+    }
+  } catch {
+    /* קלט לא תקין = אין פריטים נוספים */
+  }
+  if (new Set(requested.map((r) => r.itemId)).size !== requested.length) {
+    redirect(`/dashboard/rentals/new?error=duplicate-item${mineParam}`);
+  }
+
+  const db = getAdminFirestore();
+  const branchDoc = await db.collection("n_branches").doc(branchId).get();
+  const branchPricing = (branchDoc.data() as Omit<Branch, "id"> | undefined)?.rentalPricing;
+  const snapshotAt = new Date().toISOString();
+  // מחשבים "עם אינטרנט" במסירה הזו — הסטיק המשויך להם כבר יוצא איתם, ואסור להוסיף אותו כפריט.
+  const bundledLaptopIds = new Set(
+    requested.filter((r) => r.kind === "laptop" && r.pricingVariant !== "noInternet").map((r) => r.itemId),
+  );
+  const docs: Omit<Rental, "id">[] = [];
+
+  for (const r of requested) {
+    // מחשב/סטיק שנמכר או הוצא מהסניף לא ניתן להשכרה, גם אם הגיע מטופס ישן שעוד הציג אותו.
+    const itemSnap = await db.collection(r.kind === "stick" ? "n_sticks" : "n_laptops").doc(r.itemId).get();
+    const itemData = itemSnap.data() as (Partial<Laptop> & Partial<Stick>) | undefined;
+    if (itemData?.status && itemData.status !== "active") {
       throw new Error("הפריט הזה כבר לא פעיל בסניף (נמכר או הוצא)");
     }
-  }
-  // מחשב בתיקון (תקופה פתוחה ב-n_laptop_repairs) לא ניתן להשכרה חדשה עד "חזר מתיקון".
-  if (kind === "laptop" && (await laptopInRepair(itemId))) {
-    redirect(`/dashboard/rentals/new?error=in-repair${mineParam}`);
-  }
+    // פריט נוסף חייב להיות קיים ובאותו סניף של המסירה.
+    if (r.extra && (!itemData || itemData.branchId !== branchId)) {
+      throw new Error("פריט נוסף במסירה לא שייך לסניף שנבחר");
+    }
+    // מחשב בתיקון (תקופה פתוחה ב-n_laptop_repairs) לא ניתן להשכרה חדשה עד "חזר מתיקון".
+    if (r.kind === "laptop" && (await laptopInRepair(r.itemId))) {
+      redirect(`/dashboard/rentals/new?error=in-repair${mineParam}`);
+    }
 
-  const activeForItem = await getAdminFirestore()
-    .collection("n_rentals")
-    .where("itemId", "==", itemId)
-    .where("status", "==", "active")
-    .limit(1)
-    .get();
-  if (!activeForItem.empty) {
-    redirect(`/dashboard/rentals/new?error=already-rented${mineParam}`);
-  }
+    const activeForItem = await db
+      .collection("n_rentals")
+      .where("itemId", "==", r.itemId)
+      .where("status", "==", "active")
+      .limit(1)
+      .get();
+    if (!activeForItem.empty) {
+      redirect(`/dashboard/rentals/new?error=already-rented${mineParam}`);
+    }
 
-  // שכירת סטיק בנפרד: אם הסטיק הזה משוייך למחשב שמושכר כרגע "עם אינטרנט" (ברירת המחדל),
-  // הוא בפועל כבר יצא עם הלקוח של המחשב - אין למכור אותו שוב גם אם אין לו רשומת n_rentals משלו.
-  if (kind === "stick") {
-    const stickDoc = await getAdminFirestore().collection("n_sticks").doc(itemId).get();
-    const linkedLaptopId = (stickDoc.data() as Omit<Stick, "id"> | undefined)?.linkedLaptopId;
-    if (linkedLaptopId) {
-      const bundledRental = await getAdminFirestore()
-        .collection("n_rentals")
-        .where("itemId", "==", linkedLaptopId)
-        .where("status", "==", "active")
-        .where("kind", "==", "laptop")
-        .limit(1)
-        .get();
-      const bundled = bundledRental.docs[0]?.data() as Omit<Rental, "id"> | undefined;
-      if (bundled && bundled.pricingVariant !== "noInternet") {
-        redirect(`/dashboard/rentals/new?error=already-rented${mineParam}`);
+    // שכירת סטיק בנפרד: אם הסטיק הזה משוייך למחשב שמושכר כרגע "עם אינטרנט" (ברירת המחדל),
+    // הוא בפועל כבר יצא עם הלקוח של המחשב - אין למכור אותו שוב גם אם אין לו רשומת n_rentals משלו.
+    // אותו כלל גם בתוך המסירה הזו: סטיק של מחשב שנמסר עכשיו "עם סטיק" לא נספר כפריט נוסף לחיוב.
+    if (r.kind === "stick") {
+      const linkedLaptopId = itemData?.linkedLaptopId;
+      if (linkedLaptopId) {
+        if (bundledLaptopIds.has(linkedLaptopId)) {
+          redirect(`/dashboard/rentals/new?error=already-rented${mineParam}`);
+        }
+        const bundledRental = await db
+          .collection("n_rentals")
+          .where("itemId", "==", linkedLaptopId)
+          .where("status", "==", "active")
+          .where("kind", "==", "laptop")
+          .limit(1)
+          .get();
+        const bundled = bundledRental.docs[0]?.data() as Omit<Rental, "id"> | undefined;
+        if (bundled && bundled.pricingVariant !== "noInternet") {
+          redirect(`/dashboard/rentals/new?error=already-rented${mineParam}`);
+        }
       }
     }
+
+    // מחיר פתיחה = יום אחד לפי אותו מנוע תמחור של סגירת ההשכרה, כולל ירושה ממחירון הסניף.
+    // המחירון שבתוקף עכשיו נשמר על ההשכרה (`ratesSnapshot`), כדי שעדכון מחירון מאוחר יותר
+    // לא ישנה את המחיר ללקוח שכבר שכר (אפיון שדרוג v2, סעיף 4 "מחירונים").
+    let calcPrice = 0;
+    let ratesSnapshot: RentalRatesSnapshot | undefined;
+    if (itemData) {
+      if (r.kind === "laptop") {
+        const rates = effectiveLaptopRates(itemData as Laptop, branchPricing);
+        calcPrice = laptopRatesFor(rates, r.pricingVariant).dayPrice;
+        ratesSnapshot = { at: snapshotAt, laptop: rates };
+      } else {
+        const rates = effectiveStickRates(itemData as Stick, branchPricing);
+        calcPrice = rates.day1 || rates.day3plus || rates.day2;
+        ratesSnapshot = { at: snapshotAt, stick: stripUndefined(rates) };
+      }
+    }
+
+    docs.push({
+      branchId,
+      clientId,
+      itemId: r.itemId,
+      kind: r.kind,
+      pricingVariant: r.kind === "laptop" ? r.pricingVariant : undefined,
+      startDate,
+      calcPrice: roundPrice(calcPrice),
+      notes,
+      collectionRouteId,
+      status: "active",
+      paid: false,
+      expectedReturnDate,
+      // בדיקת הציוד בטופס מתייחסת לפריט הראשי בלבד.
+      handoverItems: r.extra ? undefined : handoverItems,
+      ratesSnapshot,
+    });
   }
 
-  // מחיר פתיחה = יום אחד לפי אותו מנוע תמחור של סגירת ההשכרה, כולל ירושה ממחירון
-  // הסניף. המחיר הסופי מחושב מחדש לפי התאריכים בפועל בסגירת ההשכרה.
-  const branchDoc = await getAdminFirestore().collection("n_branches").doc(branchId).get();
-  const branchPricing = (branchDoc.data() as Omit<Branch, "id"> | undefined)?.rentalPricing;
-  // המחירון שבתוקף עכשיו נשמר על ההשכרה (`ratesSnapshot`), כדי שעדכון מחירון מאוחר יותר
-  // לא ישנה את המחיר ללקוח שכבר שכר (אפיון שדרוג v2, סעיף 4 "מחירונים").
-  let calcPrice = 0;
-  let ratesSnapshot: RentalRatesSnapshot | undefined;
-  const snapshotAt = new Date().toISOString();
-  if (kind === "laptop") {
-    const laptopDoc = await getAdminFirestore().collection("n_laptops").doc(itemId).get();
-    const laptop = laptopDoc.data() as Omit<Laptop, "id"> | undefined;
-    if (laptop) {
-      const rates = effectiveLaptopRates(laptop, branchPricing);
-      calcPrice = laptopRatesFor(rates, pricingVariant).dayPrice;
-      ratesSnapshot = { at: snapshotAt, laptop: rates };
-    }
-  } else {
-    const stickDoc = await getAdminFirestore().collection("n_sticks").doc(itemId).get();
-    const stick = stickDoc.data() as Omit<Stick, "id"> | undefined;
-    if (stick) {
-      const r = effectiveStickRates(stick, branchPricing);
-      calcPrice = r.day1 || r.day3plus || r.day2;
-      ratesSnapshot = { at: snapshotAt, stick: stripUndefined(r) };
-    }
+  const batch = db.batch();
+  const deliveryId = docs.length > 1 ? db.collection("n_rentals").doc().id : undefined;
+  for (const data of docs) {
+    batch.set(db.collection("n_rentals").doc(), stripUndefined({ ...data, deliveryId }));
   }
-
-  const data: Omit<Rental, "id"> = {
-    branchId,
-    clientId,
-    itemId,
-    kind,
-    pricingVariant: kind === "laptop" ? pricingVariant : undefined,
-    startDate,
-    calcPrice: roundPrice(calcPrice),
-    notes,
-    collectionRouteId,
-    status: "active",
-    paid: false,
-    expectedReturnDate,
-    handoverItems,
-    ratesSnapshot,
-  };
-  await getAdminFirestore().collection("n_rentals").add(stripUndefined(data));
+  await batch.commit();
   revalidatePath("/dashboard/rentals", "layout");
   redirect(mine ? "/dashboard/rentals/mine" : "/dashboard/rentals");
 }

@@ -72,6 +72,7 @@ type Props = {
   clientNote?: string;
   expectedReturnDate?: string;
   handoverItems?: string[];
+  deliveryCount?: number;
 };
 
 const BTN =
@@ -108,6 +109,7 @@ export function ActiveRentalRow({
   clientNote,
   expectedReturnDate,
   handoverItems,
+  deliveryCount,
 }: Props) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -286,7 +288,12 @@ export function ActiveRentalRow({
             </div>
           )}
         </td>
-        <td className="px-[11px] py-2 text-muted">{itemName}</td>
+        <td className="px-[11px] py-2 text-muted">
+          {itemName}
+          {deliveryCount && deliveryCount > 1 && (
+            <div className="text-[11px]" title="נמסרו יחד; כל פריט מוחזר ומשולם בנפרד">{`מסירה משותפת · ${deliveryCount} פריטים`}</div>
+          )}
+        </td>
         {showBranch && <td className="px-[11px] py-2 text-muted">{branchName}</td>}
         <td className="px-[11px] py-2 text-muted">
           {startDate}

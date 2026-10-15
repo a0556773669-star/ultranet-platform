@@ -165,6 +165,10 @@ export default async function RentalsPage({ searchParams }: { searchParams?: { m
     };
   }
 
+  // מסירה משותפת: כמה פריטים פעילים חולקים את אותו `deliveryId` (מסמך המשך 1, סעיף 42).
+  const activeByDelivery = new Map<string, number>();
+  for (const r of active) if (r.deliveryId) activeByDelivery.set(r.deliveryId, (activeByDelivery.get(r.deliveryId) ?? 0) + 1);
+
   const activeRows: ActiveRowData[] = active.map((r) => {
     const info = rowInfo(r);
     const item = r.kind === "stick" ? sticks.get(r.itemId) : laptops.get(r.itemId);
@@ -212,6 +216,7 @@ export default async function RentalsPage({ searchParams }: { searchParams?: { m
       clientNote: info.clientNote,
       expectedReturnDate: r.expectedReturnDate,
       handoverItems: r.handoverItems,
+      deliveryCount: r.deliveryId ? (activeByDelivery.get(r.deliveryId) ?? 1) : undefined,
       tokenRouteName: canCharge ? tokenRouteName : null,
       chargeRoutes: canCharge ? chargeRoutes : [],
       canDelete,
