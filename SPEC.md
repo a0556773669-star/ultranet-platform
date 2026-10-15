@@ -291,7 +291,8 @@ pnpm dev        # turbo run dev — מריץ web + api
 | `n_period_assignments` | `PeriodAssignment` | **השיוך של אבן דרך לתקופת עבודה - לא עותק שלה.** מזהה המסמך דטרמיניסטי: `${milestoneId}__${periodType}__${periodKey}`, וכך אילוץ "אבן דרך אחת לכל תקופה" נאכף ברמת בסיס הנתונים ולא רק בממשק. שדות: `milestoneId`, `quarterKey` (**הרבעון שבו נעשה השיוך**, לא בהכרח רבעון הבית של אבן הדרך - כך שאילתת שוויון אחת מחזירה את כל שיוכי הלוח), `periodType` (`quarter`/`month`/`week`), `periodKey`, `assignedAt`/`assignedBy`, `outcome` (`open` כל עוד התקופה פתוחה; בסגירת התקופה ננעל ל-`done`/`missed`/`cancelled`), `closedAt` |
 | `n_task_activity` | `TaskActivity` | יומן הפעולות של המודול - כל פעולה משמעותית עם מי, מתי, ומה השתנה: `entityType`, `entityId`, `action` (`create`/`update`/`assign`/`unassign`/`status`/`complete`/`reopen`/`cancel`/`move`/`delete`/`restore`/`view`/`comment`/`decision`), `field`/`oldValue`/`newValue`, `milestoneId`/`personalTaskId`/`quarterKey` (להקשר ולשליפה מהירה בשאילתת שוויון יחידה), `note` (סיבה), `userName`, `at`. `decision` = החלטת "ניהול ישיבה" על משימה שלא הושלמה: `newValue` הוא `continue`/`replan`/`pause`, `field` הוא `week`/`month`. **משרת גם את הטאב "משימות ליוני"** (`entityType: "personal_task"`) - אותו יומן, ישות נוספת. אינו ניתן לעריכה דרך הממשק |
 | `n_task_settings` | `TaskSettings` | מסמך יחיד במזהה `default`: `weekStartDay`, `warningWeekday` (מתי מופיעה האזהרה הכתומה) ו-`recommendedRocksPerQuarter`. שבוע העבודה ומועד האזהרה הם **הגדרה ולא קבוע בקוד**. בנוסף שלוש רשימות הגישה לטאב "משימות ליוני": `personalOwnerEmails` (בעל הרשימה - הכול), `personalEditorEmails` (הזנה ועריכה) ו-`personalViewerEmails` (צפייה). נשמרות באותיות קטנות; שלוש רשימות ריקות = הטאב מוצג לבעלים בלבד |
-| `n_personal_tasks` | `PersonalTask` | משימות הטאב "משימות ליוני" (`/dashboard/duxus/personal`) - `title` (השדה היחיד שחובה), `description`, `contactName`/`contactPhone` (טלפון כטקסט חופשי; פורמט לא תקין אינו חוסם שמירה), `priority` (`normal`/`important`/`urgent`), `status` (`new`/`open`/`in_progress`/`waiting`/`done`/`cancelled`), `dueDate` ("YYYY-MM-DD") ו-`dueTime` ("HH:MM", רשות) - **מחרוזות ולא חותמת זמן**, בדיוק כמו `Milestone.dueDate`, כדי ש"היום" יהיה אותו יום בשרת ובדפדפן, `pinned` (הצמדה לראש הרשימה), `lastNote` (שיקוף ההערה האחרונה לתצוגה בשורה), `viewedAt` (פתיחה ראשונה - מה שמסיר את חיווי "חדש"), `completedAt`/`completedBy`, `cancelledAt`/`cancelledBy`/`cancelReason` (חובה בביטול), `reopenCount`, `deletedAt`/`deletedBy` (מחיקה לוגית בלבד), `updatedAt` (נעילה אופטימית). **אינן משתמשות ב-`Rock`/`Milestone`/`PeriodAssignment`** - אין כאן רבעון ואין שיוך לתקופות, ו-`importBatch`/`importKey` (רשומות שנוצרו או אוחדו בייבוא חד-פעמי, ראו "ייבוא משימות ליוני") |
+| `n_personal_tasks` | `PersonalTask` | משימות הטאב "משימות ליוני" (`/dashboard/duxus/personal`) - `title` (השדה היחיד שחובה), `description`, `contactName`/`contactPhone` (טלפון כטקסט חופשי; פורמט לא תקין אינו חוסם שמירה), `priority` (`normal`/`important`/`urgent`), `status` (`new`/`open`/`in_progress`/`waiting`/`done`/`cancelled`), `dueDate` ("YYYY-MM-DD") ו-`dueTime` ("HH:MM", רשות) - **מחרוזות ולא חותמת זמן**, בדיוק כמו `Milestone.dueDate`, כדי ש"היום" יהיה אותו יום בשרת ובדפדפן, `pinned` (הצמדה לראש הרשימה), `lastNote` (שיקוף ההערה האחרונה לתצוגה בשורה), `viewedAt` (פתיחה ראשונה - מה שמסיר את חיווי "חדש"), `completedAt`/`completedBy`, `cancelledAt`/`cancelledBy`/`cancelReason` (חובה בביטול), `reopenCount`, `deletedAt`/`deletedBy` (מחיקה לוגית בלבד), `updatedAt` (נעילה אופטימית). **אינן משתמשות ב-`Rock`/`Milestone`/`PeriodAssignment`** - אין כאן רבעון ואין שיוך לתקופות, ו-`importBatch`/`importKey` (רשומות שנוצרו או אוחדו בייבוא חד-פעמי, ראו "ייבוא משימות ליוני"). `branchId`/`templateId` (רשות, 2026-10-15) — רק במשימות שנוצרו בהחלת תבנית פתיחת סניף; משימה רגילה/ישנה בלי השדות |
+| `n_branch_templates` | `BranchTemplate` | **חדש (2026-10-15, מסמך המשך סעיף 50)** — תבניות פתיחת סניף השכרות: `name`, `steps[]` (`{title, note?}`), `approvedBy`/`approvedAt` (השמירה בידי הבעלים היא האישור), `createdBy/At`, `updatedBy/At`, `archivedAt` (הוצאה משימוש, לא מחיקה). בעלים בלבד. נכתב רק בפעולה מפורשת ב-`/dashboard/rentals/branches/templates` |
 | `n_personal_task_comments` | `PersonalTaskComment` | הערות כרונולוגיות על משימה אישית - `taskId`, `body`, `createdBy`, `createdAt`, `editedAt`. ההערה האחרונה מוכפלת ל-`lastNote` על המשימה, כדי שהרשימה לא תשלוף שרשור לכל שורה |
 | `n_rock_reviews` | `RockReview` | סיכום ישיבת רבעון/חודש/שבוע - מזהה דטרמיניסטי `${period}_${periodKey}` (upsert, רשומה אחת לתקופה). בנוסף ל-`notes`: `participants`, `meetingDate` ו-`locked` (ישיבה נעולה = סיכום סופי, עד שנפתחת מחדש במפורש) |
 | `n_help_questions` | `HelpQuestion` | כל שאלה שנשאלה במרכז העזרה (`/dashboard/help`): `question`, `answer`, `source` (`ai` = העוזר החכם, `faq` = הותאמה שאלה נפוצה, `none` = לא נמצאה תשובה), `matchedIds` (השאלות הנפוצות שהוצעו), `audience` (`owner`/`renter`), `userEmail`/`userName`, `helpful` (סימון 👍/👎 של השואל; חסר = לא סומן), `createdAt` (ISO). נכתב רק ע"י מרכז העזרה ו-`app.html` לא קורא אותו. הבעלים רואה אותו ב-`/dashboard/help/questions` |
@@ -2287,6 +2288,27 @@ app שרץ בדפדפן ניתן ל"התקנה" כאפליקציה עם אייק
 - **בורר סניפים** (`components/branch-picker.tsx`, `lib/branch-selection.ts`): אחד/כמה/כולם/ניקוי, נשמר ב-`?b=`,
   והשרת מסנן רק בתוך רשימת המותרים. כרגע במסך ההשכרות (בעלים).
 - **הנה"ח ראשית:** "תקציר לפי תקופה" (החודש, הקודם, השנה, הכול) — אותן שורות של הסה"כ, מסוננות לפי חודש.
+
+**שלב 4 — מסמך המשך סעיפים 50, 39, 40:**
+- **תבנית פתיחת סניף (50):** `/dashboard/rentals/branches/templates` (בעלים, `requireOwner`; קישור "תבניות פתיחה"
+  ברשימת הסניפים) — יצירה/עריכה של רשימת צעדים, כולל הדבקת רשימה מתוך נוהל קיים (כל שורה = צעד). "שמירה ואישור"
+  ממלא `approvedBy/At`; "הוצאה משימוש" במקום מחיקה. **החלה** — רק מכרטיס הסניף (`rentals/branches/[id]`), ורק לסניף
+  השכרות פתוח **שאין בו אף רשומה ב-`n_rentals`**; סניף ותיק לא מקבל אפשרות החלה. `applyBranchTemplateAction` בודק
+  בשרת את כל התנאים, ו**מעתיק** כל צעד למשימה חדשה ב-`n_personal_tasks` ("משימות ליוני") באותה צורה בדיוק של משימה
+  רגילה (`lib/personal-task-doc.ts`, משותף ל-`createPersonalTaskAction`) + `branchId`/`templateId` + רישום יומן
+  `create` ב-`n_task_activity`. התבנית לא משתנה בהחלה ועריכתה לא נוגעת במשימות שנוצרו. "כבר הוחלה" מזוהה
+  מהמשימות עצמן (`branchId` + `templateId`, לא מחוקות) — החלה חוזרת דורשת אישור מפורש שני. ההחלה מוגבלת
+  לבעלים; היא אינה נבדקת מול רשימות הגישה של "משימות ליוני" (המשימות נכנסות לרשימה של יוני ממילא). כרטיס
+  הסניף מציג את המשימות שנוצרו מתבנית ואת הסטטוס שלהן.
+- **סיור אחרי שדרוג (39):** `app/dashboard/upgrade-tour.tsx` — כרטיס חד־פעמי בדף הבית, "הבא/הקודם/דילוג/סיום".
+  הצעדים נבנים בשרת לפי מה שהמשתמש רואה (תפריט צד, חיפוש "/", סדר מסך ההשכרות וניסוח כפתור ההחזרה — למי שיש
+  `rentals`, נהלים והדרכות, בדיקת קבלה — לבעלים). הסגירה נשמרת ב-`localStorage` לפי מייל + גרסת סיור
+  (`ultranet.tour.v2-2026-10:<email>`) — **אין כתיבה ל-DB**. גרסה חדשה של הסיור = שינוי הקבוע `TOUR_VERSION`.
+- **בדיקת קבלה (40):** `/dashboard/maintenance/acceptance` (בעלים, `requireOwner`; קישור ממסך "בדיקת נתונים") —
+  רשימה סטטית לפי סעיף 14 פריטים 5–7 באפיון הבסיס: השוואת רשומות/סכומים, השכרה ללקוח קיים/חדש, החזרה ללא תשלום
+  ועם כל אמצעי, מחירון (פעילה/חדשה/היסטורית), תיקון, העברה חודשית/רב־חודשית, הוצאות חוזרות, והרשאות בעל סניף
+  (חיפוש/קישורים/יצוא/תוכן). אזהרה בולטת: **בלי עסקאות דמה בנתוני אמת**. המסך לא קורא ולא כותב נתונים; הסימונים
+  ב-`localStorage` בלבד (`ultranet.acceptance.v1:<email>`).
 
 המיפוי המלא, הממצאים, ההחלטות והסטטוס של כל סעיף: `docs/upgrade-v2-mapping.md`.
 

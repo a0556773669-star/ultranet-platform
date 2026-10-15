@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowLeft, CheckCircle2, Stethoscope } from "lucide-react";
+import { ArrowLeft, CheckCircle2, ClipboardCheck, Stethoscope } from "lucide-react";
 import { requireOwner } from "@/lib/perms";
 import { loadLeftovers } from "@/lib/leftovers";
 import { deleteLeftoverAction } from "./actions";
@@ -33,6 +33,14 @@ export default async function MaintenancePage() {
         רשומה שהסניף שלה נמחק, הוחלף או לא קיים נופלת מכל המסכים — אבל ממשיכה להופיע בהתראות של דף
         הבית ובהנה&quot;ח הראשית. כאן מרוכזות בדיוק הרשומות האלה. נסרקו {report.scanned.toLocaleString("he-IL")} מסמכים.
       </p>
+
+      <Link
+        href="/dashboard/maintenance/acceptance"
+        className="btn-outline mb-4 inline-flex items-center gap-1.5"
+      >
+        <ClipboardCheck className="h-4 w-4" />
+        בדיקת קבלה לפני מעבר
+      </Link>
 
       {report.total === 0 ? (
         <div className="rounded-card border border-emerald-200 bg-emerald-50 p-6 text-center">
