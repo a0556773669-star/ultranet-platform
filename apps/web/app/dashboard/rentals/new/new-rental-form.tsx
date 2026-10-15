@@ -265,9 +265,11 @@ export function NewRentalForm({
             <option value="">בחר סטיק</option>
             {branchSticks.map((s) => {
               const rented = rentedStickSet.has(s.id);
+              // סטיק של מחשב שבתיקון לא מושכר בנפרד עד שהמחשב חוזר.
+              const laptopInRepair = !rented && !!s.linkedLaptopId && !!repairLaptopIds?.includes(s.linkedLaptopId);
               return (
-                <option key={s.id} value={s.id} disabled={rented}>
-                  {s.name} ({s.day1} ₪/יום ראשון){rented ? " — מושכר כרגע" : ""}
+                <option key={s.id} value={s.id} disabled={rented || laptopInRepair}>
+                  {s.name} ({s.day1} ₪/יום ראשון){rented ? " — מושכר כרגע" : laptopInRepair ? " — המחשב שלו בתיקון" : ""}
                 </option>
               );
             })}
@@ -378,7 +380,12 @@ export function NewRentalForm({
                     ? branchLaptops.filter(
                         (l) => !rentedLaptopSet.has(l.id) && !repairLaptopIds?.includes(l.id) && !taken.has(l.id),
                       )
-                    : branchSticks.filter((st) => !rentedStickSet.has(st.id) && !taken.has(st.id));
+                    : branchSticks.filter(
+                        (st) =>
+                          !rentedStickSet.has(st.id) &&
+                          !taken.has(st.id) &&
+                          !(st.linkedLaptopId && repairLaptopIds?.includes(st.linkedLaptopId)),
+                      );
                 const update = (patch: Partial<Extra>) =>
                   setExtras((prev) => prev.map((e, j) => (j === i ? { ...e, ...patch } : e)));
                 return (

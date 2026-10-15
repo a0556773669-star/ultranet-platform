@@ -528,6 +528,10 @@ export async function createRentalAction(formData: FormData) {
     // אותו כלל גם בתוך המסירה הזו: סטיק של מחשב שנמסר עכשיו "עם סטיק" לא נספר כפריט נוסף לחיוב.
     if (r.kind === "stick") {
       const linkedLaptopId = itemData?.linkedLaptopId;
+      // סטיק של מחשב שבתיקון לא מושכר בנפרד עד שהמחשב חוזר (החלטת יוני, 2026-10-15).
+      if (linkedLaptopId && (await laptopInRepair(linkedLaptopId))) {
+        redirect(`/dashboard/rentals/new?error=in-repair${mineParam}`);
+      }
       if (linkedLaptopId) {
         if (bundledLaptopIds.has(linkedLaptopId)) {
           redirect(`/dashboard/rentals/new?error=already-rented${mineParam}`);
