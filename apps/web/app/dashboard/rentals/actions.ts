@@ -6,7 +6,7 @@ import { scopedSession } from "@/lib/perms";
 import { getAdminFirestore } from "@/lib/firebase-admin";
 import { FieldValue } from "firebase-admin/firestore";
 import { resolveEzcountCreds, createEzcountReceipt, EZCOUNT_DOC_TYPES } from "@/lib/ezcount";
-import type { RentalClient, Laptop, Stick, Rental, Branch } from "@ultranet/shared-types";
+import type { RentalClient, Laptop, Stick, Rental, Branch, RentalRatesSnapshot } from "@ultranet/shared-types";
 import { parseClientsWorkbook } from "@/lib/client-excel";
 import {
   effectiveLaptopRates,
@@ -490,12 +490,18 @@ export async function createRentalAction(formData: FormData) {
   // הסניף. המחיר הסופי מחושב מחדש לפי התאריכים בפועל בסגירת ההשכרה.
   const branchDoc = await getAdminFirestore().collection("n_branches").doc(branchId).get();
   const branchPricing = (branchDoc.data() as Omit<Branch, "id"> | undefined)?.rentalPricing;
+  // המחירון שבתוקף עכשיו נשמר על ההשכרה (`ratesSnapshot`), כדי שעדכון מחירון מאוחר יותר
+  // לא ישנה את המחיר ללקוח שכבר שכר (אפיון שדרוג v2, סעיף 4 "מחירונים").
   let calcPrice = 0;
+  let ratesSnapshot: RentalRatesSnapshot | undefined;
+  const snapshotAt = new Date().toISOString();
   if (kind === "laptop") {
     const laptopDoc = await getAdminFirestore().collection("n_laptops").doc(itemId).get();
     const laptop = laptopDoc.data() as Omit<Laptop, "id"> | undefined;
     if (laptop) {
-      calcPrice = laptopRatesFor(effectiveLaptopRates(laptop, branchPricing), pricingVariant).dayPrice;
+      const rates = effectiveLaptopRates(laptop, branchPricing);
+      calcPrice = laptopRatesFor(rates, pricingVariant).dayPrice;
+      ratesSnapshot = { at: snapshotAt, laptop: rates };
     }
   } else {
     const stickDoc = await getAdminFirestore().collection("n_sticks").doc(itemId).get();
@@ -503,6 +509,7 @@ export async function createRentalAction(formData: FormData) {
     if (stick) {
       const r = effectiveStickRates(stick, branchPricing);
       calcPrice = r.day1 || r.day3plus || r.day2;
+      ratesSnapshot = { at: snapshotAt, stick: stripUndefined(r) };
     }
   }
 
@@ -518,6 +525,7 @@ export async function createRentalAction(formData: FormData) {
     collectionRouteId,
     status: "active",
     paid: false,
+    ratesSnapshot,
   };
   await getAdminFirestore().collection("n_rentals").add(stripUndefined(data));
   revalidatePath("/dashboard/rentals", "layout");

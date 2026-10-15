@@ -108,7 +108,9 @@ export function HomeRecurringReminders({
                   type="submit"
                   className="rounded-lg bg-amber-500 px-2.5 py-1 text-[11px] font-bold text-white transition hover:opacity-90"
                 >
-                  שולם — עדכן
+                  {/* רק רושם את הסכום של החודש (`setRecurringMonthAmountAction`); אין כאן מעקב תשלום
+                      נפרד, ולכן הכיתוב "עדכון סכום" ולא "שולם" (סעיף 8 באפיון השדרוג). */}
+                  עדכון סכום
                 </button>
                 <Link
                   href={scopeHref(r.expense)}

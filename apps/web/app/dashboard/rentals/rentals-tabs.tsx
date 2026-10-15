@@ -16,7 +16,7 @@ const TABS: TabItem[] = [
   { href: "/dashboard/rentals/expenses", label: "הוצאות", icon: Banknote },
   { href: "/dashboard/rentals/laptops", label: "מחשבים", icon: Laptop },
   // כמה עולה לי כל מחשב שנכנס לסניף — נזקף אוטומטית להשקעה בסניף. בעלים בלבד.
-  { href: "/dashboard/rentals/laptop-costs", label: "עלות להוספה", icon: Coins, ownerOnly: true },
+  { href: "/dashboard/rentals/laptop-costs", label: "עלויות השקעה בציוד", icon: Coins, ownerOnly: true },
   { href: "/dashboard/rentals/labels", label: "מדבקות", icon: Tag },
   { href: "/dashboard/rentals/accounting", label: "הנה\"ח", icon: BarChart3 },
   { href: "/dashboard/rentals/branches", label: "סניפים", icon: Building2, ownerOnly: true },

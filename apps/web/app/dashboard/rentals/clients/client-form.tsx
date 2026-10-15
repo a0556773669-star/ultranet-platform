@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type { Branch, RentalClient } from "@ultranet/shared-types";
+import { CopyButton } from "@/components/copy-button";
 
 const FIELD =
   "w-full rounded-lg border border-card-border bg-[#f4f6f9] px-3 py-2 text-sm focus:border-teal focus:bg-white focus:outline-none";
@@ -56,11 +57,15 @@ export function ClientForm({
         <input name="name" required defaultValue={initial?.name} className={FIELD} />
       </div>
       <div>
-        <label className={LABEL}>טלפון</label>
+        <label className={`${LABEL} flex items-center gap-1`}>
+          טלפון {initial?.phone && <CopyButton value={initial.phone} label="טלפון" />}
+        </label>
         <input name="phone" dir="ltr" defaultValue={initial?.phone} className={FIELD} />
       </div>
       <div>
-        <label className={LABEL}>מייל (רשות)</label>
+        <label className={`${LABEL} flex items-center gap-1`}>
+          מייל (רשות) {initial?.email && <CopyButton value={initial.email} label="מייל" />}
+        </label>
         <input type="email" name="email" dir="ltr" defaultValue={initial?.email} className={FIELD} />
       </div>
       <div>

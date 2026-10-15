@@ -1,10 +1,14 @@
+import { redirect } from "next/navigation";
 import { ClipboardCheck } from "lucide-react";
+import { STOCK_MODULE_HIDDEN } from "@/lib/feature-flags";
 import { requireModuleAccess } from "@/lib/perms";
 import { getStockSnapshotAction } from "../actions";
 import { StockClient } from "./stock-client";
 
 export default async function OperationsStockPage() {
   await requireModuleAccess("computers");
+  // המלאי מוסתר מהממשק (סעיף 10 באפיון השדרוג). הנתונים נשמרים; גם קישור ישן לא פותח אותו.
+  if (STOCK_MODULE_HIDDEN) redirect("/dashboard/operations/tasks");
   const snapshot = await getStockSnapshotAction();
   return (
     <div className="space-y-3">

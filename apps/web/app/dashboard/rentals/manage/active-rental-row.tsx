@@ -65,6 +65,9 @@ type Props = {
   tokenRouteName: string | null;
   chargeRoutes: { id: string; name: string; mosadId: string; apiValid: string; defaultForNewCards: boolean }[];
   canCharge: boolean;
+  initialPaid?: boolean;
+  initialPaymentMethod?: string;
+  ratesLocked?: boolean;
 };
 
 const BTN =
@@ -95,6 +98,9 @@ export function ActiveRentalRow({
   tokenRouteName,
   chargeRoutes,
   canCharge,
+  initialPaid = false,
+  initialPaymentMethod,
+  ratesLocked = false,
 }: Props) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -104,8 +110,8 @@ export function ActiveRentalRow({
   const [manualPrice, setManualPrice] = useState("");
   const [overrideReason, setOverrideReason] = useState("");
   const [notes, setNotes] = useState(initialNotes ?? "");
-  const [paid, setPaid] = useState(false);
-  const [paymentMethod, setPaymentMethod] = useState<string | null>(null);
+  const [paid, setPaid] = useState(initialPaid);
+  const [paymentMethod, setPaymentMethod] = useState<string | null>(initialPaymentMethod ?? null);
   const [showNedarim, setShowNedarim] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -271,7 +277,7 @@ export function ActiveRentalRow({
         <td className="px-[11px] py-2 text-muted">{startDate}</td>
         <td className="px-[11px] py-2 font-semibold text-ink">{finalPrice.toLocaleString()} ₪</td>
         <td className="px-[11px] py-2">
-          <span className="text-xs font-bold text-teal-dark">{expanded ? "סגירה ▲" : "החזרה ▼"}</span>
+          <span className="text-xs font-bold text-teal-dark">{expanded ? "הסתרה ▲" : "החזרה ▼"}</span>
         </td>
       </tr>
       {expanded && (
@@ -348,6 +354,13 @@ export function ActiveRentalRow({
                     <span>
                       חישוב: <strong className="text-ink">{quote.breakdown}</strong> ={" "}
                       <strong className="text-ink">{autoPrice.toLocaleString()} ₪</strong>
+                    </span>
+                  )}
+                  {ratesLocked ? (
+                    <span className="text-teal-dark">לפי המחירון שנשמר בפתיחת ההשכרה</span>
+                  ) : (
+                    <span className="text-amber-700">
+                      ההשכרה נפתחה לפני שמירת המחירון — מחושב לפי המחירון הנוכחי. אם המחיר עודכן מאז, יש לתקן ידנית.
                     </span>
                   )}
                   <button
@@ -519,7 +532,9 @@ export function ActiveRentalRow({
                   onClick={handleClose}
                   className="rounded-[10px] bg-gradient-to-br from-teal to-teal-light px-6 py-2 text-sm font-bold text-white shadow-primary transition hover:opacity-90 disabled:opacity-50"
                 >
-                  {pending ? "מעבד..." : "סגירה"}
+                  {/* אותה פעולה בדיוק כמו "סגירה" הקודם (`closeRentalAction`): רושמת החזרה, תאריך
+                      ומחיר סופי, ולא נוגעת בסימון התשלום. השם רק מתאר מה קורה בפועל. */}
+                  {pending ? "שומר…" : paid ? "השלמת ההחזרה" : "החזרה ללא תשלום — השארת חוב"}
                 </button>
                 {canDelete && (
                   <button
@@ -531,7 +546,11 @@ export function ActiveRentalRow({
                     {deleting ? "מוחק..." : "מחיקת השכרה"}
                   </button>
                 )}
-                {!paid && <span className="text-xs text-muted">אפשר לסגור גם ללא תשלום – ההשכרה תסומן כחובה</span>}
+                {!paid && (
+                  <span className="text-xs text-muted">
+                    לקבלת תשלום — בחרו אמצעי בתיבת &quot;תשלום&quot; למעלה. בלי תשלום ההשכרה תעבור לחובות הפתוחים.
+                  </span>
+                )}
               </div>
             </div>
           </td>

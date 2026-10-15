@@ -3,11 +3,12 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ClipboardCheck, ListChecks, Settings2, type LucideIcon } from "lucide-react";
+import { STOCK_MODULE_HIDDEN } from "@/lib/feature-flags";
 
 type OpsTab = { href: string; label: string; icon: LucideIcon; show: (p: OpsTabsProps) => boolean };
 
 const TABS: OpsTab[] = [
-  { href: "/dashboard/operations/stock", label: "עדכון מלאי", icon: ClipboardCheck, show: (p) => p.canStock },
+  { href: "/dashboard/operations/stock", label: "עדכון מלאי", icon: ClipboardCheck, show: (p) => p.canStock && !STOCK_MODULE_HIDDEN },
   { href: "/dashboard/operations/tasks", label: "משימות", icon: ListChecks, show: (p) => p.canTasks },
   { href: "/dashboard/operations/settings", label: "הגדרות תפעול", icon: Settings2, show: (p) => p.isOwner },
 ];

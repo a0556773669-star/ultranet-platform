@@ -15,7 +15,7 @@ const TH = "px-3 py-2 text-right text-[11px] font-bold uppercase tracking-wide t
 const TD = "px-3 py-2 whitespace-nowrap text-[13px]";
 
 /**
- * עלות להוספה — כמה עולה לי כל מחשב שנכנס לסניף השכרות (בעלים בלבד).
+ * עלויות השקעה בציוד (לשעבר "עלות להוספה") — כמה עולה לי כל מחשב שנכנס לסניף השכרות (בעלים בלבד).
  *
  * כל מחשב שקיים או שנוסף נזקף אוטומטית כהשקעה שלי בסניף שלו, לפי המחיר שהיה בתוקף ביום
  * שנוסף. זה נכנס ל"ההוצאות שלי" ול"ששילמתי בפועל" בהנה"ח של ההשכרות — **לא** לספר הראשי
@@ -60,7 +60,7 @@ export default async function LaptopCostsPage() {
       <div>
         <h1 className="flex items-center gap-1.5 text-[21px] font-extrabold text-ink">
           <Coins className="h-5 w-5" />
-          עלות להוספה
+          עלויות השקעה בציוד
         </h1>
         <p className="mt-0.5 text-[12.5px] text-muted">
           כמה עולה לי כל מחשב שנכנס לסניף. העלות נזקפת אוטומטית להשקעה שלי בסניף (הנה&quot;ח ההשכרות) —

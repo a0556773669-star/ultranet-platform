@@ -1,12 +1,11 @@
 import type { ReactNode } from "react";
 import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
-import { Users } from "lucide-react";
 import { authOptions } from "@/lib/auth";
 import { SignOutButton } from "./sign-out-button";
 import { cookies } from "next/headers";
 import { DEVICE_TRUST_COOKIE, verifyDeviceToken } from "@/lib/device-trust";
-import { TopNav } from "./top-nav";
+import { SideNav } from "./side-nav";
 import { getAssignments, isOwnerSession, topRole, unionPerms } from "@/lib/perms";
 
 import { NAV_ITEMS, visibleFor } from "@/lib/nav-items";
@@ -32,41 +31,46 @@ export default async function DashboardLayout({ children }: { children: ReactNod
   const isOwner = isOwnerSession(session);
   const name = session.user?.name ?? session.user?.email ?? "";
 
-  const items = NAV_ITEMS.filter((item) => visibleFor(role, perms, item));
-  if (isOwner) {
-    items.push({ href: "/dashboard/users", label: "משתמשים", icon: Users });
-  }
+  const items = NAV_ITEMS.filter((item) => visibleFor(role, perms, item, isOwner));
   const navItems = items.map((item) => ({
     href: item.href,
     label: item.label,
-    icon: <item.icon className="ml-1 h-4 w-4" />,
+    group: item.group,
+    icon: <item.icon className="h-4 w-4" />,
   }));
 
   const logoUrl = await getLogoSrc();
+  const logo = logoUrl ? (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img src={logoUrl} alt="אולטרנט" className="h-12 w-auto object-contain" />
+  ) : (
+    <span className="text-xl font-extrabold tracking-tight text-teal">אולטרנט</span>
+  );
 
+  // תפריט צד מימין (אפיון שדרוג v2, סעיף 2) במקום שורת הלשוניות העליונה. אותם פריטים ואותן
+  // הרשאות; הצבעים והגופן של האתר לא השתנו.
   return (
-    <div className="min-h-screen bg-page">
-      <header className="flex flex-wrap items-center justify-between gap-3 border-b border-card-border bg-white px-6 py-3">
-        <div className="flex items-center">
-          {logoUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={logoUrl} alt="אולטרנט" className="h-12 w-auto object-contain" />
-          ) : (
-            <span className="text-xl font-extrabold tracking-tight text-teal">אולטרנט</span>
-          )}
-        </div>
-        <TopNav items={navItems} />
-        <div className="flex items-center gap-2 text-sm text-muted">
-          <span>
-            שלום, <span className="font-medium text-ink">{name}</span>
-          </span>
-          {role && (
-            <span className="rounded-full border border-teal px-2 py-0.5 text-xs text-teal-dark">{role}</span>
-          )}
-          <SignOutButton />
-        </div>
-      </header>
-      <main className="p-6">{children}</main>
+    <div className="flex min-h-screen bg-page">
+      <SideNav variant="desktop" items={navItems} logo={logo} />
+      <div className="flex min-w-0 flex-1 flex-col">
+        <header className="relative flex flex-wrap items-center justify-between gap-3 border-b border-card-border bg-white px-6 py-3">
+          <div className="flex items-center gap-3 md:hidden">
+            <SideNav variant="mobile" items={navItems} />
+            {logo}
+          </div>
+          <div className="flex-1" />
+          <div className="flex items-center gap-2 text-sm text-muted">
+            <span>
+              שלום, <span className="font-medium text-ink">{name}</span>
+            </span>
+            {role && (
+              <span className="rounded-full border border-teal px-2 py-0.5 text-xs text-teal-dark">{role}</span>
+            )}
+            <SignOutButton />
+          </div>
+        </header>
+        <main className="min-w-0 p-6">{children}</main>
+      </div>
     </div>
   );
 }

@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { FileText, Laptop as LaptopIcon, Wifi } from "lucide-react";
 import { requireModuleAccess } from "@/lib/perms";
 import { getAdminFirestore } from "@/lib/firebase-admin";
@@ -164,10 +163,18 @@ export default async function RentalsPage({ searchParams }: { searchParams?: { m
     const item = r.kind === "stick" ? sticks.get(r.itemId) : laptops.get(r.itemId);
     // המחירון בפועל = מה שהוזן על הפריט, וכל מה שחסר יורש ממחירון הסניף (מוגדר פעם אחת ב-/pricing).
     const branchPricing = branches.get(r.branchId)?.rentalPricing;
+    // השכרה שנפתחה עם צילום מחירון (`ratesSnapshot`) מחושבת לפיו בלבד: המחיר שהלקוח שכר עליו
+    // לא עולה בגלל עדכון מחירון מאוחר. השכרה ישנה בלי צילום מחושבת לפי המחירון הנוכחי, ומסומנת.
+    const snapshot = r.ratesSnapshot;
     const laptopRates =
-      r.kind === "laptop" && item ? effectiveLaptopRates(item as Laptop, branchPricing) : undefined;
+      r.kind === "laptop"
+        ? snapshot?.laptop ?? (item ? effectiveLaptopRates(item as Laptop, branchPricing) : undefined)
+        : undefined;
     const stickRates =
-      r.kind === "stick" && item ? effectiveStickRates(item as Stick, branchPricing) : undefined;
+      r.kind === "stick"
+        ? snapshot?.stick ?? (item ? effectiveStickRates(item as Stick, branchPricing) : undefined)
+        : undefined;
+    const ratesLocked = Boolean(r.kind === "laptop" ? snapshot?.laptop : snapshot?.stick);
     const client = clients.get(r.clientId);
     const tokenKey = `${r.branchId}::${client?.collectionRouteId ?? ""}`;
     const tokenRouteName = info.hasCardToken ? (tokenCredsMap.get(tokenKey)?.name ?? null) : null;
@@ -192,6 +199,9 @@ export default async function RentalsPage({ searchParams }: { searchParams?: { m
       laptopRates,
       stickRates,
       hasRoute: !!r.collectionRouteId,
+      paid: r.paid === true,
+      paymentMethod: r.paymentMethod,
+      ratesLocked,
       tokenRouteName: canCharge ? tokenRouteName : null,
       chargeRoutes: canCharge ? chargeRoutes : [],
       canDelete,
@@ -233,109 +243,109 @@ export default async function RentalsPage({ searchParams }: { searchParams?: { m
         <p className="text-sm text-muted">ניהול השכרות פעילות והיסטוריה</p>
       </div>
 
-      <div className="flex items-center justify-between">
-        <div className="text-xs font-bold uppercase tracking-wide text-muted">מצב מחשבים וסטיקים</div>
-        <Link
-          href={onlyMine ? "/dashboard/rentals/new?mine=1" : "/dashboard/rentals/new"}
-          className="rounded-[10px] bg-gradient-to-br from-teal to-teal-light px-4 py-1.5 text-xs font-bold text-white shadow-primary transition hover:opacity-90"
-        >
-          + השכרה חדשה
-        </Link>
-      </div>
-
-      {visibleBranches.length === 0 ? (
-        <div className="rounded-card border border-dashed border-card-border bg-white py-10 text-center text-sm text-muted">
-          אין סניפים להצגה
-        </div>
-      ) : (
-        visibleBranches.map((b) => {
-          // סניף שנסגר (או נמחק) לא מקבל לוח — אין בו מה להשכיר.
-          if (b.closedAt || b.deleted) return null;
-          const bLaptops = laptopsList
-            .filter((l) => l.branchId === b.id && isLaptopActive(l))
-            .sort((x, y) => x.name.localeCompare(y.name, "he", { numeric: true }));
-          const bRentedSticks = sticksList
-            .filter((s) => s.branchId === b.id && renterName(s.id, "stick"))
-            .sort((x, y) => x.name.localeCompare(y.name, "he", { numeric: true }));
-          if (bLaptops.length === 0 && bRentedSticks.length === 0) return null;
-          return (
-            <div key={b.id} className="mb-2">
-              {role === "owner" && <h3 className="mb-2 text-sm font-bold text-ink">{b.name}</h3>}
-              {/* ריבועים קטנים ולא פסים רחבים: רוחב קבוע של ~120px ממלא את השורה בכמה שנכנס,
-                  כך שבמסך רחב רואים את כל הסניף בשורה-שתיים ולא שש כרטיסיות מתוחות. */}
-              <div className="grid grid-cols-[repeat(auto-fill,minmax(112px,1fr))] gap-2.5 sm:grid-cols-[repeat(auto-fill,minmax(124px,1fr))]">
-                {bLaptops.map((l) => {
-                  const renter = renterName(l.id, "laptop");
-                  const noInternet = !renter && linkedStickRentedOut(l.id);
-                  return (
-                    <div
-                      key={l.id}
-                      className={`relative flex aspect-square flex-col items-center justify-center gap-1 overflow-hidden rounded-2xl border p-2 text-center shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${
-                        renter
-                          ? "border-red-200 bg-gradient-to-b from-red-50 to-white"
-                          : "border-teal/40 bg-gradient-to-b from-teal-bg to-white"
-                      }`}
-                    >
-                      <span
-                        className={`absolute inset-x-0 top-0 h-1 ${renter ? "bg-red-400" : "bg-teal"}`}
-                        aria-hidden
-                      />
-                      <span
-                        className={`flex h-9 w-9 items-center justify-center rounded-full ${
-                          renter ? "bg-red-100 text-red-600" : "bg-white text-teal-dark shadow-sm"
-                        }`}
-                      >
-                        <LaptopIcon className="h-[18px] w-[18px]" />
-                      </span>
-                      <div className="w-full truncate text-[12.5px] font-extrabold leading-tight text-ink" title={l.name}>
-                        {l.name}
-                      </div>
-                      <span
-                        className={`rounded-full px-2 py-0.5 text-[10.5px] font-bold ${
-                          renter ? "bg-red-600 text-white" : "bg-teal text-white"
-                        }`}
-                      >
-                        {renter ? "מושכר" : "פנוי"}
-                      </span>
-                      {renter && (
-                        <div className="w-full truncate text-[10.5px] text-muted" title={renter}>
-                          {renter}
-                        </div>
-                      )}
-                      {noInternet && <div className="text-[10.5px] font-bold text-red-600">ללא אינטרנט</div>}
-                    </div>
-                  );
-                })}
-                {bRentedSticks.map((s) => {
-                  const renter = renterName(s.id, "stick");
-                  return (
-                    <div
-                      key={s.id}
-                      className="relative flex aspect-square flex-col items-center justify-center gap-1 overflow-hidden rounded-2xl border border-red-200 bg-gradient-to-b from-red-50 to-white p-2 text-center shadow-sm"
-                    >
-                      <span className="absolute inset-x-0 top-0 h-1 bg-red-400" aria-hidden />
-                      <span className="flex h-9 w-9 items-center justify-center rounded-full bg-red-100 text-red-600">
-                        <Wifi className="h-[18px] w-[18px]" />
-                      </span>
-                      <div className="w-full truncate text-[12.5px] font-extrabold leading-tight text-ink" title={s.name}>
-                        {s.name}
-                      </div>
-                      <span className="rounded-full bg-red-600 px-2 py-0.5 text-[10.5px] font-bold text-white">מושכר</span>
-                      {renter && (
-                        <div className="w-full truncate text-[10.5px] text-muted" title={renter}>
-                          {renter}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
+      <RentalsLists
+        active={activeRows}
+        unpaid={unpaidRows}
+        history={historyRows}
+        showBranchColumn={role === "owner"}
+        newRentalHref={onlyMine ? "/dashboard/rentals/new?mine=1" : "/dashboard/rentals/new"}
+        tiles={
+          <>
+            <div className="text-xs font-bold uppercase tracking-wide text-muted">מצב מחשבים וסטיקים</div>
+            {visibleBranches.length === 0 ? (
+              <div className="rounded-card border border-dashed border-card-border bg-white py-10 text-center text-sm text-muted">
+                אין סניפים להצגה
               </div>
-            </div>
-          );
-        })
-      )}
-
-      <RentalsLists active={activeRows} unpaid={unpaidRows} history={historyRows} showBranchColumn={role === "owner"} />
+            ) : (
+              visibleBranches.map((b) => {
+                // סניף שנסגר (או נמחק) לא מקבל לוח — אין בו מה להשכיר.
+                if (b.closedAt || b.deleted) return null;
+                const bLaptops = laptopsList
+                  .filter((l) => l.branchId === b.id && isLaptopActive(l))
+                  .sort((x, y) => x.name.localeCompare(y.name, "he", { numeric: true }));
+                const bRentedSticks = sticksList
+                  .filter((s) => s.branchId === b.id && renterName(s.id, "stick"))
+                  .sort((x, y) => x.name.localeCompare(y.name, "he", { numeric: true }));
+                if (bLaptops.length === 0 && bRentedSticks.length === 0) return null;
+                return (
+                  <div key={b.id} className="mb-2">
+                    {role === "owner" && <h3 className="mb-2 text-sm font-bold text-ink">{b.name}</h3>}
+                    {/* ריבועים קטנים ולא פסים רחבים: רוחב קבוע של ~120px ממלא את השורה בכמה שנכנס,
+                        כך שבמסך רחב רואים את כל הסניף בשורה-שתיים ולא שש כרטיסיות מתוחות. */}
+                    <div className="grid grid-cols-[repeat(auto-fill,minmax(112px,1fr))] gap-2.5 sm:grid-cols-[repeat(auto-fill,minmax(124px,1fr))]">
+                      {bLaptops.map((l) => {
+                        const renter = renterName(l.id, "laptop");
+                        const noInternet = !renter && linkedStickRentedOut(l.id);
+                        return (
+                          <div
+                            key={l.id}
+                            className={`relative flex aspect-square flex-col items-center justify-center gap-1 overflow-hidden rounded-2xl border p-2 text-center shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${
+                              renter
+                                ? "border-red-200 bg-gradient-to-b from-red-50 to-white"
+                                : "border-teal/40 bg-gradient-to-b from-teal-bg to-white"
+                            }`}
+                          >
+                            <span
+                              className={`absolute inset-x-0 top-0 h-1 ${renter ? "bg-red-400" : "bg-teal"}`}
+                              aria-hidden
+                            />
+                            <span
+                              className={`flex h-9 w-9 items-center justify-center rounded-full ${
+                                renter ? "bg-red-100 text-red-600" : "bg-white text-teal-dark shadow-sm"
+                              }`}
+                            >
+                              <LaptopIcon className="h-[18px] w-[18px]" />
+                            </span>
+                            <div className="w-full truncate text-[12.5px] font-extrabold leading-tight text-ink" title={l.name}>
+                              {l.name}
+                            </div>
+                            <span
+                              className={`rounded-full px-2 py-0.5 text-[10.5px] font-bold ${
+                                renter ? "bg-red-600 text-white" : "bg-teal text-white"
+                              }`}
+                            >
+                              {renter ? "מושכר" : "פנוי"}
+                            </span>
+                            {renter && (
+                              <div className="w-full truncate text-[10.5px] text-muted" title={renter}>
+                                {renter}
+                              </div>
+                            )}
+                            {noInternet && <div className="text-[10.5px] font-bold text-red-600">ללא אינטרנט</div>}
+                          </div>
+                        );
+                      })}
+                      {bRentedSticks.map((s) => {
+                        const renter = renterName(s.id, "stick");
+                        return (
+                          <div
+                            key={s.id}
+                            className="relative flex aspect-square flex-col items-center justify-center gap-1 overflow-hidden rounded-2xl border border-red-200 bg-gradient-to-b from-red-50 to-white p-2 text-center shadow-sm"
+                          >
+                            <span className="absolute inset-x-0 top-0 h-1 bg-red-400" aria-hidden />
+                            <span className="flex h-9 w-9 items-center justify-center rounded-full bg-red-100 text-red-600">
+                              <Wifi className="h-[18px] w-[18px]" />
+                            </span>
+                            <div className="w-full truncate text-[12.5px] font-extrabold leading-tight text-ink" title={s.name}>
+                              {s.name}
+                            </div>
+                            <span className="rounded-full bg-red-600 px-2 py-0.5 text-[10.5px] font-bold text-white">מושכר</span>
+                            {renter && (
+                              <div className="w-full truncate text-[10.5px] text-muted" title={renter}>
+                                {renter}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </>
+        }
+      />
     </div>
   );
 }

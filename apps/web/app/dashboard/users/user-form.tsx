@@ -18,8 +18,8 @@ const ROLE_OPTIONS: { value: UserRole; label: string }[] = [
 
 const PERM_OPTIONS: { key: PermissionKey; label: string; hint?: string }[] = [
   { key: "branches", label: "סניפים", hint: "ניהול סניפים — לשותף בלבד" },
-  { key: "computers", label: "מלאי", hint: "עדכון מלאי ומשימות בחדר המחשבים" },
-  { key: "tasks", label: "משימות", hint: "מסך המשימות בלבד, בלי המלאי" },
+  { key: "computers", label: "חדרי מחשבים", hint: "תפעול ומשימות בחדר המחשבים; לשותף בסניף גם הוצאות והנה\"ח" },
+  { key: "tasks", label: "משימות", hint: "מסך המשימות של חדרי המחשבים בלבד" },
   { key: "rentals", label: "השכרות" },
   { key: "coworking", label: "משרד שיתופי" },
   { key: "accounting", label: "הנה\"ח" },
@@ -187,7 +187,7 @@ export function UserForm({
                 </div>
                 {assignment.role === "employee" && (
                   <p className="mt-2 text-[11px] text-muted">
-                    עובד מתפעל בלבד: בחדרי מחשבים הוא מגיע למלאי ולמשימות, ולא להוצאות, לניהול
+                    עובד מתפעל בלבד: בחדרי מחשבים הוא מגיע לתפעול ולמשימות, ולא להוצאות, לניהול
                     הסניפים או להנהלת החשבונות של הסניף — אלה נשארים לשותף שמנהל אותו.
                   </p>
                 )}

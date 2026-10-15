@@ -515,6 +515,28 @@ export interface Rental {
   pickupLoc?: string;
   returnLoc?: string;
   returnDate?: string;
+  /**
+   * **המחירון שבתוקף ברגע פתיחת ההשכרה** (מ-2026-10-15). לקוח ששכר "על דעת 40 ליום" ממשיך
+   * לשלם לפיו גם אם המחירון של המחשב/הסניף עודכן אחר כך: ההחזרה מחשבת מכאן ולא מהמחירון
+   * הנוכחי. רשות — השכרות שנפתחו לפני השדה (או ב-app.html) אין להן צילום, ומחושבות לפי
+   * המחירון הנוכחי עם סימון גלוי; לא ממלאים להן צילום בדיעבד.
+   */
+  ratesSnapshot?: RentalRatesSnapshot;
+}
+
+/** המחירון שנשמר על השכרה בפתיחתה. בדיוק אחד מ-`laptop` / `stick` מוגדר, לפי `Rental.kind`. */
+export interface RentalRatesSnapshot {
+  /** מתי נשמר הצילום (ISO). */
+  at: string;
+  laptop?: {
+    dayPrice: number;
+    weekPrice: number;
+    monthPrice: number;
+    noInternetDayPrice: number;
+    noInternetWeekPrice: number;
+    noInternetMonthPrice: number;
+  };
+  stick?: { day1: number; day2: number; day3plus: number; weekPrice?: number; monthPrice?: number };
 }
 
 /** collection: n_inventory */

@@ -1,27 +1,25 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
-import { Laptop as LaptopIcon, Users, FolderOpen, AlertCircle, Package, CheckCircle2, AlertTriangle, ArrowLeft, Armchair, Stethoscope } from "lucide-react";
+import { Laptop as LaptopIcon, AlertTriangle, ArrowLeft, Plus, Search, Target, ListChecks } from "lucide-react";
 import { authOptions } from "@/lib/auth";
 import { getAdminFirestore } from "@/lib/firebase-admin";
 import {
   getAssignments,
   isOwnerSession,
   resolveModuleScope,
-  topRole,
   unionPerms,
   type PermKey,
 } from "@/lib/perms";
-import { NAV_ITEMS, visibleFor, type NavItem } from "@/lib/nav-items";
 import HomeClock from "./home-clock";
 import type { ExpenseScope, Laptop, RecurringVariableExpense, Rental } from "@ultranet/shared-types";
-import { getStockSnapshotAction } from "./(computer-rooms)/operations/actions";
 import { loadMainLedger } from "@/lib/main-ledger";
 import { loadCoworkingData, paymentForMonth, currentMonth as coworkingMonth } from "@/lib/coworking";
 import { loadRecurringVariableExpenses } from "@/lib/recurring-expenses";
 import { HomeRecurringReminders } from "@/components/recurring-expenses/home-recurring-reminders";
 import { loadPendingReportReminder } from "@/lib/branch-report-send";
 import { monthLabel as heMonthLabel } from "@/lib/branch-month-report";
+import { loadHomeTasks, type HomeTasks } from "@/lib/home-tasks";
 
 /** באיזו הרשאה מותנה כל scope של הוצאה קבועה משתנה בתזכורת שבדף הבית. */
 const RECURRING_SCOPE_PERM: Record<ExpenseScope, PermKey> = {
@@ -42,7 +40,6 @@ export default async function DashboardHomePage() {
   // מודול. מי שהוא שותף בסניף השכרות וגם עובד בחדר מחשבים רואה כאן את שניהם, כל אחד
   // בסניף הנכון שלו.
   const assignments = getAssignments(session);
-  const role = topRole(assignments);
   const perms = unionPerms(assignments);
   const name = session.user?.name ?? session.user?.email ?? "";
   const isOwner = isOwnerSession(session);
@@ -60,7 +57,10 @@ export default async function DashboardHomePage() {
     monthExpenses: number;
   } | null = null;
 
-  if (has("accounting")) {
+  // כרטיסי הכסף הם הסה"כ של ההנה"ח הראשית — ולכן לבעלים בלבד, בדיוק כמו המסך עצמו
+  // (`requireOwner` בכל `/dashboard/accounting`). עד 2026-10-15 הם הוצגו לכל מי שיש לו הרשאת
+  // `accounting`, כלומר גם למי שנחסם מההנה"ח עצמה (החלטת יוני).
+  if (isOwner) {
     // Read from the same ledger the accounting screen shows, so the number on the home page and
     // the number on /dashboard/accounting can never disagree: both are the sum of the rows
     // marked countsToMain, and nothing is added back on top here.
@@ -179,54 +179,66 @@ export default async function DashboardHomePage() {
     });
   }
 
-  // חוסרי מלאי מגיעים ממודול התפעול: מה שסניף סימן עליו X בבדיקה של החודש הנוכחי.
-  // `getStockSnapshotAction` כבר מסנן לסניפים שהמשתמש רשאי לראות, ולכן אין כאן סינון נוסף.
-  let stockPending = 0;
-  let missingStock: { name: string; branchName: string }[] | null = null;
-
-  if (has("computers")) {
-    const snapshot = await getStockSnapshotAction();
-    if (snapshot.alerts) {
-      missingStock = snapshot.alerts.flatMap((a) =>
-        a.missing.map((name) => ({ name, branchName: a.branchName })),
-      );
-      stockPending = snapshot.alerts.reduce((sum, a) => sum + a.pending, 0);
-    } else {
-      const branchName = snapshot.branches[0]?.name ?? "";
-      missingStock = snapshot.rows.filter((r) => r.status === "missing").map((r) => ({ name: r.name, branchName }));
-      stockPending = snapshot.rows.filter((r) => r.status === null).length;
-    }
-    missingStock = missingStock.slice(0, 6);
-  }
+  // מלאי (בדיקות V/X בחדרי מחשבים) הוסתר מהממשק ולא מוצג בדף הבית — סעיף 10 באפיון השדרוג.
+  // הנתונים נשמרים כמו שהם; ראו `STOCK_MODULE_HIDDEN` ב-`lib/feature-flags.ts`.
 
   // קבוע ולא `let`: TypeScript לא שומר צמצום טיפוס של משתנה משתנה בתוך קולבק, וכרטיס
   // המשרד השיתופי קורא את השדות שלו גם בתוך `map`.
   const cwDue = coworkingDue;
 
-  const categories: (NavItem)[] = NAV_ITEMS.filter(
-    (item) => item.href !== "/dashboard" && visibleFor(role, perms, item),
-  );
-  if (isOwner) {
-    categories.push({ href: "/dashboard/users", label: "משתמשים והרשאות", icon: Users });
-    // הכניסה היחידה לרשומות שאין להן מסך. היא בדף הבית מפני ששם רואים את ההתראות שהן
-    // מייצרות, וזו השאלה שהן מעלות: "מאיפה ההתראה הזו, ואיפה מטפלים בה".
-    categories.push({ href: "/dashboard/maintenance", label: "בדיקת נתונים", icon: Stethoscope });
+  // משימות ליוני, השבוע והרבעון — רק למי שיש לו את מודול המשימות. כשהמקור לא נטען מוצג
+  // "לא נטען" ולא 0 (סעיף 1 באפיון השדרוג).
+  let homeTasks: HomeTasks | "error" | null = null;
+  if (has("duxus")) {
+    homeTasks = await loadHomeTasks().catch(() => "error" as const);
   }
 
   // הדו"ח החודשי לשותפים נשלח רק בלחיצת כפתור - ולכן מה-1 לחודש ועד שהוא נשלח, הבעלים
   // רואה כאן תזכורת לשלוח אותו (ראו loadPendingReportReminder).
   const reportReminder = isOwner ? await loadPendingReportReminder().catch(() => null) : null;
 
+  const unpaidCount = unpaidRentals?.length ?? 0;
+  const unpaidSum = (unpaidRentals ?? []).reduce((sum, u) => sum + (u.amount || 0), 0);
+  const cwUnpaid = cwDue ? cwDue.clients.filter((c) => !c.paid).length : 0;
+  const recurringMissing = recurringExpenses.length;
+  const attentionRows = [
+    recurringExpenses.length > 0 && {
+      key: "recurring",
+      label: "הוצאות קבועות משתנות שחסר להן סכום",
+      value: String(recurringMissing),
+      href: "#recurring",
+      tone: "amber" as const,
+    },
+    unpaidRentals && {
+      key: "debts",
+      label: unpaidCount > 0 ? `חובות השכרות · ₪${unpaidSum.toLocaleString("he-IL")}` : "חובות השכרות",
+      value: String(unpaidCount),
+      href: "/dashboard/rentals/manage",
+      tone: unpaidCount > 0 ? ("red" as const) : ("muted" as const),
+    },
+    cwDue && {
+      key: "coworking",
+      label: `תשלומי משרד שיתופי חסרים — ${cwDue.month}`,
+      value: String(cwUnpaid),
+      href: "/dashboard/coworking",
+      tone: cwUnpaid > 0 ? ("amber" as const) : ("muted" as const),
+    },
+  ].filter(Boolean) as { key: string; label: string; value: string; href: string; tone: "red" | "amber" | "muted" }[];
+  const toneClass = { red: "text-red-600", amber: "text-amber-600", muted: "text-muted" };
+  const openAttention =
+    recurringMissing + unpaidCount + cwUnpaid;
+
+  const canRent = has("rentals");
+  const tasks = homeTasks;
+
   return (
-    <div>
-      <div className="mb-4">
-        <HomeClock name={name} />
-      </div>
+    <div className="mx-auto flex max-w-6xl flex-col gap-4">
+      <HomeClock name={name} />
 
       {reportReminder && (
         <Link
           href={`/dashboard/accounting/mobile?month=${reportReminder.month}`}
-          className="mb-4 flex items-center gap-3 rounded-card border-2 border-amber-400 bg-amber-50 p-4 shadow-card transition hover:bg-amber-100"
+          className="flex items-center gap-3 rounded-card border-2 border-amber-400 bg-amber-50 p-4 shadow-card transition hover:bg-amber-100"
         >
           <AlertTriangle className="h-6 w-6 shrink-0 text-amber-600" />
           <div className="flex-1">
@@ -241,191 +253,192 @@ export default async function DashboardHomePage() {
         </Link>
       )}
 
-        {rentedLaptops && (
-          <div className="card">
-            <div className="mb-3 flex items-center justify-between text-xs font-bold uppercase tracking-wide text-muted">
-              <span className="flex items-center gap-1.5"><LaptopIcon className="h-4 w-4" />{"ניידים מושכרים כעת"}</span>
-              <span className="rounded-full bg-[#f4f6f9] px-2.5 py-0.5 text-ink normal-case">{rentedLaptops.length}</span>
-            </div>
-            {rentedLaptops.length === 0 ? (
-              <div className="text-sm text-muted">{"אין השכרות פעילות"}</div>
-            ) : (
-              rentedLaptops.map((l, i) => (
-                <div key={i} className="flex items-center gap-2 border-b border-card-border py-2 text-[13px] last:border-b-0">
-                  <span className="h-2 w-2 rounded-full bg-teal" />
-                  <span className="flex-1 font-medium text-ink">{l.name}</span>
-                  <span className="text-[11px] text-muted">{"מאז " + l.startDate}</span>
+      {(canRent || isOwner) && (
+        <div className="flex flex-wrap gap-2">
+          {canRent && (
+            <Link href="/dashboard/rentals/new" className="flex items-center gap-1.5 rounded-[10px] bg-gradient-to-br from-teal to-teal-light px-4 py-2 text-sm font-bold text-white shadow-primary transition hover:opacity-90">
+              <Plus className="h-4 w-4" />
+              {"השכרה חדשה"}
+            </Link>
+          )}
+          {canRent && (
+            <Link href="/dashboard/rentals/manage" className="btn-outline flex items-center gap-1.5">
+              <Search className="h-4 w-4" />
+              {"איתור השכרה / החזרה"}
+            </Link>
+          )}
+          {isOwner && (
+            <Link href="/dashboard/accounting" className="btn-outline flex items-center gap-1.5">
+              <Plus className="h-4 w-4" />
+              {"הכנסה"}
+            </Link>
+          )}
+          {isOwner && (
+            <Link href="/dashboard/accounting" className="btn-outline flex items-center gap-1.5">
+              <Plus className="h-4 w-4" />
+              {"הוצאה"}
+            </Link>
+          )}
+        </div>
+      )}
+
+      {(rentedLaptops || moneyStats) && (
+        <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-4">
+          {rentedLaptops && (
+            <Link
+              href="/dashboard/rentals/manage"
+              className="rounded-card bg-gradient-to-br from-teal-dark to-teal p-4 text-white shadow-primary transition hover:opacity-95"
+            >
+              <div className="flex items-center gap-1.5 text-[12px] font-semibold text-white/85">
+                <LaptopIcon className="h-4 w-4" />
+                {"מחשבים מושכרים כעת"}
+              </div>
+              <div className="mt-1 text-[28px] font-black tabular-nums">{rentedLaptops.length}</div>
+              <div className="text-[11px] text-white/80">{"מחשבים ניידים בלבד, בלי סטיקים · לפירוט"}</div>
+            </Link>
+          )}
+          {moneyStats && (
+            <>
+              <div className="rounded-card border border-card-border bg-white p-4 shadow-card">
+                <div className="text-[12px] font-semibold text-muted">{"נכנס עד היום"}</div>
+                <div className="mt-1 text-[24px] font-black tabular-nums text-emerald-600">
+                  {moneyStats.totalIncome.toLocaleString()} ₪
                 </div>
-              ))
+                <div className="text-[11px] tabular-nums text-muted">{`החודש ${moneyStats.monthIncome.toLocaleString()} ₪`}</div>
+              </div>
+              <div className="rounded-card border border-card-border bg-white p-4 shadow-card">
+                <div className="text-[12px] font-semibold text-muted">{"הוצאתי עד היום"}</div>
+                <div className="mt-1 text-[24px] font-black tabular-nums text-red-600">
+                  {moneyStats.totalExpenses.toLocaleString()} ₪
+                </div>
+                <div className="text-[11px] tabular-nums text-muted">{`החודש ${moneyStats.monthExpenses.toLocaleString()} ₪`}</div>
+              </div>
+              <div className="rounded-card border border-card-border bg-white p-4 shadow-card">
+                <div className="text-[12px] font-semibold text-muted">{"הפרש (נכנס פחות יצא)"}</div>
+                <div
+                  className={`mt-1 text-[24px] font-black tabular-nums ${
+                    moneyStats.totalIncome - moneyStats.totalExpenses >= 0 ? "text-teal-dark" : "text-red-600"
+                  }`}
+                >
+                  {(moneyStats.totalIncome - moneyStats.totalExpenses).toLocaleString()} ₪
+                </div>
+                <div className="text-[11px] tabular-nums text-muted">
+                  {`החודש ${(moneyStats.monthIncome - moneyStats.monthExpenses).toLocaleString()} ₪`}
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
+        {attentionRows.length > 0 && (
+          <div className="card">
+            <div className="mb-2 flex items-center justify-between text-xs font-bold text-muted">
+              <span className="flex items-center gap-1.5">
+                <AlertTriangle className="h-4 w-4" />
+                {"דורש טיפול"}
+              </span>
+              {openAttention > 0 && (
+                <span className="rounded-full bg-red-50 px-2.5 py-0.5 text-red-700">{openAttention}</span>
+              )}
+            </div>
+            {attentionRows.map((row) => (
+              <Link
+                key={row.key}
+                href={row.href}
+                className="flex items-center justify-between gap-2 border-b border-card-border py-2 text-[13px] last:border-b-0 hover:text-teal-dark"
+              >
+                <span className="font-medium text-ink">{row.label}</span>
+                <span className={`font-extrabold tabular-nums ${toneClass[row.tone]}`}>{row.value}</span>
+              </Link>
+            ))}
+            {cwDue && cwDue.orphanCount > 0 && (
+              <p className="mt-2 rounded-lg bg-amber-50 px-2 py-1.5 text-[11px] font-bold text-amber-900">
+                {cwDue.orphanCount === 1
+                  ? "השכרה אחת במשרד השיתופי אינה משויכת לסניף פעיל — אפשר לשייך אותה במסך המשרד השיתופי."
+                  : `${cwDue.orphanCount} השכרות במשרד השיתופי אינן משויכות לסניף פעיל — אפשר לשייך אותן במסך המשרד השיתופי.`}
+              </p>
             )}
           </div>
         )}
 
-      {moneyStats && (
-        <div className="mb-3 grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-4">
-          <div className="relative overflow-hidden rounded-card border border-card-border bg-white p-4 shadow-card">
-            <span className="absolute right-0 top-0 h-full w-1 bg-emerald-500" />
-            <div className="text-[11px] font-semibold uppercase tracking-wide text-muted">{"הכנסות עד היום"}</div>
-            <div className="mt-1 text-[25px] font-black text-emerald-600">{moneyStats.totalIncome.toLocaleString()} ₪</div>
-          </div>
-          <div className="relative overflow-hidden rounded-card border border-card-border bg-white p-4 shadow-card">
-            <span className="absolute right-0 top-0 h-full w-1 bg-red-500" />
-            <div className="text-[11px] font-semibold uppercase tracking-wide text-muted">{"הוצאות עד היום"}</div>
-            <div className="mt-1 text-[25px] font-black text-red-600">{moneyStats.totalExpenses.toLocaleString()} ₪</div>
-          </div>
-          <div className="relative overflow-hidden rounded-card border border-card-border bg-white p-4 shadow-card">
-            <span className="absolute right-0 top-0 h-full w-1 bg-teal" />
-            <div className="text-[11px] font-semibold uppercase tracking-wide text-muted">{"הכנסות החודש"}</div>
-            <div className="mt-1 text-[25px] font-black text-teal-dark">{moneyStats.monthIncome.toLocaleString()} ₪</div>
-          </div>
-          <div className="relative overflow-hidden rounded-card border border-card-border bg-white p-4 shadow-card">
-            <span className="absolute right-0 top-0 h-full w-1 bg-amber-500" />
-            <div className="text-[11px] font-semibold uppercase tracking-wide text-muted">{"הוצאות החודש"}</div>
-            <div className="mt-1 text-[25px] font-black text-amber-600">{moneyStats.monthExpenses.toLocaleString()} ₪</div>
-          </div>
-        </div>
-      )}
-
-      <div className="mb-2 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-muted"><FolderOpen className="h-4 w-4" />{"הקטגוריות שלי"}</div>
-      <div className="mb-4 grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-5">
-        {categories.length === 0 && (
-          <div className="col-span-full rounded-card border border-card-border bg-white p-6 text-center text-sm text-muted shadow-card">
-            {"אין קטגוריות זמינות עבורך"}
+        {tasks === "error" && (
+          <div className="card lg:col-span-2">
+            <div className="mb-2 flex items-center gap-1.5 text-xs font-bold text-muted">
+              <ListChecks className="h-4 w-4" />
+              {"משימות"}
+            </div>
+            <div className="text-sm text-muted">{"מקור המשימות לא נטען כרגע — המספרים לא מוצגים כדי שלא ייראו כמו 0."}</div>
           </div>
         )}
-        {categories.map((c) => (
-          <Link
-            key={c.href}
-            href={c.href}
-            className="flex flex-col items-center gap-1 rounded-card border border-card-border bg-white p-4 text-center shadow-card transition hover:-translate-y-0.5 hover:border-teal hover:shadow-primary"
-          >
-            <c.icon className="h-6 w-6 text-teal-dark" />
-            <span className="text-[13px] font-bold text-ink">{c.label}</span>
-          </Link>
-        ))}
+
+        {tasks && tasks !== "error" && (
+          <>
+            <div className="card">
+              <div className="mb-2 flex items-center gap-1.5 text-xs font-bold text-muted">
+                <ListChecks className="h-4 w-4" />
+                {"המשימות שלי"}
+              </div>
+              {tasks.personal ? (
+                <>
+                  <Link href="/dashboard/duxus/personal" className="flex items-center justify-between border-b border-card-border py-2 text-[13px] hover:text-teal-dark">
+                    <span className="font-medium text-ink">{"משימות ליוני — פתוחות"}</span>
+                    <span className="font-extrabold tabular-nums text-ink">{tasks.personal.open}</span>
+                  </Link>
+                  <Link href="/dashboard/duxus/personal" className="flex items-center justify-between border-b border-card-border py-2 text-[13px] hover:text-teal-dark">
+                    <span className="font-medium text-ink">{"מתוכן דחופות"}</span>
+                    <span className={`font-extrabold tabular-nums ${tasks.personal.urgent > 0 ? "text-red-600" : "text-muted"}`}>
+                      {tasks.personal.urgent}
+                    </span>
+                  </Link>
+                </>
+              ) : null}
+              <Link href="/dashboard/duxus/rocks/week" className="flex items-center justify-between py-2 text-[13px] hover:text-teal-dark">
+                <span className="font-medium text-ink">{"השבוע: נבחרו / הושלמו"}</span>
+                <span className="font-extrabold tabular-nums text-ink">
+                  {tasks.week ? `${tasks.week.selected} / ${tasks.week.done}` : "לא נפתח"}
+                </span>
+              </Link>
+            </div>
+
+            <div className="card">
+              <div className="mb-2 flex items-center justify-between text-xs font-bold text-muted">
+                <span className="flex items-center gap-1.5">
+                  <Target className="h-4 w-4" />
+                  {"הרבעון"}
+                </span>
+                {tasks.quarterLabel && <span className="font-medium">{tasks.quarterLabel}</span>}
+              </div>
+              {tasks.rocks.length === 0 ? (
+                <div className="text-sm text-muted">{"עוד לא הוגדרו סלעים לרבעון"}</div>
+              ) : (
+                tasks.rocks.map((rock) => (
+                  <Link key={rock.id} href="/dashboard/duxus/rocks/quarter" className="block border-b border-card-border py-2 last:border-b-0">
+                    <div className="flex items-center justify-between gap-2 text-[13px]">
+                      <span className="font-medium text-ink">{rock.title}</span>
+                      <span className="font-extrabold tabular-nums text-ink">
+                        {rock.total === 0 ? "אין אבני דרך" : `${rock.percent}%`}
+                      </span>
+                    </div>
+                    {rock.total > 0 && (
+                      <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-[#f4f6f9]">
+                        <div className="h-full rounded-full bg-teal" style={{ width: `${rock.percent}%` }} />
+                      </div>
+                    )}
+                  </Link>
+                ))
+              )}
+            </div>
+          </>
+        )}
       </div>
 
       {recurringExpenses.length > 0 && (
-        <div className="mb-3">
+        <div id="recurring">
           <HomeRecurringReminders expenses={recurringExpenses} canManage />
         </div>
       )}
-
-      <div className="mb-3 grid grid-cols-1 gap-3 lg:grid-cols-2">
-        {cwDue && cwDue.clients.length > 0 && (
-          <div className="card">
-            <div className="mb-3 flex items-center justify-between text-xs font-bold uppercase tracking-wide text-muted">
-              <span className="flex items-center gap-1.5">
-                <Armchair className="h-4 w-4" />
-                {`תשלומי משרד שיתופי — ${cwDue.month}`}
-              </span>
-              <span className="rounded-full bg-[#f4f6f9] px-2.5 py-0.5 text-ink normal-case">
-                {cwDue.clients.filter((c) => !c.paid).length} לא שולמו
-              </span>
-            </div>
-            {cwDue.clients.map((c) => (
-              <div
-                key={c.id}
-                className="flex items-center gap-2 border-b border-card-border py-2 text-[13px] last:border-b-0"
-              >
-                <span className={`h-2 w-2 rounded-full ${c.paid ? "bg-emerald-500" : "bg-red-500"}`} />
-                <span className="flex-1 font-medium text-ink">
-                  {c.name} <span className="text-[11px] text-muted">· עמדה {c.station}</span>
-                  {cwDue.multiBranch && !c.orphan && (
-                    <span className="text-[11px] text-muted"> · {c.branchName}</span>
-                  )}
-                  {c.orphan && (
-                    <span className="mr-1.5 rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-extrabold text-amber-900">
-                      ללא סניף פעיל
-                    </span>
-                  )}
-                </span>
-                <span className={`text-[11px] font-bold ${c.paid ? "text-emerald-600" : "text-red-600"}`}>
-                  {c.paid ? "שולם" : `${c.cost.toLocaleString()} ₪ חסר`}
-                </span>
-              </div>
-            ))}
-            {cwDue.orphanCount > 0 && (
-              <p className="mt-2 rounded-lg bg-amber-50 px-2 py-1.5 text-[11px] font-bold text-amber-900">
-                {cwDue.orphanCount === 1
-                  ? "השכרה אחת כאן אינה משויכת לסניף משרד שיתופי פעיל — לכן היא לא מופיעה בעמדות. במסך המשרד השיתופי אפשר לשייך אותה לסניף ולעמדה, או למחוק אותה."
-                  : `${cwDue.orphanCount} מההשכרות כאן אינן משויכות לסניף משרד שיתופי פעיל — לכן הן לא מופיעות בעמדות. במסך המשרד השיתופי אפשר לשייך אותן לסניף ולעמדה, או למחוק אותן.`}
-              </p>
-            )}
-            <Link
-              href="/dashboard/coworking"
-              className="mt-2 inline-flex items-center gap-1 text-[11px] font-bold text-teal hover:underline"
-            >
-              {cwDue.orphanCount > 0
-                ? "לסימון תשלום ולטיפול בהשכרות ללא סניף"
-                : "לסימון תשלום במסך הסניפים והעמדות"}
-              <ArrowLeft className="h-3 w-3" />
-            </Link>
-          </div>
-        )}
-
-        {unpaidRentals && unpaidRentals.length > 0 && (
-        <div className="card border-red-300 bg-red-50">
-          <div className="mb-3 flex items-center justify-between text-xs font-bold uppercase tracking-wide text-red-700">
-            <span className="flex items-center gap-1.5"><AlertCircle className="h-4 w-4" />{"חובות השכרות"}</span>
-            <span className="rounded-full bg-red-100 px-2.5 py-0.5 text-red-700 normal-case">{unpaidRentals.length}</span>
-          </div>
-          {unpaidRentals.map((u) => (
-            <div key={u.id} className="flex items-center gap-2 border-b border-red-100 py-2 text-[13px] last:border-b-0">
-              <span className="h-2 w-2 rounded-full bg-red-500" />
-              <span className="flex-1 font-medium text-ink">{u.clientName} – {u.itemName}</span>
-              <span className="text-[11px] font-bold text-red-700">{u.amount} ₪</span>
-            </div>
-          ))}
-          <Link href="/dashboard/rentals/manage" className="mt-2 inline-flex items-center gap-1 text-[11px] font-bold text-red-700 hover:underline">
-            {"למעבר לאיחוד השכרות"}
-            <ArrowLeft className="h-3 w-3" />
-          </Link>
-        </div>
-      )}
-
-      {missingStock && (
-          <div className="card">
-            <div className="mb-3 flex items-center justify-between text-xs font-bold uppercase tracking-wide text-muted">
-              <span className="flex items-center gap-1.5"><Package className="h-4 w-4" />{"מלאי - פריטים בחוסר"}</span>
-              {stockPending > 0 && (
-                <span className="rounded-full bg-amber-50 px-2.5 py-0.5 normal-case text-amber-700">
-                  {stockPending}{" "}{"טרם סומנו"}
-                </span>
-              )}
-            </div>
-            {missingStock.length === 0 ? (
-              <div className="text-sm text-muted">{"אין פריטים בחוסר במלאי"}</div>
-            ) : (
-              missingStock.map((it, i) => (
-                <div key={i} className="flex items-center gap-2 border-b border-card-border py-2 text-[13px] last:border-b-0">
-                  <span className="h-2 w-2 rounded-full bg-red-500" />
-                  <span className="flex-1 font-medium text-ink">{it.name}</span>
-                  <span className="text-[11px] text-muted">{it.branchName}</span>
-                </div>
-              ))
-            )}
-            <Link href="/dashboard/operations/stock" className="mt-2 inline-flex items-center gap-1 text-[11px] font-bold text-teal hover:underline">
-              {"לעדכון המלאי"}
-              <ArrowLeft className="h-3 w-3" />
-            </Link>
-          </div>
-        )}
-      </div>
-      <div className="card">
-        <div className="mb-3 flex items-center justify-between text-xs font-bold uppercase tracking-wide text-muted">
-          <span className="flex items-center gap-1.5"><CheckCircle2 className="h-4 w-4" />{"משימות לטיפול"}</span>
-          <span className="rounded-full bg-[#f4f6f9] px-2.5 py-0.5 text-ink normal-case">0</span>
-        </div>
-        <div className="text-sm text-muted">{"ריכוז משימות ייבנה לכל אורך הפיתוח, לפי קטגוריה וצבע"}</div>
-      </div>
-      <div className="card">
-        <div className="mb-3 flex items-center justify-between text-xs font-bold uppercase tracking-wide text-muted">
-          <span className="flex items-center gap-1.5"><AlertTriangle className="h-4 w-4" />{"התראות"}</span>
-          <span className="rounded-full bg-[#f4f6f9] px-2.5 py-0.5 text-ink normal-case">0</span>
-        </div>
-        <div className="text-sm text-muted">{"התראות יופיעו כאן בהמשך הפיתוח"}</div>
-      </div>
     </div>
   );
 }

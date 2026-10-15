@@ -5,8 +5,12 @@ import Link from "next/link";
 import { Check, Search, X } from "lucide-react";
 import type { RentalClient, Branch } from "@ultranet/shared-types";
 import { TokenChargeButton } from "../manage/token-charge-button";
+import { CopyButton } from "@/components/copy-button";
 
 type Scope = "mine" | "all";
+
+/** "נוספו לאחרונה" = 30 הימים האחרונים, לפי זמן יצירת המסמך ב-Firestore (נתון אמיתי, לא מוערך). */
+const RECENT_DAYS = 30;
 
 export function ClientsTable({
   clients,
@@ -16,7 +20,10 @@ export function ClientsTable({
   canCharge,
   routeNameById,
   isOwner,
+  createdAtById,
 }: {
+  /** זמן יצירת מסמך הלקוח (ms) — מ-`createTime` של Firestore; ללקוחות אין שדה תאריך משלהם. */
+  createdAtById: Record<string, number>;
   clients: RentalClient[];
   myScopeBranchIds: string[];
   showBranchColumn: boolean;
@@ -27,6 +34,7 @@ export function ClientsTable({
 }) {
   const [scope, setScope] = useState<Scope>("mine");
   const [search, setSearch] = useState("");
+  const [recentOnly, setRecentOnly] = useState(false);
   const [openChargeId, setOpenChargeId] = useState<string | null>(null);
   const [chargeResult, setChargeResult] = useState<Record<string, string>>({});
 
@@ -37,11 +45,17 @@ export function ClientsTable({
 
   const visibleClients = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return scopedClients;
-    return scopedClients.filter(
-      (c) => c.name.toLowerCase().includes(q) || (c.phone ?? "").includes(q)
-    );
-  }, [scopedClients, search]);
+    let list = q
+      ? scopedClients.filter((c) => c.name.toLowerCase().includes(q) || (c.phone ?? "").includes(q))
+      : scopedClients;
+    if (recentOnly) {
+      const since = Date.now() - RECENT_DAYS * 86_400_000;
+      list = list
+        .filter((c) => (createdAtById[c.id] ?? 0) >= since)
+        .sort((a, b) => (createdAtById[b.id] ?? 0) - (createdAtById[a.id] ?? 0));
+    }
+    return list;
+  }, [scopedClients, search, recentOnly, createdAtById]);
 
   return (
     <div>
@@ -72,6 +86,18 @@ export function ClientsTable({
             </button>
           </>
         )}
+        <button
+          type="button"
+          onClick={() => setRecentOnly((v) => !v)}
+          aria-pressed={recentOnly}
+          className={`rounded-[10px] px-3 py-1.5 text-xs font-bold transition ${
+            recentOnly
+              ? "bg-teal-bg text-teal-dark"
+              : "border border-card-border bg-white text-ink hover:bg-[#f4f6f9]"
+          }`}
+        >
+          {`נוספו לאחרונה (${RECENT_DAYS} יום)`}
+        </button>
         <div className="relative mr-auto w-full max-w-xs">
           <Search className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
           <input
@@ -83,9 +109,19 @@ export function ClientsTable({
           />
         </div>
       </div>
-      {search && (
-        <p className="mb-2 text-xs font-semibold text-muted">
+      {(search || recentOnly) && (
+        <p className="mb-2 flex items-center gap-2 text-xs font-semibold text-muted">
           נמצאו {visibleClients.length} לקוחות תואמים
+          <button
+            type="button"
+            onClick={() => {
+              setSearch("");
+              setRecentOnly(false);
+            }}
+            className="font-bold text-teal hover:underline"
+          >
+            הצג הכול
+          </button>
         </p>
       )}
 
@@ -114,8 +150,11 @@ export function ClientsTable({
                 <Fragment key={c.id}>
                 <tr className="border-t border-card-border transition hover:bg-[#f8fafc]">
                   <td className="px-[11px] py-2 font-semibold text-ink">{c.name}</td>
-                  <td className="px-[11px] py-2 text-muted" dir="ltr">
-                    {c.phone ?? "-"}
+                  <td className="px-[11px] py-2 text-muted">
+                    <span className="inline-flex items-center gap-1">
+                      <span dir="ltr">{c.phone ?? "-"}</span>
+                      {c.phone && <CopyButton value={c.phone} label="טלפון" />}
+                    </span>
                   </td>
                   <td className="px-[11px] py-2">
                     {(!c.depositType || c.depositType === "none") && (
