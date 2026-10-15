@@ -6,6 +6,8 @@ import type { Rental, RentalClient, Laptop, Stick, Branch, CollectionRoute } fro
 import { effectiveLaptopRates, effectiveStickRates } from "@/lib/rental-pricing";
 import { isLaptopActive } from "@/lib/laptop-names";
 import { LAPTOP_REPAIRS_COLLECTION, openRepairsByLaptop, repairDaysText } from "@/lib/laptop-repairs";
+import { BranchPicker } from "@/components/branch-picker";
+import { parseBranchSelection } from "@/lib/branch-selection";
 import { RentalsLists, type ActiveRowData, type HistoryRowData } from "./rentals-lists";
 
 async function loadData() {
@@ -39,7 +41,7 @@ async function loadData() {
   return { rentals, clients, laptops, sticks, laptopsList, sticksList, branches, branchesList, allBranches, routesList, openRepairs };
 }
 
-export default async function RentalsPage({ searchParams }: { searchParams?: { mine?: string } }) {
+export default async function RentalsPage({ searchParams }: { searchParams?: { mine?: string; b?: string } }) {
   const session = await requireModuleAccess("rentals");
   const role = session.user?.role;
   const myBranchId = session.user?.branchId;
@@ -53,7 +55,16 @@ export default async function RentalsPage({ searchParams }: { searchParams?: { m
   const todayIso = new Date().toISOString().slice(0, 10);
 
   const myOwnBranchIds = branchesList.filter((b) => b.isMine === true).map((b) => b.id);
-  const visible = rentals.filter((r) => (role === "owner" && !onlyMine) || r.branchId === myBranchId || (onlyMine && myOwnBranchIds.includes(r.branchId)));
+  // בורר הסניפים (סעיף 2) — לבעלים במסך הכללי, רק מתוך סניפי ההשכרות הקיימים. מצמצם, לא מרחיב.
+  const pickerBranches =
+    role === "owner" && !onlyMine
+      ? branchesList.filter((b) => !b.deleted && !b.closedAt).map((b) => ({ id: b.id, name: b.name }))
+      : [];
+  const pickedBranchIds = parseBranchSelection(searchParams?.b, pickerBranches.map((b) => b.id));
+  const inPicked = (branchId: string) => pickedBranchIds.length === 0 || pickedBranchIds.includes(branchId);
+  const visible = rentals
+    .filter((r) => (role === "owner" && !onlyMine) || r.branchId === myBranchId || (onlyMine && myOwnBranchIds.includes(r.branchId)))
+    .filter((r) => inPicked(r.branchId));
   const active = visible.filter((r) => r.status === "active");
   // Sorted newest-first so both the dedicated "unpaid" list and the paginated history below show
   // the most relevant entries first. Capped generously (not to 20 anymore) so pagination on the
@@ -65,11 +76,13 @@ export default async function RentalsPage({ searchParams }: { searchParams?: { m
   const history = historyAll.slice(0, HISTORY_CAP);
   const unpaid = historyAll.filter((r) => !r.paid);
 
-  const visibleBranches = onlyMine
-    ? branchesList.filter((b) => b.isMine === true)
-    : role === "owner"
-    ? branchesList
-    : branchesList.filter((b) => b.id === myBranchId);
+  const visibleBranches = (
+    onlyMine
+      ? branchesList.filter((b) => b.isMine === true)
+      : role === "owner"
+        ? branchesList
+        : branchesList.filter((b) => b.id === myBranchId)
+  ).filter((b) => inPicked(b.id));
 
   // Both of these used to be extra Firestore waves after loadData - a second full read of
   // n_collection_routes, then up to three sequential document reads per distinct (branch, route)
@@ -257,6 +270,12 @@ export default async function RentalsPage({ searchParams }: { searchParams?: { m
         </h1>
         <p className="text-sm text-muted">ניהול השכרות פעילות והיסטוריה</p>
       </div>
+
+      {pickerBranches.length > 1 && (
+        <div className="flex flex-wrap items-center gap-2">
+          <BranchPicker branches={pickerBranches} selected={pickedBranchIds} />
+        </div>
+      )}
 
       <RentalsLists
         active={activeRows}
