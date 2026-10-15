@@ -61,11 +61,10 @@ export function SideNav({
         href={item.href}
         title={compact ? item.label : undefined}
         aria-current={active ? "page" : undefined}
-        className={`flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-[14px] font-bold transition ${
-          active ? "bg-teal-bg text-teal-dark" : "text-muted hover:bg-gray-100 hover:text-ink"
-        } ${compact ? "justify-center" : ""}`}
+        // אותם כפתורים בדיוק כמו בשורת הלשוניות הקודמת (`pill-active` / `pill-inactive`), רק בטור.
+        className={`${active ? "pill-active" : "pill-inactive"} flex items-center gap-1.5 ${compact ? "justify-center" : ""}`}
       >
-        <span className="flex h-5 w-5 shrink-0 items-center justify-center">{item.icon}</span>
+        <span className="flex shrink-0 items-center">{item.icon}</span>
         {!compact && <span className="truncate">{item.label}</span>}
       </Link>
     );
@@ -92,15 +91,15 @@ export function SideNav({
     return (
       <aside
         className={`sticky top-0 hidden h-screen shrink-0 flex-col border-l border-card-border bg-white px-2.5 py-3 md:flex ${
-          collapsed ? "w-[68px]" : "w-[220px]"
+          collapsed ? "w-[64px]" : "w-[200px]"
         }`}
       >
-        <div className={`mb-3 flex items-center ${collapsed ? "justify-center" : "justify-between"} gap-2 px-1`}>
-          {!collapsed && logo}
+        <div className="mb-4 flex flex-col items-center gap-2 px-1">
+          <div className={collapsed ? "[&_img]:h-7 [&_img]:max-w-[44px]" : ""}>{logo}</div>
           <button
             type="button"
             onClick={toggleCollapsed}
-            className="rounded-lg p-1.5 text-muted transition hover:bg-gray-100"
+            className="self-start rounded-lg p-1 text-muted transition hover:bg-gray-100"
             aria-label={collapsed ? "הרחבת התפריט" : "צמצום התפריט"}
             title={collapsed ? "הרחבת התפריט" : "צמצום התפריט"}
           >

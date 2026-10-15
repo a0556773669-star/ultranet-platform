@@ -36,13 +36,13 @@ export default async function DashboardLayout({ children }: { children: ReactNod
     href: item.href,
     label: item.label,
     group: item.group,
-    icon: <item.icon className="h-[18px] w-[18px]" />,
+    icon: <item.icon className="h-4 w-4" />,
   }));
 
   const logoUrl = await getLogoSrc();
   const logo = logoUrl ? (
     // eslint-disable-next-line @next/next/no-img-element
-    <img src={logoUrl} alt="אולטרנט" className="h-10 w-auto object-contain" />
+    <img src={logoUrl} alt="אולטרנט" className="h-12 w-auto object-contain" />
   ) : (
     <span className="text-xl font-extrabold tracking-tight text-teal">אולטרנט</span>
   );
