@@ -61,7 +61,7 @@ export function MonthSummary({ tracking }: { tracking: LaptopBranchTracking }) {
           <thead className="bg-[#f4f6f9] text-muted">
             <tr>
               <th className="px-3 py-2 text-right text-[11px] font-bold">סניף</th>
-              <th className="px-3 py-2 text-right text-[11px] font-bold">מחשבים</th>
+              <th className="px-3 py-2 text-right text-[11px] font-bold">מחשבים שקולים</th>
               <th className="px-3 py-2 text-right text-[11px] font-bold">רווח נטו שלי</th>
               <th className="px-3 py-2 text-right text-[11px] font-bold">נטו למחשב</th>
               <th className="px-3 py-2 text-right text-[11px] font-bold">{`מול ${monthLabel(prevMonth)}`}</th>
@@ -72,7 +72,7 @@ export function MonthSummary({ tracking }: { tracking: LaptopBranchTracking }) {
             {rows.map(({ row, cur, live, status, delta }) => (
               <tr key={row.branch.id} className="border-t border-card-border">
                 <td className="px-3 py-2 font-bold text-ink">{row.branch.name}</td>
-                <td className="px-3 py-2">{cur?.existed ? cur.computerCount : "—"}</td>
+                <td className="px-3 py-2">{cur?.existed ? (Number.isInteger(cur.computerCount) ? cur.computerCount : cur.computerCount.toFixed(1)) : "—"}</td>
                 <td className="px-3 py-2">{cur?.existed ? `${fmt(cur.netProfit)} ₪` : "—"}</td>
                 <td className="px-3 py-2">
                   {status === "na" ? (

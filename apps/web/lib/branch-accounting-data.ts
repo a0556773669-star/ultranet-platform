@@ -12,6 +12,7 @@ import type {
   Stick,
   LaptopSale,
   LaptopCostRate,
+  LaptopRepair,
 } from "@ultranet/shared-types";
 import {
   ownerExpenseBurden,
@@ -28,6 +29,7 @@ import {
   revenueShareToDate as revenueShareToDateOf,
 } from "./revenue-shares";
 import { LAPTOP_COST_RATES_COLLECTION, laptopCostLines } from "./laptop-costs";
+import { LAPTOP_REPAIRS_COLLECTION } from "./laptop-repairs";
 import { lastDayOfMonth, nextMonth, previousMonth } from "./fixed-expense-revision";
 
 export const LAPTOP_SALES_COLLECTION = "n_laptop_sales";
@@ -310,6 +312,8 @@ export interface BranchAccountingRawData {
   laptopCostRates: LaptopCostRate[];
   /** תאריך ההשכרה הראשונה של כל מחשב — נפילה לעלות של מחשב ותיק בלי `addedDate`. */
   firstRentalByLaptop: Map<string, string>;
+  /** תקופות התיקון של מחשבים (`n_laptop_repairs`) לפי סניף — ימי תיקון יוצאים ממכנה הרווחיות. */
+  repairsByBranch: Map<string, LaptopRepair[]>;
 }
 
 export async function loadBranchAccountingRawData(): Promise<BranchAccountingRawData> {
@@ -327,6 +331,7 @@ export async function loadBranchAccountingRawData(): Promise<BranchAccountingRaw
     multiBranchSnap,
     salesSnap,
     costRatesSnap,
+    repairsSnap,
   ] = await Promise.all([
     db.collection("n_branches").get(),
     db.collection("n_fixed_expenses").get(),
@@ -340,6 +345,7 @@ export async function loadBranchAccountingRawData(): Promise<BranchAccountingRaw
     db.collection(MULTI_BRANCH_EXPENSES_COLLECTION).get(),
     db.collection(LAPTOP_SALES_COLLECTION).get(),
     db.collection(LAPTOP_COST_RATES_COLLECTION).get(),
+    db.collection(LAPTOP_REPAIRS_COLLECTION).get(),
   ]);
 
   const branches = branchesSnap.docs.map((d) => ({ ...(d.data() as Omit<Branch, "id">), id: d.id }) as Branch);
@@ -485,7 +491,16 @@ export async function loadBranchAccountingRawData(): Promise<BranchAccountingRaw
     (d) => ({ ...(d.data() as Omit<LaptopCostRate, "id">), id: d.id }) as LaptopCostRate,
   );
 
+  const repairsByBranch = new Map<string, LaptopRepair[]>();
+  for (const d of repairsSnap.docs) {
+    const r = { ...(d.data() as Omit<LaptopRepair, "id">), id: d.id } as LaptopRepair;
+    const arr = repairsByBranch.get(r.branchId) ?? [];
+    arr.push(r);
+    repairsByBranch.set(r.branchId, arr);
+  }
+
   return {
+    repairsByBranch,
     branches,
     fixedByBranch,
     variableByBranch,
