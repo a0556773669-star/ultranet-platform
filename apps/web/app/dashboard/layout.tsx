@@ -6,6 +6,7 @@ import { SignOutButton } from "./sign-out-button";
 import { cookies } from "next/headers";
 import { DEVICE_TRUST_COOKIE, verifyDeviceToken } from "@/lib/device-trust";
 import { SideNav } from "./side-nav";
+import { GlobalSearch } from "./global-search";
 import { getAssignments, isOwnerSession, topRole, unionPerms } from "@/lib/perms";
 
 import { NAV_ITEMS, visibleFor } from "@/lib/nav-items";
@@ -58,7 +59,9 @@ export default async function DashboardLayout({ children }: { children: ReactNod
             <SideNav variant="mobile" items={navItems} />
             {logo}
           </div>
-          <div className="flex-1" />
+          <div className="flex min-w-0 flex-1 justify-start">
+            <GlobalSearch />
+          </div>
           <div className="flex items-center gap-2 text-sm text-muted">
             <span>
               שלום, <span className="font-medium text-ink">{name}</span>
