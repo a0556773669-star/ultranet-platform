@@ -80,6 +80,15 @@ export function ClientForm({
         <label className={LABEL}>מאיפה הגיע אלינו (רשות)</label>
         <input name="referralSource" defaultValue={initial?.referralSource} className={FIELD} />
       </div>
+      <div className="sm:col-span-2">
+        <label className={LABEL}>הערה בולטת על הלקוח (רשות — מוצגת גם בהשכרות שלו)</label>
+        <input
+          name="pinnedNote"
+          defaultValue={initial?.pinnedNote}
+          placeholder="למשל: להתקשר רק אחרי 17:00"
+          className={FIELD}
+        />
+      </div>
 
       <div className="flex items-center gap-2">
         <input

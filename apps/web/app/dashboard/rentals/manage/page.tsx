@@ -150,6 +150,7 @@ export default async function RentalsPage({ searchParams }: { searchParams?: { m
     return {
       clientName: client?.name ?? "-",
       clientPhone: client?.phone,
+      clientNote: client?.pinnedNote,
       clientIdNum: client?.idNum,
       cardLast4: client?.cardLast4,
       hasCardToken: !!(client?.gatewayToken && client?.cardExpiry),
@@ -202,6 +203,9 @@ export default async function RentalsPage({ searchParams }: { searchParams?: { m
       paid: r.paid === true,
       paymentMethod: r.paymentMethod,
       ratesLocked,
+      clientNote: info.clientNote,
+      expectedReturnDate: r.expectedReturnDate,
+      handoverItems: r.handoverItems,
       tokenRouteName: canCharge ? tokenRouteName : null,
       chargeRoutes: canCharge ? chargeRoutes : [],
       canDelete,

@@ -490,6 +490,12 @@ export interface RentalClient {
    *  branch's route (see resolveNedarimCreds). */
   collectionRouteId?: string | null;
   referralSource?: string; // free text: how the client found us
+  /**
+   * הערה בולטת ללקוח (מ-2026-10-15, מסמך המשך 1 סעיפים 4 ו-8) — הערה מעשית על **הלקוח**
+   * ("להתקשר רק אחרי 17:00"), שמוצגת בכרטיס ובשורת ההשכרה הפעילה. נפרדת מ-`Rental.notes`
+   * שהיא הערה על **ההשכרה**. רשות; הערות ישנות נשארות במקומן ולא מועתקות לכאן.
+   */
+  pinnedNote?: string;
 }
 
 /** collection: n_rentals */
@@ -515,6 +521,15 @@ export interface Rental {
   pickupLoc?: string;
   returnLoc?: string;
   returnDate?: string;
+  /**
+   * תאריך החזרה משוער (YYYY-MM-DD, רשות; מסמך המשך 1 סעיף 43) — לתכנון בלבד. **אינו** תאריך
+   * החזרה בפועל, לא שריון, לא משנה מחיר ולא מסיים השכרה אוטומטית.
+   */
+  expectedReturnDate?: string;
+  /** בדיקת ציוד (רשות; מסמך המשך 1 סעיף 3): מה סומן כנמסר בפתיחה ומה כהוחזר בהחזרה —
+   *  מפתחות מתוך `laptop` / `charger` / `bag` / `stick`. רישום בלבד; לא מבצע החזרה או חיוב. */
+  handoverItems?: string[];
+  returnItems?: string[];
   /**
    * **המחירון שבתוקף ברגע פתיחת ההשכרה** (מ-2026-10-15). לקוח ששכר "על דעת 40 ליום" ממשיך
    * לשלם לפיו גם אם המחירון של המחשב/הסניף עודכן אחר כך: ההחזרה מחשבת מכאן ולא מהמחירון

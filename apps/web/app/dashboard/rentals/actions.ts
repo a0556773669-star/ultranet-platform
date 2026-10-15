@@ -8,6 +8,7 @@ import { FieldValue } from "firebase-admin/firestore";
 import { resolveEzcountCreds, createEzcountReceipt, EZCOUNT_DOC_TYPES } from "@/lib/ezcount";
 import type { RentalClient, Laptop, Stick, Rental, Branch, RentalRatesSnapshot } from "@ultranet/shared-types";
 import { parseClientsWorkbook } from "@/lib/client-excel";
+import { cleanItems } from "@/lib/equipment-checklist";
 import {
   effectiveLaptopRates,
   effectiveStickRates,
@@ -142,6 +143,7 @@ export async function createClientAction(formData: FormData) {
     idNum: String(formData.get("idNum") ?? "").trim() || undefined,
     address: String(formData.get("address") ?? "").trim() || undefined,
     referralSource: String(formData.get("referralSource") ?? "").trim() || undefined,
+    pinnedNote: String(formData.get("pinnedNote") ?? "").trim() || undefined,
     signedTerms: formData.get("signedTerms") === "on",
     depositType,
     cardLast4: depositType === "credit" ? (String(formData.get("cardLast4") ?? "").trim().slice(-4) || undefined) : undefined,
@@ -252,12 +254,17 @@ export async function updateClientAction(id: string, formData: FormData) {
     idNum: String(formData.get("idNum") ?? "").trim() || undefined,
     address: String(formData.get("address") ?? "").trim() || undefined,
     referralSource: String(formData.get("referralSource") ?? "").trim() || undefined,
+    pinnedNote: String(formData.get("pinnedNote") ?? "").trim() || undefined,
     signedTerms: formData.get("signedTerms") === "on",
     depositType,
     cardLast4: depositType === "credit" ? (String(formData.get("cardLast4") ?? "").trim().slice(-4) || undefined) : undefined,
     cardExpiry: depositType === "credit" ? (String(formData.get("cardExpiry") ?? "").trim() || undefined) : undefined,
   };
   await getAdminFirestore().collection("n_rental_clients").doc(id).set(stripUndefined(data), { merge: true });
+  // הערה בולטת שנמחקה בטופס צריכה להימחק גם מהלקוח — `merge` לבדו משאיר את הישנה.
+  if (formData.has("pinnedNote") && !data.pinnedNote) {
+    await getAdminFirestore().collection("n_rental_clients").doc(id).update({ pinnedNote: FieldValue.delete() });
+  }
   revalidatePath("/dashboard/rentals", "layout");
   redirect("/dashboard/rentals/clients");
 }
@@ -356,7 +363,7 @@ export async function issueCashReceiptAction(rentalId: string) {
 
 export async function closeRentalAction(
   rentalId: string,
-  data: { returnDate: string; finalPrice: number; priceOverrideReason?: string; notes?: string }
+  data: { returnDate: string; finalPrice: number; priceOverrideReason?: string; notes?: string; returnItems?: string[] }
 ) {
   await requireSession();
   await getAdminFirestore()
@@ -370,6 +377,7 @@ export async function closeRentalAction(
         finalPrice: roundPrice(data.finalPrice),
         priceOverrideReason: data.priceOverrideReason,
         notes: data.notes,
+        returnItems: cleanItems(data.returnItems),
       }),
       { merge: true }
     );
@@ -379,7 +387,7 @@ export async function closeRentalAction(
 
 export async function closeRentalWithChargeAction(
   rentalId: string,
-  data: { returnDate: string; finalPrice: number; priceOverrideReason?: string; notes?: string },
+  data: { returnDate: string; finalPrice: number; priceOverrideReason?: string; notes?: string; returnItems?: string[] },
   receiptPdfLink?: string
 ) {
   await requireSession();
@@ -427,6 +435,8 @@ export async function createRentalAction(formData: FormData) {
   const pricingVariant = (String(formData.get("pricingVariant") ?? "normal") as "normal" | "noInternet");
   const startDate = String(formData.get("startDate") ?? "");
   const notes = String(formData.get("notes") ?? "").trim() || undefined;
+  const expectedReturnDate = String(formData.get("expectedReturnDate") ?? "").trim() || undefined;
+  const handoverItems = cleanItems(formData.getAll("handoverItems"));
   const collectionRouteId = String(formData.get("collectionRouteId") ?? "").trim() || undefined;
   const mine = String(formData.get("mine") ?? "").trim() === "1";
   const mineParam = mine ? "&mine=1" : "";
@@ -525,6 +535,8 @@ export async function createRentalAction(formData: FormData) {
     collectionRouteId,
     status: "active",
     paid: false,
+    expectedReturnDate,
+    handoverItems,
     ratesSnapshot,
   };
   await getAdminFirestore().collection("n_rentals").add(stripUndefined(data));

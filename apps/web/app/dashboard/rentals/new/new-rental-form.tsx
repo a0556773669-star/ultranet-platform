@@ -2,6 +2,7 @@
 
 import { useMemo, useRef, useState, useTransition } from "react";
 import type { ChangeEvent, FormEvent } from "react";
+import { itemsForPackage } from "@/lib/equipment-checklist";
 import type { Branch, RentalClient, Laptop, Stick, CollectionRoute } from "@ultranet/shared-types";
 import { createRentalAction } from "../actions";
 import { CustomerCombobox } from "../customer-combobox";
@@ -43,6 +44,9 @@ export function NewRentalForm({
   const [itemId, setItemId] = useState("");
   const [pricingVariant, setPricingVariant] = useState<"normal" | "noInternet">("normal");
   const notesRef = useRef<HTMLTextAreaElement>(null);
+  // תאריך החזרה משוער — רשות, לתכנון בלבד (מסמך המשך 1, סעיף 43).
+  const [expectedReturnDate, setExpectedReturnDate] = useState("");
+  const [handoverItems, setHandoverItems] = useState<string[]>([]);
   const [formError, setFormError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
@@ -50,6 +54,7 @@ export function NewRentalForm({
   const rentedStickSet = useMemo(() => new Set(rentedStickIds), [rentedStickIds]);
 
   const branchClients = clients.filter((c) => c.branchId === branchId);
+  const selectedClient = clientId ? clients.find((c) => c.id === clientId) : undefined;
   const branchLaptops = laptops
     .filter((l) => l.branchId === branchId)
     .sort((a, b) => a.name.localeCompare(b.name, "he", { numeric: true }));
@@ -121,6 +126,8 @@ export function NewRentalForm({
     fd.set("pricingVariant", pricingVariant);
     fd.set("startDate", startDate);
     fd.set("notes", notesRef.current?.value ?? "");
+    fd.set("expectedReturnDate", expectedReturnDate);
+    for (const k of handoverItems) fd.append("handoverItems", k);
     if (onlyMine) fd.set("mine", "1");
     startTransition(() => {
       createRentalAction(fd);
@@ -152,6 +159,34 @@ export function NewRentalForm({
       <div>
         <label className={LABEL}>לקוח</label>
         <CustomerCombobox clients={branchClients} value={clientId} onChange={setClientId} />
+        {selectedClient && (
+          // מצב קצר של הלקוח שנבחר: תקנון ופיקדון (לפי השדות הקיימים, בלי חובה חדשה), והערה בולטת.
+          <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-[11px] font-bold">
+            <span
+              className={`rounded-full px-2 py-0.5 ${
+                selectedClient.signedTerms ? "bg-teal-bg text-teal-dark" : "bg-red-50 text-red-600"
+              }`}
+            >
+              {selectedClient.signedTerms ? "חתם על תקנון" : "לא חתם על תקנון"}
+            </span>
+            <span
+              className={`rounded-full px-2 py-0.5 ${
+                !selectedClient.depositType || selectedClient.depositType === "none"
+                  ? "bg-red-50 text-red-600"
+                  : "bg-teal-bg text-teal-dark"
+              }`}
+            >
+              {selectedClient.depositType === "check"
+                ? "פיקדון: צ׳ק"
+                : selectedClient.depositType === "credit"
+                  ? "פיקדון: אשראי"
+                  : "ללא פיקדון"}
+            </span>
+            {selectedClient.pinnedNote && (
+              <span className="rounded-full bg-amber-50 px-2 py-0.5 text-amber-800">{selectedClient.pinnedNote}</span>
+            )}
+          </div>
+        )}
       </div>
 
       <div>
@@ -290,7 +325,38 @@ export function NewRentalForm({
       )}
 
       <div>
-        <label className={LABEL}>הערות</label>
+        <label className={LABEL}>החזרה משוערת (רשות — לתכנון בלבד, לא משנה מחיר)</label>
+        <input
+          type="date"
+          value={expectedReturnDate}
+          min={startDate || undefined}
+          onChange={(e: ChangeEvent<HTMLInputElement>) => setExpectedReturnDate(e.target.value)}
+          className={FIELD}
+        />
+      </div>
+
+      {itemId && (
+        <div>
+          <label className={LABEL}>בדיקת ציוד במסירה (רשות)</label>
+          <div className="flex flex-wrap gap-3 text-sm">
+            {itemsForPackage(kind, pricingVariant).map((it) => (
+              <label key={it.key} className="flex items-center gap-1.5">
+                <input
+                  type="checkbox"
+                  checked={handoverItems.includes(it.key)}
+                  onChange={(e) =>
+                    setHandoverItems((prev) => (e.target.checked ? [...prev, it.key] : prev.filter((k) => k !== it.key)))
+                  }
+                />
+                {it.label}
+              </label>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div>
+        <label className={LABEL}>הערה על ההשכרה</label>
         <textarea name="notes" ref={notesRef} rows={2} className={FIELD} />
       </div>
 

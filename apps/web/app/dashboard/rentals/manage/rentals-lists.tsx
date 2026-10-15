@@ -58,6 +58,11 @@ export type ActiveRowData = {
   paymentMethod?: string;
   /** true = המחיר מחושב מהמחירון שנשמר בפתיחת ההשכרה; false = השכרה ישנה, לפי המחירון הנוכחי. */
   ratesLocked: boolean;
+  /** הערה בולטת על הלקוח (`RentalClient.pinnedNote`) — נפרדת מהערת ההשכרה. */
+  clientNote?: string;
+  /** החזרה משוערת — לתכנון בלבד. */
+  expectedReturnDate?: string;
+  handoverItems?: string[];
 };
 
 export type HistoryRowData = {
@@ -240,6 +245,9 @@ export function RentalsLists({
                   initialPaid={r.paid}
                   initialPaymentMethod={r.paymentMethod}
                   ratesLocked={r.ratesLocked}
+                  clientNote={r.clientNote}
+                  expectedReturnDate={r.expectedReturnDate}
+                  handoverItems={r.handoverItems}
                 />
               ))}
             </tbody>
