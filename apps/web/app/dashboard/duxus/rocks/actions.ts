@@ -16,6 +16,7 @@ import type {
   MilestonePriority,
   MilestoneSource,
   MilestoneOrigin,
+  MeetingDecision,
   PeriodAssignment,
   PeriodType,
   AssignmentOutcome,
@@ -104,6 +105,12 @@ function toRock(id: string, data: Partial<Rock> | undefined): Rock {
   };
 }
 
+/** רשימת מזהים מנורמלת: לא-מערך הופך לרשימה ריקה, בלי ריקים ובלי כפילויות. */
+function toIdList(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return Array.from(new Set(value.map((v) => String(v ?? "").trim()).filter(Boolean)));
+}
+
 /**
  * דאטה שנוצר לפני מודל הסטטוסים מכיל רק `done` בוליאני - הוא נגזר כאן ל-`status`
  * בזמן קריאה, בלי מיגרציה וכתיבה חוזרת ל-DB.
@@ -134,6 +141,11 @@ function toMilestone(id: string, data: Partial<Milestone> | undefined): Mileston
     source: data?.source ?? "rock",
     origin: data?.origin ?? "quarter",
     rolledFromId: data?.rolledFromId ?? null,
+    // שדות רשות חדשים (אפיון המשך 25/26/30/49) - דאטה קיים בלעדיהם נקרא כברירת מחדל ריקה.
+    inbox: data?.inbox === true,
+    nextAction: data?.nextAction ?? "",
+    splitFromId: data?.splitFromId ?? "",
+    dependsOnIds: toIdList(data?.dependsOnIds),
     order: data?.order ?? 0,
     deletedAt: data?.deletedAt ?? null,
     createdAt: data?.createdAt ?? 0,
@@ -1111,11 +1123,14 @@ export async function createMilestoneAction(input: {
   origin?: MilestoneOrigin;
   /** שיוך מיידי לתקופות שבהן נוצרה (למשל "נוסף במהלך השבוע") */
   assignTo?: { periodType: PeriodType; periodKey: string }[];
+  /** תיבת קליטה (סעיף 25): רעיון שממתין לבחירה בישיבה - תמיד משימה שוטפת ובלי שיוך */
+  inbox?: boolean;
 }): Promise<ActionResult> {
   await requireModuleAccess("duxus");
   const title = input.title.trim();
   if (!title) return { ok: false, message: "יש להזין כותרת לאבן דרך" };
-  const source: MilestoneSource = input.source ?? "rock";
+  const inbox = input.inbox === true;
+  const source: MilestoneSource = inbox ? "adhoc" : (input.source ?? "rock");
   // אבן דרך שנוספה בשבוע/חודש בלי שיוך קודם חייבת תת-סלע (סעיף 8).
   if (source === "rock" && !input.rockId) return { ok: false, message: "יש לבחור סלע או תת-סלע לאבן הדרך" };
 
@@ -1124,7 +1139,8 @@ export async function createMilestoneAction(input: {
   if (blocked) return { ok: false, message: blocked };
 
   // האחראי הוא רשות גם בשיבוץ לשבוע - בעל העסק והמזכירה עובדים על אותו ממשק.
-  const assignTo = input.assignTo ?? [];
+  // רעיון בתיבת קליטה לעולם לא משתבץ אוטומטית - הבחירה נעשית בישיבה.
+  const assignTo = inbox ? [] : (input.assignTo ?? []);
 
   const createdBy = await currentUserLabel();
   const now = Date.now();
@@ -1152,6 +1168,8 @@ export async function createMilestoneAction(input: {
     source,
     origin,
     rolledFromId: null,
+    // השדה נכתב רק לרעיון בתיבת קליטה; אבני דרך רגילות נשארות בלעדיו בדיוק כמו קודם.
+    ...(inbox ? { inbox: true } : {}),
     order: now,
     deletedAt: null,
     createdAt: now,
@@ -1165,7 +1183,13 @@ export async function createMilestoneAction(input: {
     action: "create",
     newValue: title,
     quarterKey: input.quarterKey,
-    note: origin === "quarter" ? "נוצרה בתכנון הרבעון" : origin === "month" ? "נוספה במהלך החודש" : "נוספה במהלך השבוע",
+    note: inbox
+      ? "נוסף לתיבת הקליטה"
+      : origin === "quarter"
+        ? "נוצרה בתכנון הרבעון"
+        : origin === "month"
+          ? "נוספה במהלך החודש"
+          : "נוספה במהלך השבוע",
   });
 
   assignTo.forEach(({ periodType, periodKey }) => {
@@ -1207,7 +1231,33 @@ const FIELD_LABELS: Record<string, string> = {
   waitReason: "סיבת המתנה",
   waitUntil: "תאריך מעקב",
   rockId: "שיוך לתת-סלע",
+  nextAction: "הפעולה הבאה",
+  dependsOnIds: "תלוי ב־",
 };
+
+/**
+ * בדיקת תלות מעגלית (סעיף 49): הולכים מהתלויות החדשות לאורך `dependsOnIds` שלהן. אם
+ * מגיעים בחזרה לאבן הדרך עצמה - התלות תיצור מעגל. מחזירה את שם אבן הדרך שסוגרת את
+ * המעגל, או `null`. מוגבלת במספר צמתים כדי שנתון שבור לא יגרום ללולאה ארוכה.
+ */
+async function dependencyCycle(db: Firestore, id: string, deps: string[]): Promise<string | null> {
+  const visited = new Set<string>();
+  let frontier = deps.filter((d) => d !== id);
+  while (frontier.length && visited.size < 500) {
+    frontier.forEach((d) => visited.add(d));
+    const docs = await fetchByIds(db, MILESTONES, frontier, toMilestone);
+    const next: string[] = [];
+    for (const m of docs) {
+      const ds = m.dependsOnIds ?? [];
+      if (ds.includes(id)) return m.title || m.id;
+      ds.forEach((d) => {
+        if (!visited.has(d)) next.push(d);
+      });
+    }
+    frontier = Array.from(new Set(next));
+  }
+  return null;
+}
 
 /**
  * עריכת אבן דרך מחלונית הצד. `expectedUpdatedAt` הוא נעילה אופטימית: אם משתמש אחר
@@ -1226,6 +1276,10 @@ export async function updateMilestoneAction(
     waitUntil?: string;
     /** העברה לתת-סלע אחר - מותרת ונרשמת ביומן (סעיף 10) */
     rockId?: string;
+    /** הפעולה הבאה (סעיף 26) - נכתבת רק כשהשתנתה */
+    nextAction?: string;
+    /** "תלוי ב־" (סעיף 49) - נכתב רק כשהשתנה; תלות עצמית/מעגלית נדחית */
+    dependsOnIds?: string[];
   },
   expectedUpdatedAt?: number
 ): Promise<ActionResult> {
@@ -1256,11 +1310,44 @@ export async function updateMilestoneAction(
   if (input.waitReason !== undefined) next.waitReason = input.waitReason.trim();
   if (input.waitUntil !== undefined) next.waitUntil = input.waitUntil.trim();
   if (input.rockId !== undefined && input.rockId !== before.rockId) next.rockId = input.rockId;
+  // שדות הרשות החדשים נכתבים רק כשהמשתמש שינה אותם בפועל - שמירה רגילה לא מוסיפה
+  // אותם למסמך קיים.
+  if (input.nextAction !== undefined && input.nextAction.trim() !== (before.nextAction ?? "")) {
+    next.nextAction = input.nextAction.trim();
+  }
+
+  const extra: Record<string, unknown> = {};
+  let depsLog: { oldValue: string; newValue: string } | null = null;
+  if (input.dependsOnIds !== undefined) {
+    const deps = toIdList(input.dependsOnIds);
+    const prev = before.dependsOnIds ?? [];
+    const changed = deps.length !== prev.length || deps.some((d) => !prev.includes(d));
+    if (changed) {
+      if (deps.includes(id)) return { ok: false, message: "אבן דרך לא יכולה להיות תלויה בעצמה" };
+      const cycle = await dependencyCycle(db, id, deps);
+      if (cycle) return { ok: false, message: `התלות יוצרת מעגל: "${cycle}" כבר תלויה (ישירות או בעקיפין) באבן הדרך הזו` };
+      const titles = await fetchByIds(db, MILESTONES, Array.from(new Set([...prev, ...deps])), toMilestone);
+      const titleOf = (x: string) => titles.find((t) => t.id === x)?.title || x;
+      extra.dependsOnIds = deps;
+      depsLog = { oldValue: prev.map(titleOf).join(", "), newValue: deps.map(titleOf).join(", ") };
+    }
+  }
 
   const user = await currentUserLabel();
   const now = Date.now();
   const batch = db.batch();
-  batch.set(ref, { ...next, updatedAt: now, updatedBy: user }, { merge: true });
+  batch.set(ref, { ...next, ...extra, updatedAt: now, updatedBy: user }, { merge: true });
+  if (depsLog) {
+    logActivity(db, batch, user, {
+      entityType: "milestone",
+      entityId: id,
+      action: "update",
+      field: FIELD_LABELS.dependsOnIds,
+      oldValue: depsLog.oldValue,
+      newValue: depsLog.newValue,
+      quarterKey: before.quarterKey,
+    });
+  }
   Object.keys(next).forEach((key) => {
     const oldValue = String((before as unknown as Record<string, unknown>)[key] ?? "");
     const newValue = String(next[key] ?? "");
@@ -1521,8 +1608,12 @@ export async function assignMilestonesAction(
       assignedBy: user,
       outcome: "open" satisfies AssignmentOutcome,
     });
-    if (keys.length > 0) {
-      batch.set(db.collection(MILESTONES).doc(m.id), { carryOverCount: (m.carryOverCount ?? 0) + 1 }, { merge: true });
+    const milestonePatch: Record<string, unknown> = {};
+    if (keys.length > 0) milestonePatch.carryOverCount = (m.carryOverCount ?? 0) + 1;
+    // רעיון מתיבת הקליטה שנבחר בישיבה יוצא מהתיבה (סעיף 25) - הוא כבר בתכנון.
+    if (m.inbox) milestonePatch.inbox = false;
+    if (Object.keys(milestonePatch).length) {
+      batch.set(db.collection(MILESTONES).doc(m.id), milestonePatch, { merge: true });
     }
     logActivity(db, batch, user, {
       entityType: "milestone",
@@ -1530,7 +1621,7 @@ export async function assignMilestonesAction(
       action: "assign",
       field: periodType,
       newValue: periodKey,
-      note: keys.length > 0 ? "התחייבות מחודשת" : "",
+      note: keys.length > 0 ? "התחייבות מחודשת" : m.inbox ? "נבחר מתיבת הקליטה" : "",
       quarterKey,
     });
     count += 1;
@@ -1577,6 +1668,207 @@ export async function unassignMilestoneAction(
   await batch.commit();
   revalidateModule();
   return { ok: true };
+}
+
+// --- כתיבה: פיצול משימה גדולה (אפיון המשך, סעיף 30) ---
+
+/**
+ * פיצול אבן דרך גדולה לצעדים: יוצר אבני דרך חדשות מקושרות (`splitFromId`) באותו סלע
+ * ותת-סלע. **המקור נשמר כמות שהוא** - הוא לא נמחק, לא מוסתר ולא מסומן כהושלם
+ * אוטומטית כשהצעדים מסתיימים (אין כלל כזה שאושר).
+ *
+ * `assignTo` הוא שיוכים שהמשתמש בחר במפורש בחלונית (התקופות הפתוחות של המקור). שיוכי
+ * רבעון של המקור לרבעון אחר (גלגול) מועברים גם הם, כדי שהצעדים יוצגו היכן שהמקור מוצג.
+ */
+export async function splitMilestoneAction(
+  parentId: string,
+  steps: string[],
+  assignTo: { periodType: PeriodType; periodKey: string }[] = []
+): Promise<CountResult> {
+  await requireModuleAccess("duxus");
+  const titles = steps.map((t) => t.trim()).filter(Boolean);
+  if (!titles.length) return { ok: false, message: "יש להזין לפחות צעד אחד" };
+  if (titles.length > 30) return { ok: false, message: "אפשר לפצל לעד 30 צעדים בפעולה אחת" };
+
+  const db = getAdminFirestore();
+  const parentSnap = await db.collection(MILESTONES).doc(parentId).get();
+  if (!parentSnap.exists) return { ok: false, message: "אבן הדרך לא נמצאה" };
+  const parent = toMilestone(parentId, parentSnap.data() as Partial<Milestone>);
+  if (parent.deletedAt) return { ok: false, message: "אבן הדרך נמחקה" };
+  if (parent.status === "done" || parent.status === "cancelled") {
+    return { ok: false, message: "אפשר לפצל רק אבן דרך פתוחה" };
+  }
+  const blocked = await milestoneWriteBlock(db, parent);
+  if (blocked) return { ok: false, message: blocked };
+
+  const user = await currentUserLabel();
+  const now = Date.now();
+  const batch = db.batch();
+  const periods = assignTo.filter((a) => a.periodKey && !(a.periodType === "quarter" && a.periodKey === parent.quarterKey));
+
+  titles.forEach((title, i) => {
+    const ref = db.collection(MILESTONES).doc();
+    batch.set(ref, {
+      rockId: parent.rockId,
+      quarterKey: parent.quarterKey,
+      title,
+      description: "",
+      ownerUserId: "",
+      ownerName: parent.ownerName ?? "",
+      status: "not_started" satisfies MilestoneStatus,
+      done: false,
+      priority: parent.priority ?? "normal",
+      dueDate: "",
+      notes: "",
+      waitReason: "",
+      waitUntil: "",
+      cancelReason: "",
+      reopenCount: 0,
+      carryOverCount: 0,
+      source: parent.source ?? "rock",
+      origin: parent.origin ?? "quarter",
+      rolledFromId: null,
+      splitFromId: parentId,
+      order: (parent.order ?? now) + (i + 1) / 100,
+      deletedAt: null,
+      createdAt: now + i,
+      createdBy: user,
+      updatedAt: now,
+      updatedBy: user,
+    });
+    logActivity(db, batch, user, {
+      entityType: "milestone",
+      entityId: ref.id,
+      action: "create",
+      newValue: title,
+      quarterKey: parent.quarterKey,
+      note: `צעד מתוך "${parent.title}"`,
+    });
+    periods.forEach(({ periodType, periodKey }) => {
+      batch.set(db.collection(ASSIGNMENTS).doc(assignmentId(ref.id, periodType, periodKey)), {
+        milestoneId: ref.id,
+        quarterKey: periodType === "quarter" ? periodKey : parent.quarterKey,
+        periodType,
+        periodKey,
+        assignedAt: now,
+        assignedBy: user,
+        outcome: "open" satisfies AssignmentOutcome,
+      });
+    });
+  });
+  logActivity(db, batch, user, {
+    entityType: "milestone",
+    entityId: parentId,
+    action: "update",
+    field: "פיצול לצעדים",
+    newValue: titles.join(" · "),
+    note: `${titles.length} צעדים חדשים · המקור נשמר`,
+    quarterKey: parent.quarterKey,
+  });
+  await batch.commit();
+  revalidateModule();
+  return { ok: true, count: titles.length };
+}
+
+// --- כתיבה: החלטות "ניהול ישיבה" (אפיון המשך, סעיף 29) ---
+
+export type MeetingDecisionInput = { milestoneId: string; decision: MeetingDecision; note?: string };
+
+export type MeetingDecisionRecord = {
+  milestoneId: string;
+  decision: MeetingDecision;
+  periodType: string;
+  note: string;
+  at: number;
+  userName: string;
+};
+
+const DECISION_NOTE: Record<"week" | "month", Record<MeetingDecision, string>> = {
+  week: { continue: "ממשיכים לשבוע הנוכחי", replan: "חוזר לתכנון החודש", pause: "הושהה" },
+  month: { continue: "ממשיכים לחודש הנוכחי", replan: "חוזר לתכנון הרבעון", pause: "הושהה" },
+};
+
+/**
+ * רישום ההחלטות על המשימות שלא הושלמו, אחת לכל משימה:
+ *
+ * - `continue` - שיוך לתקופה הפתוחה (אותה אבן דרך, שיוך נוסף - לא עותק).
+ * - `replan` - בישיבה שבועית: נשארת/נכנסת לחודש הפתוח בלי שיוך לשבוע. בישיבה חודשית:
+ *   חוזרת לרבעון בלי שיוך לחודש.
+ * - `pause` - **אין שיוך חדש ואין שינוי סטטוס.** המשימה נשארת פתוחה ותעלה שוב להחלטה.
+ *
+ * כל החלטה נרשמת ב-`n_task_activity` (`action: "decision"`). שום שיוך קיים לא נמחק.
+ */
+export async function recordMeetingDecisionsAction(input: {
+  quarterKey: string;
+  periodType: "week" | "month";
+  periodKey: string;
+  /** החודש הפתוח - יעד ההחלטה "חזרה לתכנון החודש" בישיבה שבועית */
+  monthKey?: string;
+  decisions: MeetingDecisionInput[];
+}): Promise<CountResult> {
+  await requireModuleAccess("duxus");
+  const decisions = input.decisions.filter((d) => d.milestoneId && ["continue", "replan", "pause"].includes(d.decision));
+  if (!decisions.length) return { ok: true, count: 0 };
+  if (!input.periodKey) return { ok: false, message: "לא נפתחה תקופה" };
+  const db = getAdminFirestore();
+  const blocked = await quarterWriteBlock(db, input.quarterKey);
+  if (blocked) return { ok: false, message: blocked };
+
+  const continueIds = decisions.filter((d) => d.decision === "continue").map((d) => d.milestoneId);
+  if (continueIds.length) {
+    const res = await assignMilestonesAction(continueIds, input.periodType, input.periodKey, input.quarterKey);
+    if (!res.ok) return res;
+  }
+  const replanIds = decisions.filter((d) => d.decision === "replan").map((d) => d.milestoneId);
+  if (input.periodType === "week" && input.monthKey && replanIds.length) {
+    // שיוך כפול לאותו חודש מדולג בשרת, כך שמה שכבר בחודש נשאר כמות שהוא.
+    const res = await assignMilestonesAction(replanIds, "month", input.monthKey, input.quarterKey);
+    if (!res.ok) return res;
+  }
+
+  const user = await currentUserLabel();
+  const batch = db.batch();
+  decisions.forEach((d) => {
+    const label = DECISION_NOTE[input.periodType][d.decision];
+    logActivity(db, batch, user, {
+      entityType: "milestone",
+      entityId: d.milestoneId,
+      action: "decision",
+      field: input.periodType,
+      newValue: d.decision,
+      note: d.note?.trim() ? `${label} · ${d.note.trim()}` : label,
+      quarterKey: input.quarterKey,
+    });
+  });
+  await batch.commit();
+  revalidateModule();
+  return { ok: true, count: decisions.length };
+}
+
+/** ההחלטה האחרונה שנרשמה לכל אבן דרך ברבעון - להצגה בשלב "מעבר על הפתוחות". */
+export async function listMeetingDecisions(quarterKey: string): Promise<Record<string, MeetingDecisionRecord>> {
+  await requireModuleAccess("duxus");
+  if (!quarterKey) return {};
+  const snap = await getAdminFirestore()
+    .collection(ACTIVITY)
+    .where("quarterKey", "==", quarterKey)
+    .where("action", "==", "decision")
+    .get();
+  const out: Record<string, MeetingDecisionRecord> = {};
+  snap.docs
+    .map((d) => toActivity(d.id, d.data() as Partial<TaskActivity>))
+    .sort((a, b) => a.at - b.at)
+    .forEach((a) => {
+      out[a.entityId] = {
+        milestoneId: a.entityId,
+        decision: a.newValue as MeetingDecision,
+        periodType: a.field ?? "",
+        note: a.note ?? "",
+        at: a.at,
+        userName: a.userName ?? "",
+      };
+    });
+  return out;
 }
 
 // --- כתיבה: פתיחת רבעון חדש ---
