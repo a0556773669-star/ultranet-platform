@@ -8,10 +8,11 @@
  *    כל ההכנסה של הסניף לפני חלוקה עם השותף, כולל מכירות מחשבים.
  *  - חדרי מחשבים: שורות ההכנסה של `loadComputerRoomAccounting` (מעקב ידני + מזומן מהקופה).
  *  - משרד שיתופי: התשלומים שנרשמו ללקוחות הסניף (`payments`), לפי החודש שלהם.
- *  - מכירת מחשבים: `n_laptop_sales` מכל הסניפים.
+ *  - מכירת מחשבים: הכנסות מסוג "מכירת מחשבים" בהנה"ח הראשית (`n_ah_income`, `type: "sale"`).
+ *  - סניפי ניידים חדשים: כל סניף השכרות שאף שורה אחרת בקובץ לא מחוברת אליו.
  */
 import * as XLSX from "xlsx";
-import type { Branch, BranchType, Goal, GoalLinkKind } from "@ultranet/shared-types";
+import type { AccountingIncome, Branch, BranchType, Goal, GoalLinkKind } from "@ultranet/shared-types";
 import { getAdminFirestore } from "./firebase-admin";
 import { monthsBetween } from "./branch-accounting";
 import { computeBranchFinancials, loadBranchAccountingRawData } from "./branch-accounting-data";
@@ -77,8 +78,9 @@ function isLive(b: Branch) {
 
 export async function loadGoalsBoard(month = currentMonth()): Promise<GoalsBoard> {
   const db = getAdminFirestore();
-  const [goalsSnap, rentalsRaw, rooms, coworking] = await Promise.all([
+  const [goalsSnap, salesSnap, rentalsRaw, rooms, coworking] = await Promise.all([
     db.collection(GOALS_COLLECTION).get(),
+    db.collection("n_ah_income").where("type", "==", "sale").get(),
     loadBranchAccountingRawData(),
     loadComputerRoomAccounting(),
     loadCoworkingData(),
@@ -100,9 +102,12 @@ export async function loadGoalsBoard(month = currentMonth()): Promise<GoalsBoard
   };
 
   const rentalBranches = rentalsRaw.branches.filter((b) => b.branchType === "rentals" && isLive(b));
-  const linkedRentals = new Set(goals.filter((g) => g.linkKind === "branch").map((g) => g.branchId));
+  const linkedBranchIds = new Set(goals.filter((g) => g.linkKind === "branch").map((g) => g.branchId));
+  // "סניפים שאקים בעתיד": כל סניף השכרות שאין לו שורה משלו בקובץ נכנס לשורת הסניפים החדשים.
+  const newRentals = rentalBranches.filter((b) => !linkedBranchIds.has(b.id));
+  const wantNew = goals.some((g) => g.linkKind === "new_rentals");
   for (const branch of rentalBranches) {
-    if (!linkedRentals.has(branch.id)) continue;
+    if (!linkedBranchIds.has(branch.id) && !wantNew) continue;
     for (const m of window) {
       const f = computeBranchFinancials(branch, rentalsRaw, m);
       add(branch.id, m, f.grossIncomeThisMonth + f.saleIncomeThisMonth);
@@ -124,6 +129,12 @@ export async function loadGoalsBoard(month = currentMonth()): Promise<GoalsBoard
         coworkingAll[p.month] = (coworkingAll[p.month] ?? 0) + (p.amount || 0);
       }
     }
+  }
+  const computerSales: Record<string, number> = {};
+  for (const d of salesSnap.docs) {
+    const i = d.data() as AccountingIncome;
+    const m = i.month || (i.date ?? "").slice(0, 7);
+    if (wanted.has(m)) computerSales[m] = (computerSales[m] ?? 0) + (i.amount || 0);
   }
   const laptopSales: Record<string, number> = {};
   for (const sales of rentalsRaw.salesByBranch.values()) {
@@ -156,7 +167,22 @@ export async function loadGoalsBoard(month = currentMonth()): Promise<GoalsBoard
       sourceLabel = "כל סניפי המשרד השיתופי";
     } else if (goal.linkKind === "laptop_sales") {
       series = laptopSales;
-      sourceLabel = "מכירות מחשבים מכל הסניפים";
+      sourceLabel = "מכירות מחשבים מסניפי הניידים";
+    } else if (goal.linkKind === "computer_sales") {
+      series = computerSales;
+      sourceLabel = "הכנסות \"מכירת מחשבים\" בכספים";
+    } else if (goal.linkKind === "new_rentals") {
+      series = {};
+      for (const b of newRentals) {
+        for (const [m, v] of Object.entries(byBranch.get(b.id) ?? {})) series[m] = (series[m] ?? 0) + v;
+      }
+      computersActual = newRentals.reduce(
+        (s, b) => s + (rentalsRaw.laptopsByBranch.get(b.id) ?? []).filter(isLaptopActive).length,
+        0,
+      );
+      sourceLabel = newRentals.length
+        ? `סניפים חדשים: ${newRentals.map((b) => b.name).join(", ")}`
+        : "עוד אין סניפים חדשים";
     }
     const prev = window.slice(0, 3).map((m) => series?.[m] ?? 0);
     return {
@@ -253,9 +279,9 @@ export function suggestLink(
   branches: Pick<Branch, "id" | "name" | "branchType" | "location" | "partnerName">[],
 ): { linkKind: GoalLinkKind; branchId?: string } {
   const text = normalize(label);
-  // "מכירת מחשבים" בקובץ היא קו עסקי בהיקף אחר לגמרי ממכירות המחשבים של סניפי ההשכרות, ולכן
-  // לא מחוברת אוטומטית — חיבור כזה היה מציג אחוז ביצוע מטעה. הבעלים יכול לחבר אותה ידנית.
-  if (/מכירת/.test(text)) return { linkKind: "none" };
+  if (/מכירת מחשבים/.test(text)) return { linkKind: "computer_sales" };
+  if (/תוכנה|קיוסק/.test(text)) return { linkKind: "inactive" };
+  if (/^ניידים סניפים$/.test(text)) return { linkKind: "new_rentals" };
   let type: BranchType | null = null;
   let rest = text;
   if (/^חדר מ+חשבים/.test(text)) {

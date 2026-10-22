@@ -15,10 +15,11 @@ function money(n: number) {
   return `${Math.round(n).toLocaleString("he-IL")} ₪`;
 }
 
-type Status = "good" | "close" | "behind" | "none";
+type Status = "good" | "close" | "behind" | "none" | "inactive";
 
 /** בחודש הנוכחי משווים לקצב (היעד × החלק שעבר מהחודש); בחודש שהסתיים — ליעד המלא. */
 function statusOf(row: GoalRow, elapsed: number): Status {
+  if (row.goal.linkKind === "inactive") return "inactive";
   if (row.actual == null || !row.goal.turnover) return "none";
   const expected = row.goal.turnover * Math.max(elapsed, 0.0001);
   const ratio = row.actual / expected;
@@ -32,6 +33,7 @@ const STATUS_STYLE: Record<Status, { bar: string; text: string; label: string }>
   close: { bar: "bg-amber-500", text: "text-amber-700", label: "קרוב" },
   behind: { bar: "bg-red-500", text: "text-red-600", label: "מאחור" },
   none: { bar: "bg-slate-300", text: "text-muted", label: "אין נתון באתר" },
+  inactive: { bar: "bg-slate-300", text: "text-muted", label: "לא פעיל כרגע" },
 };
 
 function linkValue(row: GoalRow) {
@@ -69,7 +71,11 @@ function GoalLine({ row, board, isCurrent }: { row: GoalRow; board: Board; isCur
   };
 
   return (
-    <tr className={`border-t border-card-border align-middle ${pending ? "opacity-50" : ""}`}>
+    <tr
+      className={`border-t border-card-border align-middle ${pending ? "opacity-50" : ""} ${
+        status === "inactive" ? "bg-[#f7f9fb] text-muted opacity-70" : ""
+      }`}
+    >
       <td className="px-3 py-2.5">
         <div className="text-[13px] font-bold text-ink">{row.goal.label}</div>
         {error && <div className="text-[11px] font-semibold text-red-600">{error}</div>}
@@ -83,7 +89,10 @@ function GoalLine({ row, board, isCurrent }: { row: GoalRow; board: Board; isCur
         >
           <option value="none">— לא נמדד —</option>
           <option value="coworking_all">כל סניפי המשרד השיתופי</option>
-          <option value="laptop_sales">מכירות מחשבים (כל הסניפים)</option>
+          <option value="inactive">לא פעיל כרגע (לא נכנס לסיכום)</option>
+          <option value="new_rentals">סניפי ניידים חדשים (כל מה שאין לו שורה)</option>
+          <option value="computer_sales">הכנסות &quot;מכירת מחשבים&quot; בכספים</option>
+          <option value="laptop_sales">מכירות מחשבים מסניפי הניידים</option>
           {(["rentals", "computers", "coworking"] as const).map((type) => (
             <optgroup key={type} label={BRANCH_TYPE_LABEL[type]}>
               {board.branches
@@ -96,6 +105,9 @@ function GoalLine({ row, board, isCurrent }: { row: GoalRow; board: Board; isCur
             </optgroup>
           ))}
         </select>
+        {row.goal.linkKind === "new_rentals" && (
+          <div className="mt-1 max-w-[220px] text-[11px] text-muted">{row.sourceLabel}</div>
+        )}
       </td>
       <td className="whitespace-nowrap px-3 py-2.5 text-[13px] font-bold text-ink">
         {editing ? (
@@ -172,14 +184,15 @@ function Stat({ label, value, sub }: { label: string; value: string; sub?: strin
 }
 
 export function GoalsBoard({ board, isCurrent }: { board: Board; isCurrent: boolean }) {
-  const measured = board.rows.filter((r) => r.actual != null);
-  const targetAll = board.rows.reduce((s, r) => s + r.goal.turnover, 0);
+  const active = board.rows.filter((r) => r.goal.linkKind !== "inactive");
+  const measured = active.filter((r) => r.actual != null);
+  const targetAll = active.reduce((s, r) => s + r.goal.turnover, 0);
   const targetMeasured = measured.reduce((s, r) => s + r.goal.turnover, 0);
   const actual = measured.reduce((s, r) => s + (r.actual ?? 0), 0);
   const pct = targetMeasured ? Math.round((actual / targetMeasured) * 100) : 0;
   const onTrack = measured.filter((r) => statusOf(r, board.elapsed) === "good").length;
   const forecast = isCurrent && board.elapsed > 0 ? actual / board.elapsed : actual;
-  const unlinked = board.rows.length - measured.length;
+  const unlinked = active.length - measured.length;
 
   return (
     <div className="flex flex-col gap-4">
@@ -196,7 +209,7 @@ export function GoalsBoard({ board, isCurrent }: { board: Board; isCurrent: bool
         />
         <Stat label="שורות בקצב / ביעד" value={`${onTrack} מתוך ${measured.length}`} />
         <Stat
-          label="יעד חודשי כולל (כל הקובץ)"
+          label="יעד חודשי כולל (בלי שורות לא פעילות)"
           value={money(targetAll)}
           sub={unlinked ? `${unlinked} שורות לא נמדדות באתר` : "כל השורות נמדדות"}
         />

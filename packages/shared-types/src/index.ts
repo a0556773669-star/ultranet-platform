@@ -2020,10 +2020,20 @@ export interface BranchProgress {
  * לאן יעד מחובר באתר — מאיפה נלקח הביצוע בפועל.
  *  - `branch`: סניף אחד (`branchId`), לפי סוג הסניף.
  *  - `coworking_all`: כל סניפי המשרד השיתופי יחד.
- *  - `laptop_sales`: מכירות המחשבים (`n_laptop_sales`) מכל הסניפים.
+ *  - `laptop_sales`: מכירות המחשבים מתוך סניפי ההשכרות (`n_laptop_sales`).
+ *  - `computer_sales`: הכנסות מסוג "מכירת מחשבים" בהנה"ח הראשית (`n_ah_income`, `type: "sale"`).
+ *  - `new_rentals`: סניפי ניידים חדשים — כל סניף השכרות פעיל שאף שורת יעד אחרת לא מחוברת אליו.
+ *  - `inactive`: קו עסקי שלא פעיל כרגע — מוצג באפור ולא נכנס לסך היעדים.
  *  - `none`: אין באתר נתון לשורה הזו — היעד מוצג בלבד.
  */
-export type GoalLinkKind = "branch" | "coworking_all" | "laptop_sales" | "none";
+export type GoalLinkKind =
+  | "branch"
+  | "coworking_all"
+  | "laptop_sales"
+  | "computer_sales"
+  | "new_rentals"
+  | "inactive"
+  | "none";
 
 /**
  * collection: `n_goals` — שורת יעד חודשית (`/dashboard/goals`), מיובאת מקובץ האקסל של היעדים.
