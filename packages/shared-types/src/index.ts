@@ -2015,3 +2015,37 @@ export interface BranchProgress {
   marks: Partial<Record<BranchProgressManualStage, BranchProgressMark>>;
   updatedAt?: string;
 }
+
+/**
+ * לאן יעד מחובר באתר — מאיפה נלקח הביצוע בפועל.
+ *  - `branch`: סניף אחד (`branchId`), לפי סוג הסניף.
+ *  - `coworking_all`: כל סניפי המשרד השיתופי יחד.
+ *  - `laptop_sales`: מכירות המחשבים (`n_laptop_sales`) מכל הסניפים.
+ *  - `none`: אין באתר נתון לשורה הזו — היעד מוצג בלבד.
+ */
+export type GoalLinkKind = "branch" | "coworking_all" | "laptop_sales" | "none";
+
+/**
+ * collection: `n_goals` — שורת יעד חודשית (`/dashboard/goals`), מיובאת מקובץ האקסל של היעדים.
+ *
+ * כל הסכומים הם **לחודש**. הביצוע בפועל לא נשמר כאן — הוא נגזר מנתוני האתר בזמן קריאה,
+ * ראו `apps/web/lib/goals.ts`. ייבוא חוזר מחליף את השורות אבל שומר את החיבור (`linkKind` /
+ * `branchId`) של שורה שהשם שלה לא השתנה.
+ */
+export interface Goal {
+  id: string;
+  /** השם כפי שמופיע בקובץ, למשל "ניידים צפת" */
+  label: string;
+  order: number;
+  /** יעד מחזור חודשי, ₪ */
+  turnover: number;
+  /** יעד רווחיות חודשי, ₪ (מידע בלבד) */
+  profit?: number;
+  /** מספר המחשבים כפי שנרשם בקובץ ("מס כיום") */
+  computersNow?: number;
+  /** יעד מספר המחשבים ("יעד במספר") */
+  computersTarget?: number;
+  linkKind: GoalLinkKind;
+  branchId?: string;
+  updatedAt?: string;
+}
