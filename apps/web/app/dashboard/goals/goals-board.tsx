@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import type { BranchType, GoalLinkKind } from "@ultranet/shared-types";
+import { ArrowDownRight, ArrowRight, ArrowUpLeft } from "lucide-react";
 import type { GoalRow, GoalsBoard as Board } from "@/lib/goals";
 import { updateGoalAction } from "./actions";
 
@@ -17,19 +18,18 @@ function money(n: number) {
 
 type Status = "good" | "close" | "behind" | "none" | "inactive";
 
-/** בחודש הנוכחי משווים לקצב (היעד × החלק שעבר מהחודש); בחודש שהסתיים — ליעד המלא. */
-function statusOf(row: GoalRow, elapsed: number): Status {
+/** ממוצע שלושת החודשים המלאים האחרונים מול היעד החודשי. */
+function statusOf(row: GoalRow): Status {
   if (row.goal.linkKind === "inactive") return "inactive";
   if (row.actual == null || !row.goal.turnover) return "none";
-  const expected = row.goal.turnover * Math.max(elapsed, 0.0001);
-  const ratio = row.actual / expected;
+  const ratio = row.actual / row.goal.turnover;
   if (ratio >= 1) return "good";
   if (ratio >= 0.8) return "close";
   return "behind";
 }
 
 const STATUS_STYLE: Record<Status, { bar: string; text: string; label: string }> = {
-  good: { bar: "bg-teal", text: "text-teal-dark", label: "בקצב" },
+  good: { bar: "bg-teal", text: "text-teal-dark", label: "עומד ביעד" },
   close: { bar: "bg-amber-500", text: "text-amber-700", label: "קרוב" },
   behind: { bar: "bg-red-500", text: "text-red-600", label: "מאחור" },
   none: { bar: "bg-slate-300", text: "text-muted", label: "אין נתון באתר" },
@@ -40,11 +40,38 @@ function linkValue(row: GoalRow) {
   return row.goal.linkKind === "branch" && row.goal.branchId ? `branch:${row.goal.branchId}` : row.goal.linkKind;
 }
 
-function GoalLine({ row, board, isCurrent }: { row: GoalRow; board: Board; isCurrent: boolean }) {
+/** חץ מגמה: שלושת החודשים האחרונים מול שלושת החודשים שלפניהם. */
+function TrendCell({ row }: { row: GoalRow }) {
+  if (row.goal.linkKind === "inactive" || row.actual == null) return <span className="text-muted">—</span>;
+  if (!row.trend) return <span className="text-[11.5px] text-muted">חדש — אין עם מה להשוות</span>;
+  const pct = row.trendPct != null ? `${row.trendPct > 0 ? "+" : ""}${Math.round(row.trendPct)}%` : "";
+  if (row.trend === "up")
+    return (
+      <span className="inline-flex items-center gap-1 font-extrabold text-teal-dark" title="עלייה מול 3 החודשים שלפני">
+        <ArrowUpLeft className="h-5 w-5" />
+        עלייה {pct}
+      </span>
+    );
+  if (row.trend === "down")
+    return (
+      <span className="inline-flex items-center gap-1 font-extrabold text-red-600" title="ירידה מול 3 החודשים שלפני">
+        <ArrowDownRight className="h-5 w-5" />
+        ירידה {pct}
+      </span>
+    );
+  return (
+    <span className="inline-flex items-center gap-1 font-bold text-muted" title="בלי שינוי משמעותי">
+      <ArrowRight className="h-5 w-5 rotate-180" />
+      יציב {pct}
+    </span>
+  );
+}
+
+function GoalLine({ row, board }: { row: GoalRow; board: Board }) {
   const [pending, start] = useTransition();
   const [editing, setEditing] = useState(false);
   const [error, setError] = useState("");
-  const status = statusOf(row, board.elapsed);
+  const status = statusOf(row);
   const style = STATUS_STYLE[status];
   const pct = row.actual != null && row.goal.turnover ? (row.actual / row.goal.turnover) * 100 : 0;
 
@@ -130,6 +157,11 @@ function GoalLine({ row, board, isCurrent }: { row: GoalRow; board: Board; isCur
       </td>
       <td className="whitespace-nowrap px-3 py-2.5 text-[13px] font-extrabold text-ink">
         {row.actual == null ? <span className="text-muted">—</span> : money(row.actual)}
+        {row.actual != null && row.monthsCounted < 3 && (
+          <div className="text-[10.5px] font-semibold text-muted">
+            {row.monthsCounted === 1 ? "חודש מלא אחד" : `${row.monthsCounted} חודשים מלאים`}
+          </div>
+        )}
       </td>
       <td className="min-w-[170px] px-3 py-2.5">
         {row.actual == null ? (
@@ -138,13 +170,6 @@ function GoalLine({ row, board, isCurrent }: { row: GoalRow; board: Board; isCur
           <div>
             <div className="relative h-2.5 overflow-hidden rounded-full bg-[#eef1f5]">
               <div className={`h-full rounded-full ${style.bar}`} style={{ width: `${Math.min(100, pct)}%` }} />
-              {isCurrent && board.elapsed < 1 && (
-                <div
-                  className="absolute top-0 h-full w-0.5 bg-ink/60"
-                  style={{ right: `${board.elapsed * 100}%` }}
-                  title="איפה צריך להיות היום"
-                />
-              )}
             </div>
             <div className={`mt-0.5 flex justify-between text-[11px] font-bold ${style.text}`}>
               <span>{Math.round(pct)}%</span>
@@ -153,8 +178,8 @@ function GoalLine({ row, board, isCurrent }: { row: GoalRow; board: Board; isCur
           </div>
         )}
       </td>
-      <td className="whitespace-nowrap px-3 py-2.5 text-[12px] text-muted">
-        {row.avg3 == null ? "—" : money(row.avg3)}
+      <td className="whitespace-nowrap px-3 py-2.5 text-[12px]">
+        <TrendCell row={row} />
       </td>
       <td className="whitespace-nowrap px-3 py-2.5 text-[12px] text-muted">
         {row.computersActual != null || row.goal.computersTarget != null ? (
@@ -183,31 +208,28 @@ function Stat({ label, value, sub }: { label: string; value: string; sub?: strin
   );
 }
 
-export function GoalsBoard({ board, isCurrent }: { board: Board; isCurrent: boolean }) {
+export function GoalsBoard({ board }: { board: Board }) {
   const active = board.rows.filter((r) => r.goal.linkKind !== "inactive");
   const measured = active.filter((r) => r.actual != null);
   const targetAll = active.reduce((s, r) => s + r.goal.turnover, 0);
   const targetMeasured = measured.reduce((s, r) => s + r.goal.turnover, 0);
   const actual = measured.reduce((s, r) => s + (r.actual ?? 0), 0);
   const pct = targetMeasured ? Math.round((actual / targetMeasured) * 100) : 0;
-  const onTrack = measured.filter((r) => statusOf(r, board.elapsed) === "good").length;
-  const forecast = isCurrent && board.elapsed > 0 ? actual / board.elapsed : actual;
+  const onTrack = measured.filter((r) => statusOf(r) === "good").length;
+  const up = measured.filter((r) => r.trend === "up").length;
+  const down = measured.filter((r) => r.trend === "down").length;
   const unlinked = active.length - measured.length;
 
   return (
     <div className="flex flex-col gap-4">
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Stat
-          label="נכנס החודש (שורות שנמדדות)"
+          label="ממוצע חודשי בפועל (שורות שנמדדות)"
           value={money(actual)}
           sub={`${pct}% מיעד של ${money(targetMeasured)}`}
         />
-        <Stat
-          label={isCurrent ? "תחזית לסוף החודש" : "סוף החודש"}
-          value={money(forecast)}
-          sub={isCurrent ? `לפי הקצב עד היום (עברו ${Math.round(board.elapsed * 100)}% מהחודש)` : undefined}
-        />
-        <Stat label="שורות בקצב / ביעד" value={`${onTrack} מתוך ${measured.length}`} />
+        <Stat label="שורות שעומדות ביעד" value={`${onTrack} מתוך ${measured.length}`} />
+        <Stat label="מגמה" value={`${up} בעלייה · ${down} בירידה`} sub="מול שלושת החודשים שלפני" />
         <Stat
           label="יעד חודשי כולל (בלי שורות לא פעילות)"
           value={money(targetAll)}
@@ -222,16 +244,16 @@ export function GoalsBoard({ board, isCurrent }: { board: Board; isCurrent: bool
               <th className="px-3 py-2">שורה</th>
               <th className="px-3 py-2">נמדד מול</th>
               <th className="px-3 py-2">יעד מחזור לחודש</th>
-              <th className="px-3 py-2">בפועל</th>
-              <th className="px-3 py-2">{isCurrent ? "התקדמות (הקו = איפה צריך להיות היום)" : "התקדמות"}</th>
-              <th className="px-3 py-2">ממוצע 3 חודשים קודמים</th>
+              <th className="px-3 py-2">בפועל (ממוצע 3 חודשים)</th>
+              <th className="px-3 py-2">התקדמות</th>
+              <th className="px-3 py-2">מגמה</th>
               <th className="px-3 py-2">מחשבים</th>
               <th className="px-3 py-2">יעד רווחיות</th>
             </tr>
           </thead>
           <tbody>
             {board.rows.map((row) => (
-              <GoalLine key={row.goal.id} row={row} board={board} isCurrent={isCurrent} />
+              <GoalLine key={row.goal.id} row={row} board={board} />
             ))}
           </tbody>
         </table>

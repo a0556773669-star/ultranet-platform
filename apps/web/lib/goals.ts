@@ -38,14 +38,10 @@ function shiftMonth(month: string, delta: number): string {
   return `${Math.floor(idx / 12)}-${String((idx % 12) + 1).padStart(2, "0")}`;
 }
 
-/** כמה מהחודש כבר עבר (0–1). לחודש שהסתיים — 1. */
-export function monthElapsed(month: string, today = new Date()): number {
-  const now = today.toISOString().slice(0, 7);
-  if (month < now) return 1;
-  if (month > now) return 0;
-  const days = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
-  return today.getDate() / days;
-}
+/** מעל ±5% בין שלושת החודשים האחרונים לשלושה שלפניהם — עלייה/ירידה; בתוך הטווח — יציב. */
+const TREND_THRESHOLD = 0.05;
+
+export type GoalTrend = "up" | "down" | "flat";
 
 export interface GoalBranchOption {
   id: string;
@@ -57,17 +53,20 @@ export interface GoalRow {
   goal: Goal;
   /** שם המקור באתר, לתצוגה ("סניף צפת", "כל המשרד השיתופי"...); ריק כשאין חיבור */
   sourceLabel: string;
-  /** null = אין נתון באתר לשורה הזו */
+  /** ממוצע חודשי של שלושת החודשים המלאים האחרונים. null = אין נתון באתר / אין עדיין חודש מלא */
   actual: number | null;
-  /** ממוצע שלושת החודשים שלפני החודש הנבחר */
-  avg3: number | null;
+  /** כמה חודשים מלאים נכנסו לממוצע (פחות מ-3 בסניף שנפתח לאחרונה) */
+  monthsCounted: number;
+  /** השינוי באחוזים מול ממוצע שלושת החודשים שלפניהם; null = אין עם מה להשוות */
+  trendPct: number | null;
+  trend: GoalTrend | null;
   /** מחשבים פעילים כרגע באתר (סניפי השכרות בלבד) */
   computersActual: number | null;
 }
 
 export interface GoalsBoard {
-  month: string;
-  elapsed: number;
+  /** שלושת החודשים המלאים שהממוצע מחושב עליהם, מהישן לחדש */
+  months: string[];
   rows: GoalRow[];
   branches: GoalBranchOption[];
 }
@@ -76,7 +75,12 @@ function isLive(b: Branch) {
   return !b.deleted && !b.notStarted;
 }
 
-export async function loadGoalsBoard(month = currentMonth()): Promise<GoalsBoard> {
+/**
+ * הביצוע הוא **ממוצע שלושת החודשים המלאים האחרונים** — חודש באמצע לא אומר כלום. המגמה משווה את
+ * הממוצע הזה לממוצע של שלושת החודשים שלפניהם. בסניף שנפתח בתוך החלון סופרים רק מחודש הפתיחה,
+ * כדי שחודשים שבהם הסניף עוד לא היה קיים לא יורידו את הממוצע ולא ייצרו "עלייה" מדומה.
+ */
+export async function loadGoalsBoard(): Promise<GoalsBoard> {
   const db = getAdminFirestore();
   const [goalsSnap, salesSnap, rentalsRaw, rooms, coworking] = await Promise.all([
     db.collection(GOALS_COLLECTION).get(),
@@ -89,7 +93,10 @@ export async function loadGoalsBoard(month = currentMonth()): Promise<GoalsBoard
   const goals = goalsSnap.docs
     .map((d) => ({ ...(d.data() as Omit<Goal, "id">), id: d.id }) as Goal)
     .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
-  const window = [shiftMonth(month, -3), shiftMonth(month, -2), shiftMonth(month, -1), month];
+  const lastFull = shiftMonth(currentMonth(), -1);
+  const window = [-5, -4, -3, -2, -1, 0].map((d) => shiftMonth(lastFull, d));
+  const prevMonths = window.slice(0, 3);
+  const lastMonths = window.slice(3);
   const wanted = new Set(window);
 
   // מחזור לפי סניף ולפי חודש, רק לחודשים שהדף צריך.
@@ -144,20 +151,20 @@ export async function loadGoalsBoard(month = currentMonth()): Promise<GoalsBoard
     }
   }
 
-  const branches: GoalBranchOption[] = [...rentalBranches, ...roomBranches, ...cwBranches].map((b) => ({
-    id: b.id,
-    name: b.name,
-    type: b.branchType,
-  }));
+  const liveBranches = [...rentalBranches, ...roomBranches, ...cwBranches];
+  const branches: GoalBranchOption[] = liveBranches.map((b) => ({ id: b.id, name: b.name, type: b.branchType }));
   const branchById = new Map(branches.map((b) => [b.id, b]));
+  const openMonthById = new Map(liveBranches.map((b) => [b.id, (b.openedAt || b.founded || "").slice(0, 7)]));
 
   const rows: GoalRow[] = goals.map((goal) => {
     let series: Record<string, number> | null = null;
     let sourceLabel = "";
     let computersActual: number | null = null;
+    let openMonth = "";
     if (goal.linkKind === "branch" && goal.branchId && branchById.has(goal.branchId)) {
       const b = branchById.get(goal.branchId)!;
       series = byBranch.get(b.id) ?? {};
+      openMonth = openMonthById.get(b.id) ?? "";
       sourceLabel = `${BRANCH_TYPE_LABEL[b.type]} · ${b.name}`;
       if (b.type === "rentals") {
         computersActual = (rentalsRaw.laptopsByBranch.get(b.id) ?? []).filter(isLaptopActive).length;
@@ -184,18 +191,36 @@ export async function loadGoalsBoard(month = currentMonth()): Promise<GoalsBoard
         ? `סניפים חדשים: ${newRentals.map((b) => b.name).join(", ")}`
         : "עוד אין סניפים חדשים";
     }
-    const prev = window.slice(0, 3).map((m) => series?.[m] ?? 0);
+    const avgOf = (months: string[]) => {
+      const counted = months.filter((m) => !openMonth || m >= openMonth);
+      if (!series || !counted.length) return { avg: null, n: 0 };
+      return { avg: counted.reduce((s, m) => s + (series![m] ?? 0), 0) / counted.length, n: counted.length };
+    };
+    const last = avgOf(lastMonths);
+    const prev = avgOf(prevMonths);
+    let trendPct: number | null = null;
+    let trend: GoalTrend | null = null;
+    if (last.avg != null && prev.avg != null) {
+      if (prev.avg > 0) {
+        trendPct = ((last.avg - prev.avg) / prev.avg) * 100;
+        trend = trendPct > TREND_THRESHOLD * 100 ? "up" : trendPct < -TREND_THRESHOLD * 100 ? "down" : "flat";
+      } else {
+        trend = last.avg > 0 ? "up" : "flat";
+      }
+    }
     return {
       goal,
       sourceLabel,
-      actual: series ? series[month] ?? 0 : null,
-      avg3: series ? prev.reduce((s, n) => s + n, 0) / 3 : null,
+      actual: last.avg,
+      monthsCounted: last.n,
+      trendPct,
+      trend,
       computersActual,
     };
   });
 
   branches.sort((a, b) => a.type.localeCompare(b.type) || a.name.localeCompare(b.name, "he"));
-  return { month, elapsed: monthElapsed(month), rows, branches };
+  return { months: lastMonths, rows, branches };
 }
 
 /* ---------------------------------------------------------------------------
