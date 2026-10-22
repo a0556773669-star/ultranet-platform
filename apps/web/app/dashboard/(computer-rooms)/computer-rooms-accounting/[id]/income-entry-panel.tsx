@@ -41,6 +41,7 @@ export function IncomeEntryPanel({
   importedRows = 0,
   canClearImported = false,
   templateHref,
+  initialOpen = false,
 }: {
   saveMonthly: Action;
   branches: BranchIncomeRow[];
@@ -52,8 +53,10 @@ export function IncomeEntryPanel({
   importedRows?: number;
   canClearImported?: boolean;
   templateHref?: string;
+  /** נפתח מיד - כשמגיעים מהקישור במייל התזכורת (`?enter=YYYY-MM`) */
+  initialOpen?: boolean;
 }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(initialOpen);
   const [month, setMonth] = useState(defaultMonth);
 
   const showImport = importEnabled && importIncome && templateHref;
