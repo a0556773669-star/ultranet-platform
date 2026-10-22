@@ -557,6 +557,14 @@ pnpm dev        # turbo run dev — מריץ web + api
   - **שדה ריק = לא נוגעים בסניף הזה**, מספר **מחליף** את שורות המעקב של אותו סניף+חודש
     (אידמפוטנטי: הקלדה חוזרת מתקנת ולא מכפילה, והמסך מראה מספר אחד לחודש), ו-**0 מוחק** את
     החודש. המזומן מהספר הראשי לא נמחק ולא נכתב מכאן לעולם.
+  - **תזכורת חודשית במייל** (2026-10, `lib/cr-income-reminder.ts`): ה-cron
+    `/api/cron/cr-income-check` רץ ב-1 לחודש (06:00 UTC, `apps/web/vercel.json`) ובודק אילו סניפים
+    עוד בלי שורת מעקב לחודש הקודם. מזומן מהקופה לא נחשב מילוי: המספר מסייפר עדיין חסר. אם חסר
+    משהו, נשלח לבעלים מייל (Resend, `loadOwnerEmail`) עם רשימת הסניפים וקישור
+    `/dashboard/computer-rooms-accounting?enter=YYYY-MM`, שפותח את החלון מיד על החודש החסר. כשהכול
+    מולא, לא נשלח כלום. ה-route דורש `Authorization: Bearer $CRON_SECRET` (Vercel שולח אותו לבד);
+    בלי `CRON_SECRET` מוגדר הוא מחזיר 401. משיכה אוטומטית מהאתר של סייפר עוד לא קיימת. ה-API
+    שלהם בתשלום, ולכן בינתיים הנתונים מוזנים ידנית לפי המייל.
   - ההרשאה נבדקת **לכל סניף בנפרד ב-Server Action** (`requireBranchAccess` +
     `requireComputerRoomBranch`), ולא רק ברשימה שהמסך שלח: owner מזין לכל הסניפים, שותף רק
     לסניף שלו. גם היעד לחזרה (`back`) מסונן לנתיבי המודול בלבד.
@@ -1470,7 +1478,8 @@ pnpm dev        # turbo run dev — מריץ web + api
 **הדו"ח החודשי במייל** (`lib/branch-report-send.ts`) נשלח **רק בלחיצת כפתור של הבעלים**
 במסך "ניידים" (2026-10). עד אז הוא נשלח אוטומטית ב-1 לחודש ב-09:00 (cron ב-`apps/web/vercel.json`),
 לפני שהנתונים של החודש שנסגר נסגרו בפועל, והמייל לשותפים יצא עם טעויות. לכן:
-- ה-cron הוסר (`vercel.json` עם `crons: []`), ו-`/api/rentals/monthly-reports` מחזיר 410 ולא שולח כלום.
+- ה-cron הזה הוסר מ-`vercel.json`, ו-`/api/rentals/monthly-reports` מחזיר 410 ולא שולח כלום. (ה-cron היחיד שם
+  היום הוא תזכורת הכנסות חדרי המחשבים, ראו בסעיף חדרי המחשבים.)
 - **הדו"ח הוא תמיד על חודש שנסגר** (`reportMonthFor` = החודש הקודם). כשבבורר של ההעברות נבחר החודש
   הנוכחי, הכפתורים "שלח לכל הסניפים — <חודש>" / "שלח לסניפים נבחרים — <חודש>" עובדים על החודש הקודם,
   ולכן ההוצאות של החודש הנוכחי (קבועות נזקפות מה-1 לחודש) לא נכנסות לדו"ח. חודש עבר שנבחר במפורש
@@ -2454,7 +2463,7 @@ app שרץ בדפדפן ניתן ל"התקנה" כאפליקציה עם אייק
 | `apps/web/app/dashboard/accounting/purchases-table.tsx` / `recurring-purchases-table.tsx` / `fixed-expenses-table.tsx` / `recurring-update-table.tsx` | ארבע הטבלאות שהגיעו מ"הוצאות נוספות" כשהוא נמחק: רכישות חד-פעמיות, סיכום הרכישות החוזרות, ההוצאות הקבועות של העסק, ועדכון החודש של כל ההוצאות הקבועות המשתנות בכל המודולים |
 | `apps/web/app/dashboard/accounting/main-fixed-expense-controls.tsx` / `recurring-row-controls.tsx` | "הפסקה"/"חידוש"/מחיקה בתוך שורת טבלה — אותן Server Actions של הכרטיסים שהיו ב"הוצאות נוספות", בגרסת לקוח |
 | `apps/web/app/dashboard/accounting/extra-expenses/page.tsx` | `redirect` בלבד ל-`/dashboard/accounting` — הכתובת הישנה של "הוצאות נוספות" |
-| `apps/web/vercel.json` | `crons: []` — השליחה האוטומטית של הדו"ח החודשי הושבתה (2026-10); `/api/rentals/monthly-reports` מחזיר 410 |
+| `apps/web/vercel.json` | cron יחיד: `/api/cron/cr-income-check` ב-1 לחודש (תזכורת הכנסות חדרי מחשבים, `lib/cr-income-reminder.ts`). השליחה האוטומטית של הדו"ח החודשי הושבתה (2026-10); `/api/rentals/monthly-reports` מחזיר 410 |
 | `apps/web/lib/branch-expense-ledger.ts` | מנגנון הבבואות — **כבוי**. `createLinkedOwnerLedgerExpense` הוא no-op (הסיגנטורה נשמרה כדי ששמונת מקומות הקריאה ימשיכו לעבוד); המחיקה נשארה אמיתית, כי הוצאה ישנה עשויה עדיין לשאת בבואה |
 | `apps/web/lib/branch-income-ledger.ts` | יצירה/עדכון/מחיקה של רשומת `n_ah_income` מקושרת מהעברת סניף שסומנה כבוצעה (`BranchTransfer.linkedAhIncomeId`) |
 | `apps/web/lib/shop-recommender.ts` | מנוע ההמלצות של חנות ה-AI - זיהוי תחום שימוש מטקסט חופשי, שאלות המשך, ניקוד רמת עומס, מפרט גנרי פר-תחום, התאמה לקטלוג האמיתי (`n_shop_catalog`) |

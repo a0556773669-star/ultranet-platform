@@ -18,7 +18,7 @@ const TD = "px-2.5 py-2 whitespace-nowrap";
 export default async function ComputerRoomsAccountingHomePage({
   searchParams,
 }: {
-  searchParams?: { month?: string; monthSaved?: string; monthCleared?: string };
+  searchParams?: { month?: string; monthSaved?: string; monthCleared?: string; enter?: string };
 }) {
   // מנהלים בלבד, מאותה סיבה כמו במסך ההוצאות.
   const session = await requireModuleAccess("computers", { managerOnly: true });
@@ -29,6 +29,9 @@ export default async function ComputerRoomsAccountingHomePage({
     if (!myBranchId) redirect("/dashboard");
     redirect(`/dashboard/computer-rooms-accounting/${myBranchId}`);
   }
+
+  // הקישור ממייל התזכורת החודשית (lib/cr-income-reminder.ts) פותח את החלון ישר על החודש החסר.
+  const enterMonth = /^\d{4}-\d{2}$/.test(searchParams?.enter ?? "") ? searchParams!.enter! : null;
 
   const data = await loadComputerRoomAccounting();
   const rows = data.branches.flatMap((b) => {
@@ -58,7 +61,8 @@ export default async function ComputerRoomsAccountingHomePage({
           <IncomeEntryPanel
             saveMonthly={saveMonthlyBranchIncomeAction}
             branches={branchMonthlyIncomeRows(data)}
-            defaultMonth={new Date().toISOString().slice(0, 7)}
+            defaultMonth={enterMonth ?? new Date().toISOString().slice(0, 7)}
+            initialOpen={!!enterMonth}
             back="/dashboard/computer-rooms-accounting"
           />
           <Link
