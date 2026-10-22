@@ -1,17 +1,10 @@
-import Link from "next/link";
-import { ChevronLeft, ChevronRight, Flag } from "lucide-react";
+import { Flag } from "lucide-react";
 import { requireOwner } from "@/lib/perms";
-import { currentMonth, loadGoalsBoard } from "@/lib/goals";
+import { loadGoalsBoard } from "@/lib/goals";
 import { importGoalsAction } from "./actions";
 import { GoalsBoard } from "./goals-board";
 
 export const dynamic = "force-dynamic";
-
-function shift(month: string, delta: number) {
-  const [y, m] = month.split("-").map(Number);
-  const idx = (y ?? 1970) * 12 + ((m ?? 1) - 1) + delta;
-  return `${Math.floor(idx / 12)}-${String((idx % 12) + 1).padStart(2, "0")}`;
-}
 
 function monthTitle(month: string) {
   const [y, m] = month.split("-").map(Number);
@@ -25,12 +18,12 @@ function monthTitle(month: string) {
 export default async function GoalsPage({
   searchParams,
 }: {
-  searchParams?: { month?: string; imported?: string; importError?: string };
+  searchParams?: { imported?: string; importError?: string };
 }) {
   await requireOwner();
-  const now = currentMonth();
-  const month = searchParams?.month && /^\d{4}-\d{2}$/.test(searchParams.month) ? searchParams.month : now;
-  const board = await loadGoalsBoard(month);
+  const board = await loadGoalsBoard();
+  const from = board.months[0] ?? "";
+  const to = board.months[board.months.length - 1] ?? "";
 
   return (
     <div className="flex flex-col gap-5">
@@ -41,8 +34,9 @@ export default async function GoalsPage({
             יעדים
           </h1>
           <p className="mt-0.5 max-w-2xl text-[12.5px] text-muted">
-            יעד המחזור החודשי של כל סניף מול מה שנכנס בפועל באתר. היעדים נטענים מקובץ האקסל; הביצוע מתעדכן
-            אוטומטית מהנתונים בכל כניסה.
+            יעד המחזור החודשי של כל סניף מול הממוצע החודשי של שלושת החודשים המלאים האחרונים
+            ({monthTitle(from)} – {monthTitle(to)}). המגמה משווה לשלושת החודשים שלפניהם. היעדים נטענים מקובץ
+            האקסל; הביצוע מתעדכן אוטומטית מהנתונים באתר.
           </p>
         </div>
         <form
@@ -69,30 +63,12 @@ export default async function GoalsPage({
         </div>
       )}
 
-      <div className="flex items-center gap-2">
-        <Link href={`/dashboard/goals?month=${shift(month, -1)}`} className="btn-outline inline-flex items-center px-2 py-1">
-          <ChevronRight className="h-4 w-4" />
-        </Link>
-        <span className="min-w-[120px] text-center text-sm font-extrabold text-ink">{monthTitle(month)}</span>
-        <Link
-          href={`/dashboard/goals?month=${shift(month, 1)}`}
-          className={`btn-outline inline-flex items-center px-2 py-1 ${month >= now ? "pointer-events-none opacity-40" : ""}`}
-        >
-          <ChevronLeft className="h-4 w-4" />
-        </Link>
-        {month !== now && (
-          <Link href="/dashboard/goals" className="text-xs font-bold text-teal hover:underline">
-            לחודש הנוכחי
-          </Link>
-        )}
-      </div>
-
       {board.rows.length === 0 ? (
         <div className="rounded-card border border-card-border bg-white p-8 text-center text-sm text-muted">
           עוד לא נטענו יעדים. בחר את קובץ האקסל של היעדים למעלה ולחץ &quot;טעינת יעדים מאקסל&quot;.
         </div>
       ) : (
-        <GoalsBoard board={board} isCurrent={month === now} />
+        <GoalsBoard board={board} />
       )}
     </div>
   );
