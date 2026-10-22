@@ -9,7 +9,15 @@ import { isOwnerSession } from "@/lib/perms";
 import { getAdminFirestore } from "@/lib/firebase-admin";
 import { GOALS_COLLECTION, parseGoalsWorkbook, suggestLink } from "@/lib/goals";
 
-const LINK_KINDS: GoalLinkKind[] = ["branch", "coworking_all", "laptop_sales", "none"];
+const LINK_KINDS: GoalLinkKind[] = [
+  "branch",
+  "coworking_all",
+  "laptop_sales",
+  "computer_sales",
+  "new_rentals",
+  "inactive",
+  "none",
+];
 
 async function requireOwnerAction() {
   const session = await getServerSession(authOptions);
@@ -48,7 +56,11 @@ export async function importGoalsAction(formData: FormData) {
   for (const d of existingSnap.docs) batch.delete(d.ref);
   lines.forEach((line, i) => {
     const prev = existingByLabel.get(line.label);
-    const link = prev ? { linkKind: prev.linkKind, branchId: prev.branchId } : suggestLink(line.label, branches);
+    // שורה שכבר חוברה שומרת את החיבור; שורה שנשארה "לא נמדד" מקבלת הצעה מחדש.
+    const link =
+      prev && prev.linkKind !== "none"
+        ? { linkKind: prev.linkKind, branchId: prev.branchId }
+        : suggestLink(line.label, branches);
     const goal: Omit<Goal, "id"> = {
       label: line.label,
       order: i,
