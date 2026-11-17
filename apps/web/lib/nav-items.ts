@@ -11,6 +11,7 @@ import {
   Users,
   Stethoscope,
   Flag,
+  ShoppingBag,
   type LucideIcon,
 } from "lucide-react";
 import type { PermKey } from "@/lib/perms";
@@ -42,6 +43,7 @@ export const NAV_ITEMS: NavItem[] = [
   { href: "/dashboard/tutorials", label: "נהלים והדרכות", icon: BookOpen, group: "tools" },
   { href: "/dashboard/help", label: "עזרה ושאלות", icon: LifeBuoy, group: "tools" },
   { href: "/dashboard/shop", label: "חנות AI", icon: Sparkles, perm: "shop", group: "tools" },
+  { href: "/dashboard/store", label: "חנות סניפים", icon: ShoppingBag, perm: "store", group: "tools" },
   { href: "/dashboard/maintenance", label: "בדיקת נתונים", icon: Stethoscope, group: "tools", ownerOnly: true },
 ];
 

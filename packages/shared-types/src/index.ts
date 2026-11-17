@@ -134,6 +134,7 @@ export type PermissionKey =
   | "tasks"
   | "charging"
   | "shop"
+  | "store"
   | "duxus";
 
 /**
@@ -1029,6 +1030,68 @@ export interface ShopLead {
   notes?: string;
 }
 
+// --- חנות סניפים (התאמת מחשב ללקוח, מנהל הסניף -> הבעלים/מזכירה) ---
+
+export type StoreDeviceKind = "laptop" | "desktop";
+/** "spec" = הלקוח יודע מה הוא רוצה · "guided" = התאמה לפי שאלות */
+export type StoreRequestMode = "spec" | "guided";
+export type StoreRequestStatus = "new" | "in_review" | "answered" | "closed";
+export type StoreCpuTier = "i3" | "i5" | "i7";
+
+/** המפרט המבוקש/המותאם. שדה חסר = הלקוח לא קבע (ולכן מותר להציע בו שדרוג). */
+export interface StoreSpec {
+  kind: StoreDeviceKind;
+  cpu?: StoreCpuTier;
+  ramGb?: number;
+  storageGb?: number;
+  screenInches?: number;
+  touch?: boolean;
+  /** דור מעבד מינימלי (למשל 12); חסר = הדורות הרגילים של העסק */
+  minGeneration?: number;
+  /** נייח בלבד: ציוד נלווה שהלקוח רוצה (מסך/מקלדת/עכבר/רמקולים) */
+  extras?: string[];
+}
+
+/** אפשרות אחת שהבעלים/המזכירה מחזירים לסניף. מחירי השוק אינם מחיר סופי - ראו `lib/store-pricing.ts`. */
+export interface StoreRequestOption {
+  label: string;
+  /** "as_requested" = בדיוק מה שהלקוח ביקש · "upgrade" = מחשב טיפה טוב יותר */
+  kind: "as_requested" | "upgrade";
+  specText: string;
+  /** הסבר למנהל הסניף במה האפשרות הזו טובה יותר (לשדרוג) */
+  whyBetter?: string;
+  marketLowILS?: number;
+  quotedFromILS?: number;
+  quotedToILS?: number;
+}
+
+/** collection: n_store_requests - בקשת התאמת מחשב שמנהל סניף שלח מ-`/dashboard/store` */
+export interface StoreRequest {
+  id: string;
+  createdAt: string; // ISO
+  createdByEmail: string;
+  createdByName: string;
+  branchId: string;
+  branchName: string;
+  mode: StoreRequestMode;
+  customerName: string;
+  customerPhone?: string;
+  /** תקציב שהלקוח אמר (רשות) */
+  budgetILS?: number;
+  spec: StoreSpec;
+  /** שדות שהלקוח קבע בוודאות - לא משנים אותם בשדרוג */
+  lockedFields: (keyof StoreSpec)[];
+  /** שאלות ותשובות (באשף השאלות) */
+  answers: { question: string; answer: string }[];
+  notes?: string;
+  status: StoreRequestStatus;
+  options?: StoreRequestOption[];
+  responseNote?: string;
+  respondedAt?: string;
+  respondedBy?: string;
+  updatedAt: string; // ISO
+}
+
 // --- משימות ונהלים (נהלים + סלעים ואבני דרך) ---
 //
 // החלטת היסוד של המודול: **אבן דרך נוצרת פעם אחת בלבד.** רבעון, חודש ושבוע אינם
@@ -1069,9 +1132,10 @@ export interface Procedure {
 }
 
 /** "duxus" = מי שיש לו את מודול המשימות (ההתנהגות הוותיקה) · "owner" = הנהלה בלבד ·
- *  "branch_managers" = כל מנהלי הסניפים (שותפים) · "users" = משתמשים נבחרים לפי מייל. */
+ *  "branch_managers" = כל מנהלי הסניפים (שותפים) · "users" = משתמשים נבחרים לפי מייל ·
+ *  "store" = כל מי שיש לו את הרשאת "חנות סניפים" (`store`). */
 export interface ProcedureAudience {
-  mode: "duxus" | "owner" | "branch_managers" | "users";
+  mode: "duxus" | "owner" | "branch_managers" | "users" | "store";
   /** רק כש-`mode === "users"`: מיילים באותיות קטנות. */
   userEmails?: string[];
 }

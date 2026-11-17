@@ -22,6 +22,7 @@ const PERM_LABELS: Record<string, string> = {
   accounting: "הנה\"ח",
   charging: "סליקה וקבלות",
   shop: "חנות AI",
+  store: "חנות סניפים",
   duxus: "משימות ונהלים",
 };
 
