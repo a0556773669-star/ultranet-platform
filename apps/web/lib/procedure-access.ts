@@ -22,6 +22,8 @@ export function canViewProcedure(session: Session | null | undefined, procedure:
       return resolveModuleScope(session, "duxus").granted;
     case "branch_managers":
       return getAssignments(session).some((a) => a.role === "partner");
+    case "store":
+      return resolveModuleScope(session, "store").granted;
     case "users": {
       const email = (session.user?.email ?? "").toLowerCase();
       return Boolean(email) && (audience.userEmails ?? []).includes(email);
@@ -36,7 +38,7 @@ export { AUDIENCE_LABEL } from "@/lib/procedure-audience";
 /** קריאת השדה מהטופס. ערך לא מוכר → הנהלה בלבד (הבחירה הבטוחה). */
 export function readAudience(formData: FormData): ProcedureAudience {
   const mode = String(formData.get("audienceMode") ?? "owner");
-  if (mode === "duxus" || mode === "branch_managers") return { mode };
+  if (mode === "duxus" || mode === "branch_managers" || mode === "store") return { mode };
   if (mode === "users") {
     const userEmails = Array.from(
       new Set(formData.getAll("audienceEmails").map((v) => String(v).trim().toLowerCase()).filter(Boolean)),

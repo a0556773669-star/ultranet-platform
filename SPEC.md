@@ -35,6 +35,10 @@
   לקוח מתאר למה הוא צריך מחשב, מקבל שאלות המשך ממוקדות, ובסוף שלוש הצעות תצורה (מינימלי/מומלץ/מוגזם)
   עם הסבר, אפשרות להוסיף ציוד נלווה, ולסיום קבלת הצעת מחיר להורדה + פנייה שנשמרת לצוות אולטרנט.
 
+- **חנות סניפים** (`/dashboard/store`, הרשאה `store`) — פנימית, **רק לסניפים שהבעלים סימן** (הרשאה בשיוך
+  המשתמש). מנהל סניף מתאים מחשב ללקוח (לפי רצון הלקוח / לפי שאלות), הבקשה נשלחת לבעלים/מזכירה שמחזירים
+  טווח מחיר הערכה (מחיר שוק + מרווח) ו-1 עד 3 אפשרויות; ובנוסף נהלים והדרכות התקנה. שלב א' בלי מלאי.
+
 המערכת מרובת-סניפים ומרובת-משתמשים, עם הרשאות לפי תפקיד (owner / partner /
 employee) ולפי מודול. זהו **הדור הבא של `app.html`** — אפליקציית עמוד יחיד ישנה
 שעדיין רצה במקביל על אותו מסד נתונים.
@@ -116,7 +120,7 @@ pnpm dev        # turbo run dev — מריץ web + api
 **תפקידים (`UserRole`):** `owner` · `partner` · `employee`.
 
 **מפתחות הרשאה (`PermKey`):**
-`branches` · `computers` · `rentals` · `coworking` · `accounting` · `tasks` · `charging` · `shop` · `duxus`.
+`branches` · `computers` · `rentals` · `coworking` · `accounting` · `tasks` · `charging` · `shop` · `store` · `duxus`.
 
 ### שיוכים — כמה תפקידים לאותו אדם
 
@@ -281,10 +285,11 @@ pnpm dev        # turbo run dev — מריץ web + api
 | `n_shop_catalog` | `ShopComputerConfig` | תצורות מחשב אמיתיות למכירה בחנות ה-AI (`/shop`) - שם, דרגה (`minimal`/`recommended`/`extreme`), תחומי שימוש (`useCases`), מפרט, מחיר; ממולא ידנית ע"י הבעלים ב-`/dashboard/shop/catalog` |
 | `n_shop_addons` | `ShopAddon` | ציוד נלווה שניתן להוסיף להצעת המחיר בחנות ה-AI (תיק/עכבר/מקלדת/דיסק און קי/אחר) |
 | `n_shop_leads` | `ShopLead` | פניות שהתקבלו מהצ'אטבוט הציבורי - תיאור, תשובות, ההמלצות שהוצגו, תצורה/ציוד נבחרים, פרטי קשר, סטטוס |
+| `n_store_requests` | `StoreRequest` | **בקשת התאמת מחשב** מ"חנות סניפים" (`/dashboard/store`): `branchId`/`branchName`, `createdByEmail`/`createdByName`, `mode` (`spec` = לפי רצון הלקוח, `guided` = לפי שאלות), `customerName`/`customerPhone`, `budgetILS` (רשות), `spec` (`StoreSpec`: `kind` נייד/נייח, `cpu` i3/i5/i7, `ramGb`, `storageGb`, `screenInches`, `touch`, `minGeneration`, `extras` לנייח), `lockedFields` (מה שהלקוח קבע בוודאות — **לעולם לא משנים ולא מציעים בו שדרוג**), `answers`, `notes`, `status` (`new`/`in_review`/`answered`/`closed`), ותשובת הבעלים: `options` (עד 3 `StoreRequestOption`: `kind` `as_requested`/`upgrade`, `specText`, `whyBetter` — ההסבר למנהל הסניף, `marketLowILS`, `quotedFromILS`/`quotedToILS`), `responseNote`, `respondedAt`/`respondedBy`. נכתב רק מ-`app/dashboard/store/actions.ts`; לא נכנס לשום חישוב כספי |
 | `n_branch_transfers` | `BranchTransfer` | התחשבנות חודשית שותף↔בעלים; `transferredAmount` (רשות) - הסכום שבפועל נרשם כהועבר לאותו חודש, באותה מוסכמת סימן כמו `netToOwner` (חיובי = לבעלים, שלילי = מהבעלים) - מאפשר לרשום העברה חלקית/מאוחרת שלא תואמת בדיוק את הסכום המחושב. רשומות ישנות בלי השדה הזה (רק `transferred: true`) מטופלות כמסולקות במלואן, ראו `lib/branch-ledger.ts`. `linkedAhIncomeId` (רשות) - מזהה רשומת `n_ah_income` שנוצרה/מתעדכנת אוטומטית כש-`transferredAmount` חיובי, ראו `lib/branch-income-ledger.ts` בסעיף 9. `receiptIssued` (רשות) - סימון עצמאי "הוצאנו קבלה", לא קשור לסכום |
 | `n_approved_emails` | — | מיילים מאושרים לכניסת קוד |
 | `n_login_codes` | — | קודי כניסה חד-פעמיים עם תפוגה |
-| `n_procedures` | `Procedure` | נהלים ברורים במודול "משימות ונהלים" (`/dashboard/duxus/procedures`) - כותרת, תיאור קצר (`summary`), תוכן HTML עשיר (עורך זהה להדרכות), קטגוריה חופשית, `version` (מספר גרסה ידני), `status` (`draft`/`active`/`superseded`/`archived` - דאטה ישן בלי השדה נחשב `active`), `ownerName`, `supersedesId` (שרשרת גרסאות - גרסה חדשה מסמנת את הקודמת `superseded` ולעולם לא מוחקת אותה), ו-`attachmentName`/`attachmentDataUrl` (קובץ PDF/Word כ-data URL בתוך המסמך, אותו דגם כמו קבצי ההדרכות). `audience` (רשות, 2026-10-15) — **מי רשאי לצפות**: `duxus` / `owner` / `branch_managers` / `users` (+`userEmails`). **חסר = ההרשאה הוותיקה בדיוק** (כל מי שיש לו `duxus`); נוהל חדש — הנהלה בלבד. נאכף ב-`lib/procedure-access.ts` בכל רשימה, כרטיס, קישור ישיר ופעולת עריכה/ארכוב/מחיקה |
+| `n_procedures` | `Procedure` | נהלים ברורים במודול "משימות ונהלים" (`/dashboard/duxus/procedures`) - כותרת, תיאור קצר (`summary`), תוכן HTML עשיר (עורך זהה להדרכות), קטגוריה חופשית, `version` (מספר גרסה ידני), `status` (`draft`/`active`/`superseded`/`archived` - דאטה ישן בלי השדה נחשב `active`), `ownerName`, `supersedesId` (שרשרת גרסאות - גרסה חדשה מסמנת את הקודמת `superseded` ולעולם לא מוחקת אותה), ו-`attachmentName`/`attachmentDataUrl` (קובץ PDF/Word כ-data URL בתוך המסמך, אותו דגם כמו קבצי ההדרכות). `audience` (רשות, 2026-10-15) — **מי רשאי לצפות**: `duxus` / `owner` / `branch_managers` / `users` (+`userEmails`) / `store` (מי שיש לו הרשאת `store` — נהלי והדרכות "חנות סניפים"). **חסר = ההרשאה הוותיקה בדיוק** (כל מי שיש לו `duxus`); נוהל חדש — הנהלה בלבד. נאכף ב-`lib/procedure-access.ts` בכל רשימה, כרטיס, קישור ישיר ופעולת עריכה/ארכוב/מחיקה |
 | `n_quarters` | `Quarter` | רבעוני העבודה (`/dashboard/duxus/rocks`). **מזהה המסמך הוא ה-`quarterKey`** שמופיע על `Rock`/`Milestone`: `label` (תווית חופשית, למשל "ראש חודש אלול - ראש חודש כסלו"), `status` (`active`/`archived` - מאורכב = קריאה בלבד, נאכף בשרת), `startDate`/`endDate` (רשות, לתצוגה), `order` (חותמת זמן למיון ציר הזמן), `activeMonthKey`/`activeWeekKey` (החודש/השבוע ה"פתוחים" - מה שמוצג במסכי החודש והשבוע; ריק = עוד לא נפתחו), `rolledFromKey` (הרבעון שממנו גולגל). מפתחות לועזיים ישנים ("2026-Q3") ממשיכים לעבוד בלי מיגרציה - מוצגים כרבעון פעיל וירטואלי, והמסמך נוצר בפועל רק כשמבצעים עליו פעולה |
 | `n_rocks` | `Rock` | סלעים רבעוניים ותתי-סלעים (`/dashboard/duxus/rocks`) - `quarterKey` (מזהה מסמך ב-`n_quarters`), `parentRockId` (ריק = סלע עצמו, מוגדר = תת-סלע, עומק אחד), `status` (`active`/`done`/`dropped`; **`done` תמיד מחושב מאבני הדרך ולעולם לא מסומן ידנית** - `dropped` הוא ההחלטה הידנית היחידה, ודורשת סיבה), `dueDate` (רשות), `deletedAt` (מחיקה לוגית - סלע עם ילדים או היסטוריה לא נמחק פיזית), `rolledFromId`, אחראי |
 | `n_milestones` | `Milestone` | אבני הדרך (המשימות בפועל) תחת סלע/תת-סלע, וגם המשימות השוטפות. **הסטטוס נשמר כאן פעם אחת בלבד** - `status` (`not_started`/`in_progress`/`waiting`/`done`/`cancelled`) הוא המקור היחיד לאמת, ו-`done` הבוליאני הוא שיקוף שלו שנשמר כדי ששאילתות ישנות ימשיכו לעבוד (לעולם לא לעדכן אותו בנפרד). דאטה ישן בלי `status` נגזר מ-`done` בזמן קריאה. עוד: `quarterKey` (מוכפל מהסלע-אב לשאילתת שוויון יחידה), `description`, `priority`, `dueDate`, `notes`, `waitReason`/`waitUntil` (חובה בהמתנה), `cancelReason` (חובה בביטול), `doneAt`/`completedBy`, `reopenCount`, `carryOverCount` (כמה פעמים שובצה מחדש), `source` (`rock`/`adhoc`), `origin` (`quarter`/`month`/`week` - איפה נוספה, כדי להפריד "תוכנן מראש" מ"נוסף תוך כדי"), `deletedAt` (מחיקה לוגית), `updatedAt` (נעילה אופטימית), ו-`importBatch`/`importKey` (רשומות שנוצרו בייבוא חד-פעמי, ראו "ייבוא רבעון 1"). **שדות רשות חדשים (אפיון המשך, 2026-10) - נכתבים רק בפעולה מפורשת, דאטה קיים בלעדיהם נקרא כברירת מחדל ריקה:** `inbox` (בוליאני - רעיון בתיבת קליטה שממתין לבחירה בישיבה; נכתב `true` רק ביצירה מהתיבה ויורד ל-`false` כשנבחר לחודש/לשבוע), `nextAction` (מחרוזת - "הפעולה הבאה"), `splitFromId` (מזהה אבן הדרך שממנה נוצר הצעד ב"פיצול לצעדים"), `dependsOnIds` (מערך מזהים - "תלוי ב־", בלי תלות עצמית/מעגלית). **השיוך לתקופות אינו כאן** אלא ב-`n_period_assignments`; `stage`/`monthKey`/`weekKey` נשארו כשדות legacy לקריאה בלבד |
@@ -2131,6 +2136,30 @@ Firestore Emulator עם נתוני הדגמה, כתוביות בעברית צר�
 - **ציוד נלווה** (`/addons`) — CRUD על `n_shop_addons`: שם, סוג (תיק/עכבר/מקלדת/דיסק און
   קי/אחר), מחיר (רשות), פעיל/לא פעיל.
 
+### חנות סניפים (`/dashboard/store`) — perm: store
+
+מודול פנימי לסניפים (להבדיל מ"חנות AI" הציבורית). **גישה רק לסניפים שהבעלים סימן**: מסמנים את ההרשאה
+"חנות סניפים" בשיוך המשתמש (`/dashboard/users`); אין הרשאה — אין פריט בתפריט והמסכים מחזירים ל-`/dashboard`.
+בעלים (והמזכירה שעובדת על חשבונו) רואים את כל הסניפים; משתמש אחר רואה ושולח רק בשם הסניפים שבשיוך
+(`resolveModuleScope(..., "store").allows`, נבדק גם ב-`createStoreRequestAction` וגם בקריאת הבקשה).
+
+**שלב א' (בלי מלאי):** אין מחשבים במלאי — כל הזמנה מיבואן, מגיעה לסניף, ומנהל הסניף מכין את המחשב לפי ההדרכות.
+- `/dashboard/store` — "איך זה עובד" + **נהלים והדרכות**: נהלים מ-`n_procedures` עם `audience.mode === "store"`
+  (נערכים במסך הנהלים הקיים; הפעולה: נוהל חדש → "מי רשאי לצפות" = "סניפים עם חנות סניפים" → סטטוס "בתוקף").
+  הצפייה דרך `/dashboard/tutorials/procedures/[id]`.
+- `/dashboard/store/new` — אשף התאמה (`request-wizard.tsx`): **לפי רצון הלקוח** (כל שדה שנבחר נעול) או **לפי
+  שאלות** (נייד/נייח → שימוש בסיסי/משרדי/כבד → מסך/מגע/אחסון/זיכרון/ציוד → תקציב); שדה ב"לא יודע" מושלם לפי השימוש.
+  מנוע ההתאמה (`lib/store-wizard.ts`) **דטרמיניסטי — בלי מודל שפה ובלי עלות טוקנים**. `suggestUpgrade` מציע
+  "טיפה יותר טוב" (עד שני שדרוגים, מעבד ← זיכרון ← אחסון) **רק בשדות שהלקוח לא קבע**, עם הסבר במה זה טוב יותר.
+  השרת מנרמל את המפרט מחדש (`sanitizeSpec`) ולא סומך על הקלט מהדפדפן.
+- `/dashboard/store/requests` (+`/[id]`) — הבקשות (הסניף רואה את שלו; בעלים — הכול). **טופס מענה לבעלים בלבד**
+  (`requireOwner`): מחיר = **ממוצע שוק נמוך (בלי חריגים) + 300 עד 500 ₪** (`lib/store-pricing.ts`, ניתן לעריכה),
+  עד 3 אפשרויות. סקירת מחירי השוק נעשית ב-Claude של הבעלים עצמו דרך כפתור "העתקת הנחיה" — **ללא קריאת API**.
+  המחיר מוצג כהערכה, לא כמחיר סופי.
+- **חיבור AI עתידי:** אם יוחלט על הכנה אוטומטית — דרך `ANTHROPIC_API_KEY` (כמו מרכז העזרה, עם מטמון ומודל זול).
+  חשבון מנוי של Claude (claude.ai / Claude Code) **אינו** מיועד להפעלת מוצר מול משתמשים אחרים.
+- **שלב ב' (מתוכנן):** מלאי שנרכש (`n_store_inventory`) עם מחירים קבועים מראש, שמחליף את חישוב השוק.
+
 כל הדף הציבורי משתמש באותו `logoUrl` מ-`n_label_settings/default` שמוצג גם בדשבורד (עם
 וורדמארק טקסטואלי "אולטרנט" כברירת מחדל כשאין לוגו מוגדר) - אין מסלול לוגו נפרד לחנות ה-AI.
 
@@ -2474,6 +2503,8 @@ app שרץ בדפדפן ניתן ל"התקנה" כאפליקציה עם אייק
 | `apps/web/lib/branch-income-ledger.ts` | יצירה/עדכון/מחיקה של רשומת `n_ah_income` מקושרת מהעברת סניף שסומנה כבוצעה (`BranchTransfer.linkedAhIncomeId`) |
 | `apps/web/lib/shop-recommender.ts` | מנוע ההמלצות של חנות ה-AI - זיהוי תחום שימוש מטקסט חופשי, שאלות המשך, ניקוד רמת עומס, מפרט גנרי פר-תחום, התאמה לקטלוג האמיתי (`n_shop_catalog`) |
 | `apps/web/lib/shop-quote.ts` | בניית מסמך ה-HTML העצמאי של הצעת המחיר שהלקוח מוריד בסוף השיחה ב-`/shop` |
+| `apps/web/lib/store-wizard.ts` | מנוע ההתאמה של חנות הסניפים: שימושים, ברירות מחדל, `suggestUpgrade`, `sanitizeSpec`, `specToText`, ובניית הנחיית סקירת השוק |
+| `apps/web/lib/store-pricing.ts` | מרווח המחיר (300-500 ₪) וחישוב טווח ההצעה מממוצע שוק נמוך |
 | `apps/web/lib/owner-name.ts` | שמות אמיתיים (לא "אני"/"השותף") לשדות "מי שילם"/"על מי החוב" במסכי הוצאות - `getOwnerName` (שם המשתמש עם `role: "owner"`) ו-`resolveSharedPartnerName` (שם השותף ל"סניף" המדומה המשותף, כשכל סניפי השותפות במודול מסכימים על אותו שותף) |
 | `apps/web/lib/help/*` | מרכז העזרה: בסיס הידע (`kb-owner.ts`/`kb-renter.ts`), סינון לפי קהל (`knowledge.ts`), חיפוש (`search.ts`), העוזר החכם (`assistant.ts`) |
 | `tools/tutorial-videos/*` | הפקת סרטוני ההדרכה: נתוני הדגמה, הקלטה, הרכבה וקריינות |

@@ -15,6 +15,7 @@ export const PERM_KEYS: readonly PermKey[] = [
   "tasks",
   "charging",
   "shop",
+  "store",
   "duxus",
 ] as const;
 
@@ -37,6 +38,7 @@ const MODULE_BRANCH_TYPE: Record<PermKey, BranchType | null> = {
   coworking: "coworking",
   accounting: null,
   shop: null,
+  store: null,
   duxus: null,
 };
 

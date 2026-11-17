@@ -6,4 +6,5 @@ export const AUDIENCE_LABEL: Record<ProcedureAudience["mode"], string> = {
   owner: "הנהלה בלבד",
   branch_managers: "כל מנהלי הסניפים",
   users: "משתמשים נבחרים",
+  store: "סניפים עם חנות סניפים",
 };

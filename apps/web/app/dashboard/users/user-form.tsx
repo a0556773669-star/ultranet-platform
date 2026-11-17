@@ -25,6 +25,7 @@ const PERM_OPTIONS: { key: PermissionKey; label: string; hint?: string }[] = [
   { key: "accounting", label: "הנה\"ח" },
   { key: "charging", label: "סליקה וקבלות" },
   { key: "shop", label: "חנות AI" },
+  { key: "store", label: "חנות סניפים", hint: "התאמת מחשב ללקוח, נהלים והדרכות - רק לסניפים שמסמנים" },
   { key: "duxus", label: "משימות ונהלים" },
 ];
 
