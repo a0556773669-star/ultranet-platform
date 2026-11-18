@@ -8,6 +8,8 @@ import type { StoreRequest } from "@ultranet/shared-types";
 import { StoreTabs } from "../../store-tabs";
 import { STORE_STATUS_LABEL as STATUS_LABEL } from "@/lib/store-status";
 import { RespondForm } from "./respond-form";
+import { StageActions } from "./stage-actions";
+import { storeAiConfigured } from "@/lib/store-ai";
 
 export const dynamic = "force-dynamic";
 
@@ -77,10 +79,41 @@ export default async function StoreRequestPage({ params }: { params: { id: strin
           {r.responseNote ? <p className="text-sm text-ink">{r.responseNote}</p> : null}
         </div>
       ) : (
-        <div className="card mb-4 text-sm text-muted">הבקשה התקבלה. אנחנו בודקים מחירי שוק והתאמה ונחזור אליכם כאן.</div>
+        <div className={`card mb-4 text-sm text-muted ${r.status === "new" || r.status === "in_review" ? "" : "hidden"}`}>הבקשה התקבלה. אנחנו בודקים מחירי שוק והתאמה ונחזור אליכם כאן.</div>
       )}
 
-      {isOwner ? (
+      {r.accessories?.length ? (
+        <div className="card mb-4 flex flex-col gap-1 text-sm">
+          <h2 className="text-base font-bold text-ink">ציוד נלווה</h2>
+          {r.accessories.map((a, i) => (
+            <div key={i} className="flex justify-between">
+              <span>{a.name}</span>
+              {a.quotedFromILS && a.quotedToILS ? (
+                <span className="font-bold text-teal-dark">{a.quotedFromILS.toLocaleString("he-IL")} - {a.quotedToILS.toLocaleString("he-IL")} ₪</span>
+              ) : null}
+            </div>
+          ))}
+        </div>
+      ) : null}
+
+      {r.chosenOptionIndex !== undefined && r.options?.[r.chosenOptionIndex] ? (
+        <div className="card mb-4 text-sm">
+          האפשרות שהלקוח אישר: <b>{r.options[r.chosenOptionIndex]!.label}</b>
+          {r.finalPriceILS ? <> · מחיר סופי: <b className="text-teal-dark">{r.finalPriceILS.toLocaleString("he-IL")} ₪</b></> : null}
+          {r.stockNote ? <div className="mt-1 text-xs text-muted">{r.stockNote}</div> : null}
+          {r.shippingNote ? <div className="mt-1 text-xs text-muted">משלוח: {r.shippingNote}</div> : null}
+        </div>
+      ) : null}
+
+      {r.status === "no_stock" ? (
+        <div className="card mb-4 text-sm text-ink">אין מלאי כרגע לאפשרות הזו. {r.stockNote || "נחזור אליכם עם חלופה."}</div>
+      ) : null}
+
+      <div className="mb-4">
+        <StageActions id={r.id} status={r.status} isOwner={isOwner} options={(r.options ?? []).map((o) => ({ label: o.label }))} finalPriceILS={r.finalPriceILS} />
+      </div>
+
+      {isOwner && ["new", "in_review", "answered", "no_stock"].includes(r.status) ? (
         <RespondForm
           id={r.id}
           requestedSpecText={specToText(r.spec)}
@@ -88,6 +121,9 @@ export default async function StoreRequestPage({ params }: { params: { id: strin
           upgradeWhy={upgrade ? upgrade.reasons.join("\n") : ""}
           marketPrompt={buildMarketPrompt(r)}
           status={r.status}
+          aiEnabled={storeAiConfigured()}
+          isDesktop={r.spec.kind === "desktop"}
+          extras={r.spec.extras ?? []}
         />
       ) : null}
     </div>

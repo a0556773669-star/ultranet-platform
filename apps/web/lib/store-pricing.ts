@@ -17,3 +17,18 @@ export function quotedRange(marketLowILS: number): { from: number; to: number } 
 export function roundTen(n: number): number {
   return Math.round(n / 10) * 10;
 }
+
+/**
+ * ציוד נלווה לנייח: מרווח קטן יותר מהמחשב, על המחיר **הנמוך בשוק**.
+ * מסך: 100-200 ₪ · מקלדת ועכבר אלחוטיים פשוטים (בסביבות 70-80 ₪): 30-80 ₪.
+ */
+export const ACCESSORY_MARKUP_ILS: Record<string, { min: number; max: number }> = {
+  מסך: { min: 100, max: 200 },
+  "מקלדת ועכבר": { min: 30, max: 80 },
+};
+export const ACCESSORY_DEFAULT_MARKUP = { min: 30, max: 80 };
+
+export function accessoryRange(name: string, marketLowILS: number): { from: number; to: number } {
+  const m = ACCESSORY_MARKUP_ILS[name] ?? ACCESSORY_DEFAULT_MARKUP;
+  return { from: marketLowILS + m.min, to: marketLowILS + m.max };
+}

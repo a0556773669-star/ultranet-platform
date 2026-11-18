@@ -285,7 +285,7 @@ pnpm dev        # turbo run dev — מריץ web + api
 | `n_shop_catalog` | `ShopComputerConfig` | תצורות מחשב אמיתיות למכירה בחנות ה-AI (`/shop`) - שם, דרגה (`minimal`/`recommended`/`extreme`), תחומי שימוש (`useCases`), מפרט, מחיר; ממולא ידנית ע"י הבעלים ב-`/dashboard/shop/catalog` |
 | `n_shop_addons` | `ShopAddon` | ציוד נלווה שניתן להוסיף להצעת המחיר בחנות ה-AI (תיק/עכבר/מקלדת/דיסק און קי/אחר) |
 | `n_shop_leads` | `ShopLead` | פניות שהתקבלו מהצ'אטבוט הציבורי - תיאור, תשובות, ההמלצות שהוצגו, תצורה/ציוד נבחרים, פרטי קשר, סטטוס |
-| `n_store_requests` | `StoreRequest` | **בקשת התאמת מחשב** מ"חנות סניפים" (`/dashboard/store`): `branchId`/`branchName`, `createdByEmail`/`createdByName`, `mode` (`spec` = לפי רצון הלקוח, `guided` = לפי שאלות), `customerName`/`customerPhone`, `budgetILS` (רשות), `spec` (`StoreSpec`: `kind` נייד/נייח, `cpu` i3/i5/i7, `ramGb`, `storageGb`, `screenInches`, `touch`, `minGeneration`, `extras` לנייח), `lockedFields` (מה שהלקוח קבע בוודאות — **לעולם לא משנים ולא מציעים בו שדרוג**), `answers`, `notes`, `status` (`new`/`in_review`/`answered`/`closed`), ותשובת הבעלים: `options` (עד 3 `StoreRequestOption`: `kind` `as_requested`/`upgrade`, `specText`, `whyBetter` — ההסבר למנהל הסניף, `marketLowILS`, `quotedFromILS`/`quotedToILS`), `responseNote`, `respondedAt`/`respondedBy`. נכתב רק מ-`app/dashboard/store/actions.ts`; לא נכנס לשום חישוב כספי |
+| `n_store_requests` | `StoreRequest` | **(שלב ב': `status` הרחב, `chosenOptionIndex`, `finalPriceILS`, `stockNote`, `shippingNote`, חותמות זמן לכל שלב, ו-`accessories` לציוד נלווה בנייח)** **בקשת התאמת מחשב** מ"חנות סניפים" (`/dashboard/store`): `branchId`/`branchName`, `createdByEmail`/`createdByName`, `mode` (`spec` = לפי רצון הלקוח, `guided` = לפי שאלות), `customerName`/`customerPhone`, `budgetILS` (רשות), `spec` (`StoreSpec`: `kind` נייד/נייח, `cpu` i3/i5/i7, `ramGb`, `storageGb`, `screenInches`, `touch`, `minGeneration`, `extras` לנייח), `lockedFields` (מה שהלקוח קבע בוודאות — **לעולם לא משנים ולא מציעים בו שדרוג**), `answers`, `notes`, `status` (`new`/`in_review`/`answered`/`closed`), ותשובת הבעלים: `options` (עד 3 `StoreRequestOption`: `kind` `as_requested`/`upgrade`, `specText`, `whyBetter` — ההסבר למנהל הסניף, `marketLowILS`, `quotedFromILS`/`quotedToILS`), `responseNote`, `respondedAt`/`respondedBy`. נכתב רק מ-`app/dashboard/store/actions.ts`; לא נכנס לשום חישוב כספי |
 | `n_branch_transfers` | `BranchTransfer` | התחשבנות חודשית שותף↔בעלים; `transferredAmount` (רשות) - הסכום שבפועל נרשם כהועבר לאותו חודש, באותה מוסכמת סימן כמו `netToOwner` (חיובי = לבעלים, שלילי = מהבעלים) - מאפשר לרשום העברה חלקית/מאוחרת שלא תואמת בדיוק את הסכום המחושב. רשומות ישנות בלי השדה הזה (רק `transferred: true`) מטופלות כמסולקות במלואן, ראו `lib/branch-ledger.ts`. `linkedAhIncomeId` (רשות) - מזהה רשומת `n_ah_income` שנוצרה/מתעדכנת אוטומטית כש-`transferredAmount` חיובי, ראו `lib/branch-income-ledger.ts` בסעיף 9. `receiptIssued` (רשות) - סימון עצמאי "הוצאנו קבלה", לא קשור לסכום |
 | `n_approved_emails` | — | מיילים מאושרים לכניסת קוד |
 | `n_login_codes` | — | קודי כניסה חד-פעמיים עם תפוגה |
@@ -2154,11 +2154,26 @@ Firestore Emulator עם נתוני הדגמה, כתוביות בעברית צר�
   השרת מנרמל את המפרט מחדש (`sanitizeSpec`) ולא סומך על הקלט מהדפדפן.
 - `/dashboard/store/requests` (+`/[id]`) — הבקשות (הסניף רואה את שלו; בעלים — הכול). **טופס מענה לבעלים בלבד**
   (`requireOwner`): מחיר = **ממוצע שוק נמוך (בלי חריגים) + 300 עד 500 ₪** (`lib/store-pricing.ts`, ניתן לעריכה),
-  עד 3 אפשרויות. סקירת מחירי השוק נעשית ב-Claude של הבעלים עצמו דרך כפתור "העתקת הנחיה" — **ללא קריאת API**.
-  המחיר מוצג כהערכה, לא כמחיר סופי.
-- **חיבור AI עתידי:** אם יוחלט על הכנה אוטומטית — דרך `ANTHROPIC_API_KEY` (כמו מרכז העזרה, עם מטמון ומודל זול).
-  חשבון מנוי של Claude (claude.ai / Claude Code) **אינו** מיועד להפעלת מוצר מול משתמשים אחרים.
-- **שלב ב' (מתוכנן):** מלאי שנרכש (`n_store_inventory`) עם מחירים קבועים מראש, שמחליף את חישוב השוק.
+  עד 3 אפשרויות. בנייח גם **ציוד נלווה** (`accessories`) עם מרווח קטן על המחיר הנמוך בשוק: מסך +100-200, מקלדת
+  ועכבר אלחוטיים +30-80. המחיר מוצג כהערכה, לא כמחיר סופי. **דור מעבד: ברירת מחדל 12 ומעלה**
+  (`DEFAULT_MIN_GENERATION`). המרווחים **לא מופיעים בנהלים** שהסניפים רואים.
+- **הכנת מחיר שוק:** (א) כפתור "העתקת הנחיה" להדבקה ב-Claude של הבעלים — בלי עלות API; (ב) כפתור "הכנה אוטומטית"
+  (`aiMarketDraftAction`, `lib/store-ai.ts`) — **Claude Haiku 5.5 (הדגם הזול ביותר), מאמץ נמוך, חיפוש ברשת**, רק
+  כש-`ANTHROPIC_API_KEY` מוגדר ורק לבעלים; מחזיר **טיוטה** שממלאת את "ממוצע שוק נמוך" והבעלים מאשר. אין קריאת
+  מודל בשום מסלול של הסניפים. חשבון מנוי של Claude (claude.ai / Claude Code) **אינו** מיועד להפעלת מוצר מול
+  משתמשים אחרים.
+- **שלב ב' - מהצעה לעסקה (מחזור חיי הבקשה, `StoreRequestStatus`):** `new` ← `in_review` ← `answered` (הצעה לסניף) ←
+  `stock_check` (הלקוח אישר אפשרות, הסניף מבקש בדיקת מלאי: `requestStockCheckAction`) ← `stock_confirmed` (הבעלים
+  מאשר מלאי + `finalPriceILS`: `confirmStockAction`; או `no_stock`) ← `deal_closed` (הסניף סגר במחיר הסופי:
+  `closeDealAction`) ← `shipped` (הבעלים מוציא משלוח, בדרך כלל באותו יום: `markShippedAction`) ← `delivered`
+  (הסניף מאשר קבלה: `markDeliveredAction`) ← `closed`. פעולות הסניף נבדקות מול שיוך הסניף ומול הסטטוס הנוכחי;
+  פעולות הבעלים — `requireOwner`. המחשב מגיע ישירות לסניף והסניף מכין אותו לפי ההדרכות. עדיין **אין מלאי במערכת**:
+  "מלאי אושר" הוא אישור ידני של הבעלים.
+- **נהלי ברירת מחדל:** `lib/store-default-procedures.ts` (8 נהלים: קבלת לקוח, לקוח שיודע, לקוח שלא יודע, מחיר,
+  בדיקת מלאי וסגירה, משלוח וקבלה, אחריות ואנטיווירוס, תוכנות ורישיונות). נטענים בכפתור "טעינת נהלי ברירת מחדל"
+  (`seedStoreProceduresAction`, מזהים קבועים, לא דורס נוהל קיים). אחריות: מול היצרן בלבד, ללא כיסוי שבר או וירוסים.
+  תוכנות: רק תוכנות שמותר להתקין חוקית; רישיונות נרכשים ע"י הלקוח.
+- **עתידי:** מלאי שנרכש (`n_store_inventory`) עם מחירים קבועים מראש, שיחליף את חישוב השוק ואת האישור הידני.
 
 כל הדף הציבורי משתמש באותו `logoUrl` מ-`n_label_settings/default` שמוצג גם בדשבורד (עם
 וורדמארק טקסטואלי "אולטרנט" כברירת מחדל כשאין לוגו מוגדר) - אין מסלול לוגו נפרד לחנות ה-AI.
@@ -2504,6 +2519,8 @@ app שרץ בדפדפן ניתן ל"התקנה" כאפליקציה עם אייק
 | `apps/web/lib/shop-recommender.ts` | מנוע ההמלצות של חנות ה-AI - זיהוי תחום שימוש מטקסט חופשי, שאלות המשך, ניקוד רמת עומס, מפרט גנרי פר-תחום, התאמה לקטלוג האמיתי (`n_shop_catalog`) |
 | `apps/web/lib/shop-quote.ts` | בניית מסמך ה-HTML העצמאי של הצעת המחיר שהלקוח מוריד בסוף השיחה ב-`/shop` |
 | `apps/web/lib/store-wizard.ts` | מנוע ההתאמה של חנות הסניפים: שימושים, ברירות מחדל, `suggestUpgrade`, `sanitizeSpec`, `specToText`, ובניית הנחיית סקירת השוק |
+| `apps/web/lib/store-ai.ts` | הכנה אוטומטית של מחיר שוק (Haiku 5.5 + חיפוש ברשת), בעלים בלבד, דורש `ANTHROPIC_API_KEY` |
+| `apps/web/lib/store-default-procedures.ts` | נהלי ברירת המחדל של חנות הסניפים |
 | `apps/web/lib/store-pricing.ts` | מרווח המחיר (300-500 ₪) וחישוב טווח ההצעה מממוצע שוק נמוך |
 | `apps/web/lib/owner-name.ts` | שמות אמיתיים (לא "אני"/"השותף") לשדות "מי שילם"/"על מי החוב" במסכי הוצאות - `getOwnerName` (שם המשתמש עם `role: "owner"`) ו-`resolveSharedPartnerName` (שם השותף ל"סניף" המדומה המשותף, כשכל סניפי השותפות במודול מסכימים על אותו שותף) |
 | `apps/web/lib/help/*` | מרכז העזרה: בסיס הידע (`kb-owner.ts`/`kb-renter.ts`), סינון לפי קהל (`knowledge.ts`), חיפוש (`search.ts`), העוזר החכם (`assistant.ts`) |

@@ -15,6 +15,9 @@ export const USAGE_OPTIONS: { key: UsageKey; label: string; hint: string }[] = [
   { key: "heavy", label: "כבד", hint: "עריכת תמונות/וידאו, תכנות, תוכנות מקצועיות" },
 ];
 
+/** ברירת המחדל של העסק: מעבד מדור 12 ומעלה (אלא אם הלקוח/הבעלים קבעו אחרת). */
+export const DEFAULT_MIN_GENERATION = 12;
+
 export const CPU_ORDER: StoreCpuTier[] = ["i3", "i5", "i7"];
 const RAM_STEPS = [8, 16, 32];
 const STORAGE_STEPS = [256, 512, 1000, 2000];
@@ -33,7 +36,7 @@ export function storageLabel(gb: number): string {
 export function specToText(spec: StoreSpec): string {
   const parts: string[] = [spec.kind === "laptop" ? "נייד" : "נייח"];
   if (spec.cpu) parts.push(`מעבד ${spec.cpu}`);
-  if (spec.minGeneration) parts.push(`דור ${spec.minGeneration}+`);
+  parts.push(`דור ${spec.minGeneration ?? DEFAULT_MIN_GENERATION}+`);
   if (spec.ramGb) parts.push(`${spec.ramGb}GB RAM`);
   if (spec.storageGb) parts.push(`${storageLabel(spec.storageGb)} SSD`);
   if (spec.kind === "laptop" && spec.screenInches) parts.push(`${spec.screenInches}"`);
@@ -125,7 +128,7 @@ export function buildMarketPrompt(r: StoreRequest): string {
     "",
     `מפרט שהלקוח ביקש: ${specToText(r.spec)}`,
     r.budgetILS ? `תקציב שהלקוח הזכיר: ${r.budgetILS} ₪` : "",
-    r.spec.minGeneration ? "" : "דורות מעבד: הדורות הרגילים בלבד, בלי מחשבים ישנים מדי.",
+    `דור מעבד: ${r.spec.minGeneration ?? DEFAULT_MIN_GENERATION} ומעלה בלבד.`,
     "",
     "הנחיות:",
     "1. תן 5 מחירים מחנויות שונות עם שם החנות ודגם.",
