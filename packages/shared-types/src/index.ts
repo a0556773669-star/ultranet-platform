@@ -135,7 +135,8 @@ export type PermissionKey =
   | "charging"
   | "shop"
   | "store"
-  | "duxus";
+  | "duxus"
+  | "investment";
 
 /**
  * כובע אחד של משתמש: תפקיד בסניף מסוים, עם ההרשאות שנלוות לתפקיד הזה.
@@ -2196,4 +2197,41 @@ export interface Goal {
   linkKind: GoalLinkKind;
   branchId?: string;
   updatedAt?: string;
+}
+
+
+/** סוגי תנועה בספר ההשקעה (`/dashboard/investment`). ראו SPEC, פרק "השקעה — יצחק ברון". */
+export type InvestmentEntryKind =
+  /** כסף שהמשקיע העביר לפרויקט (הגדלת קרן ההשקעה) */
+  | "deposit"
+  /** הוצאה של הפרויקט (פיתוח, שיווק, תפעול, שכר מפתחת...) */
+  | "expense"
+  /** הכנסה של הפרויקט (מזכה בחלוקת רווחים שוטפת) */
+  | "income"
+  /** תשלום רווחים שוטף למשקיע (25%) */
+  | "profit_payout"
+  /** החזר מקרן ההשקעה למשקיע (פירעון) */
+  | "principal_return";
+
+/**
+ * collection: `n_investment_entries` — שורה בספר ההשקעה של הפרויקט מול המשקיע.
+ *
+ * `expenseType` רלוונטי רק ל-`expense`: `capital` = הקמה/פיתוח שממומן מקרן ההשקעה, `operating` =
+ * הוצאה שוטפת שמנוכה מההכנסות לפני חלוקת הרווחים. חסר = `capital`.
+ * `source` = `"import"` לשורה שיובאה מהספר הקיים (להגנה מכפילות עם `sourceRef`).
+ */
+export interface InvestmentEntry {
+  id: string;
+  kind: InvestmentEntryKind;
+  /** YYYY-MM-DD — התאריך שבו הכסף עבר בפועל */
+  date: string;
+  amount: number;
+  description: string;
+  category?: string;
+  expenseType?: "capital" | "operating";
+  note?: string;
+  source?: "manual" | "import";
+  sourceRef?: string;
+  createdAt: string;
+  createdBy?: string;
 }

@@ -27,6 +27,7 @@ const PERM_OPTIONS: { key: PermissionKey; label: string; hint?: string }[] = [
   { key: "shop", label: "חנות AI" },
   { key: "store", label: "חנות סניפים", hint: "התאמת מחשב ללקוח, נהלים והדרכות - רק לסניפים שמסמנים" },
   { key: "duxus", label: "משימות ונהלים" },
+  { key: "investment", label: "השקעה", hint: "טאב ההשקעה (יצחק ברון) — צפייה בלבד; עריכה לבעלים" },
 ];
 
 const BRANCH_TYPE_LABEL: Record<string, string> = {

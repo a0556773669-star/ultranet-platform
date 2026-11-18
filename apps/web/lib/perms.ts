@@ -17,6 +17,7 @@ export const PERM_KEYS: readonly PermKey[] = [
   "shop",
   "store",
   "duxus",
+  "investment",
 ] as const;
 
 type PermMap = Partial<Record<PermKey, boolean>>;
@@ -40,6 +41,7 @@ const MODULE_BRANCH_TYPE: Record<PermKey, BranchType | null> = {
   shop: null,
   store: null,
   duxus: null,
+  investment: null,
 };
 
 const ROLE_RANK: Record<UserRole, number> = { employee: 1, partner: 2, owner: 3 };

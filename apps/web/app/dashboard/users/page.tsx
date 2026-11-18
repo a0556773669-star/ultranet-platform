@@ -24,6 +24,7 @@ const PERM_LABELS: Record<string, string> = {
   shop: "חנות AI",
   store: "חנות סניפים",
   duxus: "משימות ונהלים",
+  investment: "השקעה",
 };
 
 /** אותה נפילה לאחור כמו ב-`getAssignments`, כאן על מסמך מ-Firestore ולא על session. */

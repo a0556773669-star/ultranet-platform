@@ -12,6 +12,7 @@ import {
   Stethoscope,
   Flag,
   ShoppingBag,
+  PiggyBank,
   type LucideIcon,
 } from "lucide-react";
 import type { PermKey } from "@/lib/perms";
@@ -38,6 +39,7 @@ export const NAV_ITEMS: NavItem[] = [
   // "כספים" = ההנה"ח הראשית + ניידים (רווחיות והתחשבנות). אותו נתיב ואותה הרשאה כמו "הנה"ח" הקודם.
   { href: "/dashboard/accounting", label: "כספים", icon: BarChart3, perm: "accounting", group: "main" },
   { href: "/dashboard/duxus", label: "משימות", icon: Target, perm: "duxus", group: "main" },
+  { href: "/dashboard/investment", label: "השקעה", icon: PiggyBank, perm: "investment", group: "main" },
   { href: "/dashboard/goals", label: "יעדים", icon: Flag, group: "main", ownerOnly: true },
   { href: "/dashboard/users", label: "משתמשים", icon: Users, group: "tools", ownerOnly: true },
   { href: "/dashboard/tutorials", label: "נהלים והדרכות", icon: BookOpen, group: "tools" },
