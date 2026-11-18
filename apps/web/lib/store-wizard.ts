@@ -118,7 +118,7 @@ export function sanitizeSpec(raw: Partial<StoreSpec> | undefined): StoreSpec {
     if (typeof raw?.touch === "boolean") spec.touch = raw.touch;
   }
   if (typeof raw?.minGeneration === "number" && raw.minGeneration >= 1 && raw.minGeneration <= 30) spec.minGeneration = raw.minGeneration;
-  if (kind === "desktop" && Array.isArray(raw?.extras)) {
+  if (Array.isArray(raw?.extras)) {
     spec.extras = raw.extras.map((e) => String(e).trim().slice(0, 40)).filter(Boolean).slice(0, 8);
   }
   return spec;

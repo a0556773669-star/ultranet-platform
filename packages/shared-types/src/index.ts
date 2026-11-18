@@ -1062,7 +1062,7 @@ export interface StoreSpec {
   touch?: boolean;
   /** דור מעבד מינימלי (למשל 12); חסר = הדורות הרגילים של העסק */
   minGeneration?: number;
-  /** נייח בלבד: ציוד נלווה שהלקוח רוצה (מסך/מקלדת/עכבר/רמקולים) */
+  /** ציוד נלווה שהלקוח רוצה (מסך/מקלדת/עכבר/סטיק/רמקולים) - בנייד ובנייח */
   extras?: string[];
 }
 
@@ -1094,6 +1094,7 @@ export type StoreCommissionCategory = "laptop" | "desktop" | "accessory";
  *  `fixed` = סכום קבוע בשקלים לעסקה · `percent` = אחוז מהמחיר הסופי של אותה קטגוריה. */
 export interface StoreCommissionRule {
   id: StoreCommissionCategory;
+  /** `fixed` בקטגוריית `accessory` = סכום **לכל אביזר** (סטיק, מקלדת, עכבר, מסך...) */
   kind: "fixed" | "percent";
   value: number;
 }
@@ -1158,6 +1159,8 @@ export interface StoreRequest {
    *  נספרת רק כש-`collection.by === "branch"`. */
   commissionILS?: number;
   commissionNote?: string;
+  /** עמלה שהבעלים קבע לעסקה הזו לפני שליחת תשובת בדיקת המלאי - גוברת על כללי העמלה בסגירה. */
+  commissionOverrideILS?: number;
   stockNote?: string;
   stockConfirmedAt?: string;
   dealClosedAt?: string;

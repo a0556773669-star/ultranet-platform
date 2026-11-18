@@ -3,7 +3,7 @@ import { Coins } from "lucide-react";
 import { requireOwner } from "@/lib/perms";
 import { getAdminFirestore } from "@/lib/firebase-admin";
 import { COMMISSION_CATEGORY_LABEL, dealSettlement } from "@/lib/store-commission";
-import { COMMISSION_CATEGORIES, currentIsraelMonth, loadCommissionRules } from "@/lib/store-commission-data";
+import { COMMISSION_CATEGORIES, currentIsraelMonth, loadEffectiveRules } from "@/lib/store-commission-data";
 import type { StoreRequest } from "@ultranet/shared-types";
 import { StoreTabs } from "../store-tabs";
 import { saveCommissionRulesAction } from "../actions";
@@ -17,7 +17,7 @@ const money = (n: number) => `${Math.round(n).toLocaleString("he-IL")} ₪`;
 export default async function CommissionsPage({ searchParams }: { searchParams: { month?: string } }) {
   await requireOwner();
   const month = /^\d{4}-\d{2}$/.test(searchParams.month ?? "") ? searchParams.month! : currentIsraelMonth();
-  const rules = await loadCommissionRules();
+  const rules = await loadEffectiveRules();
   const snap = await getAdminFirestore().collection("n_store_requests").where("collection.by", "==", "branch").get();
   const deals = snap.docs
     .map((d) => ({ ...(d.data() as Omit<StoreRequest, "id">), id: d.id }) as StoreRequest)
@@ -45,8 +45,8 @@ export default async function CommissionsPage({ searchParams }: { searchParams: 
       <form action={saveCommissionRulesAction} className="card mb-4 flex flex-col gap-3">
         <h2 className="text-base font-bold text-ink">כללי עמלה לכל מוצר</h2>
         <p className="text-xs text-muted">
-          עמלה נקבעת בסגירת העסקה ונשמרת עליה. שינוי כאן לא משנה עסקאות שנסגרו. ריק = אין עמלה.
-          עמלה מגיעה רק כשהסניף גבה את הכסף.
+          עמלה נקבעת בסגירת העסקה ונשמרת עליה. שינוי כאן לא משנה עסקאות שנסגרו. 0 = אין עמלה.
+          ברירת המחדל: 150 ₪ לכל מחשב ו-20 ₪ לכל אביזר. עמלה מגיעה רק כשהסניף גבה את הכסף, וניתן לעדכן אותה לכל הזמנה לפני שליחת תשובת בדיקת המלאי.
         </p>
         {COMMISSION_CATEGORIES.map((c) => {
           const rule = rules.get(c);
@@ -54,7 +54,7 @@ export default async function CommissionsPage({ searchParams }: { searchParams: 
             <div key={c} className="flex flex-wrap items-center gap-2">
               <span className="w-56 text-sm font-semibold text-ink">{COMMISSION_CATEGORY_LABEL[c]}</span>
               <select name={`${c}_kind`} defaultValue={rule?.kind ?? "fixed"} className={FIELD}>
-                <option value="fixed">סכום קבוע ₪ לעסקה</option>
+                <option value="fixed">{c === "accessory" ? "סכום קבוע ₪ לכל אביזר" : "סכום קבוע ₪ למחשב"}</option>
                 <option value="percent">אחוז מהמחיר הסופי</option>
               </select>
               <input name={`${c}_value`} defaultValue={rule?.value ?? ""} inputMode="decimal" className={`w-24 ${FIELD}`} />

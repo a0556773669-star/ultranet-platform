@@ -187,6 +187,9 @@ export async function confirmStockAction(id: string, formData: FormData): Promis
   await requireOwner();
   const price = Number(String(formData.get("finalPriceILS") ?? "").replace(/[^\d.]/g, ""));
   if (!Number.isFinite(price) || price <= 0) throw new Error("יש להזין מחיר סופי");
+  const commRaw = String(formData.get("commissionOverrideILS") ?? "").trim();
+  const commOverride = commRaw === "" ? undefined : Math.round(Number(commRaw.replace(/[^\d.]/g, "")));
+  if (commOverride !== undefined && !Number.isFinite(commOverride)) throw new Error("סכום עמלה לא תקין");
   const accRaw = Number(String(formData.get("accessoriesFinalILS") ?? "").replace(/[^\d.]/g, ""));
   const accFinal = Number.isFinite(accRaw) && accRaw > 0 ? Math.round(accRaw) : 0;
   const now = new Date().toISOString();
@@ -194,6 +197,7 @@ export async function confirmStockAction(id: string, formData: FormData): Promis
     status: "stock_confirmed" satisfies StoreRequestStatus,
     finalPriceILS: Math.round(price),
     ...(accFinal ? { accessoriesFinalILS: accFinal } : {}),
+    ...(commOverride !== undefined ? { commissionOverrideILS: commOverride } : {}),
     stockNote: String(formData.get("stockNote") ?? "").trim().slice(0, 500),
     stockConfirmedAt: now,
     updatedAt: now,
@@ -271,8 +275,9 @@ export async function saveCommissionRulesAction(formData: FormData): Promise<voi
     const kind = formData.get(`${category}_kind`) === "percent" ? "percent" : "fixed";
     const value = Number(String(formData.get(`${category}_value`) ?? "").replace(/[^\d.]/g, ""));
     const ref = db.collection(COMMISSION_RULES_COLLECTION).doc(category satisfies StoreCommissionCategory);
+    // ריק או 0 = בכוונה בלי עמלה לקטגוריה (כלל שמור עם ערך 0); מחיקת כלל לא מתבצעת כדי לא לחזור לברירת המחדל בטעות.
     if (!Number.isFinite(value) || value <= 0) {
-      await ref.delete();
+      await ref.set({ kind, value: 0 });
       continue;
     }
     if (kind === "percent" && value > 100) throw new Error("אחוז עמלה לא יכול לעבור 100");
@@ -386,4 +391,22 @@ export async function seedGlossaryAction(): Promise<void> {
   if (!(await col.limit(1).get()).empty) return;
   for (const t of DEFAULT_GLOSSARY) await col.add({ ...t, active: true });
   revalidatePath("/dashboard/store/glossary");
+}
+
+/** בדיקת חיבור ל-API: קריאה מינימלית אחת ל-Haiku (עלות זניחה). בעלים בלבד. */
+export async function testAiConnectionAction(): Promise<{ ok: boolean; message: string }> {
+  await requireOwner();
+  if (!process.env.ANTHROPIC_API_KEY) return { ok: false, message: "ANTHROPIC_API_KEY לא מוגדר בשרת (ב-Vercel, ואחרי הגדרה צריך Redeploy)" };
+  try {
+    const { default: Anthropic } = await import("@anthropic-ai/sdk");
+    const res = await new Anthropic().messages.create({
+      model: "claude-haiku-5-5",
+      max_tokens: 16,
+      output_config: { effort: "low" },
+      messages: [{ role: "user", content: "ענה במילה אחת: שלום" }],
+    });
+    return { ok: true, message: `החיבור תקין (${res.usage.input_tokens + res.usage.output_tokens} טוקנים)` };
+  } catch (e) {
+    return { ok: false, message: e instanceof Error ? e.message : "שגיאה לא ידועה" };
+  }
 }
