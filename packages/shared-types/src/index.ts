@@ -1086,6 +1086,38 @@ export interface StoreAccessoryQuote {
   quotedToILS?: number;
 }
 
+/** סוגי מוצר לעמלה - `laptop`/`desktop` לפי סוג המחשב בבקשה, `accessory` לציוד נלווה. */
+export type StoreCommissionCategory = "laptop" | "desktop" | "accessory";
+
+/** collection: n_store_commission_rules - מסמך לכל קטגוריה (המזהה הוא הקטגוריה).
+ *  `fixed` = סכום קבוע בשקלים לעסקה · `percent` = אחוז מהמחיר הסופי של אותה קטגוריה. */
+export interface StoreCommissionRule {
+  id: StoreCommissionCategory;
+  kind: "fixed" | "percent";
+  value: number;
+}
+
+/** גבייה בסגירת עסקה. `by: "branch"` = הסניף גבה (זכאי לעמלה, והסכום שגבה נכנס להתחשבנות החודשית
+ *  מול הבעלים); `by: "owner"` = הבעלים גובה ישירות (אין עמלה). אין כאן שום פרט כרטיס אשראי. */
+export interface StoreCollection {
+  by: "branch" | "owner";
+  method?: "cash" | "card" | "transfer";
+  /** הסכום שנגבה בפועל - ברירת המחדל: המחיר הסופי של העסקה */
+  amountILS: number;
+  at: string; // ISO
+  /** החודש (YYYY-MM) שבו העסקה נכנסת להתחשבנות */
+  month: string;
+}
+
+/** collection: n_store_glossary - מושגים שהבעלים מלמד את יועץ ה-AI ("חידושי תורה = Word בסיס בלבד") */
+export interface StoreGlossaryTerm {
+  id: string;
+  term: string;
+  /** הנחיה חופשית למודל: מה המושג אומר, מה לשאול, מה להסביר ללקוח */
+  guidance: string;
+  active: boolean;
+}
+
 /** collection: n_store_requests - בקשת התאמת מחשב שמנהל סניף שלח מ-`/dashboard/store` */
 export interface StoreRequest {
   id: string;
@@ -1117,6 +1149,14 @@ export interface StoreRequest {
   stockCheckAt?: string;
   /** המחיר הסופי שהבעלים אישר עם המלאי - המחיר שבו הסניף סוגר את העסקה */
   finalPriceILS?: number;
+  /** מחיר סופי לציוד הנלווה (נייח), אם יש - נפרד כי העמלה עליו לפי הקטגוריה "accessory" */
+  accessoriesFinalILS?: number;
+  /** הגבייה בסגירת העסקה */
+  collection?: StoreCollection;
+  /** העמלה שהסניף צבר על העסקה - נקבעת בסגירה לפי כללי העמלה, והבעלים רשאי לעדכן.
+   *  נספרת רק כש-`collection.by === "branch"`. */
+  commissionILS?: number;
+  commissionNote?: string;
   stockNote?: string;
   stockConfirmedAt?: string;
   dealClosedAt?: string;

@@ -30,6 +30,9 @@ export interface BranchMonthReport {
   /** מכירות מחשבים בחודש — 100% לבעלים, כלולות במלואן ב-`netToOwner`. */
   sales: { name: string; date: string; price: number }[];
   salesTotal: number;
+  /** "חנות סניפים": מה שהסניף גבה החודש מעסקאות חנות, והעמלה שצבר עליהן (מופחתת מההתחשבנות). */
+  storeCollected: number;
+  storeCommission: number;
   expenseLines: SettlementExpenseLine[];
   /** Total spent on the settlement-relevant expense lines above. */
   expenseTotal: number;
@@ -79,6 +82,8 @@ export function buildBranchMonthReport(
       .sort((a, b) => a.date.localeCompare(b.date))
       .map((s) => ({ name: s.laptopName, date: s.date, price: s.price })),
     salesTotal: f.saleIncomeThisMonth,
+    storeCollected: f.storeCollectedThisMonth,
+    storeCommission: f.storeCommissionThisMonth,
     expenseLines: settlementExpenseLinesForMonth(branch, raw, month),
     expenseTotal: f.settlementExpenseThisMonth,
     openingBalance,
@@ -277,6 +282,20 @@ ${
         <div style="margin-top:8px;font-size:11px;color:${MUTED};line-height:1.6">
           מכירת מחשב היא 100% של ${esc(ownerName)} ולכן היא לא מתחלקת — הסכום כולו כלול בהתחשבנות החודש.
         </div>
+      </td>
+    </tr>`
+    : ""
+}
+${
+  report.storeCollected > 0 || report.storeCommission > 0
+    ? `
+    <tr>
+      <td style="padding:18px 20px 4px">
+        <div style="font-size:13px;font-weight:800;color:${MUTED};letter-spacing:.02em">חנות סניפים החודש</div>
+        <table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse;margin-top:6px">
+          ${summaryRow("נגבה על ידי הסניף", money(report.storeCollected), INK)}
+          ${summaryRow("עמלת הסניף - מופחתת מההתחשבנות", money(-report.storeCommission), GREEN, true)}
+        </table>
       </td>
     </tr>`
     : ""

@@ -5,10 +5,14 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { getAdminFirestore } from "@/lib/firebase-admin";
 import { currentModuleScope, requireOwner } from "@/lib/perms";
+import { COMMISSION_CATEGORIES, COMMISSION_RULES_COLLECTION, currentIsraelMonth, loadCommissionRules } from "@/lib/store-commission-data";
+import { computeDealCommission } from "@/lib/store-commission";
+import { advisorTurn, type AdvisorResult, type AdvisorTurn } from "@/lib/store-advisor";
+import { DEFAULT_GLOSSARY, GLOSSARY_COLLECTION } from "@/lib/store-glossary";
 import { DEFAULT_STORE_PROCEDURES } from "@/lib/store-default-procedures";
 import { draftMarketPrice, storeAiConfigured, type MarketDraft } from "@/lib/store-ai";
 import { applyUsageDefaults, sanitizeSpec, type UsageKey } from "@/lib/store-wizard";
-import type { StoreAccessoryQuote, StoreRequest, StoreRequestMode, StoreRequestOption, StoreRequestStatus, StoreSpec } from "@ultranet/shared-types";
+import type { StoreAccessoryQuote, StoreCollection, StoreCommissionCategory, StoreRequest, StoreRequestMode, StoreRequestOption, StoreRequestStatus, StoreSpec } from "@ultranet/shared-types";
 
 const COLLECTION = "n_store_requests";
 const STATUSES: StoreRequestStatus[] = ["new", "in_review", "answered", "stock_check", "stock_confirmed", "deal_closed", "shipped", "delivered", "closed", "no_stock"];
@@ -183,10 +187,13 @@ export async function confirmStockAction(id: string, formData: FormData): Promis
   await requireOwner();
   const price = Number(String(formData.get("finalPriceILS") ?? "").replace(/[^\d.]/g, ""));
   if (!Number.isFinite(price) || price <= 0) throw new Error("יש להזין מחיר סופי");
+  const accRaw = Number(String(formData.get("accessoriesFinalILS") ?? "").replace(/[^\d.]/g, ""));
+  const accFinal = Number.isFinite(accRaw) && accRaw > 0 ? Math.round(accRaw) : 0;
   const now = new Date().toISOString();
   await getAdminFirestore().collection(COLLECTION).doc(id).update({
     status: "stock_confirmed" satisfies StoreRequestStatus,
     finalPriceILS: Math.round(price),
+    ...(accFinal ? { accessoriesFinalILS: accFinal } : {}),
     stockNote: String(formData.get("stockNote") ?? "").trim().slice(0, 500),
     stockConfirmedAt: now,
     updatedAt: now,
@@ -205,13 +212,73 @@ export async function noStockAction(id: string, formData: FormData): Promise<voi
   revalidateRequest(id);
 }
 
-/** הסניף סגר את העסקה עם הלקוח במחיר הסופי. */
-export async function closeDealAction(id: string): Promise<void> {
+export interface CloseDealInput {
+  /** מי גובה: הסניף (זכאי לעמלה, והסכום נכנס להתחשבנות מול הבעלים) או הבעלים ישירות */
+  collectedBy: "branch" | "owner";
+  method?: "cash" | "card" | "transfer";
+}
+
+/**
+ * הסניף סגר את העסקה עם הלקוח במחיר הסופי, ובוחר מי גובה.
+ *
+ * `branch`: הסכום (מחיר סופי למחשב + לציוד) נכנס להתחשבנות החודשית של הסניף, והעמלה לפי כללי הבעלים
+ * מופחתת ממנה אוטומטית. `owner`: אין עמלה ואין שינוי בהתחשבנות של הסניף.
+ */
+export async function closeDealAction(id: string, input: CloseDealInput): Promise<void> {
   const { ref, request } = await loadForBranch(id);
   if (request.status !== "stock_confirmed") throw new Error("אפשר לסגור עסקה רק אחרי אישור מלאי");
+  if (input.collectedBy !== "branch" && input.collectedBy !== "owner") throw new Error("יש לבחור מי גובה");
+  const total = (request.finalPriceILS ?? 0) + (request.accessoriesFinalILS ?? 0);
+  if (!(total > 0)) throw new Error("אין מחיר סופי לעסקה");
   const now = new Date().toISOString();
-  await ref.update({ status: "deal_closed", dealClosedAt: now, updatedAt: now });
+  const collection: StoreCollection = {
+    by: input.collectedBy,
+    ...(input.collectedBy === "branch" && input.method ? { method: input.method } : {}),
+    amountILS: total,
+    at: now,
+    month: currentIsraelMonth(),
+  };
+  const commissionILS = input.collectedBy === "branch" ? computeDealCommission(request, await loadCommissionRules()) : 0;
+  await ref.update({ status: "deal_closed", dealClosedAt: now, collection, commissionILS, updatedAt: now });
   revalidateRequest(id);
+  revalidatePath("/dashboard/store/commissions");
+}
+
+/** הבעלים מתקן עמלה של עסקה (למשל הסכמה חריגה). עסקה שנגבתה ע"י הסניף בלבד. */
+export async function adjustCommissionAction(id: string, formData: FormData): Promise<void> {
+  await requireOwner();
+  const ref = getAdminFirestore().collection(COLLECTION).doc(id);
+  const snap = await ref.get();
+  if (!snap.exists) throw new Error("הבקשה לא נמצאה");
+  const request = snap.data() as StoreRequest;
+  if (request.collection?.by !== "branch") throw new Error("עמלה רלוונטית רק לעסקה שהסניף גבה");
+  const amount = Number(String(formData.get("commissionILS") ?? "").replace(/[^\d.]/g, ""));
+  if (!Number.isFinite(amount) || amount < 0) throw new Error("סכום עמלה לא תקין");
+  await ref.update({
+    commissionILS: Math.round(amount),
+    commissionNote: String(formData.get("commissionNote") ?? "").trim().slice(0, 200),
+    updatedAt: new Date().toISOString(),
+  });
+  revalidateRequest(id);
+  revalidatePath("/dashboard/store/commissions");
+}
+
+/** שמירת כללי העמלה (סכום קבוע או אחוז) לכל קטגוריה. ערך ריק/0 = אין עמלה לקטגוריה. */
+export async function saveCommissionRulesAction(formData: FormData): Promise<void> {
+  await requireOwner();
+  const db = getAdminFirestore();
+  for (const category of COMMISSION_CATEGORIES) {
+    const kind = formData.get(`${category}_kind`) === "percent" ? "percent" : "fixed";
+    const value = Number(String(formData.get(`${category}_value`) ?? "").replace(/[^\d.]/g, ""));
+    const ref = db.collection(COMMISSION_RULES_COLLECTION).doc(category satisfies StoreCommissionCategory);
+    if (!Number.isFinite(value) || value <= 0) {
+      await ref.delete();
+      continue;
+    }
+    if (kind === "percent" && value > 100) throw new Error("אחוז עמלה לא יכול לעבור 100");
+    await ref.set({ kind, value });
+  }
+  revalidatePath("/dashboard/store/commissions");
 }
 
 /** הבעלים מוציא משלוח (בדרך כלל באותו יום). */
@@ -277,4 +344,46 @@ export async function seedStoreProceduresAction(): Promise<{ created: number }> 
   }
   revalidatePath("/dashboard/store");
   return { created };
+}
+
+/** תור אחד בשיחת היועץ. פתוח לכל מי שיש לו הרשאת חנות סניפים; עלות מוגבלת (ראו `MAX_USER_TURNS`). */
+export async function advisorTurnAction(history: AdvisorTurn[]): Promise<AdvisorResult> {
+  const scope = await currentModuleScope("store");
+  if (!scope?.granted) throw new Error("אין הרשאה לחנות סניפים");
+  const clean = (Array.isArray(history) ? history : [])
+    .filter((t) => (t.role === "user" || t.role === "assistant") && typeof t.content === "string")
+    .map((t) => ({ role: t.role, content: t.content }));
+  return advisorTurn(clean);
+}
+
+// ---------------------------------------------------------------------------
+// מושגי היועץ (בעלים בלבד)
+// ---------------------------------------------------------------------------
+
+export async function saveGlossaryTermAction(formData: FormData): Promise<void> {
+  await requireOwner();
+  const term = String(formData.get("term") ?? "").trim().slice(0, 80);
+  const guidance = String(formData.get("guidance") ?? "").trim().slice(0, 800);
+  if (!term || !guidance) throw new Error("חובה למלא מושג והנחיה");
+  const id = String(formData.get("id") ?? "").trim();
+  const col = getAdminFirestore().collection(GLOSSARY_COLLECTION);
+  const data = { term, guidance, active: formData.get("active") !== "off" };
+  if (id) await col.doc(id).set(data, { merge: true });
+  else await col.add(data);
+  revalidatePath("/dashboard/store/glossary");
+}
+
+export async function deleteGlossaryTermAction(id: string): Promise<void> {
+  await requireOwner();
+  await getAdminFirestore().collection(GLOSSARY_COLLECTION).doc(id).delete();
+  revalidatePath("/dashboard/store/glossary");
+}
+
+/** העתקת מושגי ברירת המחדל למסד, כדי שיהיה אפשר לערוך אותם. רק כשאין מושגים. */
+export async function seedGlossaryAction(): Promise<void> {
+  await requireOwner();
+  const col = getAdminFirestore().collection(GLOSSARY_COLLECTION);
+  if (!(await col.limit(1).get()).empty) return;
+  for (const t of DEFAULT_GLOSSARY) await col.add({ ...t, active: true });
+  revalidatePath("/dashboard/store/glossary");
 }

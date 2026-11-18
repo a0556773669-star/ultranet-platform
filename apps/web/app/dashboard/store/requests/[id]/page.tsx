@@ -7,6 +7,7 @@ import { buildMarketPrompt, specToText, suggestUpgrade } from "@/lib/store-wizar
 import type { StoreRequest } from "@ultranet/shared-types";
 import { StoreTabs } from "../../store-tabs";
 import { STORE_STATUS_LABEL as STATUS_LABEL } from "@/lib/store-status";
+import { adjustCommissionAction } from "../../actions";
 import { RespondForm } from "./respond-form";
 import { StageActions } from "./stage-actions";
 import { storeAiConfigured } from "@/lib/store-ai";
@@ -27,7 +28,7 @@ export default async function StoreRequestPage({ params }: { params: { id: strin
   return (
     <div className="max-w-2xl">
       <h1 className="mb-4 text-[21px] font-extrabold text-ink">בקשה: {r.customerName}</h1>
-      <StoreTabs />
+      <StoreTabs isOwner={isOwner} />
       <Link href="/dashboard/store/requests" className="mb-3 flex items-center gap-1.5 text-sm font-semibold text-teal hover:underline">
         <ArrowRight className="h-4 w-4" />
         חזרה לרשימה
@@ -100,6 +101,12 @@ export default async function StoreRequestPage({ params }: { params: { id: strin
         <div className="card mb-4 text-sm">
           האפשרות שהלקוח אישר: <b>{r.options[r.chosenOptionIndex]!.label}</b>
           {r.finalPriceILS ? <> · מחיר סופי: <b className="text-teal-dark">{r.finalPriceILS.toLocaleString("he-IL")} ₪</b></> : null}
+          {r.collection ? (
+            <div className="mt-1 text-xs text-ink">
+              נגבה ע״י {r.collection.by === "branch" ? "הסניף" : "הנהלה"}: {r.collection.amountILS.toLocaleString("he-IL")} ₪
+              {r.collection.by === "branch" && typeof r.commissionILS === "number" ? <> · עמלת הסניף: <b className="text-teal-dark">{r.commissionILS.toLocaleString("he-IL")} ₪</b></> : null}
+            </div>
+          ) : null}
           {r.stockNote ? <div className="mt-1 text-xs text-muted">{r.stockNote}</div> : null}
           {r.shippingNote ? <div className="mt-1 text-xs text-muted">משלוח: {r.shippingNote}</div> : null}
         </div>
@@ -109,8 +116,22 @@ export default async function StoreRequestPage({ params }: { params: { id: strin
         <div className="card mb-4 text-sm text-ink">אין מלאי כרגע לאפשרות הזו. {r.stockNote || "נחזור אליכם עם חלופה."}</div>
       ) : null}
 
+      {isOwner && r.collection?.by === "branch" ? (
+        <form action={adjustCommissionAction.bind(null, r.id)} className="card mb-4 flex flex-wrap items-end gap-2 text-sm">
+          <div>
+            <label className="mb-1 block text-xs font-semibold text-muted">עמלת הסניף (₪) - ניתן לתיקון</label>
+            <input name="commissionILS" defaultValue={r.commissionILS ?? 0} inputMode="numeric" className="rounded-lg border border-card-border bg-[#f4f6f9] px-3 py-2 text-sm" />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-semibold text-muted">סיבה (רשות)</label>
+            <input name="commissionNote" defaultValue={r.commissionNote ?? ""} className="rounded-lg border border-card-border bg-[#f4f6f9] px-3 py-2 text-sm" />
+          </div>
+          <button type="submit" className="btn-outline text-xs">עדכון עמלה</button>
+        </form>
+      ) : null}
+
       <div className="mb-4">
-        <StageActions id={r.id} status={r.status} isOwner={isOwner} options={(r.options ?? []).map((o) => ({ label: o.label }))} finalPriceILS={r.finalPriceILS} />
+        <StageActions id={r.id} status={r.status} isOwner={isOwner} options={(r.options ?? []).map((o) => ({ label: o.label }))} finalPriceILS={r.finalPriceILS} accessoriesFinalILS={r.accessoriesFinalILS} hasAccessories={r.spec.kind === "desktop"} />
       </div>
 
       {isOwner && ["new", "in_review", "answered", "no_stock"].includes(r.status) ? (

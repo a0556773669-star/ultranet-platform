@@ -3,8 +3,9 @@
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type { StoreCpuTier, StoreDeviceKind, StoreRequestMode, StoreSpec } from "@ultranet/shared-types";
-import { USAGE_OPTIONS, applyUsageDefaults, specToText, storageLabel, suggestUpgrade, type UsageKey } from "@/lib/store-wizard";
-import { createStoreRequestAction } from "../actions";
+import { USAGE_OPTIONS, applyUsageDefaults, fillMissingFromUsage, specToText, storageLabel, suggestUpgrade, type UsageKey } from "@/lib/store-wizard";
+import { advisorTurnAction, createStoreRequestAction } from "../actions";
+import type { AdvisorResult, AdvisorTurn } from "@/lib/store-advisor";
 
 const FIELD =
   "w-full rounded-lg border border-card-border bg-[#f4f6f9] px-3 py-2 text-sm focus:border-teal focus:bg-white focus:outline-none";
@@ -41,7 +42,7 @@ function Chips<T extends string | number | boolean>({
   );
 }
 
-export function RequestWizard({ branches }: { branches: Branch[] }) {
+export function RequestWizard({ branches, aiEnabled }: { branches: Branch[]; aiEnabled: boolean }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState("");
@@ -65,8 +66,50 @@ export function RequestWizard({ branches }: { branches: Branch[] }) {
   const [generation, setGeneration] = useState("");
   const [extras, setExtras] = useState<string[]>([]);
 
+  // יועץ ה-AI (שיחה): כשמופעל, "לפי שאלות" מתחיל בשיחה; אפשר לעבור לשאלון הרגיל.
+  const [useAi, setUseAi] = useState(aiEnabled);
+  const [chat, setChat] = useState<AdvisorTurn[]>([]);
+  const [chatInput, setChatInput] = useState("");
+  const [chatBusy, setChatBusy] = useState(false);
+  const [aiResult, setAiResult] = useState<AdvisorResult | null>(null);
+  const aiMode = mode === "guided" && useAi;
+
+  async function sendChat() {
+    const text = chatInput.trim();
+    if (!text || chatBusy) return;
+    const next: AdvisorTurn[] = [...chat, { role: "user", content: text }];
+    setChat(next);
+    setChatInput("");
+    setChatBusy(true);
+    setError("");
+    try {
+      const r = await advisorTurnAction(next);
+      setChat([...next, { role: "assistant", content: r.reply }]);
+      setAiResult(r);
+      if (r.budgetILS && !budget) setBudget(String(r.budgetILS));
+      if (r.kind) setKind(r.kind);
+      if (r.usage) setUsage(r.usage);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "שגיאה ביועץ");
+    } finally {
+      setChatBusy(false);
+    }
+  }
+
   // מה שהלקוח קבע בוודאות (כל שדה שנבחר) = נעול.
   const { spec, locked } = useMemo(() => {
+    if (aiMode && aiResult) {
+      const k = aiResult.kind ?? kind;
+      const base: StoreSpec = { kind: k };
+      if (aiResult.cpu) base.cpu = aiResult.cpu;
+      if (aiResult.ramGb) base.ramGb = aiResult.ramGb;
+      if (aiResult.storageGb) base.storageGb = aiResult.storageGb;
+      if (k === "laptop" && aiResult.screenInches) base.screenInches = aiResult.screenInches;
+      if (k === "laptop" && aiResult.touch !== null) base.touch = aiResult.touch;
+      if (k === "desktop" && aiResult.extras.length) base.extras = aiResult.extras;
+      const lockedAi = aiResult.lockedFields.filter((f): f is keyof StoreSpec => f in base) as (keyof StoreSpec)[];
+      return { spec: fillMissingFromUsage(base, aiResult.usage ?? usage), locked: lockedAi };
+    }
     const base: StoreSpec = { kind };
     const lockedFields: (keyof StoreSpec)[] = [];
     if (cpu !== "unknown") { base.cpu = cpu; lockedFields.push("cpu"); }
@@ -80,11 +123,16 @@ export function RequestWizard({ branches }: { branches: Branch[] }) {
     // באשף השאלות משלימים לפי שימוש את מה שלא נקבע; ב"לפי רצון הלקוח" משאירים כפי שהוזן.
     const completed = mode === "guided" ? applyUsageDefaults(base, usage, lockedFields) : base;
     return { spec: completed, locked: lockedFields };
-  }, [kind, cpu, ram, storage, screen, touch, generation, extras, usage, mode]);
+  }, [kind, cpu, ram, storage, screen, touch, generation, extras, usage, mode, aiMode, aiResult]);
 
   const upgrade = useMemo(() => suggestUpgrade(spec, locked), [spec, locked]);
 
   const answers = useMemo(() => {
+    if (aiMode) {
+      return chat
+        .map((t, i) => (t.role === "user" ? { question: chat[i - 1]?.content ?? "פתיחה", answer: t.content } : null))
+        .filter((a): a is { question: string; answer: string } => a !== null);
+    }
     if (mode !== "guided") return [];
     const out = [
       { question: "נייד או נייח", answer: kind === "laptop" ? "נייד" : "נייח" },
@@ -98,11 +146,11 @@ export function RequestWizard({ branches }: { branches: Branch[] }) {
     out.push({ question: "זיכרון", answer: ram === "unknown" ? "לא יודע" : `${ram}GB` });
     if (kind === "desktop") out.push({ question: "ציוד נלווה", answer: extras.join(", ") || "ללא" });
     return out;
-  }, [mode, kind, usage, screen, touch, storage, ram, extras]);
+  }, [mode, aiMode, chat, kind, usage, screen, touch, storage, ram, extras]);
 
   const guidedSteps = kind === "laptop" ? ["kind", "usage", "screen", "touch", "storage", "ram", "budget", "details"] : ["kind", "usage", "storage", "ram", "extras", "budget", "details"];
   const specSteps = ["spec", "details"];
-  const steps = mode === "guided" ? guidedSteps : specSteps;
+  const steps = aiMode ? ["chat", "details"] : mode === "guided" ? guidedSteps : specSteps;
   const current = steps[step];
   const isLast = step === steps.length - 1;
 
@@ -118,7 +166,7 @@ export function RequestWizard({ branches }: { branches: Branch[] }) {
           budgetILS: budget ? Number(budget) : undefined,
           spec,
           lockedFields: locked,
-          usage: mode === "guided" ? usage : undefined,
+          usage: mode === "guided" && !aiMode ? usage : undefined,
           answers,
           notes,
         });
@@ -136,9 +184,9 @@ export function RequestWizard({ branches }: { branches: Branch[] }) {
           <div className="text-base font-bold text-ink">לפי רצון הלקוח</div>
           <p className="mt-1 text-sm text-muted">הלקוח יודע מה הוא רוצה (״i3, 8 ג׳יגה, 15.6 אינץ׳״). מה שנבחר - לא משתנה.</p>
         </button>
-        <button type="button" onClick={() => { setMode("guided"); setStep(0); }} className="card text-right transition hover:border-teal">
+        <button type="button" onClick={() => { setMode("guided"); setUseAi(aiEnabled); setStep(0); }} className="card text-right transition hover:border-teal">
           <div className="text-base font-bold text-ink">לפי שאלות</div>
-          <p className="mt-1 text-sm text-muted">הלקוח לא יודע. שואלים אותו כמה שאלות פשוטות והמערכת מתאימה מפרט.</p>
+          <p className="mt-1 text-sm text-muted">הלקוח לא יודע. {aiEnabled ? "יועץ חכם מנהל איתכם שיחה קצרה" : "שואלים אותו כמה שאלות פשוטות"} והמערכת מתאימה מפרט.</p>
         </button>
       </div>
     );
@@ -152,6 +200,35 @@ export function RequestWizard({ branches }: { branches: Branch[] }) {
           החלפת שיטה
         </button>
       </div>
+
+      {current === "chat" && (
+        <div className="flex flex-col gap-3">
+          <div className="text-sm font-bold text-ink">שיחה עם היועץ - כתבו מה הלקוח מספר</div>
+          <div className="flex max-h-80 flex-col gap-2 overflow-y-auto rounded-lg border border-card-border bg-[#f4f6f9] p-3 text-sm">
+            {!chat.length ? <div className="text-muted">למשל: ״הלקוח רוצה מחשב נייד לחידושי תורה״ או ״הוא עושה גרפיקה ולא יודע מה לקנות״.</div> : null}
+            {chat.map((t, i) => (
+              <div key={i} className={t.role === "user" ? "self-start rounded-lg bg-white px-3 py-1.5" : "self-end rounded-lg bg-teal-bg px-3 py-1.5 text-teal-dark"}>
+                {t.content}
+              </div>
+            ))}
+            {chatBusy ? <div className="text-xs text-muted">היועץ חושב...</div> : null}
+          </div>
+          <div className="flex gap-2">
+            <input
+              value={chatInput}
+              onChange={(e) => setChatInput(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); void sendChat(); } }}
+              placeholder="מה הלקוח אומר?"
+              className={FIELD}
+            />
+            <button type="button" disabled={chatBusy || !chatInput.trim()} onClick={() => void sendChat()} className="btn-primary disabled:opacity-40">שליחה</button>
+          </div>
+          {aiResult?.done ? <div className="rounded-lg bg-teal-bg px-3 py-2 text-xs font-semibold text-teal-dark">היועץ סיים. אפשר להמשיך לסיכום.</div> : null}
+          <button type="button" onClick={() => { setUseAi(false); setStep(0); }} className="w-fit text-xs font-semibold text-teal hover:underline">
+            מעבר לשאלון הרגיל (בלי AI)
+          </button>
+        </div>
+      )}
 
       {current === "kind" && (
         <div>
@@ -305,8 +382,8 @@ export function RequestWizard({ branches }: { branches: Branch[] }) {
             {pending ? "שולח..." : "שליחת הבקשה אלינו"}
           </button>
         ) : (
-          <button type="button" onClick={() => setStep((s) => s + 1)} className="btn-primary">
-            הבא
+          <button type="button" disabled={current === "chat" && !aiResult?.kind} onClick={() => setStep((s) => s + 1)} className="btn-primary disabled:opacity-40">
+            {current === "chat" ? "המשך לסיכום" : "הבא"}
           </button>
         )}
       </div>

@@ -2,6 +2,7 @@ import { ShoppingBag } from "lucide-react";
 import { currentModuleScope, requireModuleAccess } from "@/lib/perms";
 import { getAdminFirestore } from "@/lib/firebase-admin";
 import { StoreTabs } from "../store-tabs";
+import { advisorConfigured } from "@/lib/store-advisor";
 import { RequestWizard } from "./request-wizard";
 
 export default async function NewStoreRequestPage() {
@@ -20,8 +21,8 @@ export default async function NewStoreRequestPage() {
         <ShoppingBag className="h-5 w-5" />
         התאמת מחשב ללקוח
       </h1>
-      <StoreTabs />
-      <RequestWizard branches={branches} />
+      <StoreTabs isOwner={Boolean(scope?.isOwner)} />
+      <RequestWizard branches={branches} aiEnabled={advisorConfigured()} />
     </div>
   );
 }
