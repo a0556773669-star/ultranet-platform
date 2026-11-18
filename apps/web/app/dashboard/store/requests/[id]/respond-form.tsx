@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type { StoreRequestStatus } from "@ultranet/shared-types";
-import { quotedRange } from "@/lib/store-pricing";
-import { respondStoreRequestAction, setStoreRequestStatusAction } from "../../actions";
+import { accessoryRange, quotedRange } from "@/lib/store-pricing";
+import { aiMarketDraftAction, respondStoreRequestAction, setStoreRequestStatusAction } from "../../actions";
 
 const FIELD =
   "w-full rounded-lg border border-card-border bg-[#f4f6f9] px-3 py-2 text-sm focus:border-teal focus:bg-white focus:outline-none";
@@ -17,9 +17,12 @@ type Props = {
   upgradeWhy: string;
   marketPrompt: string;
   status: StoreRequestStatus;
+  aiEnabled: boolean;
+  isDesktop: boolean;
+  extras: string[];
 };
 
-function OptionBlock({ prefix, title, defaultLabel, defaultSpec, defaultWhy }: { prefix: string; title: string; defaultLabel: string; defaultSpec: string; defaultWhy?: string }) {
+function OptionBlock({ prefix, title, defaultLabel, defaultSpec, defaultWhy, presetLow }: { prefix: string; title: string; defaultLabel: string; defaultSpec: string; defaultWhy?: string; presetLow?: string }) {
   const [low, setLow] = useState("");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
@@ -32,6 +35,10 @@ function OptionBlock({ prefix, title, defaultLabel, defaultSpec, defaultWhy }: {
       setTo(String(q.to));
     }
   }
+  useEffect(() => {
+    if (presetLow) onLow(presetLow);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [presetLow]);
   return (
     <fieldset className="flex flex-col gap-2 rounded-lg border border-card-border p-3">
       <legend className="px-1 text-xs font-bold text-ink">{title}</legend>
@@ -58,11 +65,67 @@ function OptionBlock({ prefix, title, defaultLabel, defaultSpec, defaultWhy }: {
   );
 }
 
-export function RespondForm({ id, requestedSpecText, upgradeSpecText, upgradeWhy, marketPrompt, status }: Props) {
+function AccessoryBlock({ index, name }: { index: number; name: string }) {
+  const [low, setLow] = useState("");
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
+  function onLow(v: string) {
+    const clean = v.replace(/\D/g, "");
+    setLow(clean);
+    if (clean) {
+      const q = accessoryRange(name, Number(clean));
+      setFrom(String(q.from));
+      setTo(String(q.to));
+    }
+  }
+  const p = `acc${index}`;
+  return (
+    <div className="grid grid-cols-4 items-end gap-2">
+      <div>
+        <label className={LABEL}>פריט</label>
+        <input name={`${p}_name`} defaultValue={name} className={FIELD} />
+      </div>
+      <div>
+        <label className={LABEL}>שוק נמוך ₪</label>
+        <input name={`${p}_low`} value={low} onChange={(e) => onLow(e.target.value)} inputMode="numeric" className={FIELD} />
+      </div>
+      <div>
+        <label className={LABEL}>מ-₪</label>
+        <input name={`${p}_from`} value={from} onChange={(e) => setFrom(e.target.value.replace(/\D/g, ""))} inputMode="numeric" className={FIELD} />
+      </div>
+      <div>
+        <label className={LABEL}>עד ₪</label>
+        <input name={`${p}_to`} value={to} onChange={(e) => setTo(e.target.value.replace(/\D/g, ""))} inputMode="numeric" className={FIELD} />
+      </div>
+    </div>
+  );
+}
+
+export function RespondForm({ id, requestedSpecText, upgradeSpecText, upgradeWhy, marketPrompt, status, aiEnabled, isDesktop, extras }: Props) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState("");
   const [copied, setCopied] = useState(false);
+  const [aiPending, setAiPending] = useState(false);
+  const [aiLow, setAiLow] = useState("");
+  const [aiInfo, setAiInfo] = useState("");
+
+  async function runAi() {
+    setError("");
+    setAiPending(true);
+    try {
+      const d = await aiMarketDraftAction(id);
+      if (d.lowAverageILS) setAiLow(String(d.lowAverageILS));
+      setAiInfo(
+        [d.stores.map((x) => `${x.store}: ${x.priceILS.toLocaleString("he-IL")} ₪`).join(" · "), d.upgradeNote].filter(Boolean).join("\n") ||
+          "לא נמצאו מחירים אמינים - מלאו ידנית",
+      );
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "שגיאה בהכנה האוטומטית");
+    } finally {
+      setAiPending(false);
+    }
+  }
 
   async function copyPrompt() {
     try {
@@ -101,9 +164,28 @@ export function RespondForm({ id, requestedSpecText, upgradeSpecText, upgradeWhy
         <p className="mt-1 text-[11px] text-muted">מדביקים ב-claude.ai, ומזינים למטה את ממוצע השוק הנמוך. הטווח ללקוח = ממוצע + 300 עד 500 ₪ (ניתן לעריכה).</p>
       </div>
 
-      <OptionBlock prefix="opt0" title="אפשרות 1 - בדיוק מה שהלקוח ביקש" defaultLabel="לפי הבקשה" defaultSpec={requestedSpecText} />
+      {aiEnabled ? (
+        <div className="rounded-lg border border-card-border p-3">
+          <button type="button" disabled={aiPending} onClick={runAi} className="btn-outline text-xs disabled:opacity-40">
+            {aiPending ? "בודק מחירי שוק..." : "הכנה אוטומטית של מחיר שוק (טיוטה)"}
+          </button>
+          {aiInfo ? <p className="mt-2 whitespace-pre-line text-xs text-ink">{aiInfo}</p> : null}
+          <p className="mt-1 text-[11px] text-muted">טיוטה בלבד - בדקו את המספר לפני שליחה לסניף.</p>
+        </div>
+      ) : null}
+
+      <OptionBlock prefix="opt0" title="אפשרות 1 - בדיוק מה שהלקוח ביקש" defaultLabel="לפי הבקשה" defaultSpec={requestedSpecText} presetLow={aiLow} />
       <OptionBlock prefix="opt1" title="אפשרות 2 - טיפה יותר טוב (רשות)" defaultLabel={upgradeSpecText ? "שדרוג מומלץ" : ""} defaultSpec={upgradeSpecText} defaultWhy={upgradeWhy} />
       <OptionBlock prefix="opt2" title="אפשרות 3 (רשות)" defaultLabel="" defaultSpec="" />
+
+      {isDesktop ? (
+        <fieldset className="flex flex-col gap-2 rounded-lg border border-card-border p-3">
+          <legend className="px-1 text-xs font-bold text-ink">ציוד נלווה (מרווח: מסך 100-200, מקלדת ועכבר 30-80)</legend>
+          {Array.from(new Set([...extras.map((e) => (e === "מקלדת" || e === "עכבר" ? "מקלדת ועכבר" : e))])).slice(0, 4).map((name, i) => (
+            <AccessoryBlock key={name} index={i} name={name} />
+          ))}
+        </fieldset>
+      ) : null}
 
       <div>
         <label className={LABEL}>הערה לסניף (רשות)</label>

@@ -40,7 +40,7 @@ export default async function StoreRequestsPage() {
             <Link key={r.id} href={`/dashboard/store/requests/${r.id}`} className="card block transition hover:border-teal">
               <div className="flex flex-wrap items-center gap-2">
                 <span className="font-bold text-ink">{r.customerName}</span>
-                <span className={`rounded-full border px-2.5 py-0.5 text-[11px] font-bold ${STATUS_CLASS[r.status]}`}>{STATUS_LABEL[r.status]}</span>
+                <span className={`rounded-full border px-2.5 py-0.5 text-[11px] font-bold ${STATUS_CLASS[r.status] ?? STATUS_CLASS.closed}`}>{STATUS_LABEL[r.status]}</span>
                 <span className="text-xs text-muted">{r.branchName} · {new Date(r.createdAt).toLocaleString("he-IL")}</span>
               </div>
               <div className="mt-1 text-xs text-muted">{specToText(r.spec)}</div>

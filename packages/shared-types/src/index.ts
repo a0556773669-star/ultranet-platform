@@ -1035,7 +1035,20 @@ export interface ShopLead {
 export type StoreDeviceKind = "laptop" | "desktop";
 /** "spec" = הלקוח יודע מה הוא רוצה · "guided" = התאמה לפי שאלות */
 export type StoreRequestMode = "spec" | "guided";
-export type StoreRequestStatus = "new" | "in_review" | "answered" | "closed";
+/** מחזור החיים: new -> in_review -> answered (הצעה לסניף) -> stock_check (הלקוח רוצה, בדיקת מלאי)
+ *  -> stock_confirmed (מלאי אושר + מחיר סופי) -> deal_closed (הסניף סגר) -> shipped -> delivered -> closed.
+ *  `no_stock` = אין מלאי / הלקוח לא מעוניין - הבקשה חוזרת לטיפול. */
+export type StoreRequestStatus =
+  | "new"
+  | "in_review"
+  | "answered"
+  | "stock_check"
+  | "stock_confirmed"
+  | "deal_closed"
+  | "shipped"
+  | "delivered"
+  | "closed"
+  | "no_stock";
 export type StoreCpuTier = "i3" | "i5" | "i7";
 
 /** המפרט המבוקש/המותאם. שדה חסר = הלקוח לא קבע (ולכן מותר להציע בו שדרוג). */
@@ -1065,6 +1078,14 @@ export interface StoreRequestOption {
   quotedToILS?: number;
 }
 
+/** ציוד נלווה בהצעה (מסך/מקלדת ועכבר...) - מרווח נפרד מהמחשב, ראו `lib/store-pricing.ts` */
+export interface StoreAccessoryQuote {
+  name: string;
+  marketLowILS?: number;
+  quotedFromILS?: number;
+  quotedToILS?: number;
+}
+
 /** collection: n_store_requests - בקשת התאמת מחשב שמנהל סניף שלח מ-`/dashboard/store` */
 export interface StoreRequest {
   id: string;
@@ -1089,6 +1110,19 @@ export interface StoreRequest {
   responseNote?: string;
   respondedAt?: string;
   respondedBy?: string;
+  /** ציוד נלווה (נייח): מסך, מקלדת ועכבר וכד' */
+  accessories?: StoreAccessoryQuote[];
+  /** שלב ב': האפשרות (אינדקס ב-`options`) שהלקוח אישר ובגללה התבקשה בדיקת מלאי */
+  chosenOptionIndex?: number;
+  stockCheckAt?: string;
+  /** המחיר הסופי שהבעלים אישר עם המלאי - המחיר שבו הסניף סוגר את העסקה */
+  finalPriceILS?: number;
+  stockNote?: string;
+  stockConfirmedAt?: string;
+  dealClosedAt?: string;
+  shippedAt?: string;
+  shippingNote?: string;
+  deliveredAt?: string;
   updatedAt: string; // ISO
 }
 

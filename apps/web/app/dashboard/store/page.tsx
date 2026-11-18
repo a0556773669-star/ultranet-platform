@@ -3,6 +3,7 @@ import { ShoppingBag, BookOpen, ArrowLeft } from "lucide-react";
 import { isOwnerSession, requireModuleAccess } from "@/lib/perms";
 import { listVisibleProcedures } from "../duxus/actions";
 import { StoreTabs } from "./store-tabs";
+import { SeedProceduresButton } from "./seed-button";
 
 export default async function StoreHomePage() {
   const session = await requireModuleAccess("store");
@@ -69,6 +70,7 @@ export default async function StoreHomePage() {
                 להוספה: <Link href="/dashboard/duxus/procedures/new" className="font-semibold text-teal hover:underline">נוהל חדש</Link>, ובשדה
                 ״מי רשאי לצפות״ בוחרים <b>״סניפים עם חנות סניפים״</b> (סטטוס ״בתוקף״). נהלי התקנה והדרכות נכנסים לאותו מקום
                 (קטגוריה לדוגמה: ״הדרכת התקנה״).
+                <SeedProceduresButton />
               </>
             ) : null}
           </p>

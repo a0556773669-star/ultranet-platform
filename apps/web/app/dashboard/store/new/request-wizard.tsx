@@ -206,7 +206,7 @@ export function RequestWizard({ branches }: { branches: Branch[] }) {
           )}
           {kind === "desktop" && <ExtrasPicker extras={extras} setExtras={setExtras} />}
           <div>
-            <label className={LABEL}>דור מעבד מינימלי (רשות - למשל 12; ריק = הדורות הרגילים)</label>
+            <label className={LABEL}>דור מעבד מינימלי (רשות - למשל 12; ריק = דור 12 ומעלה)</label>
             <input value={generation} onChange={(e) => setGeneration(e.target.value.replace(/\D/g, ""))} inputMode="numeric" className={FIELD} placeholder="12" />
           </div>
           <div>
