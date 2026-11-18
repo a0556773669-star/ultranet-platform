@@ -55,6 +55,12 @@ export function applyUsageDefaults(spec: StoreSpec, usage: UsageKey, locked: (ke
   return out;
 }
 
+/** משלים רק שדות חסרים לפי שימוש (בשונה מ-`applyUsageDefaults` שדורס כל שדה לא נעול) - לתשובות היועץ. */
+export function fillMissingFromUsage(spec: StoreSpec, usage: UsageKey): StoreSpec {
+  const d = USAGE_DEFAULTS[usage];
+  return { ...spec, cpu: spec.cpu ?? d.cpu, ramGb: spec.ramGb ?? d.ramGb, storageGb: spec.storageGb ?? d.storageGb };
+}
+
 export type UpgradeSuggestion = { spec: StoreSpec; reasons: string[] };
 
 const WHY: Record<string, string> = {

@@ -13,6 +13,7 @@ import type {
   LaptopSale,
   LaptopCostRate,
   LaptopRepair,
+  StoreRequest,
 } from "@ultranet/shared-types";
 import {
   ownerExpenseBurden,
@@ -30,6 +31,7 @@ import {
 } from "./revenue-shares";
 import { LAPTOP_COST_RATES_COLLECTION, laptopCostLines } from "./laptop-costs";
 import { LAPTOP_REPAIRS_COLLECTION } from "./laptop-repairs";
+import { dealSettlement } from "./store-commission";
 import { lastDayOfMonth, nextMonth, previousMonth } from "./fixed-expense-revision";
 
 export const LAPTOP_SALES_COLLECTION = "n_laptop_sales";
@@ -285,6 +287,10 @@ export interface BranchFinancials {
   /** מכירות מחשבים בחודש — 100% שלי, וכלולות ב-`settlementNetToOwner`. */
   saleIncomeThisMonth: number;
   saleIncomeToDate: number;
+  /** "חנות סניפים": מה שהסניף גבה החודש מעסקאות חנות (נכנס במלואו ל-`settlementNetToOwner`). */
+  storeCollectedThisMonth: number;
+  /** העמלה שהסניף צבר החודש על עסקאות החנות - מופחתת מ-`settlementNetToOwner`. */
+  storeCommissionThisMonth: number;
   /** סך עלות ההוספה של מחשבים שנזקפה לסניף עד החודש המבוקש. */
   laptopCostToDate: number;
 }
@@ -308,6 +314,9 @@ export interface BranchAccountingRawData {
   multiBranchExpenses: MultiBranchExpense[];
   /** מכירות מחשבים לפי סניף (`n_laptop_sales`) — 100% לבעלים, ראו `LaptopSale`. */
   salesByBranch: Map<string, LaptopSale[]>;
+  /** עסקאות "חנות סניפים" שהסניף גבה בהן את הכסף (`n_store_requests`, `collection.by === "branch"`):
+   *  הסכום שגבה נכנס להתחשבנות החודשית, והעמלה שלו מופחתת ממנה. ראו `lib/store-commission.ts`. */
+  storeDealsByBranch: Map<string, StoreRequest[]>;
   /** גרסאות עלות ההוספה של מחשב (`n_laptop_cost_rates`). */
   laptopCostRates: LaptopCostRate[];
   /** תאריך ההשכרה הראשונה של כל מחשב — נפילה לעלות של מחשב ותיק בלי `addedDate`. */
@@ -332,6 +341,7 @@ export async function loadBranchAccountingRawData(): Promise<BranchAccountingRaw
     salesSnap,
     costRatesSnap,
     repairsSnap,
+    storeDealsSnap,
   ] = await Promise.all([
     db.collection("n_branches").get(),
     db.collection("n_fixed_expenses").get(),
@@ -346,6 +356,7 @@ export async function loadBranchAccountingRawData(): Promise<BranchAccountingRaw
     db.collection(LAPTOP_SALES_COLLECTION).get(),
     db.collection(LAPTOP_COST_RATES_COLLECTION).get(),
     db.collection(LAPTOP_REPAIRS_COLLECTION).get(),
+    db.collection("n_store_requests").where("collection.by", "==", "branch").get(),
   ]);
 
   const branches = branchesSnap.docs.map((d) => ({ ...(d.data() as Omit<Branch, "id">), id: d.id }) as Branch);
@@ -487,6 +498,13 @@ export async function loadBranchAccountingRawData(): Promise<BranchAccountingRaw
     arr.push(sale);
     salesByBranch.set(sale.branchId, arr);
   }
+  const storeDealsByBranch = new Map<string, StoreRequest[]>();
+  for (const d of storeDealsSnap.docs) {
+    const deal = { ...(d.data() as Omit<StoreRequest, "id">), id: d.id } as StoreRequest;
+    const arr = storeDealsByBranch.get(deal.branchId) ?? [];
+    arr.push(deal);
+    storeDealsByBranch.set(deal.branchId, arr);
+  }
   const laptopCostRates = costRatesSnap.docs.map(
     (d) => ({ ...(d.data() as Omit<LaptopCostRate, "id">), id: d.id }) as LaptopCostRate,
   );
@@ -513,6 +531,7 @@ export async function loadBranchAccountingRawData(): Promise<BranchAccountingRaw
     multiBranchByBranch,
     multiBranchExpenses,
     salesByBranch,
+    storeDealsByBranch,
     laptopCostRates,
     firstRentalByLaptop,
   };
@@ -544,6 +563,13 @@ function saleLines(branch: Branch, raw: BranchAccountingRawData): { month: strin
   return (raw.salesByBranch.get(branch.id) ?? []).map((s) => ({ month: s.month, amount: s.price || 0 }));
 }
 
+/** עסקאות חנות סניפים שהסניף גבה, לפי חודש. */
+function storeDealLines(branch: Branch, raw: BranchAccountingRawData): { month: string; collected: number; commission: number }[] {
+  return (raw.storeDealsByBranch.get(branch.id) ?? [])
+    .map(dealSettlement)
+    .filter((d) => d.month && (d.collected > 0 || d.commission > 0));
+}
+
 /** ownerPct for a branch's own split (not counting parent-branch cuts). */
 function branchOwnerPct(branch: Branch): number {
   if (!branch.branchType) return 100;
@@ -569,6 +595,9 @@ export function computeBranchFinancials(branch: Branch, raw: BranchAccountingRaw
   const sales = saleLines(branch, raw).filter((l) => l.month <= month);
   const saleIncomeThisMonth = sales.filter((l) => l.month === month).reduce((sum, l) => sum + l.amount, 0);
   const saleIncomeToDate = sales.reduce((sum, l) => sum + l.amount, 0);
+  const storeDeals = storeDealLines(branch, raw).filter((l) => l.month === month);
+  const storeCollectedThisMonth = storeDeals.reduce((sum, l) => sum + l.collected, 0);
+  const storeCommissionThisMonth = storeDeals.reduce((sum, l) => sum + l.commission, 0);
 
   const ownerPct = branchOwnerPct(branch);
   const partnerPct = 100 - ownerPct;
@@ -679,13 +708,16 @@ export function computeBranchFinancials(branch: Branch, raw: BranchAccountingRaw
     incomeToDate,
     expenseToDate,
     balanceToDate: incomeToDate - expenseToDate,
-    settlementNetToOwner: settlementIncome + settlementExpense + saleIncomeThisMonth,
+    settlementNetToOwner:
+      settlementIncome + settlementExpense + saleIncomeThisMonth + storeCollectedThisMonth - storeCommissionThisMonth,
     ownerNetProfitThisMonth,
     ownerOperatingProfitThisMonth,
     ownerIncomeThisMonth: ownerIncomeThisMonth + saleIncomeThisMonth - revenueShareThisMonth,
     ownerExpenseThisMonth,
     saleIncomeThisMonth,
     saleIncomeToDate,
+    storeCollectedThisMonth,
+    storeCommissionThisMonth,
     laptopCostToDate: expenseLines.filter((e) => e.capital).reduce((sum, e) => sum + e.amount, 0),
     ownerInvestedToDate: expenseLines.reduce((sum, e) => sum + e.ownerShare, 0),
     ownerEarnedToDate:

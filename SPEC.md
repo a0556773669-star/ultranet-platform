@@ -285,7 +285,9 @@ pnpm dev        # turbo run dev — מריץ web + api
 | `n_shop_catalog` | `ShopComputerConfig` | תצורות מחשב אמיתיות למכירה בחנות ה-AI (`/shop`) - שם, דרגה (`minimal`/`recommended`/`extreme`), תחומי שימוש (`useCases`), מפרט, מחיר; ממולא ידנית ע"י הבעלים ב-`/dashboard/shop/catalog` |
 | `n_shop_addons` | `ShopAddon` | ציוד נלווה שניתן להוסיף להצעת המחיר בחנות ה-AI (תיק/עכבר/מקלדת/דיסק און קי/אחר) |
 | `n_shop_leads` | `ShopLead` | פניות שהתקבלו מהצ'אטבוט הציבורי - תיאור, תשובות, ההמלצות שהוצגו, תצורה/ציוד נבחרים, פרטי קשר, סטטוס |
-| `n_store_requests` | `StoreRequest` | **(שלב ב': `status` הרחב, `chosenOptionIndex`, `finalPriceILS`, `stockNote`, `shippingNote`, חותמות זמן לכל שלב, ו-`accessories` לציוד נלווה בנייח)** **בקשת התאמת מחשב** מ"חנות סניפים" (`/dashboard/store`): `branchId`/`branchName`, `createdByEmail`/`createdByName`, `mode` (`spec` = לפי רצון הלקוח, `guided` = לפי שאלות), `customerName`/`customerPhone`, `budgetILS` (רשות), `spec` (`StoreSpec`: `kind` נייד/נייח, `cpu` i3/i5/i7, `ramGb`, `storageGb`, `screenInches`, `touch`, `minGeneration`, `extras` לנייח), `lockedFields` (מה שהלקוח קבע בוודאות — **לעולם לא משנים ולא מציעים בו שדרוג**), `answers`, `notes`, `status` (`new`/`in_review`/`answered`/`closed`), ותשובת הבעלים: `options` (עד 3 `StoreRequestOption`: `kind` `as_requested`/`upgrade`, `specText`, `whyBetter` — ההסבר למנהל הסניף, `marketLowILS`, `quotedFromILS`/`quotedToILS`), `responseNote`, `respondedAt`/`respondedBy`. נכתב רק מ-`app/dashboard/store/actions.ts`; לא נכנס לשום חישוב כספי |
+| `n_store_requests` | `StoreRequest` | **(שלב ב': `status` הרחב, `chosenOptionIndex`, `finalPriceILS`, `stockNote`, `shippingNote`, חותמות זמן לכל שלב, ו-`accessories` לציוד נלווה בנייח)** **בקשת התאמת מחשב** מ"חנות סניפים" (`/dashboard/store`): `branchId`/`branchName`, `createdByEmail`/`createdByName`, `mode` (`spec` = לפי רצון הלקוח, `guided` = לפי שאלות), `customerName`/`customerPhone`, `budgetILS` (רשות), `spec` (`StoreSpec`: `kind` נייד/נייח, `cpu` i3/i5/i7, `ramGb`, `storageGb`, `screenInches`, `touch`, `minGeneration`, `extras` לנייח), `lockedFields` (מה שהלקוח קבע בוודאות — **לעולם לא משנים ולא מציעים בו שדרוג**), `answers`, `notes`, `status` (`new`/`in_review`/`answered`/`closed`), ותשובת הבעלים: `options` (עד 3 `StoreRequestOption`: `kind` `as_requested`/`upgrade`, `specText`, `whyBetter` — ההסבר למנהל הסניף, `marketLowILS`, `quotedFromILS`/`quotedToILS`), `responseNote`, `respondedAt`/`respondedBy`, **גבייה ועמלה (2026-11):** `accessoriesFinalILS` (מחיר סופי לציוד נלווה), `collection` (`StoreCollection`: `by` `branch`/`owner`, `method` מזומן/אשראי/העברה — **אף פעם לא פרטי כרטיס**, `amountILS`, `at`, `month` YYYY-MM לפי שעון ישראל), `commissionILS`/`commissionNote`. נכתב רק מ-`app/dashboard/store/actions.ts`; לא נכנס לשום חישוב כספי |
+| `n_store_commission_rules` | `StoreCommissionRule` | **כללי עמלת סניף לכל קטגוריית מוצר** — המזהה הוא הקטגוריה (`laptop`/`desktop`/`accessory`), `kind` (`fixed` = ₪ קבוע לעסקה / `percent` = אחוז מהמחיר הסופי) ו-`value`. מסמך חסר = אין עמלה לקטגוריה. נערך ב-`/dashboard/store/commissions` (בעלים). העמלה נקבעת בסגירת העסקה ונשמרת על הבקשה — שינוי כלל לא משנה עסקאות שנסגרו |
+| `n_store_glossary` | `StoreGlossaryTerm` | **מושגים ליועץ ה-AI** (`/dashboard/store/glossary`, בעלים): `term` + `guidance` חופשית (מה זה אומר, מה לשאול, מה להסביר) + `active`. חסר לגמרי = `DEFAULT_GLOSSARY` בקוד (`lib/store-glossary.ts`) |
 | `n_branch_transfers` | `BranchTransfer` | התחשבנות חודשית שותף↔בעלים; `transferredAmount` (רשות) - הסכום שבפועל נרשם כהועבר לאותו חודש, באותה מוסכמת סימן כמו `netToOwner` (חיובי = לבעלים, שלילי = מהבעלים) - מאפשר לרשום העברה חלקית/מאוחרת שלא תואמת בדיוק את הסכום המחושב. רשומות ישנות בלי השדה הזה (רק `transferred: true`) מטופלות כמסולקות במלואן, ראו `lib/branch-ledger.ts`. `linkedAhIncomeId` (רשות) - מזהה רשומת `n_ah_income` שנוצרה/מתעדכנת אוטומטית כש-`transferredAmount` חיובי, ראו `lib/branch-income-ledger.ts` בסעיף 9. `receiptIssued` (רשות) - סימון עצמאי "הוצאנו קבלה", לא קשור לסכום |
 | `n_approved_emails` | — | מיילים מאושרים לכניסת קוד |
 | `n_login_codes` | — | קודי כניסה חד-פעמיים עם תפוגה |
@@ -2173,6 +2175,21 @@ Firestore Emulator עם נתוני הדגמה, כתוביות בעברית צר�
   בדיקת מלאי וסגירה, משלוח וקבלה, אחריות ואנטיווירוס, תוכנות ורישיונות). נטענים בכפתור "טעינת נהלי ברירת מחדל"
   (`seedStoreProceduresAction`, מזהים קבועים, לא דורס נוהל קיים). אחריות: מול היצרן בלבד, ללא כיסוי שבר או וירוסים.
   תוכנות: רק תוכנות שמותר להתקין חוקית; רישיונות נרכשים ע"י הלקוח.
+- **גבייה ועמלות (סגירת עסקה):** בסגירה הסניף בוחר **מי גובה** — הסניף (מזומן/אשראי/העברה) או הנהלה ישירות.
+  `closeDealAction` שומר `collection` ומחשב `commissionILS` לפי `n_store_commission_rules` (`computeDealCommission`,
+  `lib/store-commission.ts`: עמלת קטגוריית המחשב על `finalPriceILS` + עמלת `accessory` על `accessoriesFinalILS`).
+  **עמלה רק כשהסניף גבה.** הבעלים רשאי לתקן עמלה לעסקה בודדת (`adjustCommissionAction`).
+  **השפעה על ההתחשבנות:** `computeBranchFinancials` (`lib/branch-accounting-data.ts`) מוסיף ל-`settlementNetToOwner`
+  את מה שהסניף גבה (`storeCollectedThisMonth`) ומפחית את העמלה (`storeCommissionThisMonth`) — כלומר הסניף מעביר
+  לבעלים **נגבה פחות עמלה**, בדיוק כמו מכירת מחשב (`n_laptop_sales`) אבל עם הניכוי. החודש הוא חודש הסגירה. הנתונים
+  נטענים ב-`loadBranchAccountingRawData` (`storeDealsByBranch`, שאילתה על `collection.by == "branch"`), נכנסים לספר
+  (`buildBranchLedger`) ולדו"ח החודשי (שורת "חנות סניפים החודש"). זה חל על סניפי השכרות (שם קיים ספר ההעברות);
+  `/dashboard/store/commissions` מציג לכל סוגי הסניפים סיכום חודשי (נגבה / עמלה / מועבר) ובו כללי העמלה.
+- **יועץ AI (שיחה):** כשמוגדר `ANTHROPIC_API_KEY`, "לפי שאלות" נפתח כשיחה (`advisorTurnAction`, `lib/store-advisor.ts`):
+  **Claude Haiku 5.5, מאמץ נמוך, פלט מובנה (JSON schema)**, עד 10 תורות, בלי חיפוש ברשת. הוא מבין כוונה לפי
+  המושגים שהבעלים הגדיר (`n_store_glossary`), שואל שאלות המשך (איכות מסך בגרפיקה, תקציב וכו'), ומחזיר מפרט מובנה
+  עם `lockedFields` (רק מה שהלקוח אמר במפורש ננעל). בלי מפתח — השאלון הרגיל (דטרמיניסטי, ללא עלות) ממשיך לעבוד, וגם
+  אפשר לעבור אליו מתוך השיחה. היועץ אינו מציין מחירים ואינו מבטיח מלאי.
 - **עתידי:** מלאי שנרכש (`n_store_inventory`) עם מחירים קבועים מראש, שיחליף את חישוב השוק ואת האישור הידני.
 
 כל הדף הציבורי משתמש באותו `logoUrl` מ-`n_label_settings/default` שמוצג גם בדשבורד (עם
@@ -2519,6 +2536,10 @@ app שרץ בדפדפן ניתן ל"התקנה" כאפליקציה עם אייק
 | `apps/web/lib/shop-recommender.ts` | מנוע ההמלצות של חנות ה-AI - זיהוי תחום שימוש מטקסט חופשי, שאלות המשך, ניקוד רמת עומס, מפרט גנרי פר-תחום, התאמה לקטלוג האמיתי (`n_shop_catalog`) |
 | `apps/web/lib/shop-quote.ts` | בניית מסמך ה-HTML העצמאי של הצעת המחיר שהלקוח מוריד בסוף השיחה ב-`/shop` |
 | `apps/web/lib/store-wizard.ts` | מנוע ההתאמה של חנות הסניפים: שימושים, ברירות מחדל, `suggestUpgrade`, `sanitizeSpec`, `specToText`, ובניית הנחיית סקירת השוק |
+| `apps/web/lib/store-advisor.ts` | יועץ השיחה של חנות הסניפים (Haiku 5.5, פלט מובנה, מגבלת תורות) |
+| `apps/web/lib/store-glossary.ts` | מושגי היועץ: ברירות מחדל וטעינה מ-`n_store_glossary` |
+| `apps/web/lib/store-commission.ts` | חישוב עמלת סניף וקריאת התחשבנות עסקה |
+| `apps/web/lib/store-commission-data.ts` | טעינת כללי העמלה והחודש הנוכחי לפי שעון ישראל |
 | `apps/web/lib/store-ai.ts` | הכנה אוטומטית של מחיר שוק (Haiku 5.5 + חיפוש ברשת), בעלים בלבד, דורש `ANTHROPIC_API_KEY` |
 | `apps/web/lib/store-default-procedures.ts` | נהלי ברירת המחדל של חנות הסניפים |
 | `apps/web/lib/store-pricing.ts` | מרווח המחיר (300-500 ₪) וחישוב טווח ההצעה מממוצע שוק נמוך |

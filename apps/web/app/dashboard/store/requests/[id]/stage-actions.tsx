@@ -23,10 +23,14 @@ type Props = {
   isOwner: boolean;
   options: { label: string }[];
   finalPriceILS?: number;
+  accessoriesFinalILS?: number;
+  hasAccessories: boolean;
 };
 
 /** הפעולה הבאה בשרשרת (מהצעה לעסקה) - לסניף או לבעלים, לפי הסטטוס. */
-export function StageActions({ id, status, isOwner, options, finalPriceILS }: Props) {
+export function StageActions({ id, status, isOwner, options, finalPriceILS, accessoriesFinalILS, hasAccessories }: Props) {
+  const [collectedBy, setCollectedBy] = useState<"branch" | "owner">("branch");
+  const [method, setMethod] = useState<"cash" | "card" | "transfer">("cash");
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState("");
@@ -70,7 +74,8 @@ export function StageActions({ id, status, isOwner, options, finalPriceILS }: Pr
         action={(fd) => run(() => confirmStockAction(id, fd))}
       >
         <h2 className="text-base font-bold text-ink">בדיקת מלאי (הנהלה)</h2>
-        <input name="finalPriceILS" inputMode="numeric" placeholder="מחיר סופי ₪" className={FIELD} />
+        <input name="finalPriceILS" inputMode="numeric" placeholder="מחיר סופי למחשב ₪" className={FIELD} />
+        {hasAccessories ? <input name="accessoriesFinalILS" inputMode="numeric" placeholder="מחיר סופי לציוד נלווה ₪ (אם יש)" className={FIELD} /> : null}
         <input name="stockNote" placeholder="הערה לסניף / סיבה אם אין מלאי (רשות)" className={FIELD} />
         <div className="flex gap-2">
           <button type="submit" disabled={pending} className="btn-primary disabled:opacity-40">אישור מלאי + מחיר סופי</button>
@@ -85,13 +90,35 @@ export function StageActions({ id, status, isOwner, options, finalPriceILS }: Pr
 
   if (status === "stock_confirmed") {
     if (isOwner) return <div className="card text-sm text-muted">ממתינים שהסניף יסגור את העסקה עם הלקוח.</div>;
+    const total = (finalPriceILS ?? 0) + (accessoriesFinalILS ?? 0);
     return (
-      <div className="card flex flex-col gap-2">
-        <h2 className="text-base font-bold text-ink">יש מלאי</h2>
-        <p className="text-sm text-ink">המחיר הסופי ללקוח: <b>{finalPriceILS?.toLocaleString("he-IL")} ₪</b>. סוגרים עם הלקוח במחיר הזה.</p>
-        <p className="text-xs text-muted">אחרי הסגירה המחשב יוצא אליכם במשלוח, ויגיע לסניף בעוד כמה ימים. מומלץ להגיד ללקוח שזה ייקח כמה ימים.</p>
-        <button type="button" disabled={pending} onClick={() => run(() => closeDealAction(id))} className="btn-primary disabled:opacity-40">
-          סגרתי את העסקה עם הלקוח
+      <div className="card flex flex-col gap-3">
+        <h2 className="text-base font-bold text-ink">יש מלאי - סגירת עסקה</h2>
+        <p className="text-sm text-ink">
+          המחיר הסופי ללקוח: <b>{total.toLocaleString("he-IL")} ₪</b>
+          {accessoriesFinalILS ? <span className="text-xs text-muted"> (כולל ציוד נלווה {accessoriesFinalILS.toLocaleString("he-IL")} ₪)</span> : null}. סוגרים עם הלקוח במחיר הזה.
+        </p>
+        <div>
+          <div className="mb-1 text-xs font-semibold text-muted">מי גובה את הכסף?</div>
+          <div className="flex flex-wrap gap-2">
+            <button type="button" onClick={() => setCollectedBy("branch")} className={collectedBy === "branch" ? "pill-active" : "pill-inactive"}>הסניף גובה (זכאי לעמלה)</button>
+            <button type="button" onClick={() => setCollectedBy("owner")} className={collectedBy === "owner" ? "pill-active" : "pill-inactive"}>הנהלה גובה ישירות</button>
+          </div>
+        </div>
+        {collectedBy === "branch" ? (
+          <div>
+            <div className="mb-1 text-xs font-semibold text-muted">באיזה אמצעי נגבה?</div>
+            <div className="flex flex-wrap gap-2">
+              {([["cash", "מזומן"], ["card", "אשראי"], ["transfer", "העברה"]] as const).map(([k, label]) => (
+                <button key={k} type="button" onClick={() => setMethod(k)} className={method === k ? "pill-active" : "pill-inactive"}>{label}</button>
+              ))}
+            </div>
+            <p className="mt-2 text-xs text-muted">הסכום שגבתם נכנס להתחשבנות החודשית מול הנהלה, והעמלה שלכם על העסקה מופחתת ממנו אוטומטית.</p>
+          </div>
+        ) : null}
+        <p className="text-xs text-muted">אחרי הסגירה המחשב יוצא אליכם במשלוח ויגיע לסניף בעוד כמה ימים. מומלץ להגיד ללקוח שזה ייקח כמה ימים.</p>
+        <button type="button" disabled={pending} onClick={() => run(() => closeDealAction(id, { collectedBy, method: collectedBy === "branch" ? method : undefined }))} className="btn-primary w-fit disabled:opacity-40">
+          סגרתי את העסקה
         </button>
         {err}
       </div>

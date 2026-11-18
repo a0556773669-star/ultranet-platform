@@ -23,7 +23,7 @@ export default async function StoreHomePage() {
         <ShoppingBag className="h-5 w-5" />
         חנות סניפים
       </h1>
-      <StoreTabs />
+      <StoreTabs isOwner={isOwner} />
 
       <div className="card mb-4">
         <h2 className="mb-2 text-base font-bold text-ink">איך זה עובד (שלב א׳)</h2>

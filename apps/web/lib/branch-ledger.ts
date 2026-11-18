@@ -52,6 +52,9 @@ function earliestActivityMonth(branch: Branch, raw: BranchAccountingRawData): st
   for (const sale of raw.salesByBranch.get(branch.id) ?? []) {
     if (sale.month) months.push(sale.month);
   }
+  for (const deal of raw.storeDealsByBranch.get(branch.id) ?? []) {
+    if (deal.collection?.month) months.push(deal.collection.month);
+  }
   if (months.length === 0) return null;
   return months.sort()[0] ?? null;
 }

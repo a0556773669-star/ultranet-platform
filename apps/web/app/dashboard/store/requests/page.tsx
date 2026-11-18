@@ -31,7 +31,7 @@ export default async function StoreRequestsPage() {
         <ShoppingBag className="h-5 w-5" />
         {scope?.isOwner ? "בקשות מהסניפים" : "הבקשות שלי"}
       </h1>
-      <StoreTabs />
+      <StoreTabs isOwner={Boolean(scope?.isOwner)} />
       {!requests.length ? (
         <div className="card text-sm text-muted">עדיין אין בקשות.</div>
       ) : (
