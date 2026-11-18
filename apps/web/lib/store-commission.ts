@@ -8,26 +8,49 @@ import type { StoreCommissionCategory, StoreCommissionRule, StoreRequest } from 
  * כלל ההתחשבנות (ראו `lib/branch-accounting-data.ts`): סניף שגבה את הכסף חייב לבעלים את הסכום שגבה,
  * פחות העמלה. עסקה שהבעלים גבה בעצמו לא מזכה בעמלה.
  */
-export function commissionFor(rule: Pick<StoreCommissionRule, "kind" | "value"> | undefined, priceILS: number): number {
-  if (!rule || !(rule.value > 0) || !(priceILS > 0)) return 0;
-  return rule.kind === "percent" ? Math.round((priceILS * rule.value) / 100) : Math.round(rule.value);
+/**
+ * ברירות המחדל של העסקה (מהבעלים): 150 ₪ לכל מחשב, נייד או נייח, ו-20 ₪ לכל אביזר נוסף
+ * (סטיק, מקלדת, עכבר, מסך). הן חלות על כל קטגוריה שאין לה כלל שמור ב-`n_store_commission_rules`;
+ * כלל עם ערך 0 = בכוונה בלי עמלה. ובכל עסקה בנפרד הבעלים רשאי לעדכן (`commissionOverrideILS`).
+ */
+export const DEFAULT_COMMISSION_RULES: Record<StoreCommissionCategory, StoreCommissionRule> = {
+  laptop: { id: "laptop", kind: "fixed", value: 150 },
+  desktop: { id: "desktop", kind: "fixed", value: 150 },
+  accessory: { id: "accessory", kind: "fixed", value: 20 },
+};
+
+/** כמה אביזרים בעסקה. "מקלדת ועכבר" שמתומחרים יחד נספרים כשניים. */
+export function accessoryCount(names: string[] | undefined): number {
+  return (names ?? []).reduce((n, name) => n + (name.includes("מקלדת") && name.includes("עכבר") ? 2 : 1), 0);
+}
+
+export function commissionFor(
+  rule: Pick<StoreCommissionRule, "kind" | "value"> | undefined,
+  priceILS: number,
+  units = 1,
+): number {
+  if (!rule || !(rule.value > 0)) return 0;
+  if (rule.kind === "percent") return priceILS > 0 ? Math.round((priceILS * rule.value) / 100) : 0;
+  return Math.round(rule.value * units);
 }
 
 export function computeDealCommission(
-  request: Pick<StoreRequest, "spec" | "finalPriceILS" | "accessoriesFinalILS">,
+  request: Pick<StoreRequest, "spec" | "finalPriceILS" | "accessoriesFinalILS" | "accessories" | "commissionOverrideILS">,
   rules: Map<StoreCommissionCategory, StoreCommissionRule>,
 ): number {
+  if (typeof request.commissionOverrideILS === "number") return request.commissionOverrideILS;
   const category: StoreCommissionCategory = request.spec.kind === "desktop" ? "desktop" : "laptop";
+  const rule = (c: StoreCommissionCategory) => rules.get(c) ?? DEFAULT_COMMISSION_RULES[c];
   return (
-    commissionFor(rules.get(category), request.finalPriceILS ?? 0) +
-    commissionFor(rules.get("accessory"), request.accessoriesFinalILS ?? 0)
+    commissionFor(rule(category), request.finalPriceILS ?? 0) +
+    commissionFor(rule("accessory"), request.accessoriesFinalILS ?? 0, accessoryCount(request.accessories?.map((a) => a.name)))
   );
 }
 
 export const COMMISSION_CATEGORY_LABEL: Record<StoreCommissionCategory, string> = {
   laptop: "מחשב נייד",
   desktop: "מחשב נייח",
-  accessory: "ציוד נלווה (מסך, מקלדת ועכבר...)",
+  accessory: "אביזר נוסף (סטיק, מקלדת, עכבר, מסך) - לכל אביזר",
 };
 
 /** סך מה שהסניף גבה ומה שהוא צבר בעמלות, לפי חודש - לקריאה מהנה"ח ומסך העמלות. */

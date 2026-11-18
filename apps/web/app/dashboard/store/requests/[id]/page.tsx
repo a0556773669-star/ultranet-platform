@@ -11,6 +11,8 @@ import { adjustCommissionAction } from "../../actions";
 import { RespondForm } from "./respond-form";
 import { StageActions } from "./stage-actions";
 import { storeAiConfigured } from "@/lib/store-ai";
+import { computeDealCommission } from "@/lib/store-commission";
+import { loadCommissionRules } from "@/lib/store-commission-data";
 
 export const dynamic = "force-dynamic";
 
@@ -24,6 +26,8 @@ export default async function StoreRequestPage({ params }: { params: { id: strin
 
   const isOwner = Boolean(scope?.isOwner);
   const upgrade = suggestUpgrade(r.spec, r.lockedFields);
+  // העמלה הצפויה: מה שנקבע להזמנה הזו, ואחרת לפי הכללים (ברירת מחדל 150 למחשב ו-20 לאביזר)
+  const expectedCommission = computeDealCommission(r, await loadCommissionRules());
 
   return (
     <div className="max-w-2xl">
@@ -131,7 +135,7 @@ export default async function StoreRequestPage({ params }: { params: { id: strin
       ) : null}
 
       <div className="mb-4">
-        <StageActions id={r.id} status={r.status} isOwner={isOwner} options={(r.options ?? []).map((o) => ({ label: o.label }))} finalPriceILS={r.finalPriceILS} accessoriesFinalILS={r.accessoriesFinalILS} hasAccessories={r.spec.kind === "desktop"} />
+        <StageActions id={r.id} status={r.status} isOwner={isOwner} options={(r.options ?? []).map((o) => ({ label: o.label }))} finalPriceILS={r.finalPriceILS} accessoriesFinalILS={r.accessoriesFinalILS} hasAccessories={r.spec.kind === "desktop" || (r.spec.extras?.length ?? 0) > 0 || (r.accessories?.length ?? 0) > 0} expectedCommissionILS={expectedCommission} commissionOverridden={typeof r.commissionOverrideILS === "number"} />
       </div>
 
       {isOwner && ["new", "in_review", "answered", "no_stock"].includes(r.status) ? (

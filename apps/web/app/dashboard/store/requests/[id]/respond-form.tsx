@@ -178,9 +178,9 @@ export function RespondForm({ id, requestedSpecText, upgradeSpecText, upgradeWhy
       <OptionBlock prefix="opt1" title="אפשרות 2 - טיפה יותר טוב (רשות)" defaultLabel={upgradeSpecText ? "שדרוג מומלץ" : ""} defaultSpec={upgradeSpecText} defaultWhy={upgradeWhy} />
       <OptionBlock prefix="opt2" title="אפשרות 3 (רשות)" defaultLabel="" defaultSpec="" />
 
-      {isDesktop ? (
+      {isDesktop || extras.length > 0 ? (
         <fieldset className="flex flex-col gap-2 rounded-lg border border-card-border p-3">
-          <legend className="px-1 text-xs font-bold text-ink">ציוד נלווה (מרווח: מסך 100-200, מקלדת ועכבר 30-80)</legend>
+          <legend className="px-1 text-xs font-bold text-ink">ציוד נלווה (מרווח: מסך 100-200, מקלדת ועכבר 30-80, סטיק 30-80)</legend>
           {Array.from(new Set([...extras.map((e) => (e === "מקלדת" || e === "עכבר" ? "מקלדת ועכבר" : e))])).slice(0, 4).map((name, i) => (
             <AccessoryBlock key={name} index={i} name={name} />
           ))}

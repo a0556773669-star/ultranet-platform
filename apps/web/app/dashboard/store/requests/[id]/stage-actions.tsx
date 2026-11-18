@@ -25,10 +25,13 @@ type Props = {
   finalPriceILS?: number;
   accessoriesFinalILS?: number;
   hasAccessories: boolean;
+  /** העמלה הצפויה לסניף על ההזמנה (ברירת מחדל לפי הכללים, או מה שהבעלים קבע) */
+  expectedCommissionILS: number;
+  commissionOverridden: boolean;
 };
 
 /** הפעולה הבאה בשרשרת (מהצעה לעסקה) - לסניף או לבעלים, לפי הסטטוס. */
-export function StageActions({ id, status, isOwner, options, finalPriceILS, accessoriesFinalILS, hasAccessories }: Props) {
+export function StageActions({ id, status, isOwner, options, finalPriceILS, accessoriesFinalILS, hasAccessories, expectedCommissionILS, commissionOverridden }: Props) {
   const [collectedBy, setCollectedBy] = useState<"branch" | "owner">("branch");
   const [method, setMethod] = useState<"cash" | "card" | "transfer">("cash");
   const router = useRouter();
@@ -75,6 +78,10 @@ export function StageActions({ id, status, isOwner, options, finalPriceILS, acce
       >
         <h2 className="text-base font-bold text-ink">בדיקת מלאי (הנהלה)</h2>
         <input name="finalPriceILS" inputMode="numeric" placeholder="מחיר סופי למחשב ₪" className={FIELD} />
+        <div>
+          <label className="mb-1 block text-xs font-semibold text-muted">עמלת הסניף על ההזמנה הזו (₪) - ניתן לעדכן לפני השליחה</label>
+          <input name="commissionOverrideILS" defaultValue={expectedCommissionILS} inputMode="numeric" className={FIELD} />
+        </div>
         {hasAccessories ? <input name="accessoriesFinalILS" inputMode="numeric" placeholder="מחיר סופי לציוד נלווה ₪ (אם יש)" className={FIELD} /> : null}
         <input name="stockNote" placeholder="הערה לסניף / סיבה אם אין מלאי (רשות)" className={FIELD} />
         <div className="flex gap-2">
@@ -97,6 +104,10 @@ export function StageActions({ id, status, isOwner, options, finalPriceILS, acce
         <p className="text-sm text-ink">
           המחיר הסופי ללקוח: <b>{total.toLocaleString("he-IL")} ₪</b>
           {accessoriesFinalILS ? <span className="text-xs text-muted"> (כולל ציוד נלווה {accessoriesFinalILS.toLocaleString("he-IL")} ₪)</span> : null}. סוגרים עם הלקוח במחיר הזה.
+        </p>
+        <p className="text-sm text-ink">
+          העמלה שלכם על העסקה (אם אתם גובים): <b className="text-teal-dark">{expectedCommissionILS.toLocaleString("he-IL")} ₪</b>
+          {commissionOverridden ? <span className="text-xs text-muted"> (נקבעה להזמנה זו)</span> : null}
         </p>
         <div>
           <div className="mb-1 text-xs font-semibold text-muted">מי גובה את הכסף?</div>

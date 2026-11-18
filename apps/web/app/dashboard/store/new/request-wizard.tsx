@@ -20,7 +20,7 @@ const CPU_CHOICES: StoreCpuTier[] = ["i3", "i5", "i7"];
 const RAM_CHOICES = [8, 16, 32];
 const STORAGE_CHOICES = [256, 512, 1000, 2000];
 const SCREEN_CHOICES = [14, 15.6, 17];
-const DESKTOP_EXTRAS = ["מסך", "מקלדת", "עכבר", "רמקולים"];
+const DESKTOP_EXTRAS = ["מסך", "מקלדת", "עכבר", "סטיק", "רמקולים"];
 
 function Chips<T extends string | number | boolean>({
   value,
@@ -106,7 +106,7 @@ export function RequestWizard({ branches, aiEnabled }: { branches: Branch[]; aiE
       if (aiResult.storageGb) base.storageGb = aiResult.storageGb;
       if (k === "laptop" && aiResult.screenInches) base.screenInches = aiResult.screenInches;
       if (k === "laptop" && aiResult.touch !== null) base.touch = aiResult.touch;
-      if (k === "desktop" && aiResult.extras.length) base.extras = aiResult.extras;
+      if (aiResult.extras.length) base.extras = aiResult.extras;
       const lockedAi = aiResult.lockedFields.filter((f): f is keyof StoreSpec => f in base) as (keyof StoreSpec)[];
       return { spec: fillMissingFromUsage(base, aiResult.usage ?? usage), locked: lockedAi };
     }
@@ -119,7 +119,7 @@ export function RequestWizard({ branches, aiEnabled }: { branches: Branch[]; aiE
     if (kind === "laptop" && touch !== "unknown") { base.touch = touch; lockedFields.push("touch"); }
     const gen = Number(generation);
     if (gen >= 1) { base.minGeneration = gen; lockedFields.push("minGeneration"); }
-    if (kind === "desktop" && extras.length) { base.extras = extras; lockedFields.push("extras"); }
+    if (extras.length) { base.extras = extras; lockedFields.push("extras"); }
     // באשף השאלות משלימים לפי שימוש את מה שלא נקבע; ב"לפי רצון הלקוח" משאירים כפי שהוזן.
     const completed = mode === "guided" ? applyUsageDefaults(base, usage, lockedFields) : base;
     return { spec: completed, locked: lockedFields };
@@ -144,11 +144,11 @@ export function RequestWizard({ branches, aiEnabled }: { branches: Branch[]; aiE
     }
     out.push({ question: "אחסון", answer: storage === "unknown" ? "לא יודע" : storageLabel(storage) });
     out.push({ question: "זיכרון", answer: ram === "unknown" ? "לא יודע" : `${ram}GB` });
-    if (kind === "desktop") out.push({ question: "ציוד נלווה", answer: extras.join(", ") || "ללא" });
+    out.push({ question: "ציוד נלווה", answer: extras.join(", ") || "ללא" });
     return out;
   }, [mode, aiMode, chat, kind, usage, screen, touch, storage, ram, extras]);
 
-  const guidedSteps = kind === "laptop" ? ["kind", "usage", "screen", "touch", "storage", "ram", "budget", "details"] : ["kind", "usage", "storage", "ram", "extras", "budget", "details"];
+  const guidedSteps = kind === "laptop" ? ["kind", "usage", "screen", "touch", "storage", "ram", "extras", "budget", "details"] : ["kind", "usage", "storage", "ram", "extras", "budget", "details"];
   const specSteps = ["spec", "details"];
   const steps = aiMode ? ["chat", "details"] : mode === "guided" ? guidedSteps : specSteps;
   const current = steps[step];
@@ -281,7 +281,7 @@ export function RequestWizard({ branches, aiEnabled }: { branches: Branch[]; aiE
               </div>
             </>
           )}
-          {kind === "desktop" && <ExtrasPicker extras={extras} setExtras={setExtras} />}
+          <ExtrasPicker extras={extras} setExtras={setExtras} />
           <div>
             <label className={LABEL}>דור מעבד מינימלי (רשות - למשל 12; ריק = דור 12 ומעלה)</label>
             <input value={generation} onChange={(e) => setGeneration(e.target.value.replace(/\D/g, ""))} inputMode="numeric" className={FIELD} placeholder="12" />
@@ -394,7 +394,7 @@ export function RequestWizard({ branches, aiEnabled }: { branches: Branch[]; aiE
 function ExtrasPicker({ extras, setExtras }: { extras: string[]; setExtras: (v: string[]) => void }) {
   return (
     <div>
-      <div className="mb-2 text-sm font-bold text-ink">ציוד נלווה לנייח</div>
+      <div className="mb-2 text-sm font-bold text-ink">ציוד נלווה (רשות)</div>
       <div className="flex flex-wrap gap-2">
         {DESKTOP_EXTRAS.map((e) => {
           const on = extras.includes(e);

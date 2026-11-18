@@ -5,6 +5,7 @@ import { DEFAULT_GLOSSARY, GLOSSARY_COLLECTION } from "@/lib/store-glossary";
 import { advisorConfigured } from "@/lib/store-advisor";
 import type { StoreGlossaryTerm } from "@ultranet/shared-types";
 import { StoreTabs } from "../store-tabs";
+import { AiTestButton } from "../ai-test-button";
 import { deleteGlossaryTermAction, saveGlossaryTermAction, seedGlossaryAction } from "../actions";
 
 export const dynamic = "force-dynamic";
@@ -29,6 +30,7 @@ export default async function GlossaryPage() {
         כאן מלמדים את היועץ איך להבין לקוחות: מושג (למשל ״חידושי תורה״) והנחיה (למשל ״Word בסיס בלבד, מחשב פשוט״).
         היועץ קורא את כל המושגים הפעילים בכל שיחה.{" "}
         {advisorConfigured() ? "היועץ פעיל." : "היועץ עדיין לא פעיל - חסר ANTHROPIC_API_KEY, והסניפים משתמשים בשאלון הרגיל."}
+        <AiTestButton />
       </div>
 
       {!terms.length ? (
