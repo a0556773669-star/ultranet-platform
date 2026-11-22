@@ -65,6 +65,13 @@ function OptionBlock({ prefix, title, defaultLabel, defaultSpec, defaultWhy, pre
   );
 }
 
+/** מקלדת ועכבר שנבחרו שניהם מתומחרים כסט אחד; אחד מהם בלבד נשאר כפריט בודד (ולא נספר כשניים בעמלה). */
+function accessoryNames(extras: string[]): string[] {
+  const both = extras.includes("מקלדת") && extras.includes("עכבר");
+  const rest = extras.filter((e) => !(both && (e === "מקלדת" || e === "עכבר")));
+  return (both ? ["מקלדת ועכבר", ...rest] : rest).slice(0, 4);
+}
+
 function AccessoryBlock({ index, name }: { index: number; name: string }) {
   const [low, setLow] = useState("");
   const [from, setFrom] = useState("");
@@ -181,7 +188,7 @@ export function RespondForm({ id, requestedSpecText, upgradeSpecText, upgradeWhy
       {isDesktop || extras.length > 0 ? (
         <fieldset className="flex flex-col gap-2 rounded-lg border border-card-border p-3">
           <legend className="px-1 text-xs font-bold text-ink">ציוד נלווה (מרווח: מסך 100-200, מקלדת ועכבר 30-80, סטיק 30-80)</legend>
-          {Array.from(new Set([...extras.map((e) => (e === "מקלדת" || e === "עכבר" ? "מקלדת ועכבר" : e))])).slice(0, 4).map((name, i) => (
+          {accessoryNames(extras).map((name, i) => (
             <AccessoryBlock key={name} index={i} name={name} />
           ))}
         </fieldset>
