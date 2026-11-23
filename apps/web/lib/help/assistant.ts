@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { anthropicConfigured, createAnthropic } from "../anthropic-client";
 import type { HelpScope } from "./knowledge";
 
 /**
@@ -8,7 +9,7 @@ import type { HelpScope } from "./knowledge";
  * בלבד — אין שום תלות קשיחה.
  */
 export function assistantConfigured(): boolean {
-  return Boolean(process.env.ANTHROPIC_API_KEY);
+  return anthropicConfigured();
 }
 
 export type { ChatTurn } from "./types";
@@ -44,7 +45,7 @@ ${faqs}`;
 }
 
 export async function askAssistant(scope: HelpScope, history: ChatTurn[], question: string): Promise<string> {
-  const client = new Anthropic();
+  const client = createAnthropic();
   const messages: Anthropic.Beta.BetaMessageParam[] = [
     ...history.slice(-8).map((t) => ({ role: t.role, content: t.content })),
     { role: "user", content: question },

@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { anthropicConfigured, createAnthropic } from "./anthropic-client";
 import type { StoreRequest } from "@ultranet/shared-types";
 import { buildMarketPrompt } from "./store-wizard";
 
@@ -9,7 +10,7 @@ import { buildMarketPrompt } from "./store-wizard";
  * זו **טיוטה** לבעלים: המספר שמוחזר ממלא את שדה "ממוצע שוק נמוך", והבעלים בודק ומאשר לפני שליחה לסניף.
  */
 export function storeAiConfigured(): boolean {
-  return Boolean(process.env.ANTHROPIC_API_KEY);
+  return anthropicConfigured();
 }
 
 const MODEL = "claude-haiku-5-5";
@@ -44,7 +45,7 @@ function parseDraft(text: string): MarketDraft {
 
 export async function draftMarketPrice(request: StoreRequest): Promise<MarketDraft> {
   if (!storeAiConfigured()) throw new Error("ANTHROPIC_API_KEY לא מוגדר");
-  const client = new Anthropic();
+  const client = createAnthropic();
   const messages: Anthropic.MessageParam[] = [{ role: "user", content: buildMarketPrompt(request) + "\n" + FORMAT_INSTRUCTION }];
 
   for (let turn = 0; turn <= MAX_PAUSE_TURNS; turn++) {
