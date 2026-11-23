@@ -4,8 +4,9 @@ import { getAdminFirestore } from "@/lib/firebase-admin";
 import { StoreTabs } from "../store-tabs";
 import { advisorConfigured } from "@/lib/store-advisor";
 import { RequestWizard } from "./request-wizard";
+import { ChatAdvisor } from "./chat-advisor";
 
-export default async function NewStoreRequestPage() {
+export default async function NewStoreRequestPage({ searchParams }: { searchParams: { form?: string } }) {
   await requireModuleAccess("store");
   const scope = await currentModuleScope("store");
   const snap = await getAdminFirestore().collection("n_branches").get();
@@ -22,7 +23,7 @@ export default async function NewStoreRequestPage() {
         התאמת מחשב ללקוח
       </h1>
       <StoreTabs isOwner={Boolean(scope?.isOwner)} />
-      <RequestWizard branches={branches} aiEnabled={advisorConfigured()} />
+      {advisorConfigured() && searchParams.form !== "1" ? <ChatAdvisor branches={branches} /> : <RequestWizard branches={branches} />}
     </div>
   );
 }

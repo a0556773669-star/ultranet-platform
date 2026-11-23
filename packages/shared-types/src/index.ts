@@ -1071,6 +1071,10 @@ export interface StoreRequestOption {
   label: string;
   /** "as_requested" = בדיוק מה שהלקוח ביקש · "upgrade" = מחשב טיפה טוב יותר */
   kind: "as_requested" | "upgrade";
+  /** "ai" = הצעה אוטומטית מהצ'אט (לפי המחירון), "owner" = נקבעה ע"י הבעלים */
+  source?: "ai" | "owner";
+  /** פירוט האביזרים באפשרות (צ'אט) */
+  accessoriesText?: string;
   specText: string;
   /** הסבר למנהל הסניף במה האפשרות הזו טובה יותר (לשדרוג) */
   whyBetter?: string;
@@ -1120,6 +1124,40 @@ export interface StoreGlossaryTerm {
   active: boolean;
 }
 
+/**
+ * מחירון שוק פנימי לחנות סניפים - מסמך יחיד `n_store_settings/price_guide`, כולו ב-₪ **מחיר שוק נמוך** (בלי מרווח).
+ * הבסיס הוא מחשב ייחוס: 8GB זיכרון, 256GB אחסון, מסך 15.6 בלי מגע (בנייח: המחשב בלבד, בלי מסך).
+ * מהמחירון נגזר טווח הערכה בצ'אט הסניפים: מחיר שוק + מרווח (`lib/store-pricing.ts`).
+ * שדה חסר = אין הערכה לפריט (הצ'אט יגיד שהמחיר יימסר אחרי בדיקה).
+ */
+export interface StorePriceGuide {
+  laptopBase: Partial<Record<StoreCpuTier, number>>;
+  desktopBase: Partial<Record<StoreCpuTier, number>>;
+  /** תוספת מעל 8GB: מפתח = גודל הזיכרון */
+  ramAdd: Partial<Record<"16" | "32", number>>;
+  /** תוספת מעל 256GB: מפתח = גודל האחסון ב-GB */
+  storageAdd: Partial<Record<"512" | "1000" | "2000", number>>;
+  touchAdd?: number;
+  screen17Add?: number;
+  /** מחיר שוק נמוך לאביזרים: monitor, keyboardMouse, keyboard, mouse, stick, speakers */
+  accessoriesLow: Partial<Record<string, number>>;
+  note?: string;
+  updatedAt?: string;
+}
+
+/** collection: n_store_faq - שאלות חוזרות שהיועץ עונה עליהן בלי לפנות למודל (בלי עלות).
+ *  `approved: false` = נלמדה אוטומטית מתשובת היועץ וממתינה לאישור הבעלים - עד אז היא לא משמשת לתשובה ישירה. */
+export interface StoreFaqEntry {
+  id: string;
+  question: string;
+  answer: string;
+  keywords: string[];
+  approved: boolean;
+  source: "owner" | "ai";
+  hits: number;
+  createdAt: string; // ISO
+}
+
 /** collection: n_store_requests - בקשת התאמת מחשב שמנהל סניף שלח מ-`/dashboard/store` */
 export interface StoreRequest {
   id: string;
@@ -1129,6 +1167,8 @@ export interface StoreRequest {
   branchId: string;
   branchName: string;
   mode: StoreRequestMode;
+  /** "chat" = נוצרה מצ'אט היועץ (עם הצעות אוטומטיות) · חסר/"form" = טופס */
+  createdVia?: "chat" | "form";
   customerName: string;
   customerPhone?: string;
   /** תקציב שהלקוח אמר (רשות) */

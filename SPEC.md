@@ -289,6 +289,8 @@ pnpm dev        # turbo run dev — מריץ web + api
 | `n_store_requests` | `StoreRequest` | **(שלב ב': `status` הרחב, `chosenOptionIndex`, `finalPriceILS`, `stockNote`, `shippingNote`, חותמות זמן לכל שלב, ו-`accessories` לציוד נלווה בנייח)** **בקשת התאמת מחשב** מ"חנות סניפים" (`/dashboard/store`): `branchId`/`branchName`, `createdByEmail`/`createdByName`, `mode` (`spec` = לפי רצון הלקוח, `guided` = לפי שאלות), `customerName`/`customerPhone`, `budgetILS` (רשות), `spec` (`StoreSpec`: `kind` נייד/נייח, `cpu` i3/i5/i7, `ramGb`, `storageGb`, `screenInches`, `touch`, `minGeneration`, `extras` לנייח), `lockedFields` (מה שהלקוח קבע בוודאות — **לעולם לא משנים ולא מציעים בו שדרוג**), `answers`, `notes`, `status` (`new`/`in_review`/`answered`/`closed`), ותשובת הבעלים: `options` (עד 3 `StoreRequestOption`: `kind` `as_requested`/`upgrade`, `specText`, `whyBetter` — ההסבר למנהל הסניף, `marketLowILS`, `quotedFromILS`/`quotedToILS`), `responseNote`, `respondedAt`/`respondedBy`, **גבייה ועמלה (2026-11):** `accessoriesFinalILS` (מחיר סופי לציוד נלווה), `collection` (`StoreCollection`: `by` `branch`/`owner`, `method` מזומן/אשראי/העברה — **אף פעם לא פרטי כרטיס**, `amountILS`, `at`, `month` YYYY-MM לפי שעון ישראל), `commissionILS`/`commissionNote`, `commissionOverrideILS` (עמלה שהבעלים קבע להזמנה לפני תשובת בדיקת המלאי — גוברת על הכללים). נכתב רק מ-`app/dashboard/store/actions.ts`; לא נכנס לשום חישוב כספי |
 | `n_store_commission_rules` | `StoreCommissionRule` | **כללי עמלת סניף לכל קטגוריית מוצר** — המזהה הוא הקטגוריה (`laptop`/`desktop`/`accessory`), `kind` (`fixed` = ₪ קבוע למחשב, ובקטגוריית `accessory` **לכל אביזר** / `percent` = אחוז מהמחיר הסופי) ו-`value`. **מסמך חסר = ברירת המחדל** (`DEFAULT_COMMISSION_RULES`: 150 ₪ לכל מחשב, 20 ₪ לכל אביזר); `value: 0` = בכוונה בלי עמלה. נערך ב-`/dashboard/store/commissions` (בעלים). העמלה נקבעת בסגירת העסקה ונשמרת על הבקשה — שינוי כלל לא משנה עסקאות שנסגרו |
 | `n_store_glossary` | `StoreGlossaryTerm` | **מושגים ליועץ ה-AI** (`/dashboard/store/glossary`, בעלים): `term` + `guidance` חופשית (מה זה אומר, מה לשאול, מה להסביר) + `active`. חסר לגמרי = `DEFAULT_GLOSSARY` בקוד (`lib/store-glossary.ts`) |
+| `n_store_faq` | `StoreFaqEntry` | שאלות חוזרות של יועץ החנות: `question`, `answer`, `keywords`, `approved` (שלא אושרה לא משמשת לתשובה ישירה), `source` (`owner`/`ai`), `hits`. נענית בלי קריאה למודל |
+| `n_store_settings` | `StorePriceGuide` | מסמך `price_guide`: מחירון שוק נמוך (בסיס לנייד/נייח לפי i3/i5/i7, תוספות זיכרון/אחסון/מגע/17", ואביזרים). מקור לטווחי ההערכה בצ'אט |
 | `n_branch_transfers` | `BranchTransfer` | התחשבנות חודשית שותף↔בעלים; `transferredAmount` (רשות) - הסכום שבפועל נרשם כהועבר לאותו חודש, באותה מוסכמת סימן כמו `netToOwner` (חיובי = לבעלים, שלילי = מהבעלים) - מאפשר לרשום העברה חלקית/מאוחרת שלא תואמת בדיוק את הסכום המחושב. רשומות ישנות בלי השדה הזה (רק `transferred: true`) מטופלות כמסולקות במלואן, ראו `lib/branch-ledger.ts`. `linkedAhIncomeId` (רשות) - מזהה רשומת `n_ah_income` שנוצרה/מתעדכנת אוטומטית כש-`transferredAmount` חיובי, ראו `lib/branch-income-ledger.ts` בסעיף 9. `receiptIssued` (רשות) - סימון עצמאי "הוצאנו קבלה", לא קשור לסכום |
 | `n_approved_emails` | — | מיילים מאושרים לכניסת קוד |
 | `n_login_codes` | — | קודי כניסה חד-פעמיים עם תפוגה |
@@ -2189,11 +2191,26 @@ Firestore Emulator עם נתוני הדגמה, כתוביות בעברית צר�
   נטענים ב-`loadBranchAccountingRawData` (`storeDealsByBranch`, שאילתה על `collection.by == "branch"`), נכנסים לספר
   (`buildBranchLedger`) ולדו"ח החודשי (שורת "חנות סניפים החודש"). זה חל על סניפי השכרות (שם קיים ספר ההעברות);
   `/dashboard/store/commissions` מציג לכל סוגי הסניפים סיכום חודשי (נגבה / עמלה / מועבר) ובו כללי העמלה.
-- **יועץ AI (שיחה):** כשמוגדר `ANTHROPIC_API_KEY`, "לפי שאלות" נפתח כשיחה (`advisorTurnAction`, `lib/store-advisor.ts`):
-  **Claude Haiku 5.5, מאמץ נמוך, פלט מובנה (JSON schema)**, עד 10 תורות, בלי חיפוש ברשת. הוא מבין כוונה לפי
-  המושגים שהבעלים הגדיר (`n_store_glossary`), שואל שאלות המשך (איכות מסך בגרפיקה, תקציב וכו'), ומחזיר מפרט מובנה
-  עם `lockedFields` (רק מה שהלקוח אמר במפורש ננעל). בלי מפתח — השאלון הרגיל (דטרמיניסטי, ללא עלות) ממשיך לעבוד, וגם
-  אפשר לעבור אליו מתוך השיחה. היועץ אינו מציין מחירים ואינו מבטיח מלאי.
+- **יועץ AI - צ'אט (ברירת המחדל לסניפים כשמוגדר `ANTHROPIC_API_KEY`):** `/dashboard/store/new` נפתח כצ'אט
+  (`chat-advisor.tsx`, `advisorChatAction`, `lib/store-advisor.ts`) — **Claude Haiku 5.5, מאמץ נמוך, פלט מובנה**.
+  מנהל הסניף כותב מה הלקוח אומר; היועץ שואל, מבין כוונה לפי המושגים (`n_store_glossary`), מכבד לקוח שלא רוצה
+  לענות (לא חוזר על שאלה), ומציע **2-3 אפשרויות** (לפי הבקשה / טיפה יותר טוב / חלופה חסכונית) עם הסבר "במה זה
+  טוב יותר". **טווחי המחיר מחושבים בקוד** מהמחירון (`estimateRange`) ולא ע"י המודל, ומשמשים רק כהערכה. מה שהלקוח
+  קבע במפורש (`lockedFields`) **נאכף בשרת** על כל האפשרויות (`buildOptions`) גם אם המודל סטה. הכפתור "הלקוח מאשר -
+  בדיקת מלאי" יוצר בקשה ב-`status: stock_check` עם `createdVia: "chat"` והצעות `source: "ai"`
+  (`createChatRequestAction`; המחירים נבנים מחדש בשרת מהמפרט, לא נלקחים מהדפדפן); "שמירה בלי אישור" יוצר `answered`.
+  הבעלים רשאי לעדכן הכול בטופס המענה. בלי מפתח — הטופס/השאלון הרגיל (`?form=1` גם כשיש מפתח).
+- **מחירון שוק (`n_store_settings/price_guide`, `/dashboard/store/prices`, בעלים):** מחיר שוק **נמוך** למחשב ייחוס
+  (נייד 15.6/8GB/256GB; נייח בלי מסך) לפי i3/i5/i7, תוספות (זיכרון, אחסון, מגע, 17"), ומחיר שוק לאביזרים. ההערכה =
+  מחיר שוק + מרווח (`lib/store-pricing.ts`). כפתור "מילוי טיוטה אוטומטי מהשוק" (`draftPriceGuide`, Haiku + חיפוש
+  ברשת) — **פעם בחודש בערך במקום חיפוש בכל שיחה**; מחזיר טיוטה שהבעלים בודק ושומר. פריט בלי מחיר במחירון = "המחיר
+  יימסר אחרי בדיקה".
+- **שאלות חוזרות (חיסכון):** `n_store_faq` (`/dashboard/store/faq`). הודעה קצרה שמתאימה לשאלה **מאושרת**
+  (`matchFaq`, מחמיר: כיסוי מילות מפתח, נירמול עברית) נענית **בלי שום קריאה למודל**. 4 שאלות בסיס בקוד
+  (אחריות, אנטיווירוס, רישיונות, זמני אספקה). כשהיועץ עונה על שאלה כללית חדשה (`generalQuestion`) היא נשמרת
+  ל-`n_store_faq` עם `approved: false` ועד אישור הבעלים לא משמשת לתשובה ישירה. מוני `hits` מראים כמה נענו בחינם.
+- **שליטה בעלות:** `MAX_USER_TURNS = 20` לשיחה, חלון היסטוריה של 16 הודעות, הנחיות מערכת קבועות במטמון, בלי חיפוש
+  ברשת בשיחה, ושאלות חוזרות בלי מודל.
 - **בדיקת חיבור AI:** כפתור במסך המושגים (`testAiConnectionAction`) מריץ קריאה מינימלית ל-Haiku ומאמת שהמפתח עובד.
 - **עתידי:** מלאי שנרכש (`n_store_inventory`) עם מחירים קבועים מראש, שיחליף את חישוב השוק ואת האישור הידני.
 
@@ -2562,7 +2579,10 @@ app שרץ בדפדפן ניתן ל"התקנה" כאפליקציה עם אייק
 | `apps/web/lib/shop-recommender.ts` | מנוע ההמלצות של חנות ה-AI - זיהוי תחום שימוש מטקסט חופשי, שאלות המשך, ניקוד רמת עומס, מפרט גנרי פר-תחום, התאמה לקטלוג האמיתי (`n_shop_catalog`) |
 | `apps/web/lib/shop-quote.ts` | בניית מסמך ה-HTML העצמאי של הצעת המחיר שהלקוח מוריד בסוף השיחה ב-`/shop` |
 | `apps/web/lib/store-wizard.ts` | מנוע ההתאמה של חנות הסניפים: שימושים, ברירות מחדל, `suggestUpgrade`, `sanitizeSpec`, `specToText`, ובניית הנחיית סקירת השוק |
-| `apps/web/lib/store-advisor.ts` | יועץ השיחה של חנות הסניפים (Haiku 5.5, פלט מובנה, מגבלת תורות) |
+| `apps/web/lib/store-advisor.ts` | יועץ הצ'אט של חנות הסניפים (Haiku 5.5, פלט מובנה, אכיפת שדות נעולים, FAQ בלי מודל) |
+| `apps/web/lib/store-price-guide.ts` | מחירון שוק פנימי והערכת טווח מחיר למפרט |
+| `apps/web/lib/store-faq.ts` | שאלות חוזרות: נירמול עברית, התאמה, ושמירת שאלות שנלמדו |
+| `apps/web/lib/anthropic-client.ts` | לקוח Anthropic עם ניקוי מפתח ואבחון בטוח |
 | `apps/web/lib/store-glossary.ts` | מושגי היועץ: ברירות מחדל וטעינה מ-`n_store_glossary` |
 | `apps/web/lib/store-commission.ts` | חישוב עמלת סניף וקריאת התחשבנות עסקה |
 | `apps/web/lib/store-commission-data.ts` | טעינת כללי העמלה והחודש הנוכחי לפי שעון ישראל |

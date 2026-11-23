@@ -67,7 +67,7 @@ export default async function StoreRequestPage({ params }: { params: { id: strin
 
       {r.options?.length ? (
         <div className="card mb-4 flex flex-col gap-3">
-          <h2 className="text-base font-bold text-ink">התשובה שלנו</h2>
+          <h2 className="text-base font-bold text-ink">{r.respondedBy === "יועץ אוטומטי" ? "הצעה אוטומטית (לפי המחירון)" : "התשובה שלנו"}</h2>
           {r.options.map((o, i) => (
             <div key={i} className="rounded-lg border border-card-border p-3 text-sm">
               <div className="font-bold text-ink">{o.label}</div>
@@ -78,6 +78,7 @@ export default async function StoreRequestPage({ params }: { params: { id: strin
                   <span className="mr-1 text-[11px] font-normal text-muted">(הערכה, לא מחיר סופי)</span>
                 </div>
               ) : null}
+              {o.accessoriesText ? <div className="mt-1 text-xs text-ink">אביזרים: {o.accessoriesText}</div> : null}
               {o.whyBetter ? <div className="mt-1 text-xs text-ink">במה זה טוב יותר: {o.whyBetter}</div> : null}
             </div>
           ))}

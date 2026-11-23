@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Home, PlusCircle, ClipboardList, Coins, BookText, type LucideIcon } from "lucide-react";
+import { Home, PlusCircle, ClipboardList, Coins, BookText, Tag, MessageCircleQuestion, type LucideIcon } from "lucide-react";
 
 const TABS: { href: string; label: string; icon: LucideIcon }[] = [
   { href: "/dashboard/store", label: "איך זה עובד + נהלים", icon: Home },
@@ -12,6 +12,8 @@ const TABS: { href: string; label: string; icon: LucideIcon }[] = [
 
 const OWNER_TABS: { href: string; label: string; icon: LucideIcon }[] = [
   { href: "/dashboard/store/commissions", label: "עמלות", icon: Coins },
+  { href: "/dashboard/store/prices", label: "מחירון שוק", icon: Tag },
+  { href: "/dashboard/store/faq", label: "שאלות חוזרות", icon: MessageCircleQuestion },
   { href: "/dashboard/store/glossary", label: "מושגים ל-AI", icon: BookText },
 ];
 
