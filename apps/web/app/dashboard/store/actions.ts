@@ -8,11 +8,13 @@ import { currentModuleScope, requireOwner } from "@/lib/perms";
 import { COMMISSION_CATEGORIES, COMMISSION_RULES_COLLECTION, currentIsraelMonth, loadCommissionRules } from "@/lib/store-commission-data";
 import { computeDealCommission } from "@/lib/store-commission";
 import { anthropicConfigured, createAnthropic, describeKey } from "@/lib/anthropic-client";
-import { advisorTurn, type AdvisorResult, type AdvisorTurn } from "@/lib/store-advisor";
+import { advisorChat, type AdvisorReply, type AdvisorTurn, type ChatOption } from "@/lib/store-advisor";
+import { estimateRange, loadPriceGuide, PRICE_GUIDE_DOC } from "@/lib/store-price-guide";
+import { FAQ_COLLECTION } from "@/lib/store-faq";
 import { DEFAULT_GLOSSARY, GLOSSARY_COLLECTION } from "@/lib/store-glossary";
 import { DEFAULT_STORE_PROCEDURES } from "@/lib/store-default-procedures";
-import { draftMarketPrice, storeAiConfigured, type MarketDraft } from "@/lib/store-ai";
-import { applyUsageDefaults, sanitizeSpec, type UsageKey } from "@/lib/store-wizard";
+import { draftMarketPrice, draftPriceGuide, storeAiConfigured, type MarketDraft } from "@/lib/store-ai";
+import { applyUsageDefaults, sanitizeSpec, specToText, type UsageKey } from "@/lib/store-wizard";
 import type { StoreAccessoryQuote, StoreCollection, StoreCommissionCategory, StoreRequest, StoreRequestMode, StoreRequestOption, StoreRequestStatus, StoreSpec } from "@ultranet/shared-types";
 
 const COLLECTION = "n_store_requests";
@@ -352,14 +354,171 @@ export async function seedStoreProceduresAction(): Promise<{ created: number }> 
   return { created };
 }
 
-/** תור אחד בשיחת היועץ. פתוח לכל מי שיש לו הרשאת חנות סניפים; עלות מוגבלת (ראו `MAX_USER_TURNS`). */
-export async function advisorTurnAction(history: AdvisorTurn[]): Promise<AdvisorResult> {
+/** תור אחד בצ'אט היועץ. פתוח לכל מי שיש לו הרשאת חנות סניפים; עלות מוגבלת ושאלות חוזרות נענות בלי מודל. */
+export async function advisorChatAction(history: AdvisorTurn[]): Promise<AdvisorReply> {
   const scope = await currentModuleScope("store");
   if (!scope?.granted) throw new Error("אין הרשאה לחנות סניפים");
   const clean = (Array.isArray(history) ? history : [])
     .filter((t) => (t.role === "user" || t.role === "assistant") && typeof t.content === "string")
     .map((t) => ({ role: t.role, content: t.content }));
-  return advisorTurn(clean);
+  return advisorChat(clean);
+}
+
+export interface CreateChatRequestInput {
+  branchId: string;
+  customerName: string;
+  customerPhone?: string;
+  transcript: AdvisorTurn[];
+  /** האפשרויות שהוצגו בצ'אט - נבנות מחדש בשרת (המחירים מחושבים כאן, לא נלקחים מהדפדפן) */
+  options: Pick<ChatOption, "label" | "kind" | "spec" | "whyBetter">[];
+  /** האפשרות שהלקוח אישר. חסר = שמירה בלי אישור */
+  chosenIndex?: number | null;
+  lockedFields: string[];
+  budgetILS?: number | null;
+  notes?: string;
+}
+
+/**
+ * יצירת בקשה מצ'אט היועץ. ההצעות (לפי המחירון) נשמרות כתשובה אוטומטית (`status: answered`), ואם הלקוח אישר
+ * אפשרות - הבקשה עוברת ישר לבדיקת מלאי (`stock_check`). הבעלים רשאי לעדכן הכול בטופס המענה.
+ */
+export async function createChatRequestAction(input: CreateChatRequestInput): Promise<{ id: string }> {
+  const scope = await currentModuleScope("store");
+  if (!scope?.granted) throw new Error("אין הרשאה לחנות סניפים");
+  if (!input.branchId || !scope.allows(input.branchId)) throw new Error("אין הרשאה לסניף הזה");
+  const customerName = input.customerName.trim().slice(0, 80);
+  if (!customerName) throw new Error("חובה להזין שם לקוח");
+  if (!Array.isArray(input.options) || input.options.length === 0) throw new Error("אין אפשרויות לשמירה - המשיכו את השיחה עד שהיועץ מציע");
+
+  const db = getAdminFirestore();
+  const branch = await db.collection("n_branches").doc(input.branchId).get();
+  if (!branch.exists) throw new Error("הסניף לא נמצא");
+  const guide = await loadPriceGuide();
+
+  const chosenIdx = typeof input.chosenIndex === "number" && input.options[input.chosenIndex] ? input.chosenIndex : null;
+  const options: StoreRequestOption[] = [];
+  let chosenAccessories: StoreAccessoryQuote[] = [];
+  let spec: StoreSpec = sanitizeSpec(input.options[0]!.spec);
+  input.options.slice(0, 3).forEach((o, i) => {
+    const optSpec = sanitizeSpec(o.spec);
+    const est = estimateRange(optSpec, guide);
+    if (i === (chosenIdx ?? 0)) {
+      spec = optSpec;
+      chosenAccessories = (est?.accessories ?? []).map((a) => ({ name: a.name, quotedFromILS: a.fromILS, quotedToILS: a.toILS }));
+    }
+    options.push({
+      label: String(o.label ?? "").slice(0, 60) || "אפשרות",
+      kind: o.kind === "upgrade" ? "upgrade" : "as_requested",
+      source: "ai",
+      specText: specToText(optSpec),
+      ...(o.whyBetter ? { whyBetter: String(o.whyBetter).slice(0, 500) } : {}),
+      ...(est ? { quotedFromILS: est.fromILS, quotedToILS: est.toILS } : {}),
+      ...(est?.accessories.length ? { accessoriesText: est.accessories.map((a) => `${a.name} ${a.fromILS}-${a.toILS}`).join(" · ") } : {}),
+    });
+  });
+  const chosen = chosenIdx;
+
+  const { getServerSession } = await import("next-auth");
+  const { authOptions } = await import("@/lib/auth");
+  const session = await getServerSession(authOptions);
+  const now = new Date().toISOString();
+  const phone = input.customerPhone?.trim().replace(/[^\d+\-\s]/g, "").slice(0, 20);
+  const budget = typeof input.budgetILS === "number" && input.budgetILS > 0 ? Math.round(input.budgetILS) : undefined;
+  const transcript = (Array.isArray(input.transcript) ? input.transcript : []).slice(-40);
+
+  const doc: Omit<StoreRequest, "id"> = {
+    createdAt: now,
+    updatedAt: now,
+    createdByEmail: session?.user?.email ?? "",
+    createdByName: session?.user?.name ?? "",
+    branchId: input.branchId,
+    branchName: String((branch.data() as { name?: string }).name ?? ""),
+    mode: "guided",
+    createdVia: "chat",
+    customerName,
+    ...(phone ? { customerPhone: phone } : {}),
+    ...(budget ? { budgetILS: budget } : {}),
+    spec,
+    lockedFields: input.lockedFields.filter((f): f is keyof StoreSpec => (LOCKABLE as string[]).includes(f)),
+    answers: transcript
+      .map((t, i) => (t.role === "user" ? { question: String(transcript[i - 1]?.content ?? "פתיחה").slice(0, 200), answer: String(t.content).slice(0, 300) } : null))
+      .filter((a): a is { question: string; answer: string } => a !== null)
+      .slice(0, 30),
+    ...(input.notes?.trim() ? { notes: input.notes.trim().slice(0, 1000) } : {}),
+    status: chosen !== null ? "stock_check" : "answered",
+    options,
+    ...(chosenAccessories.length ? { accessories: chosenAccessories } : {}),
+    respondedAt: now,
+    respondedBy: "יועץ אוטומטי",
+    ...(chosen !== null ? { chosenOptionIndex: chosen, stockCheckAt: now } : {}),
+  };
+  const ref = await db.collection(COLLECTION).add(doc);
+  revalidatePath("/dashboard/store/requests");
+  return { id: ref.id };
+}
+
+// ---------------------------------------------------------------------------
+// מחירון שוק פנימי (בעלים בלבד)
+// ---------------------------------------------------------------------------
+
+function numField(formData: FormData, key: string): number | undefined {
+  const v = Number(String(formData.get(key) ?? "").replace(/[^\d.]/g, ""));
+  return Number.isFinite(v) && v > 0 ? Math.round(v) : undefined;
+}
+
+export async function savePriceGuideAction(formData: FormData): Promise<void> {
+  await requireOwner();
+  const pick = (keys: string[], prefix: string) =>
+    Object.fromEntries(keys.map((k) => [k, numField(formData, `${prefix}_${k}`)]).filter(([, v]) => v !== undefined)) as Record<string, number>;
+  const guide = {
+    laptopBase: pick(["i3", "i5", "i7"], "lb"),
+    desktopBase: pick(["i3", "i5", "i7"], "db"),
+    ramAdd: pick(["16", "32"], "ram"),
+    storageAdd: pick(["512", "1000", "2000"], "st"),
+    accessoriesLow: pick(["monitor", "keyboardMouse", "keyboard", "mouse", "stick", "speakers"], "acc"),
+    ...(numField(formData, "touch") ? { touchAdd: numField(formData, "touch") } : {}),
+    ...(numField(formData, "s17") ? { screen17Add: numField(formData, "s17") } : {}),
+    note: String(formData.get("note") ?? "").trim().slice(0, 300),
+    updatedAt: new Date().toISOString(),
+  };
+  await getAdminFirestore().collection(PRICE_GUIDE_DOC.collection).doc(PRICE_GUIDE_DOC.id).set(guide);
+  revalidatePath("/dashboard/store/prices");
+}
+
+/** רענון המחירון באמצעות Haiku + חיפוש ברשת. מחזיר **טיוטה** בלבד - הבעלים בודק ושומר. עלות: כמה סנטים. */
+export async function refreshPriceGuideDraftAction() {
+  await requireOwner();
+  if (!storeAiConfigured()) throw new Error("ההכנה האוטומטית לא מופעלת (חסר ANTHROPIC_API_KEY)");
+  return draftPriceGuide();
+}
+
+// ---------------------------------------------------------------------------
+// שאלות נפוצות (בעלים בלבד)
+// ---------------------------------------------------------------------------
+
+export async function saveFaqAction(formData: FormData): Promise<void> {
+  await requireOwner();
+  const question = String(formData.get("question") ?? "").trim().slice(0, 200);
+  const answer = String(formData.get("answer") ?? "").trim().slice(0, 800);
+  if (!question || !answer) throw new Error("חובה למלא שאלה ותשובה");
+  const keywords = String(formData.get("keywords") ?? "").split(/[,\n]/).map((k) => k.trim()).filter(Boolean).slice(0, 10);
+  const id = String(formData.get("id") ?? "").trim();
+  const col = getAdminFirestore().collection(FAQ_COLLECTION);
+  if (id) await col.doc(id).set({ question, answer, keywords, approved: formData.get("approved") !== "off" }, { merge: true });
+  else await col.add({ question, answer, keywords, approved: true, source: "owner", hits: 0, createdAt: new Date().toISOString() });
+  revalidatePath("/dashboard/store/faq");
+}
+
+export async function approveFaqAction(id: string): Promise<void> {
+  await requireOwner();
+  await getAdminFirestore().collection(FAQ_COLLECTION).doc(id).update({ approved: true });
+  revalidatePath("/dashboard/store/faq");
+}
+
+export async function deleteFaqAction(id: string): Promise<void> {
+  await requireOwner();
+  await getAdminFirestore().collection(FAQ_COLLECTION).doc(id).delete();
+  revalidatePath("/dashboard/store/faq");
 }
 
 // ---------------------------------------------------------------------------
