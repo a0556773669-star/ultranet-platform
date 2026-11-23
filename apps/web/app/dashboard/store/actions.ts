@@ -7,6 +7,7 @@ import { getAdminFirestore } from "@/lib/firebase-admin";
 import { currentModuleScope, requireOwner } from "@/lib/perms";
 import { COMMISSION_CATEGORIES, COMMISSION_RULES_COLLECTION, currentIsraelMonth, loadCommissionRules } from "@/lib/store-commission-data";
 import { computeDealCommission } from "@/lib/store-commission";
+import { anthropicConfigured, createAnthropic, describeKey } from "@/lib/anthropic-client";
 import { advisorTurn, type AdvisorResult, type AdvisorTurn } from "@/lib/store-advisor";
 import { DEFAULT_GLOSSARY, GLOSSARY_COLLECTION } from "@/lib/store-glossary";
 import { DEFAULT_STORE_PROCEDURES } from "@/lib/store-default-procedures";
@@ -396,10 +397,9 @@ export async function seedGlossaryAction(): Promise<void> {
 /** בדיקת חיבור ל-API: קריאה מינימלית אחת ל-Haiku (עלות זניחה). בעלים בלבד. */
 export async function testAiConnectionAction(): Promise<{ ok: boolean; message: string }> {
   await requireOwner();
-  if (!process.env.ANTHROPIC_API_KEY) return { ok: false, message: "ANTHROPIC_API_KEY לא מוגדר בשרת (ב-Vercel, ואחרי הגדרה צריך Redeploy)" };
+  if (!anthropicConfigured()) return { ok: false, message: "ANTHROPIC_API_KEY לא מוגדר בשרת (ב-Vercel, ואחרי הגדרה צריך Redeploy)" };
   try {
-    const { default: Anthropic } = await import("@anthropic-ai/sdk");
-    const res = await new Anthropic().messages.create({
+    const res = await createAnthropic().messages.create({
       model: "claude-haiku-5-5",
       max_tokens: 16,
       output_config: { effort: "low" },
@@ -407,6 +407,6 @@ export async function testAiConnectionAction(): Promise<{ ok: boolean; message: 
     });
     return { ok: true, message: `החיבור תקין (${res.usage.input_tokens + res.usage.output_tokens} טוקנים)` };
   } catch (e) {
-    return { ok: false, message: e instanceof Error ? e.message : "שגיאה לא ידועה" };
+    return { ok: false, message: `${e instanceof Error ? e.message : "שגיאה לא ידועה"} || אבחון מפתח: ${describeKey()}` };
   }
 }

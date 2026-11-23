@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { anthropicConfigured, createAnthropic } from "./anthropic-client";
 import type { StoreCpuTier, StoreDeviceKind } from "@ultranet/shared-types";
 import { DEFAULT_MIN_GENERATION, USAGE_OPTIONS, type UsageKey } from "./store-wizard";
 import { loadGlossary } from "./store-glossary";
@@ -11,7 +12,7 @@ import { loadGlossary } from "./store-glossary";
  * לא מוצג והאשף הרגיל (דטרמיניסטי, בלי עלות) ממשיך לעבוד.
  */
 export function advisorConfigured(): boolean {
-  return Boolean(process.env.ANTHROPIC_API_KEY);
+  return anthropicConfigured();
 }
 
 const MODEL = "claude-haiku-5-5";
@@ -99,7 +100,7 @@ export async function advisorTurn(history: AdvisorTurn[]): Promise<AdvisorResult
   }));
   if (messages[0]?.role !== "user") messages.shift();
 
-  const client = new Anthropic();
+  const client = createAnthropic();
   const response = await client.messages.create({
     model: MODEL,
     max_tokens: 1500,
