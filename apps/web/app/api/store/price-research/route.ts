@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { timingSafeEqual } from "node:crypto";
 import { buildGuidePrompt, scanMarket } from "@/lib/store-ai";
-import { loadPriceGuide, mergeGuide, researchTargets, savePriceGuide, specDescription, type GuideDraftLike } from "@/lib/store-price-guide";
+import { EMPTY_GUIDE, loadPriceGuide, mergeGuide, researchTargets, savePriceGuide, specDescription, type GuideDraftLike } from "@/lib/store-price-guide";
 
 /**
  * מסלול חלופי לרענון המחירון **בלי עלות API**: סשן מתוזמן של Claude (על המנוי של הבעלים) קורא כאן את מה שצריך לסרוק,
@@ -33,7 +33,8 @@ export async function GET(req: Request) {
     try {
       const t = (await researchTargets()).map((x) => ({ key: x.key, description: specDescription(x.spec), requested: x.requested }));
       const draft = await scanMarket(t);
-      const before = await loadPriceGuide();
+      // ?reset=1 - מתחילים מהתחלה (בלי להתחשב במחירון הקיים), למשל אחרי שנשמרו ערכים משובשים
+      const before = new URL(req.url).searchParams.get("reset") === "1" ? EMPTY_GUIDE : await loadPriceGuide();
       const { guide, notes } = mergeGuide(before, draft);
       await savePriceGuide(guide);
       return NextResponse.json({
