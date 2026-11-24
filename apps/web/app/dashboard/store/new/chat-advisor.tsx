@@ -10,7 +10,6 @@ const FIELD =
   "w-full rounded-lg border border-card-border bg-[#f4f6f9] px-3 py-2 text-sm focus:border-teal focus:bg-white focus:outline-none";
 const money = (n: number) => n.toLocaleString("he-IL");
 
-type Branch = { id: string; name: string };
 type Msg = AdvisorTurn & {
   id: number;
   time: string;
@@ -70,10 +69,9 @@ function CopyButton({ text }: { text: string }) {
   );
 }
 
-export function ChatAdvisor({ branches }: { branches: Branch[] }) {
+export function ChatAdvisor({ branchLabel }: { branchLabel: string }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
-  const [branchId, setBranchId] = useState(branches.length === 1 ? branches[0]!.id : "");
   const [customerName, setCustomerName] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
   const [showDetails, setShowDetails] = useState(true);
@@ -95,7 +93,6 @@ export function ChatAdvisor({ branches }: { branches: Branch[] }) {
   const latestOptionsMsg = [...msgs].reverse().find((m) => m.role === "assistant" && m.options?.length);
   const lastMsg = msgs[msgs.length - 1];
   const userTurns = msgs.filter((m) => m.role === "user").length;
-  const ready = Boolean(branchId && customerName.trim());
 
   function patch(id: number, fn: (m: Msg) => Msg) {
     setMsgs((cur) => cur.map((m) => (m.id === id ? fn(m) : m)));
@@ -107,7 +104,7 @@ export function ChatAdvisor({ branches }: { branches: Branch[] }) {
     const userMsg: Msg = { id: idRef.current++, role: "user", content, time: nowTime() };
     const history = [...msgs.filter((m) => !m.local), userMsg];
     setMsgs((cur) => [...cur.map((m) => ({ ...m, quickReplies: undefined })), userMsg]);
-    if (ready) setShowDetails(false); // אחרי שהוזנו פרטי הלקוח - יותר מקום לשיחה
+    setShowDetails(false); // יותר מקום לשיחה
     setInput("");
     setBusy(true);
     setError("");
@@ -150,16 +147,11 @@ export function ChatAdvisor({ branches }: { branches: Branch[] }) {
   }
 
   function submit(chosenIndex: number | null) {
-    if (!ready || !latestOptionsMsg?.options) {
-      setShowDetails(true);
-      setError("כדי לשמור או לאשר - בחרו סניף והזינו שם לקוח בפרטי הלקוח.");
-      return;
-    }
+    if (!latestOptionsMsg?.options) return;
     setError("");
     startTransition(async () => {
       try {
         const res = await createChatRequestAction({
-          branchId,
           customerName,
           customerPhone,
           transcript: msgs.filter((m) => !m.local).map(({ role, content }) => ({ role, content })),
@@ -190,7 +182,7 @@ export function ChatAdvisor({ branches }: { branches: Branch[] }) {
           </span>
           <div>
             <div className="text-sm font-bold text-teal-dark">יועץ התאמת מחשבים</div>
-            <div className="text-[11px] text-muted">{busy ? "מקליד..." : "מחובר"}</div>
+            <div className="text-[11px] text-muted">{busy ? "מקליד..." : branchLabel}</div>
           </div>
         </div>
         <button type="button" onClick={() => setShowDetails((v) => !v)} className="text-xs font-semibold text-teal hover:underline">
@@ -199,22 +191,8 @@ export function ChatAdvisor({ branches }: { branches: Branch[] }) {
       </div>
 
       {showDetails ? (
-        <div className="grid gap-2 border-b border-card-border bg-[#fafbfc] px-4 py-2.5 md:grid-cols-3">
-          {branches.length === 0 ? (
-            <div className="rounded-lg bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800 md:col-span-3">
-              אין סניפים לבחירה: המשתמש הזה לא משויך לאף סניף. אפשר לשוחח עם היועץ, אבל לשמירה ולשליחת בקשה צריך לשייך סניף בטופס המשתמשים
-              (`/dashboard/users`, ליד ההרשאה ״חנות סניפים״).
-            </div>
-          ) : null}
-          {branches.length > 1 ? (
-            <select value={branchId} onChange={(e) => setBranchId(e.target.value)} className={FIELD} aria-label="סניף">
-              <option value="">בחירת סניף</option>
-              {branches.map((b) => (
-                <option key={b.id} value={b.id}>{b.name}</option>
-              ))}
-            </select>
-          ) : null}
-          <input value={customerName} onChange={(e) => setCustomerName(e.target.value)} placeholder="שם הלקוח" className={FIELD} />
+        <div className="grid gap-2 border-b border-card-border bg-[#fafbfc] px-4 py-2.5 md:grid-cols-2">
+          <input value={customerName} onChange={(e) => setCustomerName(e.target.value)} placeholder="שם הלקוח (רשות)" className={FIELD} />
           <input value={customerPhone} onChange={(e) => setCustomerPhone(e.target.value)} placeholder="טלפון (רשות)" dir="ltr" className={FIELD} />
         </div>
       ) : null}
