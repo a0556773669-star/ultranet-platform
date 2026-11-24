@@ -12,12 +12,13 @@ export const maxDuration = 60;
 export default async function NewStoreRequestPage({ searchParams }: { searchParams: { form?: string } }) {
   await requireModuleAccess("store");
   const scope = await currentModuleScope("store");
-  const snap = await getAdminFirestore().collection("n_branches").get();
-  const branches = snap.docs
-    .map((d) => ({ id: d.id, name: String((d.data() as { name?: string }).name ?? ""), deleted: Boolean((d.data() as { deleted?: boolean }).deleted) }))
-    .filter((b) => !b.deleted && b.name && (scope?.isOwner || scope?.allows(b.id)))
-    .sort((a, b) => a.name.localeCompare(b.name, "he"))
-    .map(({ id, name }) => ({ id, name }));
+  // הסניף נקבע אוטומטית לפי המשתמש; כאן רק התווית שמוצגת בכותרת הצ'אט
+  let branchLabel = "הנהלה";
+  if (scope && !scope.isOwner) {
+    const id = scope.branchId ?? scope.branchIds[0];
+    const doc = id ? await getAdminFirestore().collection("n_branches").doc(id).get() : null;
+    branchLabel = id ? String((doc?.data() as { name?: string } | undefined)?.name ?? "") || "סניף" : "ללא סניף משויך";
+  }
 
   return (
     <div>
@@ -26,7 +27,7 @@ export default async function NewStoreRequestPage({ searchParams }: { searchPara
         התאמת מחשב ללקוח
       </h1>
       <StoreTabs isOwner={Boolean(scope?.isOwner)} />
-      {advisorConfigured() && searchParams.form !== "1" ? <ChatAdvisor branches={branches} /> : <RequestWizard branches={branches} />}
+      {advisorConfigured() && searchParams.form !== "1" ? <ChatAdvisor branchLabel={branchLabel} /> : <RequestWizard />}
     </div>
   );
 }

@@ -23,7 +23,6 @@ const COLLECTION = "n_store_requests";
 const STATUSES: StoreRequestStatus[] = ["new", "in_review", "answered", "stock_check", "stock_confirmed", "deal_closed", "shipped", "delivered", "closed", "no_stock"];
 
 export interface CreateStoreRequestInput {
-  branchId: string;
   mode: StoreRequestMode;
   customerName: string;
   customerPhone?: string;
@@ -39,14 +38,25 @@ export interface CreateStoreRequestInput {
 
 const LOCKABLE: (keyof StoreSpec)[] = ["cpu", "ramGb", "storageGb", "screenInches", "touch", "minGeneration", "extras"];
 
+/**
+ * הסניף נקבע **אוטומטית** לפי המשתמש המחובר (השיוך שלו בטופס המשתמשים) - אין בחירת סניף. בעלים = "הנהלה".
+ * מי יצר את הבקשה נרשם אוטומטית (`createdByName`/`createdByEmail`).
+ */
+async function resolveBranch(scope: { isOwner: boolean; branchId?: string; branchIds: string[] }): Promise<{ id: string; name: string }> {
+  if (scope.isOwner) return { id: "hq", name: "הנהלה" };
+  const id = scope.branchId ?? scope.branchIds[0];
+  if (!id) throw new Error("המשתמש הזה לא משויך לסניף. יש לשייך לו סניף בטופס המשתמשים (/dashboard/users), באותו כובע של ההרשאה ״חנות סניפים״.");
+  const doc = await getAdminFirestore().collection("n_branches").doc(id).get();
+  return { id, name: String((doc.data() as { name?: string } | undefined)?.name ?? "") || id };
+}
+
 export async function createStoreRequestAction(input: CreateStoreRequestInput): Promise<ActionResult<{ id: string }>> {
   return guard(async () => {
   const scope = await currentModuleScope("store");
   if (!scope?.granted) throw new Error("אין הרשאה לחנות סניפים");
-  if (!input.branchId || !scope.allows(input.branchId)) throw new Error("אין הרשאה לסניף הזה");
+  const branch = await resolveBranch(scope);
 
-  const customerName = input.customerName.trim().slice(0, 80);
-  if (!customerName) throw new Error("חובה להזין שם לקוח");
+  const customerName = input.customerName.trim().slice(0, 80) || "לקוח ללא שם";
 
   const mode: StoreRequestMode = input.mode === "guided" ? "guided" : "spec";
   const locked = input.lockedFields.filter((f): f is keyof StoreSpec => (LOCKABLE as string[]).includes(f));
@@ -56,8 +66,6 @@ export async function createStoreRequestAction(input: CreateStoreRequestInput): 
   }
 
   const db = getAdminFirestore();
-  const branch = await db.collection("n_branches").doc(input.branchId).get();
-  if (!branch.exists) throw new Error("הסניף לא נמצא");
 
   const session = await getServerSession(authOptions);
   const now = new Date().toISOString();
@@ -69,8 +77,8 @@ export async function createStoreRequestAction(input: CreateStoreRequestInput): 
     updatedAt: now,
     createdByEmail: session?.user?.email ?? "",
     createdByName: session?.user?.name ?? "",
-    branchId: input.branchId,
-    branchName: String((branch.data() as { name?: string }).name ?? ""),
+    branchId: branch.id,
+    branchName: branch.name,
     mode,
     customerName,
     ...(phone ? { customerPhone: phone } : {}),
@@ -396,7 +404,6 @@ export async function advisorChatAction(history: AdvisorTurn[]): Promise<ActionR
 }
 
 export interface CreateChatRequestInput {
-  branchId: string;
   customerName: string;
   customerPhone?: string;
   transcript: AdvisorTurn[];
@@ -427,14 +434,11 @@ export async function createChatRequestAction(input: CreateChatRequestInput): Pr
   return guard(async () => {
   const scope = await currentModuleScope("store");
   if (!scope?.granted) throw new Error("אין הרשאה לחנות סניפים");
-  if (!input.branchId || !scope.allows(input.branchId)) throw new Error("אין הרשאה לסניף הזה");
-  const customerName = input.customerName.trim().slice(0, 80);
-  if (!customerName) throw new Error("חובה להזין שם לקוח");
+  const branch = await resolveBranch(scope);
+  const customerName = input.customerName.trim().slice(0, 80) || "לקוח ללא שם";
   if (!Array.isArray(input.options) || input.options.length === 0) throw new Error("אין אפשרויות לשמירה - המשיכו את השיחה עד שהיועץ מציע");
 
   const db = getAdminFirestore();
-  const branch = await db.collection("n_branches").doc(input.branchId).get();
-  if (!branch.exists) throw new Error("הסניף לא נמצא");
   const guide = await loadPriceGuide();
 
   const chosenIdx = typeof input.chosenIndex === "number" && input.options[input.chosenIndex] ? input.chosenIndex : null;
@@ -473,8 +477,8 @@ export async function createChatRequestAction(input: CreateChatRequestInput): Pr
     updatedAt: now,
     createdByEmail: session?.user?.email ?? "",
     createdByName: session?.user?.name ?? "",
-    branchId: input.branchId,
-    branchName: String((branch.data() as { name?: string }).name ?? ""),
+    branchId: branch.id,
+    branchName: branch.name,
     mode: "guided",
     createdVia: "chat",
     customerName,
