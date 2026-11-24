@@ -631,7 +631,7 @@ export async function testAiConnectionAction(): Promise<{ ok: boolean; message: 
       model: "claude-haiku-5-5",
       max_tokens: 300,
       output_config: { effort: "low" },
-      tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 1, user_location: { type: "approximate", country: "IL" } }],
+      tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 1 }],
       messages: [{ role: "user", content: "חפש באינטרנט: מה מזג האוויר בתל אביב היום? ענה במשפט אחד." }],
     });
     return { ok: true, message: `${base}. חיפוש ברשת: תקין` };
