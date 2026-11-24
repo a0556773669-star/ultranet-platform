@@ -1,6 +1,7 @@
 import { getAdminFirestore } from "./firebase-admin";
 import type { StoreCpuTier, StorePriceGuide, StoreSpec } from "@ultranet/shared-types";
 import { accessoryRange, quotedRange, roundTen } from "./store-pricing";
+import { DEFAULT_MIN_GENERATION } from "./store-wizard";
 
 export const PRICE_GUIDE_DOC = { collection: "n_store_settings", id: "price_guide" } as const;
 
@@ -18,13 +19,80 @@ export async function loadPriceGuide(): Promise<StorePriceGuide> {
     touchAdd: d.touchAdd,
     screen17Add: d.screen17Add,
     accessoriesLow: d.accessoriesLow ?? {},
+    specPrices: d.specPrices ?? {},
     note: d.note,
     updatedAt: d.updatedAt,
   };
 }
 
-/** מחיר שוק נמוך מוערך למחשב (בלי אביזרים), או null כשאין במחירון בסיס לדגם. */
+/** מפתח תצורה למחשב (בלי אביזרים): סוג, מעבד, זיכרון, אחסון, מסך ומגע. */
+export function specKey(spec: StoreSpec): string {
+  return [
+    spec.kind,
+    spec.cpu ?? "i3",
+    spec.ramGb ?? 8,
+    spec.storageGb ?? 256,
+    spec.kind === "laptop" ? (spec.screenInches ?? 15.6) : "-",
+    spec.kind === "laptop" ? (spec.touch ? "touch" : "notouch") : "-",
+  ].join("|");
+}
+
+/** תיאור התצורה בעברית לחיפוש בשוק. */
+export function specDescription(spec: StoreSpec): string {
+  const parts = [
+    spec.kind === "laptop" ? "מחשב נייד" : "מחשב נייח (המחשב בלבד, בלי מסך)",
+    `מעבד אינטל ${spec.cpu ?? "i3"} דור ${spec.minGeneration ?? DEFAULT_MIN_GENERATION} ומעלה`,
+    `${spec.ramGb ?? 8}GB זיכרון`,
+    `${spec.storageGb ?? 256}GB SSD`,
+  ];
+  if (spec.kind === "laptop") parts.push(`מסך ${spec.screenInches ?? 15.6} אינץ'`, spec.touch ? "עם מגע" : "בלי מגע");
+  return parts.join(", ");
+}
+
+/** התצורות הקלאסיות שנסרקות בכל לילה (נייד ונייח, i3/i5/i7, 8/16GB, 256/512GB). */
+export function classicSpecs(): StoreSpec[] {
+  const out: StoreSpec[] = [];
+  for (const kind of ["laptop", "desktop"] as const) {
+    for (const cpu of ["i3", "i5", "i7"] as const) {
+      if (kind === "desktop" && cpu === "i7") continue;
+      for (const ramGb of [8, 16]) {
+        for (const storageGb of [256, 512]) {
+          out.push(kind === "laptop" ? { kind, cpu, ramGb, storageGb, screenInches: 15.6, touch: false } : { kind, cpu, ramGb, storageGb });
+        }
+      }
+    }
+  }
+  return out;
+}
+
+/**
+ * מה לסרוק הלילה: התצורות הקלאסיות + התצורות שהסניפים באמת ביקשו ב-60 הימים האחרונים (הנפוצות ביותר).
+ * אין כאן שום פרט אישי של לקוח - רק מפרטים ומספר הפעמים.
+ */
+export async function researchTargets(): Promise<{ spec: StoreSpec; key: string; requested: number }[]> {
+  const classic = classicSpecs();
+  const counts = new Map<string, { spec: StoreSpec; n: number }>();
+  const cutoff = new Date(Date.now() - 60 * 86_400_000).toISOString();
+  const snap = await getAdminFirestore().collection("n_store_requests").where("createdAt", ">=", cutoff).get();
+  for (const d of snap.docs) {
+    const spec = (d.data() as { spec?: StoreSpec }).spec;
+    if (!spec) continue;
+    const key = specKey(spec);
+    const cur = counts.get(key);
+    counts.set(key, { spec, n: (cur?.n ?? 0) + 1 });
+  }
+  const classicKeys = new Set(classic.map(specKey));
+  const popular = [...counts.entries()]
+    .filter(([k]) => !classicKeys.has(k))
+    .sort((a, b) => b[1].n - a[1].n)
+    .slice(0, 8)
+    .map(([key, v]) => ({ spec: v.spec, key, requested: v.n }));
+  return [...classic.map((spec) => ({ spec, key: specKey(spec), requested: counts.get(specKey(spec))?.n ?? 0 })), ...popular];
+}
+/** מחיר שוק נמוך מוערך למחשב (בלי אביזרים), או null כשאין במחירון בסיס לדגם. תצורה עם מחיר מדויק במחירון גוברת. */
 export function estimateMarketLow(spec: StoreSpec, guide: StorePriceGuide): number | null {
+  const exact = guide.specPrices?.[specKey(spec)];
+  if (typeof exact === "number") return exact;
   const cpu: StoreCpuTier = spec.cpu ?? "i3";
   const base = (spec.kind === "laptop" ? guide.laptopBase : guide.desktopBase)[cpu];
   if (typeof base !== "number") return null;
@@ -135,6 +203,7 @@ export type GuideDraftLike = {
   ramAdd?: Partial<Record<string, number>>;
   storageAdd?: Partial<Record<string, number>>;
   accessoriesLow?: Partial<Record<string, number>>;
+  specPrices?: Partial<Record<string, number>>;
   touchAdd?: number | null;
   screen17Add?: number | null;
   note?: string;
@@ -156,6 +225,7 @@ export function mergeGuide(existing: StorePriceGuide, draft: GuideDraftLike): { 
     ramAdd: mergeMap(existing.ramAdd, draft.ramAdd, "ramAdd", "זיכרון"),
     storageAdd: mergeMap(existing.storageAdd, draft.storageAdd, "storageAdd", "אחסון"),
     accessoriesLow: mergeMap(existing.accessoriesLow, draft.accessoriesLow, "accessory", "אביזר"),
+    specPrices: mergeMap(existing.specPrices ?? {}, draft.specPrices, "base", "תצורה"),
     touchAdd: pickValue(existing.touchAdd, draft.touchAdd ?? undefined, "extra", "מגע", notes),
     screen17Add: pickValue(existing.screen17Add, draft.screen17Add ?? undefined, "extra", "17 אינץ'", notes),
     note: [draft.note ?? "", ...notes].filter(Boolean).join(" | ").slice(0, 500),

@@ -494,6 +494,8 @@ export async function savePriceGuideAction(formData: FormData): Promise<void> {
     accessoriesLow: pick(["monitor", "keyboardMouse", "keyboard", "mouse", "stick", "speakers"], "acc"),
     ...(numField(formData, "touch") ? { touchAdd: numField(formData, "touch") } : {}),
     ...(numField(formData, "s17") ? { screen17Add: numField(formData, "s17") } : {}),
+    // מחירים מדויקים שהסריקה הלילית שמרה - לא נמחקים בשמירה ידנית של הטופס
+    specPrices: (await loadPriceGuide()).specPrices ?? {},
     note: String(formData.get("note") ?? "").trim().slice(0, 300),
     updatedAt: new Date().toISOString(),
   };

@@ -79,10 +79,12 @@ export type PriceGuideDraft = {
   touchAdd: number | null;
   screen17Add: number | null;
   accessoriesLow: Record<string, number>;
+  /** מחיר שוק נמוך מדויק לתצורות שנסרקו (מפתח = `specKey`) */
+  specPrices: Record<string, number>;
   note: string;
 };
 
-const GUIDE_PROMPT = `אני מוכר מחשבים בישראל. בדוק מחירי שוק עדכניים (חנויות ישראליות מוכרות, מחשב חדש, מעבד אינטל דור 12 ומעלה) והחזר מחירון הערכה בשקלים.
+export const GUIDE_PROMPT = `אני מוכר מחשבים בישראל. בדוק מחירי שוק עדכניים (חנויות ישראליות מוכרות, מחשב חדש, מעבד אינטל דור 12 ומעלה) והחזר מחירון הערכה בשקלים.
 לכל מספר: ממוצע המחירים **הנמוך**, בלי להתחשב במחירים חריגים (נמוכים או גבוהים בצורה חשודה).
 הגדרות:
 - laptopBase: מחשב נייד 15.6 אינץ', 8GB זיכרון, 256GB SSD, בלי מסך מגע - לפי מעבד i3 / i5 / i7.
@@ -105,16 +107,25 @@ function onlyNumbers(o: unknown): Record<string, number> {
 }
 
 /** סקירת שוק מרוכזת למחירון (פעם בחודש בערך): Haiku + חיפוש ברשת. טיוטה לבעלים, לא נשמרת אוטומטית. */
-export async function draftPriceGuide(): Promise<PriceGuideDraft> {
+/** הנחיית הסריקה הלילית: ההנחיה הבסיסית + תצורות ספציפיות שצריך להן מחיר שוק נמוך מדויק (קלאסיות + נפוצות בבקשות). */
+export function buildGuidePrompt(targets: { key: string; description: string; requested: number }[] = []): string {
+  if (!targets.length) return GUIDE_PROMPT;
+  return `${GUIDE_PROMPT}
+
+בנוסף, החזר גם specPrices: אובייקט שבו המפתח הוא המזהה שבסוגריים המרובעים והערך הוא מחיר השוק הנמוך (אותם כללים: ממוצע נמוך בלי חריגים, מחשב מינימלי בלי מערכת הפעלה) לכל אחת מהתצורות הבאות. אם אין לך מידע אמין לתצורה מסוימת - השמט אותה, ואל תנחש.
+${targets.map((t) => `[${t.key}] ${t.description}${t.requested ? ` (התבקשה ${t.requested} פעמים לאחרונה)` : ""}`).join("\n")}`;
+}
+
+export async function draftPriceGuide(targets: { key: string; description: string; requested: number }[] = []): Promise<PriceGuideDraft> {
   if (!storeAiConfigured()) throw new Error("ANTHROPIC_API_KEY לא מוגדר");
   const client = createAnthropic();
-  const messages: Anthropic.MessageParam[] = [{ role: "user", content: GUIDE_PROMPT }];
+  const messages: Anthropic.MessageParam[] = [{ role: "user", content: buildGuidePrompt(targets) }];
   for (let turn = 0; turn <= MAX_PAUSE_TURNS; turn++) {
     const response = await client.messages.create({
       model: MODEL,
-      max_tokens: 6000,
+      max_tokens: 9000,
       output_config: { effort: "low" },
-      tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 6, user_location: { type: "approximate", country: "IL" } }],
+      tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 8, user_location: { type: "approximate", country: "IL" } }],
       messages,
     });
     if (response.stop_reason === "refusal") throw new Error("המודל סירב לבקשה");
@@ -138,6 +149,7 @@ export async function draftPriceGuide(): Promise<PriceGuideDraft> {
       touchAdd: typeof raw.touchAdd === "number" && raw.touchAdd > 0 ? Math.round(raw.touchAdd) : null,
       screen17Add: typeof raw.screen17Add === "number" && raw.screen17Add > 0 ? Math.round(raw.screen17Add) : null,
       accessoriesLow: onlyNumbers(raw.accessoriesLow),
+      specPrices: onlyNumbers(raw.specPrices),
       note: String(raw.note ?? "").slice(0, 300),
     };
   }
