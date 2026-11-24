@@ -17,6 +17,8 @@ type Msg = AdvisorTurn & {
   time: string;
   options?: ChatOption[];
   priced?: Priced;
+  /** סיבת כשל בבדיקת השוק - מוצג לבעלים בלבד */
+  priceError?: string;
   quickReplies?: string[];
   source?: "model" | "faq";
   /** הודעת פתיחה מקומית - לא נשלחת למודל */
@@ -104,7 +106,8 @@ export function ChatAdvisor({ branches }: { branches: Branch[] }) {
   async function loadPrices(msgId: number, options: ChatOption[]) {
     try {
       const res = await priceOptionsAction(options.map((o) => o.spec));
-      patch(msgId, (m) => ({ ...m, priced: "done", options: m.options?.map((o, i) => ({ ...o, estimate: res[i]?.estimate ?? null })) }));
+      const err = res.find((r) => r.error)?.error;
+      patch(msgId, (m) => ({ ...m, priced: "done", priceError: err, options: m.options?.map((o, i) => ({ ...o, estimate: res[i]?.estimate ?? null })) }));
     } catch {
       patch(msgId, (m) => ({ ...m, priced: "done" }));
     }
@@ -258,7 +261,10 @@ export function ChatAdvisor({ branches }: { branches: Branch[] }) {
                             <span className="mr-1 text-[11px] font-normal text-muted">(הערכה, לא מחיר סופי)</span>
                           </div>
                         ) : (
-                          <div className="mt-1.5 text-xs text-muted">המחיר יימסר אחרי בדיקה</div>
+                          <div className="mt-1.5 text-xs text-muted">
+                            המחיר יימסר אחרי בדיקה
+                            {m.priceError ? <span className="block text-[11px] text-red-600">אבחון (לבעלים): {m.priceError}</span> : null}
+                          </div>
                         )}
                         {o.estimate?.accessories.length ? (
                           <div className="mt-0.5 text-xs text-ink">

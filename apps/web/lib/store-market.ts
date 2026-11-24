@@ -73,19 +73,26 @@ export function accessoryNames(spec: StoreSpec): string[] {
     : extras;
 }
 
-const docId = (key: string, date: string) => createHash("sha1").update(`${date}__${key}`).digest("hex");
+/** כמה ימים תשובת מחיר נשארת בתוקף. מפרט שכבר נבדק נענה אותו דבר (עקביות בין סניפים וחיסכון); אחרי זה נבדק מחדש. */
+export const PRICE_CACHE_DAYS = 3;
+
+const docId = (key: string) => createHash("sha1").update(key).digest("hex");
+
+function ageDays(isoDate: string): number {
+  return (Date.parse(israelDate()) - Date.parse(isoDate)) / 86_400_000;
+}
 
 export async function readCache(keys: string[]): Promise<Map<string, MarketLow>> {
   const out = new Map<string, MarketLow>();
   if (!keys.length) return out;
   const db = getAdminFirestore();
-  const date = israelDate();
-  const refs = keys.map((k) => db.collection(CACHE_COLLECTION).doc(docId(k, date)));
+  const refs = keys.map((k) => db.collection(CACHE_COLLECTION).doc(docId(k)));
   const snaps = await db.getAll(...refs);
   snaps.forEach((snap, i) => {
     if (!snap.exists) return;
-    const d = snap.data() as { lowAverageILS?: number; prices?: MarketLow["prices"] };
-    if (typeof d.lowAverageILS === "number") out.set(keys[i]!, { lowAverageILS: d.lowAverageILS, prices: d.prices ?? [] });
+    const d = snap.data() as { lowAverageILS?: number; prices?: MarketLow["prices"]; date?: string };
+    if (typeof d.lowAverageILS !== "number" || !d.date || ageDays(d.date) >= PRICE_CACHE_DAYS) return;
+    out.set(keys[i]!, { lowAverageILS: d.lowAverageILS, prices: d.prices ?? [] });
   });
   return out;
 }
@@ -93,7 +100,7 @@ export async function readCache(keys: string[]): Promise<Map<string, MarketLow>>
 async function writeCache(key: string, value: MarketLow): Promise<void> {
   await getAdminFirestore()
     .collection(CACHE_COLLECTION)
-    .doc(docId(key, israelDate()))
+    .doc(docId(key))
     .set({ key, date: israelDate(), ...value, createdAt: new Date().toISOString() });
 }
 
@@ -122,7 +129,7 @@ export async function lookupMarketLows(items: MarketItem[]): Promise<Map<string,
       model: MODEL,
       max_tokens: 4000,
       output_config: { effort: "low" },
-      tools: [{ type: "web_search_20260209", name: "web_search", max_uses: Math.min(10, 2 + items.length * 2), user_location: { type: "approximate", country: "IL" } }],
+      tools: [{ type: "web_search_20250305", name: "web_search", max_uses: Math.min(10, 2 + items.length * 2), user_location: { type: "approximate", country: "IL" } }],
       messages,
     });
     if (response.stop_reason === "refusal") return out;
@@ -183,7 +190,7 @@ export async function estimateMany(
   specs: StoreSpec[],
   guide: StorePriceGuide,
   opts: { allowLookup: boolean },
-): Promise<{ estimate: PriceEstimate | null; source: "market" | "guide" | "none" }[]> {
+): Promise<{ estimate: PriceEstimate | null; source: "market" | "guide" | "none"; error?: string }[]> {
   const wanted = new Map<string, MarketItem>();
   for (const spec of specs) {
     wanted.set(computerKey(spec), { key: computerKey(spec), description: computerDescription(spec) });
@@ -193,17 +200,21 @@ export async function estimateMany(
   }
   const lows = await readCache([...wanted.keys()]);
   const missing = [...wanted.values()].filter((i) => !lows.has(i.key));
+  let error: string | undefined;
   if (opts.allowLookup && missing.length) {
     try {
-      for (const [k, v] of await lookupMarketLows(missing)) lows.set(k, v);
-    } catch {
-      // חיפוש נכשל - נופלים לגיבוי
+      const found = await lookupMarketLows(missing);
+      for (const [k, v] of found) lows.set(k, v);
+      if (found.size === 0) error = "החיפוש לא החזיר מחירים אמינים";
+    } catch (e) {
+      error = e instanceof Error ? e.message : "החיפוש נכשל";
+      console.error("[store-market] lookup failed:", error);
     }
   }
   return specs.map((spec) => {
     const market = buildEstimate(spec, lows);
     if (market) return { estimate: market, source: "market" as const };
     const fallback = estimateRange(spec, guide);
-    return fallback ? { estimate: fallback, source: "guide" as const } : { estimate: null, source: "none" as const };
+    return fallback ? { estimate: fallback, source: "guide" as const } : { estimate: null, source: "none" as const, ...(error ? { error } : {}) };
   });
 }
