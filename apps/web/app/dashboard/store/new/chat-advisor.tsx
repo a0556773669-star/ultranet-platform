@@ -200,7 +200,13 @@ export function ChatAdvisor({ branches }: { branches: Branch[] }) {
 
       {showDetails ? (
         <div className="grid gap-2 border-b border-card-border bg-[#fafbfc] px-4 py-2.5 md:grid-cols-3">
-          {branches.length !== 1 ? (
+          {branches.length === 0 ? (
+            <div className="rounded-lg bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800 md:col-span-3">
+              אין סניפים לבחירה: המשתמש הזה לא משויך לאף סניף. אפשר לשוחח עם היועץ, אבל לשמירה ולשליחת בקשה צריך לשייך סניף בטופס המשתמשים
+              (`/dashboard/users`, ליד ההרשאה ״חנות סניפים״).
+            </div>
+          ) : null}
+          {branches.length > 1 ? (
             <select value={branchId} onChange={(e) => setBranchId(e.target.value)} className={FIELD} aria-label="סניף">
               <option value="">בחירת סניף</option>
               {branches.map((b) => (
