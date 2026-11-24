@@ -24,6 +24,9 @@ export interface BranchTransferRow {
   totalDue: number;
   transferredAmount: number;
   receiptIssued: boolean;
+  /** "חנות סניפים": מה שהסניף גבה החודש (נכנס ל"צריך להעביר") ועמלתו (מופחתת). לא נכנס לרווחיות הניידים. */
+  storeCollected: number;
+  storeCommission: number;
 }
 
 /** סניף-אב ומיד אחריו הסניפים שתלויים בו, כדי שהיררכיה תיקרא כהיררכיה. */
@@ -55,6 +58,8 @@ export function buildBranchTransferRows(
       totalDue: monthRow?.totalDue ?? 0,
       transferredAmount: monthRow?.transferredAmount ?? 0,
       receiptIssued: monthRow?.receiptIssued ?? false,
+      storeCollected: f.storeCollectedThisMonth,
+      storeCommission: f.storeCommissionThisMonth,
     };
   });
 }

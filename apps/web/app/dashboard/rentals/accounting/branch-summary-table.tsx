@@ -21,6 +21,9 @@ export interface BranchSummaryRow {
   profitToDate: number;
   /** ההתחשבנות של החודש הנבחר: חיובי = נכנס אליי, שלילי = יוצא ממני */
   incomingThisMonth: number;
+  /** חנות סניפים - מוצג כהערה ליד "מגיע החודש"; לא נכלל ברווח. */
+  storeCollected?: number;
+  storeCommission?: number;
   /** מתוך "ההוצאות שלי" — עלות הוספת המחשבים שנזקפה (`lib/laptop-costs.ts`) */
   laptopCostToDate: number;
   /** מתוך "ההכנסות שלי" — מכירות מחשבים (100% שלי) */
@@ -128,6 +131,11 @@ export function BranchSummaryTable({ rows, month }: { rows: BranchSummaryRow[]; 
                 </td>
                 <td className={TD}>
                   <Signed value={r.incomingThisMonth} />
+                  {(r.storeCollected ?? 0) > 0 || (r.storeCommission ?? 0) > 0 ? (
+                    <span className="block text-[10px] font-normal text-muted">
+                      מזה חנות סניפים: {(r.storeCollected ?? 0) > 0 ? `נגבה ${money(r.storeCollected ?? 0)}, ` : ""}עמלה −{money(r.storeCommission ?? 0)} (לא נכלל ברווח)
+                    </span>
+                  ) : null}
                 </td>
               </tr>
               {open && (

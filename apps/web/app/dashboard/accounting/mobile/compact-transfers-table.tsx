@@ -71,6 +71,11 @@ export function CompactTransfersTable({ rows, month }: { rows: BranchTransferRow
                 </td>
                 <td className={TD}>
                   <Signed value={r.totalDue} strong />
+                  {r.storeCollected > 0 || r.storeCommission > 0 ? (
+                    <span className="block text-[10px] font-normal text-muted">
+                      כולל חנות סניפים: {r.storeCollected > 0 ? `נגבה ${Math.round(r.storeCollected).toLocaleString("he-IL")} ₪, ` : ""}עמלה −{Math.round(r.storeCommission).toLocaleString("he-IL")} ₪
+                    </span>
+                  ) : null}
                 </td>
                 <td className={TD}>
                   <TransferMarkCell
