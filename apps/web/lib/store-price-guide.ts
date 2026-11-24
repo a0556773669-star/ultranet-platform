@@ -231,6 +231,9 @@ function pickValue(prev: number | undefined, next: number | undefined, kind: str
     notes.push(`${label}: ${prev}->${next} שינוי גדול מדי - נשמר הקודם`);
     return prev;
   }
+  // החלקה: סריקה בודדת של חיפוש ברשת רועשת (בהרצות עוקבות ראינו סטיות של עד 40%), ולכן מחיר קיים זז רק חצי דרך
+  // אל הערך החדש. שוק משתנה לאט, וכך רעש של לילה אחד לא מזיז את ההצעות, ושינוי אמיתי ייקלט תוך כמה לילות.
+  if (typeof prev === "number") return Math.round((prev + next) / 2 / 10) * 10;
   return next;
 }
 
