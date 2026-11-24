@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import type { StorePriceGuide } from "@ultranet/shared-types";
 import { useRouter } from "next/navigation";
 import { refreshPriceGuideNowAction, savePriceGuideAction } from "../actions";
@@ -35,6 +35,12 @@ const Row = ({ name, label, vals, set }: { name: string; label: string; vals: Va
 export function PricesForm({ guide, aiEnabled }: { guide: StorePriceGuide; aiEnabled: boolean }) {
   const [vals, setVals] = useState<Vals>(fromGuide(guide));
   const [note, setNote] = useState(guide.note ?? "");
+  // אחרי עדכון אוטומטי הדף נטען מחדש עם מחירים חדשים - מרעננים את השדות בלי לאבד את הודעת התוצאה
+  useEffect(() => {
+    setVals(fromGuide(guide));
+    setNote(guide.note ?? "");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [guide.updatedAt]);
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [aiBusy, setAiBusy] = useState(false);
@@ -45,13 +51,18 @@ export function PricesForm({ guide, aiEnabled }: { guide: StorePriceGuide; aiEna
     setAiBusy(true);
     setMsg("");
     try {
-      const r = await refreshPriceGuideNowAction();
+      const res = await refreshPriceGuideNowAction();
+      if (!res.ok) {
+        setMsg(`העדכון נכשל: ${res.error}`);
+        return;
+      }
+      const r = res.data;
       setMsg(
         `המחירון עודכן ונשמר (נסרקו ${r.scanned} תצורות).${r.rejected.length ? ` נדחו ${r.rejected.length} ערכים לא סבירים: ${r.rejected.slice(0, 3).join("; ")}` : ""}`,
       );
       router.refresh();
-    } catch (e) {
-      setMsg(e instanceof Error ? e.message : "שגיאה");
+    } catch {
+      setMsg("העדכון לא הסתיים - ייתכן שהסריקה ארכה מדי (מעל דקה) ונחתכה. רעננו את הדף: אם המחירים התעדכנו, הכול תקין; אחרת נסו שוב.");
     } finally {
       setAiBusy(false);
     }

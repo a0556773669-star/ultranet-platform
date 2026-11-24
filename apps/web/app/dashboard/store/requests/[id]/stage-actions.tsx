@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import type { StoreRequestStatus } from "@ultranet/shared-types";
+import type { ActionResult } from "@/lib/action-result";
 import {
   closeDealAction,
   confirmStockAction,
@@ -38,14 +39,18 @@ export function StageActions({ id, status, isOwner, options, finalPriceILS, acce
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState("");
 
-  function run(fn: () => Promise<void>) {
+  function run(fn: () => Promise<ActionResult<void>>) {
     setError("");
     startTransition(async () => {
       try {
-        await fn();
+        const res = await fn();
+        if (!res.ok) {
+          setError(res.error);
+          return;
+        }
         router.refresh();
-      } catch (e) {
-        setError(e instanceof Error ? e.message : "שגיאה");
+      } catch {
+        setError("אירעה שגיאה בחיבור לשרת (ייתכן שהפעולה ארכה מדי). רעננו את הדף ובדקו אם הפעולה בוצעה.");
       }
     });
   }

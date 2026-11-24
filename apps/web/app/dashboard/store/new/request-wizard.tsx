@@ -122,9 +122,13 @@ export function RequestWizard({ branches }: { branches: Branch[] }) {
           answers,
           notes,
         });
-        router.push(`/dashboard/store/requests/${res.id}`);
-      } catch (e) {
-        setError(e instanceof Error ? e.message : "שגיאה בשליחה");
+        if (!res.ok) {
+          setError(res.error);
+          return;
+        }
+        router.push(`/dashboard/store/requests/${res.data.id}`);
+      } catch {
+        setError("אירעה שגיאה בחיבור לשרת. נסו שוב.");
       }
     });
   }

@@ -121,14 +121,19 @@ export function RespondForm({ id, requestedSpecText, upgradeSpecText, upgradeWhy
     setError("");
     setAiPending(true);
     try {
-      const d = await aiMarketDraftAction(id);
+      const res = await aiMarketDraftAction(id);
+      if (!res.ok) {
+        setError(res.error);
+        return;
+      }
+      const d = res.data;
       if (d.lowAverageILS) setAiLow(String(d.lowAverageILS));
       setAiInfo(
         [d.stores.map((x) => `${x.store}: ${x.priceILS.toLocaleString("he-IL")} ₪`).join(" · "), d.upgradeNote].filter(Boolean).join("\n") ||
           "לא נמצאו מחירים אמינים - מלאו ידנית",
       );
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "שגיאה בהכנה האוטומטית");
+    } catch {
+      setError("ההכנה האוטומטית לא הסתיימה (ייתכן שארכה מדי). נסו שוב.");
     } finally {
       setAiPending(false);
     }
@@ -151,10 +156,14 @@ export function RespondForm({ id, requestedSpecText, upgradeSpecText, upgradeWhy
         startTransition(async () => {
           setError("");
           try {
-            await respondStoreRequestAction(id, formData);
+            const res = await respondStoreRequestAction(id, formData);
+            if (!res.ok) {
+              setError(res.error);
+              return;
+            }
             router.refresh();
-          } catch (e) {
-            setError(e instanceof Error ? e.message : "שגיאה בשמירה");
+          } catch {
+            setError("אירעה שגיאה בחיבור לשרת. נסו שוב.");
           }
         })
       }
