@@ -11,8 +11,8 @@ export const EMPTY_GUIDE: StorePriceGuide = { laptopBase: {}, desktopBase: {}, r
 
 export async function loadPriceGuide(): Promise<StorePriceGuide> {
   const snap = await getAdminFirestore().collection(PRICE_GUIDE_DOC.collection).doc(PRICE_GUIDE_DOC.id).get();
-  if (!snap.exists) return EMPTY_GUIDE;
-  const d = snap.data() as Partial<StorePriceGuide>;
+  if (!snap.exists) return { ...EMPTY_GUIDE };
+  const d = (snap.data() ?? {}) as Partial<StorePriceGuide>;
   return {
     laptopBase: d.laptopBase ?? {},
     desktopBase: d.desktopBase ?? {},
@@ -250,12 +250,20 @@ export type GuideDraftLike = {
   note?: string;
 };
 
-export function mergeGuide(existing: StorePriceGuide, draft: GuideDraftLike): { guide: StorePriceGuide; notes: string[] } {
+export function mergeGuide(existingIn: StorePriceGuide | undefined | null, draftIn: GuideDraftLike | undefined | null): { guide: StorePriceGuide; notes: string[] } {
+  // הגנתי: קלט חסר (או מבנה לא מלא) לא מפיל את המיזוג
+  const existing: StorePriceGuide = { ...EMPTY_GUIDE, ...(existingIn ?? {}) };
+  existing.laptopBase ??= {};
+  existing.desktopBase ??= {};
+  existing.ramAdd ??= {};
+  existing.storageAdd ??= {};
+  existing.accessoriesLow ??= {};
+  const draft: GuideDraftLike = draftIn ?? {};
   const notes: string[] = [];
   const mergeMap = (prev: Partial<Record<string, number>>, next: Partial<Record<string, number>> | undefined, kind: string, label: string) => {
     const out: Record<string, number> = {};
-    for (const k of new Set([...Object.keys(prev), ...Object.keys(next ?? {})])) {
-      const v = pickValue(prev[k], next?.[k], kind, `${label} ${k}`, notes);
+    for (const k of new Set([...Object.keys(prev ?? {}), ...Object.keys(next ?? {})])) {
+      const v = pickValue(prev?.[k], next?.[k], kind, `${label} ${k}`, notes);
       if (typeof v === "number") out[k] = v;
     }
     return out;

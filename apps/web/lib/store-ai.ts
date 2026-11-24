@@ -174,8 +174,9 @@ export async function scanMarket(targets: ScanTarget[]): Promise<PriceGuideDraft
     const first = results.find((r): r is PromiseRejectedResult => r.status === "rejected");
     throw new Error(first?.reason instanceof Error ? first.reason.message : "הסריקה נכשלה");
   }
-  const base = results[0]!.status === "fulfilled" ? results[0]!.value : ok[0]!;
+  const first = results[0];
+  const base = first && first.status === "fulfilled" ? first.value : ok[0]!;
   const specPrices: Record<string, number> = {};
-  for (const r of ok) Object.assign(specPrices, r.specPrices);
+  for (const r of ok) Object.assign(specPrices, r?.specPrices ?? {});
   return { ...base, specPrices };
 }
