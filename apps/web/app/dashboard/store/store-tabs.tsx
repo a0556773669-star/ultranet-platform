@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import { Home, PlusCircle, ClipboardList, Coins, BookText, Tag, MessageCircleQuestion, type LucideIcon } from "lucide-react";
 
 const TABS: { href: string; label: string; icon: LucideIcon }[] = [
-  { href: "/dashboard/store", label: "איך זה עובד + נהלים", icon: Home },
+  { href: "/dashboard/store", label: "נהלים והוראות", icon: Home },
   { href: "/dashboard/store/new", label: "התאמת מחשב ללקוח", icon: PlusCircle },
   { href: "/dashboard/store/requests", label: "הבקשות שלי", icon: ClipboardList },
 ];
