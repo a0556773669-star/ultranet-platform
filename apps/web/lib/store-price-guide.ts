@@ -279,5 +279,18 @@ export function mergeGuide(existingIn: StorePriceGuide | undefined | null, draft
     screen17Add: pickValue(existing.screen17Add, draft.screen17Add ?? undefined, "extra", "17 אינץ'", notes),
     note: [draft.note ?? "", ...notes].filter(Boolean).join(" | ").slice(0, 500),
   };
+  // עקביות: דרגה גבוהה לא יכולה להיות זולה מדרגה נמוכה (i3 <= i5 <= i7). אם הסריקה החזירה סדר הפוך - הערכים של הסריקה נדחים
+  // ונשאר מה שהיה קודם (ריק אם לא היה), כדי שמספר משובש לא ייכנס להצעות.
+  const monotonic = (m: Partial<Record<string, number>>) => {
+    const a = m.i3, b = m.i5, c = m.i7;
+    return !((a != null && b != null && a > b) || (b != null && c != null && b > c) || (a != null && c != null && a > c));
+  };
+  for (const [field, label] of [["laptopBase", "נייד"], ["desktopBase", "נייח"]] as const) {
+    if (!monotonic(guide[field])) {
+      notes.push(`${label}: מחירי הדרגות לא עקביים (i3/i5/i7) - התוצאה נדחתה`);
+      guide[field] = monotonic(existing[field]) ? { ...existing[field] } : {};
+    }
+  }
+  guide.note = [draft.note ?? "", ...notes].filter(Boolean).join(" | ").slice(0, 500);
   return { guide, notes };
 }
