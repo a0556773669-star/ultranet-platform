@@ -14,9 +14,13 @@ export default async function PricesPage() {
     <div className="max-w-3xl">
       <h1 className="mb-4 flex items-center gap-1.5 text-[21px] font-extrabold text-ink">
         <Tag className="h-5 w-5" />
-        מחירון שוק
+        מחירון גיבוי
       </h1>
       <StoreTabs isOwner />
+      <div className="card mb-4 text-sm text-muted">
+        המחיר בצ׳אט נבדק <b>חי בשוק</b> (חיפוש ברשת, ממוצע נמוך בלי מחירים חריגים, ועוד המרווח), ונשמר <b>למשך אותו יום</b> לכל
+        הסניפים, כך שמפרט שכבר נבדק היום לא נבדק שוב. המחירון כאן הוא <b>גיבוי בלבד</b>, למקרה שהחיפוש נכשל.
+      </div>
       <PricesForm guide={guide} aiEnabled={advisorConfigured()} />
     </div>
   );
