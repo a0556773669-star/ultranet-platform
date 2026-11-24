@@ -271,7 +271,12 @@ export function RequestWizard({ branches }: { branches: Branch[] }) {
               <div className="mt-2 text-xs text-muted">כל השדות נקבעו ע״י הלקוח - ללא הצעת שדרוג.</div>
             )}
           </div>
-          {branches.length !== 1 && (
+          {branches.length === 0 && (
+            <div className="rounded-lg bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">
+              אין סניפים לבחירה: המשתמש הזה לא משויך לאף סניף. לשליחת בקשה צריך לשייך סניף בטופס המשתמשים (`/dashboard/users`, ליד ההרשאה ״חנות סניפים״).
+            </div>
+          )}
+          {branches.length > 1 && (
             <div>
               <label className={LABEL}>סניף</label>
               <select value={branchId} onChange={(e) => setBranchId(e.target.value)} className={FIELD}>
