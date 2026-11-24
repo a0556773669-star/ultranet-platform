@@ -18,8 +18,9 @@ export default async function CommissionsPage({ searchParams }: { searchParams: 
   await requireOwner();
   const month = /^\d{4}-\d{2}$/.test(searchParams.month ?? "") ? searchParams.month! : currentIsraelMonth();
   const rules = await loadEffectiveRules();
-  const snap = await getAdminFirestore().collection("n_store_requests").where("collection.by", "==", "branch").get();
-  const deals = snap.docs
+  const colRef = getAdminFirestore().collection("n_store_requests");
+  const [snapBranch, snapOnline] = await Promise.all([colRef.where("collection.by", "==", "branch").get(), colRef.where("collection.commissionToBranch", "==", true).get()]);
+  const deals = [...snapBranch.docs, ...snapOnline.docs]
     .map((d) => ({ ...(d.data() as Omit<StoreRequest, "id">), id: d.id }) as StoreRequest)
     .filter((r) => dealSettlement(r).month === month);
 

@@ -1,6 +1,8 @@
 import { getAdminFirestore } from "./firebase-admin";
 import { mailerConfigured, sendHtmlEmail } from "./mailer";
-import type { StoreRequest } from "@ultranet/shared-types";
+import { waitUntil } from "@vercel/functions";
+import type { StoreListing, StoreRequest } from "@ultranet/shared-types";
+import { findCheapestListings } from "./store-listings";
 import { specToText } from "./store-wizard";
 
 /**
@@ -38,7 +40,30 @@ async function safeSend(to: string, subject: string, body: string): Promise<void
   }
 }
 
+/** מייל לבעלים: הלקוח מעוניין - בדיקת מלאי. כולל קישורים לחנויות הזולות ביותר (חיפוש שרץ ברקע, בלי לעכב את הסניף). */
 export async function notifyOwnerStockCheck(r: StoreRequest): Promise<void> {
+  const task = stockCheckFollowUp(r).catch((e) => console.error("[store-notify] stock check follow-up failed:", e instanceof Error ? e.message : e));
+  try {
+    waitUntil(task); // ב-Vercel: ממשיך לרוץ אחרי שהתשובה לסניף כבר נשלחה
+  } catch {
+    void task;
+  }
+}
+
+function withTimeout<T>(p: Promise<T>, ms: number): Promise<T | null> {
+  return Promise.race([p, new Promise<null>((resolve) => setTimeout(() => resolve(null), ms))]);
+}
+
+async function stockCheckFollowUp(r: StoreRequest): Promise<void> {
+  let listings: StoreListing[] = [];
+  try {
+    listings = (await withTimeout(findCheapestListings(r.spec), 50_000)) ?? [];
+  } catch (e) {
+    console.error("[store-notify] listings search failed:", e instanceof Error ? e.message : e);
+  }
+  if (listings.length) {
+    await getAdminFirestore().collection("n_store_requests").doc(r.id).update({ listings, listingsAt: new Date().toISOString() }).catch(() => {});
+  }
   const chosen = r.options?.[r.chosenOptionIndex ?? -1];
   const lines = [
     `סניף: ${r.branchName} · לקוח: ${r.customerName}`,
@@ -46,7 +71,13 @@ export async function notifyOwnerStockCheck(r: StoreRequest): Promise<void> {
     chosen?.quotedFromILS ? `טווח שנאמר ללקוח: ${chosen.quotedFromILS}-${chosen.quotedToILS} ₪` : "",
     "הלקוח מעוניין - נדרשת בדיקת מלאי ומחיר סופי.",
   ].filter(Boolean);
-  const body = html("בדיקת מלאי חדשה מסניף", lines, r.id);
+  const listingsHtml = listings.length
+    ? `<h3 style="margin:16px 0 6px">אם אין מלאי אצל היבואנים - איפה הכי זול להזמין</h3>
+<ul style="padding-right:18px;margin:0">${listings
+        .map((l) => `<li style="margin:4px 0"><a href="${esc(l.url)}">${esc(l.store)}</a> · ${esc(l.title)} · <b>${l.priceILS.toLocaleString("he-IL")} ₪</b></li>`)
+        .join("")}</ul><p style="font-size:12px;color:#6b7280">מחירים אלה אינם מחייבים - לבדוק באתר.</p>`
+    : "";
+  const body = html("בדיקת מלאי חדשה מסניף", lines, r.id).replace("</div>", `${listingsHtml}</div>`);
   for (const to of await ownerEmails()) await safeSend(to, `בדיקת מלאי: ${r.customerName} (${r.branchName})`, body);
 }
 

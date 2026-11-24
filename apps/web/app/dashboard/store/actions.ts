@@ -14,10 +14,11 @@ import { estimateRange, loadPriceGuide, mergeGuide, PRICE_GUIDE_DOC, recordDeman
 import { notifyBranch, notifyOwnerNewRequest, notifyOwnerStockCheck } from "@/lib/store-notify";
 import { FAQ_COLLECTION } from "@/lib/store-faq";
 import { DEFAULT_GLOSSARY, GLOSSARY_COLLECTION } from "@/lib/store-glossary";
+import { resolveNedarimCreds } from "@/lib/nedarim";
 import { DEFAULT_STORE_PROCEDURES } from "@/lib/store-default-procedures";
 import { draftMarketPrice, scanMarket, storeAiConfigured, type MarketDraft } from "@/lib/store-ai";
 import { applyUsageDefaults, sanitizeSpec, specToText, type UsageKey } from "@/lib/store-wizard";
-import type { StoreAccessoryQuote, StoreCollection, StoreCommissionCategory, StoreRequest, StoreRequestMode, StoreRequestOption, StoreRequestStatus, StoreSpec } from "@ultranet/shared-types";
+import type { StoreAccessoryQuote, StoreCollection, StorePayment, StoreCommissionCategory, StoreRequest, StoreRequestMode, StoreRequestOption, StoreRequestStatus, StoreSpec } from "@ultranet/shared-types";
 
 const COLLECTION = "n_store_requests";
 const STATUSES: StoreRequestStatus[] = ["new", "in_review", "answered", "stock_check", "stock_confirmed", "deal_closed", "shipped", "delivered", "closed", "no_stock"];
@@ -185,7 +186,7 @@ async function loadForBranch(id: string) {
   if (!snap.exists) throw new Error("הבקשה לא נמצאה");
   const request = { ...(snap.data() as Omit<StoreRequest, "id">), id } as StoreRequest;
   if (!scope.isOwner && !scope.allows(request.branchId)) throw new Error("אין הרשאה לסניף הזה");
-  return { ref, request };
+  return { ref, request, scope };
 }
 
 function revalidateRequest(id: string) {
@@ -645,4 +646,99 @@ export async function testAiConnectionAction(): Promise<{ ok: boolean; message: 
       message: `${base}, אבל החיפוש ברשת נכשל: ${e instanceof Error ? e.message : "שגיאה"} (אם כתוב שהכלי לא מופעל - בדרך כלל צריך להפעיל Web search בהגדרות הארגון ב-console.anthropic.com)`,
     };
   }
+}
+
+// ---------------------------------------------------------------------------
+// תשלום באשראי דרך נדרים פלוס (שלב הסגירה) - אותה סליקה שקיימת היום באתר, אף פעם לא נשמרים פרטי כרטיס
+// ---------------------------------------------------------------------------
+
+const NEDARIM_CREATE = "https://matara.pro/nedarimplus/V6/Files/WebServices/DebitIframe.aspx?Action=CreateTransaction";
+/** מוסד ומפתח הבדיקה הציבוריים של נדרים פלוס (Sandbox) - אותם ערכים שבמסך החיוב הקיים. לבעלים בלבד. */
+const NEDARIM_TEST = { mosadId: "0", apiValid: "j+iyEFN3bE", routeId: "test", name: "מצב בדיקה (Sandbox)" };
+
+async function paymentCreds(request: StoreRequest, test: boolean) {
+  if (test) return NEDARIM_TEST;
+  const creds = await resolveNedarimCreds(request.branchId === "hq" ? null : request.branchId);
+  if (!creds) throw new Error("לא נמצא מסלול סליקה של נדרים פלוס לסניף הזה. יש להגדיר מסלול בדף מסלולי הגבייה.");
+  return creds;
+}
+
+function dealTotal(r: StoreRequest): number {
+  return (r.finalPriceILS ?? 0) + (r.accessoriesFinalILS ?? 0);
+}
+
+/**
+ * פתיחת עסקה בנדרים פלוס לסכום של העסקה (**הסכום נקבע בשרת**, לא מהדפדפן). מחזיר מזהה עסקה שנטען ב-iframe של נדרים,
+ * שבו הלקוח מקליד את הכרטיס (פרטי הכרטיס לא עוברים אצלנו). מסלול הסליקה: מסלול הסניף, ואחרת המסלול הגלובלי של הבעלים.
+ */
+export async function startStorePaymentAction(id: string, opts: { test?: boolean } = {}): Promise<ActionResult<{ transactionId: string; amountILS: number; routeName: string; test: boolean }>> {
+  return guard(async () => {
+    const { request, scope } = await loadForBranch(id);
+    if (request.status !== "stock_confirmed") throw new Error("אפשר לשלם רק אחרי שאושר מלאי ונקבע מחיר סופי");
+    const amount = dealTotal(request);
+    if (!(amount > 0)) throw new Error("אין מחיר סופי לעסקה");
+    const test = Boolean(opts.test) && scope.isOwner;
+    const creds = await paymentCreds(request, test);
+    const body = new URLSearchParams({
+      Mosad: creds.mosadId,
+      ApiValid: creds.apiValid,
+      PaymentType: "Ragil",
+      Amount: amount.toFixed(2),
+      Tashlumim: "1",
+      Zeout: "",
+      FirstName: request.customerName,
+      Phone: request.customerPhone ?? "",
+      Comment: `חנות סניפים - ${request.customerName} (${request.branchName})`,
+    });
+    let res: Response;
+    try {
+      res = await fetch(NEDARIM_CREATE, { method: "POST", body, headers: { "Content-Type": "application/x-www-form-urlencoded" } });
+    } catch {
+      throw new Error("שגיאת תקשורת מול נדרים פלוס");
+    }
+    const text = await res.text();
+    let data: Record<string, unknown>;
+    try {
+      data = JSON.parse(text);
+    } catch {
+      throw new Error(`תגובה לא צפויה מנדרים פלוס: ${text.slice(0, 160)}`);
+    }
+    const transactionId = String(data.Id ?? data.ID ?? "");
+    if (String(data.Status ?? "") !== "OK" || !transactionId) throw new Error(String(data.Message ?? "יצירת העסקה נכשלה"));
+    return { transactionId, amountILS: amount, routeName: creds.name, test };
+  });
+}
+
+/**
+ * נקרא אחרי שה-iframe של נדרים החזיר הצלחה: סוגר את העסקה ורושם את התשלום.
+ * חשבונאות: מסלול הסניף עצמו = הכסף אצל הסניף (`by: "branch"`, נגבה פחות עמלה כמו גבייה רגילה); מסלול גלובלי של הבעלים =
+ * הכסף כבר אצל הבעלים (`by: "owner"` + `commissionToBranch`), והעמלה נזקפת לסניף. תשלום בדיקה לא משפיע על ההתחשבנות.
+ */
+export async function confirmStorePaymentAction(id: string, transactionId: string, opts: { test?: boolean } = {}): Promise<ActionResult<void>> {
+  return guard(async () => {
+    const { ref, request, scope } = await loadForBranch(id);
+    if (request.status !== "stock_confirmed") throw new Error("העסקה כבר נסגרה או שלא אושר מלאי");
+    if (!transactionId) throw new Error("חסר מזהה עסקה");
+    const amount = dealTotal(request);
+    const test = Boolean(opts.test) && scope.isOwner;
+    const creds = await paymentCreds(request, test);
+    const branchDoc = request.branchId === "hq" ? null : await getAdminFirestore().collection("n_branches").doc(request.branchId).get();
+    const branchOwnRoute = !test && branchDoc?.exists && (branchDoc.data() as { collectionRouteId?: string | null }).collectionRouteId === creds.routeId;
+    const now = new Date().toISOString();
+    const by: StoreCollection["by"] = branchOwnRoute ? "branch" : "owner";
+    const collection: StoreCollection = {
+      by,
+      method: "card",
+      online: true,
+      ...(by === "owner" && !test ? { commissionToBranch: true } : {}),
+      amountILS: amount,
+      at: now,
+      month: currentIsraelMonth(),
+    };
+    const payment: StorePayment = { provider: "nedarim_plus", amountILS: amount, transactionId, routeId: creds.routeId, paidAt: now, ...(test ? { test: true } : {}) };
+    const commissionILS = test ? 0 : computeDealCommission(request, await loadCommissionRules());
+    await ref.update({ status: "deal_closed", dealClosedAt: now, collection, payment, commissionILS, updatedAt: now });
+    revalidateRequest(id);
+    revalidatePath("/dashboard/store/commissions");
+  });
 }

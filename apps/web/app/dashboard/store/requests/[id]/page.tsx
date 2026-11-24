@@ -123,7 +123,27 @@ export default async function StoreRequestPage({ params }: { params: { id: strin
         <div className="card mb-4 text-sm text-ink">אין מלאי כרגע לאפשרות הזו. {r.stockNote || "נחזור אליכם עם חלופה."}</div>
       ) : null}
 
-      {isOwner && r.collection?.by === "branch" ? (
+      {isOwner && r.listings?.length ? (
+        <div className="card mb-4 flex flex-col gap-1 text-sm">
+          <h2 className="text-base font-bold text-ink">אם אין מלאי אצל היבואנים - איפה הכי זול להזמין</h2>
+          {r.listings.map((l, i) => (
+            <div key={i} className="flex flex-wrap items-center justify-between gap-2">
+              <a href={l.url} target="_blank" rel="noopener noreferrer" className="font-semibold text-teal hover:underline">{l.store} · {l.title}</a>
+              <span className="font-bold text-ink">{l.priceILS.toLocaleString("he-IL")} ₪</span>
+            </div>
+          ))}
+          <p className="text-[11px] text-muted">נמצא בחיפוש כשהלקוח ביקש בדיקת מלאי. מחירים אינם מחייבים - לבדוק באתר.</p>
+        </div>
+      ) : null}
+
+      {r.payment ? (
+        <div className="card mb-4 text-sm">
+          שולם באשראי דרך נדרים פלוס: <b>{r.payment.amountILS.toLocaleString("he-IL")} ₪</b> · עסקה {r.payment.transactionId}
+          {r.payment.test ? <span className="mr-1 rounded bg-amber-100 px-1.5 text-xs font-bold text-amber-700">בדיקה</span> : null}
+        </div>
+      ) : null}
+
+      {isOwner && (r.collection?.by === "branch" || r.collection?.commissionToBranch) ? (
         <form action={adjustCommissionAction.bind(null, r.id)} className="card mb-4 flex flex-wrap items-end gap-2 text-sm">
           <div>
             <label className="mb-1 block text-xs font-semibold text-muted">עמלת הסניף (₪) - ניתן לתיקון</label>
