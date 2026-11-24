@@ -125,7 +125,7 @@ export async function draftPriceGuide(targets: { key: string; description: strin
       model: MODEL,
       max_tokens: 9000,
       output_config: { effort: "low" },
-      tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 8, user_location: { type: "approximate", country: "IL" } }],
+      tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 4, user_location: { type: "approximate", country: "IL" } }],
       messages,
     });
     if (response.stop_reason === "refusal") throw new Error("המודל סירב לבקשה");
@@ -154,4 +154,28 @@ export async function draftPriceGuide(targets: { key: string; description: strin
     };
   }
   throw new Error("החיפוש לא הסתיים - נסו שוב");
+}
+
+
+type ScanTarget = { key: string; description: string; requested: number };
+
+/**
+ * סריקת שוק מלאה **במקביל**: קריאה אחת לבסיס (נייד/נייח, תוספות, אביזרים) ועוד קריאה לכל 10 תצורות. כל קריאה קצרה
+ * (כ-30-45 שניות) ולכן הסריקה כולה נכנסת במגבלת הזמן של הפונקציה (60 שניות) גם כשהרשימה גדלה עם הביקוש. אם חלק
+ * מהקריאות נכשלות - ממשיכים עם מה שחזר; אם כולן נכשלו - שגיאה עם הסיבה.
+ */
+export async function scanMarket(targets: ScanTarget[]): Promise<PriceGuideDraft> {
+  const CHUNK = 10;
+  const chunks: ScanTarget[][] = [];
+  for (let i = 0; i < targets.length; i += CHUNK) chunks.push(targets.slice(i, i + CHUNK));
+  const results = await Promise.allSettled([draftPriceGuide([]), ...chunks.map((c) => draftPriceGuide(c))]);
+  const ok = results.filter((r): r is PromiseFulfilledResult<PriceGuideDraft> => r.status === "fulfilled").map((r) => r.value);
+  if (!ok.length) {
+    const first = results.find((r): r is PromiseRejectedResult => r.status === "rejected");
+    throw new Error(first?.reason instanceof Error ? first.reason.message : "הסריקה נכשלה");
+  }
+  const base = results[0]!.status === "fulfilled" ? results[0]!.value : ok[0]!;
+  const specPrices: Record<string, number> = {};
+  for (const r of ok) Object.assign(specPrices, r.specPrices);
+  return { ...base, specPrices };
 }

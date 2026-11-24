@@ -112,7 +112,12 @@ export function ChatAdvisor({ branches }: { branches: Branch[] }) {
     setBusy(true);
     setError("");
     try {
-      const r = await advisorChatAction(history.map(({ role, content: c }) => ({ role, content: c })));
+      const res = await advisorChatAction(history.map(({ role, content: c }) => ({ role, content: c })));
+      if (!res.ok) {
+        setError(res.error);
+        return;
+      }
+      const r = res.data;
       const id = idRef.current++;
       setMsgs((cur) => [
         ...cur,
@@ -123,8 +128,8 @@ export function ChatAdvisor({ branches }: { branches: Branch[] }) {
         if (r.budgetILS) setBudget(r.budgetILS);
         if (r.notes) setNotes(r.notes);
       }
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "שגיאה ביועץ");
+    } catch {
+      setError("אירעה שגיאה בחיבור לשרת (ייתכן שהתשובה ארכה מדי). נסו לשלוח שוב.");
     } finally {
       setBusy(false);
       inputRef.current?.focus();
@@ -164,9 +169,13 @@ export function ChatAdvisor({ branches }: { branches: Branch[] }) {
           budgetILS: budget,
           notes,
         });
-        router.push(`/dashboard/store/requests/${res.id}`);
-      } catch (e) {
-        setError(e instanceof Error ? e.message : "שגיאה בשליחה");
+        if (!res.ok) {
+          setError(res.error);
+          return;
+        }
+        router.push(`/dashboard/store/requests/${res.data.id}`);
+      } catch {
+        setError("אירעה שגיאה בחיבור לשרת. נסו שוב.");
       }
     });
   }

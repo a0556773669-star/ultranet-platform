@@ -17,11 +17,15 @@ export function SeedProceduresButton() {
         onClick={() =>
           startTransition(async () => {
             try {
-              const r = await seedStoreProceduresAction();
-              setMsg(r.created ? `נטענו ${r.created} נהלים` : "הנהלים כבר קיימים");
+              const res = await seedStoreProceduresAction();
+              if (!res.ok) {
+                setMsg(res.error);
+                return;
+              }
+              setMsg(res.data.created ? `נטענו ${res.data.created} נהלים` : "הנהלים כבר קיימים");
               router.refresh();
-            } catch (e) {
-              setMsg(e instanceof Error ? e.message : "שגיאה");
+            } catch {
+              setMsg("אירעה שגיאה בחיבור לשרת");
             }
           })
         }

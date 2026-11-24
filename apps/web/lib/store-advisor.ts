@@ -5,7 +5,7 @@ import { getAdminFirestore } from "./firebase-admin";
 import { DEFAULT_MIN_GENERATION, USAGE_OPTIONS, sanitizeSpec, specToText } from "./store-wizard";
 import { loadGlossary } from "./store-glossary";
 import { FAQ_COLLECTION, learnFaq, loadFaq, matchFaq } from "./store-faq";
-import { estimateRange, guideForPrompt, loadPriceGuide, type PriceEstimate } from "./store-price-guide";
+import { estimateRange, guideForPrompt, loadPriceGuide, recordDemand, type PriceEstimate } from "./store-price-guide";
 
 /**
  * יועץ הצ'אט של חנות הסניפים - **Claude Haiku 5.5** (הדגם הזול ביותר), מאמץ נמוך, פלט מובנה.
@@ -241,6 +241,9 @@ export async function advisorChat(history: AdvisorTurn[], isOwner = false): Prom
   let reply = String(raw.reply ?? "").slice(0, 1200);
   let ownerHint: string | undefined;
   if (options.length) {
+    // ביקוש: נרשם פעם אחת לשיחה (בהצעה הראשונה), לפי האפשרות הראשונה = מה שהלקוח ביקש. מזין את הסריקה הלילית.
+    const alreadyProposed = history.some((t) => t.role === "assistant" && (t.content.includes("טווחי מחיר") || t.content.includes("המחיר יימסר אחרי בדיקה")));
+    if (!alreadyProposed) await recordDemand(options[0]!.spec);
     // הכיוון + טווחי המחיר + השאלה אם להתקדם - מורכבים בקוד, כך שהם תמיד מדויקים ובלי עלות מודל
     const priced = options.filter((o) => o.estimate);
     const lines = priced.map((o) => `• ${o.label}: בערך ${o.estimate!.fromILS.toLocaleString("he-IL")}-${o.estimate!.toILS.toLocaleString("he-IL")} ₪`);

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { anthropicConfigured } from "@/lib/anthropic-client";
-import { draftPriceGuide } from "@/lib/store-ai";
+import { scanMarket } from "@/lib/store-ai";
 import { loadPriceGuide, mergeGuide, researchTargets, savePriceGuide, specDescription } from "@/lib/store-price-guide";
 
 /**
@@ -22,7 +22,7 @@ export async function GET(req: Request) {
   if (!anthropicConfigured()) return NextResponse.json({ ok: false, error: "ANTHROPIC_API_KEY לא מוגדר" });
   try {
     const targets = (await researchTargets()).map((t) => ({ key: t.key, description: specDescription(t.spec), requested: t.requested }));
-    const draft = await draftPriceGuide(targets);
+    const draft = await scanMarket(targets);
     const { guide, notes } = mergeGuide(await loadPriceGuide(), draft);
     await savePriceGuide(guide);
     return NextResponse.json({ ok: true, scanned: targets.length, rejected: notes });

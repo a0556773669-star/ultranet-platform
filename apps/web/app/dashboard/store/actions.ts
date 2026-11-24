@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { guard, type ActionResult } from "@/lib/action-result";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { getAdminFirestore } from "@/lib/firebase-admin";
@@ -9,12 +10,12 @@ import { COMMISSION_CATEGORIES, COMMISSION_RULES_COLLECTION, currentIsraelMonth,
 import { computeDealCommission } from "@/lib/store-commission";
 import { anthropicConfigured, createAnthropic, describeKey } from "@/lib/anthropic-client";
 import { advisorChat, type AdvisorReply, type AdvisorTurn, type ChatOption } from "@/lib/store-advisor";
-import { estimateRange, loadPriceGuide, mergeGuide, PRICE_GUIDE_DOC, researchTargets, savePriceGuide, specDescription } from "@/lib/store-price-guide";
+import { estimateRange, loadPriceGuide, mergeGuide, PRICE_GUIDE_DOC, recordDemand, researchTargets, savePriceGuide, specDescription } from "@/lib/store-price-guide";
 import { notifyBranch, notifyOwnerNewRequest, notifyOwnerStockCheck } from "@/lib/store-notify";
 import { FAQ_COLLECTION } from "@/lib/store-faq";
 import { DEFAULT_GLOSSARY, GLOSSARY_COLLECTION } from "@/lib/store-glossary";
 import { DEFAULT_STORE_PROCEDURES } from "@/lib/store-default-procedures";
-import { draftMarketPrice, draftPriceGuide, storeAiConfigured, type MarketDraft } from "@/lib/store-ai";
+import { draftMarketPrice, scanMarket, storeAiConfigured, type MarketDraft } from "@/lib/store-ai";
 import { applyUsageDefaults, sanitizeSpec, specToText, type UsageKey } from "@/lib/store-wizard";
 import type { StoreAccessoryQuote, StoreCollection, StoreCommissionCategory, StoreRequest, StoreRequestMode, StoreRequestOption, StoreRequestStatus, StoreSpec } from "@ultranet/shared-types";
 
@@ -38,7 +39,8 @@ export interface CreateStoreRequestInput {
 
 const LOCKABLE: (keyof StoreSpec)[] = ["cpu", "ramGb", "storageGb", "screenInches", "touch", "minGeneration", "extras"];
 
-export async function createStoreRequestAction(input: CreateStoreRequestInput): Promise<{ id: string }> {
+export async function createStoreRequestAction(input: CreateStoreRequestInput): Promise<ActionResult<{ id: string }>> {
+  return guard(async () => {
   const scope = await currentModuleScope("store");
   if (!scope?.granted) throw new Error("אין הרשאה לחנות סניפים");
   if (!input.branchId || !scope.allows(input.branchId)) throw new Error("אין הרשאה לסניף הזה");
@@ -81,12 +83,15 @@ export async function createStoreRequestAction(input: CreateStoreRequestInput): 
   };
   const ref = await db.collection(COLLECTION).add(doc);
   await notifyOwnerNewRequest({ ...doc, id: ref.id } as StoreRequest);
+    await recordDemand(spec);
   revalidatePath("/dashboard/store/requests");
   return { id: ref.id };
+  });
 }
 
 /** תשובת הבעלים/המזכירה: אפשרויות עם טווח מחיר. רק בעלים. */
-export async function respondStoreRequestAction(id: string, formData: FormData): Promise<void> {
+export async function respondStoreRequestAction(id: string, formData: FormData): Promise<ActionResult<void>> {
+  return guard(async () => {
   const session = await requireOwner();
   const db = getAdminFirestore();
   const ref = db.collection(COLLECTION).doc(id);
@@ -146,14 +151,17 @@ export async function respondStoreRequestAction(id: string, formData: FormData):
   } satisfies Partial<StoreRequest>);
   revalidatePath("/dashboard/store/requests");
   revalidatePath(`/dashboard/store/requests/${id}`);
+  });
 }
 
-export async function setStoreRequestStatusAction(id: string, status: StoreRequestStatus): Promise<void> {
+export async function setStoreRequestStatusAction(id: string, status: StoreRequestStatus): Promise<ActionResult<void>> {
+  return guard(async () => {
   await requireOwner();
   if (!STATUSES.includes(status)) throw new Error("סטטוס לא תקין");
   await getAdminFirestore().collection(COLLECTION).doc(id).update({ status, updatedAt: new Date().toISOString() });
   revalidatePath("/dashboard/store/requests");
   revalidatePath(`/dashboard/store/requests/${id}`);
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -178,7 +186,8 @@ function revalidateRequest(id: string) {
 }
 
 /** הלקוח אישר אפשרות - הסניף מבקש בדיקת מלאי. עובר לטיפול של הבעלים/המזכירה. */
-export async function requestStockCheckAction(id: string, optionIndex: number): Promise<void> {
+export async function requestStockCheckAction(id: string, optionIndex: number): Promise<ActionResult<void>> {
+  return guard(async () => {
   const { ref, request } = await loadForBranch(id);
   if (request.status !== "answered") throw new Error("אפשר לבקש בדיקת מלאי רק אחרי שהתקבלה הצעה");
   if (!request.options?.[optionIndex]) throw new Error("האפשרות לא נמצאה");
@@ -186,10 +195,12 @@ export async function requestStockCheckAction(id: string, optionIndex: number): 
   await ref.update({ status: "stock_check", chosenOptionIndex: optionIndex, stockCheckAt: now, updatedAt: now });
   await notifyOwnerStockCheck({ ...request, status: "stock_check", chosenOptionIndex: optionIndex, id });
   revalidateRequest(id);
+  });
 }
 
 /** הבעלים מאשר מלאי ומחיר סופי. */
-export async function confirmStockAction(id: string, formData: FormData): Promise<void> {
+export async function confirmStockAction(id: string, formData: FormData): Promise<ActionResult<void>> {
+  return guard(async () => {
   await requireOwner();
   const price = Number(String(formData.get("finalPriceILS") ?? "").replace(/[^\d.]/g, ""));
   if (!Number.isFinite(price) || price <= 0) throw new Error("יש להזין מחיר סופי");
@@ -212,9 +223,11 @@ export async function confirmStockAction(id: string, formData: FormData): Promis
   });
   if (before) await notifyBranch({ ...before, id }, "יש מלאי - אפשר לסגור עסקה", `המחיר הסופי ללקוח: ${(Math.round(price) + accFinal).toLocaleString("he-IL")} ₪. היכנסו למערכת וסגרו את העסקה.`);
   revalidateRequest(id);
+  });
 }
 
-export async function noStockAction(id: string, formData: FormData): Promise<void> {
+export async function noStockAction(id: string, formData: FormData): Promise<ActionResult<void>> {
+  return guard(async () => {
   await requireOwner();
   const now = new Date().toISOString();
   const ref = getAdminFirestore().collection(COLLECTION).doc(id);
@@ -223,6 +236,7 @@ export async function noStockAction(id: string, formData: FormData): Promise<voi
   await ref.update({ status: "no_stock" satisfies StoreRequestStatus, stockNote: note, updatedAt: now });
   if (before) await notifyBranch({ ...before, id }, "אין מלאי כרגע", note || "נחזור אליכם עם חלופה.");
   revalidateRequest(id);
+  });
 }
 
 export interface CloseDealInput {
@@ -237,7 +251,8 @@ export interface CloseDealInput {
  * `branch`: הסכום (מחיר סופי למחשב + לציוד) נכנס להתחשבנות החודשית של הסניף, והעמלה לפי כללי הבעלים
  * מופחתת ממנה אוטומטית. `owner`: אין עמלה ואין שינוי בהתחשבנות של הסניף.
  */
-export async function closeDealAction(id: string, input: CloseDealInput): Promise<void> {
+export async function closeDealAction(id: string, input: CloseDealInput): Promise<ActionResult<void>> {
+  return guard(async () => {
   const { ref, request } = await loadForBranch(id);
   if (request.status !== "stock_confirmed") throw new Error("אפשר לסגור עסקה רק אחרי אישור מלאי");
   if (input.collectedBy !== "branch" && input.collectedBy !== "owner") throw new Error("יש לבחור מי גובה");
@@ -255,6 +270,7 @@ export async function closeDealAction(id: string, input: CloseDealInput): Promis
   await ref.update({ status: "deal_closed", dealClosedAt: now, collection, commissionILS, updatedAt: now });
   revalidateRequest(id);
   revalidatePath("/dashboard/store/commissions");
+  });
 }
 
 /** הבעלים מתקן עמלה של עסקה (למשל הסכמה חריגה). עסקה שנגבתה ע"י הסניף בלבד. */
@@ -296,7 +312,8 @@ export async function saveCommissionRulesAction(formData: FormData): Promise<voi
 }
 
 /** הבעלים מוציא משלוח (בדרך כלל באותו יום). */
-export async function markShippedAction(id: string, formData: FormData): Promise<void> {
+export async function markShippedAction(id: string, formData: FormData): Promise<ActionResult<void>> {
+  return guard(async () => {
   await requireOwner();
   const now = new Date().toISOString();
   const ref = getAdminFirestore().collection(COLLECTION).doc(id);
@@ -305,28 +322,34 @@ export async function markShippedAction(id: string, formData: FormData): Promise
   await ref.update({ status: "shipped" satisfies StoreRequestStatus, shippedAt: now, shippingNote: note, updatedAt: now });
   if (before) await notifyBranch({ ...before, id }, "המחשב נשלח לסניף", note || "יגיע בעוד כמה ימים.");
   revalidateRequest(id);
+  });
 }
 
 /** המחשב הגיע לסניף. */
-export async function markDeliveredAction(id: string): Promise<void> {
+export async function markDeliveredAction(id: string): Promise<ActionResult<void>> {
+  return guard(async () => {
   const { ref, request } = await loadForBranch(id);
   if (request.status !== "shipped") throw new Error("המשלוח עדיין לא יצא");
   const now = new Date().toISOString();
   await ref.update({ status: "delivered", deliveredAt: now, updatedAt: now });
   revalidateRequest(id);
+  });
 }
 
 /** טיוטת סקירת שוק אוטומטית (Haiku, זול). בעלים בלבד; דורש ANTHROPIC_API_KEY. */
-export async function aiMarketDraftAction(id: string): Promise<MarketDraft> {
+export async function aiMarketDraftAction(id: string): Promise<ActionResult<MarketDraft>> {
+  return guard(async () => {
   await requireOwner();
   if (!storeAiConfigured()) throw new Error("ההכנה האוטומטית לא מופעלת (חסר ANTHROPIC_API_KEY)");
   const snap = await getAdminFirestore().collection(COLLECTION).doc(id).get();
   if (!snap.exists) throw new Error("הבקשה לא נמצאה");
   return draftMarketPrice({ ...(snap.data() as Omit<StoreRequest, "id">), id } as StoreRequest);
+  });
 }
 
 /** טעינה חד-פעמית של נהלי ברירת המחדל לחנות. לא דורסת נוהל קיים (מזהים קבועים). בעלים בלבד. */
-export async function seedStoreProceduresAction(): Promise<{ created: number }> {
+export async function seedStoreProceduresAction(): Promise<ActionResult<{ created: number }>> {
+  return guard(async () => {
   const session = await requireOwner();
   const db = getAdminFirestore();
   const now = Date.now();
@@ -357,16 +380,19 @@ export async function seedStoreProceduresAction(): Promise<{ created: number }> 
   }
   revalidatePath("/dashboard/store");
   return { created };
+  });
 }
 
 /** תור אחד בצ'אט היועץ. פתוח לכל מי שיש לו הרשאת חנות סניפים; עלות מוגבלת ושאלות חוזרות נענות בלי מודל. */
-export async function advisorChatAction(history: AdvisorTurn[]): Promise<AdvisorReply> {
+export async function advisorChatAction(history: AdvisorTurn[]): Promise<ActionResult<AdvisorReply>> {
+  return guard(async () => {
   const scope = await currentModuleScope("store");
   if (!scope?.granted) throw new Error("אין הרשאה לחנות סניפים");
   const clean = (Array.isArray(history) ? history : [])
     .filter((t) => (t.role === "user" || t.role === "assistant") && typeof t.content === "string")
     .map((t) => ({ role: t.role, content: t.content }));
   return advisorChat(clean, scope.isOwner);
+  });
 }
 
 export interface CreateChatRequestInput {
@@ -397,7 +423,8 @@ function whyText(o: { whyBetter?: string; pros?: string[]; cons?: string[] }): s
     .slice(0, 800);
 }
 
-export async function createChatRequestAction(input: CreateChatRequestInput): Promise<{ id: string }> {
+export async function createChatRequestAction(input: CreateChatRequestInput): Promise<ActionResult<{ id: string }>> {
+  return guard(async () => {
   const scope = await currentModuleScope("store");
   if (!scope?.granted) throw new Error("אין הרשאה לחנות סניפים");
   if (!input.branchId || !scope.allows(input.branchId)) throw new Error("אין הרשאה לסניף הזה");
@@ -471,6 +498,7 @@ export async function createChatRequestAction(input: CreateChatRequestInput): Pr
   if (chosen !== null) await notifyOwnerStockCheck({ ...doc, id: ref.id } as StoreRequest);
   revalidatePath("/dashboard/store/requests");
   return { id: ref.id };
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -507,15 +535,17 @@ export async function savePriceGuideAction(formData: FormData): Promise<void> {
  * עדכון המחירון עכשיו, בלחיצה אחת: סורק את השוק (Haiku + חיפוש ברשת) את התצורות הקלאסיות והנפוצות בבקשות, ממזג
  * למחירון עם ההגנות (טווח סביר, שינוי עד 40%) **ושומר מיד**. זה אותו מסלול כמו הרענון הלילי. עלות: בערך 10 אגורות.
  */
-export async function refreshPriceGuideNowAction(): Promise<{ scanned: number; rejected: string[] }> {
+export async function refreshPriceGuideNowAction(): Promise<ActionResult<{ scanned: number; rejected: string[] }>> {
+  return guard(async () => {
   await requireOwner();
   if (!storeAiConfigured()) throw new Error("ההכנה האוטומטית לא מופעלת (חסר ANTHROPIC_API_KEY)");
   const targets = (await researchTargets()).map((t) => ({ key: t.key, description: specDescription(t.spec), requested: t.requested }));
-  const draft = await draftPriceGuide(targets);
+  const draft = await scanMarket(targets);
   const { guide, notes } = mergeGuide(await loadPriceGuide(), draft);
   await savePriceGuide(guide);
   revalidatePath("/dashboard/store/prices");
   return { scanned: targets.length, rejected: notes };
+  });
 }
 
 // ---------------------------------------------------------------------------

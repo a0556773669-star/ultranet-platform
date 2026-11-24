@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+import { FieldValue } from "firebase-admin/firestore";
 import { getAdminFirestore } from "./firebase-admin";
 import type { StoreCpuTier, StorePriceGuide, StoreSpec } from "@ultranet/shared-types";
 import { accessoryRange, quotedRange, roundTen } from "./store-pricing";
@@ -65,29 +67,68 @@ export function classicSpecs(): StoreSpec[] {
   return out;
 }
 
+/** אוסף הביקוש: כמה פעמים כל תצורה התבקשה (מפתח המסמך = hash של `specKey`). */
+const DEMAND_COLLECTION = "n_store_demand";
+/** תצורה "רגילה" (זיכרון 8/16, אחסון 256/512/1000, מסך 14/15.6) נכנסת לסריקה הקבועה כבר מהבקשה הראשונה; חריגה - רק מהבקשה השנייה. */
+const DEMAND_MIN_MAINSTREAM = 1;
+const DEMAND_MIN_UNUSUAL = 2;
+/** תצורה שלא התבקשה 90 יום יוצאת מהסריקה הקבועה. */
+const DEMAND_DECAY_DAYS = 90;
+
+export function isMainstream(spec: StoreSpec): boolean {
+  return (
+    [8, 16].includes(spec.ramGb ?? 8) &&
+    [256, 512, 1000].includes(spec.storageGb ?? 256) &&
+    (spec.kind === "desktop" || [14, 15.6].includes(spec.screenInches ?? 15.6))
+  );
+}
+
+const demandDocId = (key: string) => createHash("sha1").update(key).digest("hex");
+
+/** רושם בקשה לתצורה (נקרא כשהיועץ מציע לראשונה בשיחה, ובטופס). כשל ברישום לא מפיל כלום. */
+export async function recordDemand(spec: StoreSpec): Promise<void> {
+  try {
+    const key = specKey(spec);
+    const now = new Date().toISOString();
+    await getAdminFirestore()
+      .collection(DEMAND_COLLECTION)
+      .doc(demandDocId(key))
+      .set({ key, spec, count: FieldValue.increment(1), lastAt: now }, { merge: true });
+  } catch {
+    // ספירת ביקוש היא בונוס
+  }
+}
+
+export type DemandEntry = { spec: StoreSpec; key: string; count: number; lastAt: string };
+
+export async function loadDemand(): Promise<DemandEntry[]> {
+  const snap = await getAdminFirestore().collection(DEMAND_COLLECTION).get();
+  const cutoff = Date.now() - DEMAND_DECAY_DAYS * 86_400_000;
+  return snap.docs
+    .map((d) => d.data() as Partial<DemandEntry>)
+    .filter((d): d is DemandEntry => Boolean(d.spec && d.key && typeof d.count === "number" && d.lastAt && Date.parse(d.lastAt) >= cutoff))
+    .sort((a, b) => b.count - a.count);
+}
+
 /**
- * מה לסרוק הלילה: התצורות הקלאסיות + התצורות שהסניפים באמת ביקשו ב-60 הימים האחרונים (הנפוצות ביותר).
+ * מה לסרוק הלילה: התצורות הקלאסיות + תצורות שהסניפים ביקשו ולא קיימות בקלאסיות. **הרשימה גדלה עם הביקוש**:
+ * תצורה רגילה נכנסת מהבקשה הראשונה, חריגה מהשנייה (ככה בקשה נדירה חד-פעמית לא נסרקת כל יום), ותצורה שלא
+ * התבקשה 90 יום יוצאת. תקרה: 12 ועוד אחד לכל 10 בקשות, עד 30 - כדי שהעלות לא תברח.
  * אין כאן שום פרט אישי של לקוח - רק מפרטים ומספר הפעמים.
  */
 export async function researchTargets(): Promise<{ spec: StoreSpec; key: string; requested: number }[]> {
   const classic = classicSpecs();
-  const counts = new Map<string, { spec: StoreSpec; n: number }>();
-  const cutoff = new Date(Date.now() - 60 * 86_400_000).toISOString();
-  const snap = await getAdminFirestore().collection("n_store_requests").where("createdAt", ">=", cutoff).get();
-  for (const d of snap.docs) {
-    const spec = (d.data() as { spec?: StoreSpec }).spec;
-    if (!spec) continue;
-    const key = specKey(spec);
-    const cur = counts.get(key);
-    counts.set(key, { spec, n: (cur?.n ?? 0) + 1 });
-  }
   const classicKeys = new Set(classic.map(specKey));
-  const popular = [...counts.entries()]
-    .filter(([k]) => !classicKeys.has(k))
-    .sort((a, b) => b[1].n - a[1].n)
-    .slice(0, 8)
-    .map(([key, v]) => ({ spec: v.spec, key, requested: v.n }));
-  return [...classic.map((spec) => ({ spec, key: specKey(spec), requested: counts.get(specKey(spec))?.n ?? 0 })), ...popular];
+  const demand = await loadDemand();
+  const total = demand.reduce((n, d) => n + d.count, 0);
+  const cap = Math.min(30, 12 + Math.floor(total / 10));
+  const demandByKey = new Map(demand.map((d) => [d.key, d.count]));
+  const tracked = demand
+    .filter((d) => !classicKeys.has(d.key))
+    .filter((d) => d.count >= (isMainstream(d.spec) ? DEMAND_MIN_MAINSTREAM : DEMAND_MIN_UNUSUAL))
+    .slice(0, cap)
+    .map((d) => ({ spec: d.spec, key: d.key, requested: d.count }));
+  return [...classic.map((spec) => ({ spec, key: specKey(spec), requested: demandByKey.get(specKey(spec)) ?? 0 })), ...tracked];
 }
 /** מחיר שוק נמוך מוערך למחשב (בלי אביזרים), או null כשאין במחירון בסיס לדגם. תצורה עם מחיר מדויק במחירון גוברת. */
 export function estimateMarketLow(spec: StoreSpec, guide: StorePriceGuide): number | null {
