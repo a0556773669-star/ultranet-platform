@@ -91,3 +91,74 @@ export function guideForPrompt(guide: StorePriceGuide): string {
 תוספת זיכרון: ${fmt(guide.ramAdd)} · תוספת אחסון: ${fmt(guide.storageAdd)} · מגע: ${guide.touchAdd ?? "לא הוגדר"}
 (מחירי שוק נמוכים בשקלים. הלקוח מקבל טווח הערכה גבוה יותר - אל תציין מחירים בטקסט, המערכת מציגה אותם.)`;
 }
+
+
+export async function savePriceGuide(guide: StorePriceGuide): Promise<void> {
+  await getAdminFirestore()
+    .collection(PRICE_GUIDE_DOC.collection)
+    .doc(PRICE_GUIDE_DOC.id)
+    .set(JSON.parse(JSON.stringify({ ...guide, updatedAt: new Date().toISOString() })));
+}
+
+/** טווחים סבירים לכל קבוצת מחירים (₪) - מחיר מחוץ לטווח נחשב שגיאת קריאה ונדחה. */
+const BOUNDS: Record<string, [number, number]> = {
+  base: [600, 12000],
+  ramAdd: [30, 2000],
+  storageAdd: [30, 3000],
+  extra: [30, 2000],
+  accessory: [15, 3000],
+};
+/** סטייה מקסימלית מהמחיר הקודם בעדכון אוטומטי. מעבר לזה - נשמר הישן, כדי שמחיר חריג לא יזהם את ההצעות. */
+const MAX_DEVIATION = 0.4;
+
+function pickValue(prev: number | undefined, next: number | undefined, kind: string, label: string, notes: string[]): number | undefined {
+  if (typeof next !== "number") return prev;
+  const [lo, hi] = BOUNDS[kind]!;
+  if (next < lo || next > hi) {
+    notes.push(`${label}: ${next} מחוץ לטווח הסביר - נדחה`);
+    return prev;
+  }
+  if (typeof prev === "number" && Math.abs(next - prev) / prev > MAX_DEVIATION) {
+    notes.push(`${label}: ${prev}->${next} שינוי גדול מדי - נשמר הקודם`);
+    return prev;
+  }
+  return next;
+}
+
+/**
+ * מיזוג טיוטת מחירון אוטומטית (מהחיפוש ברשת) למחירון הקיים, עם הגנות: טווח סביר, ושינוי של עד 40% מהערך הקודם.
+ * ערך חדש לגמרי (שאין לו קודם) מתקבל אם הוא בטווח הסביר. מחזיר את המחירון ואת ההערות על מה שנדחה.
+ */
+export type GuideDraftLike = {
+  laptopBase?: Partial<Record<string, number>>;
+  desktopBase?: Partial<Record<string, number>>;
+  ramAdd?: Partial<Record<string, number>>;
+  storageAdd?: Partial<Record<string, number>>;
+  accessoriesLow?: Partial<Record<string, number>>;
+  touchAdd?: number | null;
+  screen17Add?: number | null;
+  note?: string;
+};
+
+export function mergeGuide(existing: StorePriceGuide, draft: GuideDraftLike): { guide: StorePriceGuide; notes: string[] } {
+  const notes: string[] = [];
+  const mergeMap = (prev: Partial<Record<string, number>>, next: Partial<Record<string, number>> | undefined, kind: string, label: string) => {
+    const out: Record<string, number> = {};
+    for (const k of new Set([...Object.keys(prev), ...Object.keys(next ?? {})])) {
+      const v = pickValue(prev[k], next?.[k], kind, `${label} ${k}`, notes);
+      if (typeof v === "number") out[k] = v;
+    }
+    return out;
+  };
+  const guide: StorePriceGuide = {
+    laptopBase: mergeMap(existing.laptopBase, draft.laptopBase, "base", "נייד"),
+    desktopBase: mergeMap(existing.desktopBase, draft.desktopBase, "base", "נייח"),
+    ramAdd: mergeMap(existing.ramAdd, draft.ramAdd, "ramAdd", "זיכרון"),
+    storageAdd: mergeMap(existing.storageAdd, draft.storageAdd, "storageAdd", "אחסון"),
+    accessoriesLow: mergeMap(existing.accessoriesLow, draft.accessoriesLow, "accessory", "אביזר"),
+    touchAdd: pickValue(existing.touchAdd, draft.touchAdd ?? undefined, "extra", "מגע", notes),
+    screen17Add: pickValue(existing.screen17Add, draft.screen17Add ?? undefined, "extra", "17 אינץ'", notes),
+    note: [draft.note ?? "", ...notes].filter(Boolean).join(" | ").slice(0, 500),
+  };
+  return { guide, notes };
+}

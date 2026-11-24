@@ -9,10 +9,8 @@ import { COMMISSION_CATEGORIES, COMMISSION_RULES_COLLECTION, currentIsraelMonth,
 import { computeDealCommission } from "@/lib/store-commission";
 import { anthropicConfigured, createAnthropic, describeKey } from "@/lib/anthropic-client";
 import { advisorChat, type AdvisorReply, type AdvisorTurn, type ChatOption } from "@/lib/store-advisor";
-import { loadPriceGuide, PRICE_GUIDE_DOC } from "@/lib/store-price-guide";
-import { estimateMany } from "@/lib/store-market";
+import { estimateRange, loadPriceGuide, mergeGuide, PRICE_GUIDE_DOC, savePriceGuide } from "@/lib/store-price-guide";
 import { notifyBranch, notifyOwnerNewRequest, notifyOwnerStockCheck } from "@/lib/store-notify";
-import type { PriceEstimate } from "@/lib/store-price-guide";
 import { FAQ_COLLECTION } from "@/lib/store-faq";
 import { DEFAULT_GLOSSARY, GLOSSARY_COLLECTION } from "@/lib/store-glossary";
 import { DEFAULT_STORE_PROCEDURES } from "@/lib/store-default-procedures";
@@ -368,21 +366,7 @@ export async function advisorChatAction(history: AdvisorTurn[]): Promise<Advisor
   const clean = (Array.isArray(history) ? history : [])
     .filter((t) => (t.role === "user" || t.role === "assistant") && typeof t.content === "string")
     .map((t) => ({ role: t.role, content: t.content }));
-  return advisorChat(clean);
-}
-
-/**
- * מחיר שוק חי לאפשרויות שהוצגו בצ'אט (נקרא מהדפדפן אחרי שהתשובה כבר הוצגה, כדי שהצ'אט לא יחכה לחיפוש).
- * מאגר יומי: מפרט שכבר נבדק היום לא נבדק שוב. פתוח לכל מי שיש לו הרשאת חנות.
- */
-export async function priceOptionsAction(specs: Partial<StoreSpec>[]): Promise<{ estimate: PriceEstimate | null; source: "market" | "guide" | "none"; error?: string }[]> {
-  const scope = await currentModuleScope("store");
-  if (!scope?.granted) throw new Error("אין הרשאה לחנות סניפים");
-  const clean = (Array.isArray(specs) ? specs : []).slice(0, 3).map((x) => sanitizeSpec(x));
-  if (!clean.length) return [];
-  const res = await estimateMany(clean, await loadPriceGuide(), { allowLookup: true });
-  // סיבת הכשל מוצגת לבעלים בלבד (לאבחון); סניף רואה רק "המחיר יימסר אחרי בדיקה"
-  return scope.isOwner ? res : res.map(({ error: _error, ...rest }) => rest);
+  return advisorChat(clean, scope.isOwner);
 }
 
 export interface CreateChatRequestInput {
@@ -424,8 +408,7 @@ export async function createChatRequestAction(input: CreateChatRequestInput): Pr
   const db = getAdminFirestore();
   const branch = await db.collection("n_branches").doc(input.branchId).get();
   if (!branch.exists) throw new Error("הסניף לא נמצא");
-  // המחיר כבר הוצג בצ'אט ונשמר במאגר היומי - כאן רק קוראים אותו (בלי חיפוש חדש ובלי עלות)
-  const estimates = await estimateMany(input.options.slice(0, 3).map((o) => sanitizeSpec(o.spec)), await loadPriceGuide(), { allowLookup: false });
+  const guide = await loadPriceGuide();
 
   const chosenIdx = typeof input.chosenIndex === "number" && input.options[input.chosenIndex] ? input.chosenIndex : null;
   const options: StoreRequestOption[] = [];
@@ -433,7 +416,7 @@ export async function createChatRequestAction(input: CreateChatRequestInput): Pr
   let spec: StoreSpec = sanitizeSpec(input.options[0]!.spec);
   input.options.slice(0, 3).forEach((o, i) => {
     const optSpec = sanitizeSpec(o.spec);
-    const est = estimates[i]?.estimate ?? null;
+    const est = estimateRange(optSpec, guide);
     if (i === (chosenIdx ?? 0)) {
       spec = optSpec;
       chosenAccessories = (est?.accessories ?? []).map((a) => ({ name: a.name, quotedFromILS: a.fromILS, quotedToILS: a.toILS }));

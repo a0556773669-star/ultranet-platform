@@ -5,7 +5,7 @@ import { getAdminFirestore } from "./firebase-admin";
 import { DEFAULT_MIN_GENERATION, USAGE_OPTIONS, sanitizeSpec, specToText } from "./store-wizard";
 import { loadGlossary } from "./store-glossary";
 import { FAQ_COLLECTION, learnFaq, loadFaq, matchFaq } from "./store-faq";
-import { guideForPrompt, loadPriceGuide, type PriceEstimate } from "./store-price-guide";
+import { estimateRange, guideForPrompt, loadPriceGuide, type PriceEstimate } from "./store-price-guide";
 
 /**
  * יועץ הצ'אט של חנות הסניפים - **Claude Haiku 5.5** (הדגם הזול ביותר), מאמץ נמוך, פלט מובנה.
@@ -36,7 +36,7 @@ export type ChatOption = {
   /** יתרונות וחסרונות קצרים (+/-) להסבר ללקוח */
   pros: string[];
   cons: string[];
-  /** מחושב בנפרד (`priceOptionsAction`) כדי שהתשובה בצ'אט לא תחכה לחיפוש בשוק */
+  /** טווח הערכה מהמחירון היומי (מחושב בקוד, מיידי). null = אין במחירון בסיס למפרט הזה */
   estimate: PriceEstimate | null;
 };
 
@@ -50,6 +50,8 @@ export type AdvisorReply = {
   lockedFields: string[];
   budgetILS: number | null;
   notes: string;
+  /** רמז לבעלים בלבד כשאין מחירים (למשל מחירון ריק) */
+  ownerHint?: string;
 };
 
 const nullable = (schema: Record<string, unknown>) => ({ anyOf: [schema, { type: "null" }] });
@@ -129,7 +131,7 @@ async function systemPrompt(): Promise<string> {
 4. לקוח שאומר "הכי זול", "חסכוני" או "לא משנה" לא משאיר חוסר מידע: הצע מיד את האפשרות הזולה ביותר שעדיין מתאימה לשימוש, ולצידה טיפה יותר טובה.
 5. אחרי סבב או שניים הצע אפשרויות ביוזמתך, גם אם נשארו פרטים חסרים - השלם אותם לפי השימוש.
 6. ברגע שיש מספיק מידע (לפחות נייד/נייח והשימוש), הצע **תמיד 2 או 3 אפשרויות** בשדה options (לא אפשרות בודדת): הראשונה "as_requested" = בדיוק מה שהלקוח אמר או ההתאמה הבסיסית, אחת "upgrade" = טיפה יותר טוב, ואם מתאים "alternative" = חלופה חסכונית. לכל אפשרות: whyBetter = משפט אחד במה היא שונה, pros = עד 3 יתרונות קצרים, cons = עד 2 חסרונות או מגבלות קצרים (למשל "יקר יותר", "פחות עמיד לאורך זמן"). בעברית פשוטה, כדי שמנהל הסניף יוכל להסביר ללקוח.
-7. אל תציין מחירים בטקסט: המערכת בודקת מחיר שוק ומוסיפה לכל אפשרות טווח מחיר מיד אחרי ההצעה. כשאתה מציע אפשרויות אמור "הנה כמה אפשרויות, המחירים מתעדכנים עוד רגע". כבד תקציב שהלקוח אמר.
+7. אל תציין מחירים בטקסט: המערכת בודקת מחיר שוק ומוסיפה לכל אפשרות טווח מחיר מיד אחרי ההצעה. המערכת מוסיפה בסוף ההודעה את טווחי המחיר ואת השאלה אם להתקדם לבדיקת מלאי - אל תכתוב אותם בעצמך ואל תסיים בשאלה על התקדמות. כבד תקציב שהלקוח אמר.
 8. שדה ב-lockedFields רק אם הלקוח אמר אותו במפורש. את מה שנעול אל תשנה באף אפשרות. אפשר להציע שדרוג רק בשדות שלא ננעלו.
 9. בנייח או כשהלקוח מבקש - הוסף extras (מסך, מקלדת, עכבר, סטיק, רמקולים).
 10. דור המעבד: ${DEFAULT_MIN_GENERATION} ומעלה כברירת מחדל. אל תשאל על זה.
@@ -191,7 +193,7 @@ function buildOptions(raw: unknown, kind: "laptop" | "desktop", locked: string[]
   return parsed.map((o) => ({ ...o, specText: specToText(o.spec) }));
 }
 
-export async function advisorChat(history: AdvisorTurn[]): Promise<AdvisorReply> {
+export async function advisorChat(history: AdvisorTurn[], isOwner = false): Promise<AdvisorReply> {
   if (!advisorConfigured()) throw new Error("יועץ ה-AI לא מופעל (חסר ANTHROPIC_API_KEY)");
   const userTurns = history.filter((t) => t.role === "user").length;
   if (userTurns === 0) throw new Error("אין הודעה");
@@ -234,8 +236,23 @@ export async function advisorChat(history: AdvisorTurn[]): Promise<AdvisorReply>
 
   const deviceKind = raw.deviceKind === "desktop" ? "desktop" : "laptop";
   const locked = Array.isArray(raw.lockedFields) ? (raw.lockedFields as string[]).map(String) : [];
-  const options: ChatOption[] = buildOptions(raw.options, deviceKind, locked).map((o) => ({ ...o, estimate: null }));
-  const reply = String(raw.reply ?? "").slice(0, 1200);
+  const guide = await loadPriceGuide();
+  const options: ChatOption[] = buildOptions(raw.options, deviceKind, locked).map((o) => ({ ...o, estimate: estimateRange(o.spec, guide) }));
+  let reply = String(raw.reply ?? "").slice(0, 1200);
+  let ownerHint: string | undefined;
+  if (options.length) {
+    // הכיוון + טווחי המחיר + השאלה אם להתקדם - מורכבים בקוד, כך שהם תמיד מדויקים ובלי עלות מודל
+    const priced = options.filter((o) => o.estimate);
+    const lines = priced.map((o) => `• ${o.label}: בערך ${o.estimate!.fromILS.toLocaleString("he-IL")}-${o.estimate!.toILS.toLocaleString("he-IL")} ₪`);
+    reply += priced.length
+      ? `\n\nטווחי מחיר (הערכה לפי מחירי השוק, לא מחיר סופי):\n${lines.join("\n")}\n\nהאם הלקוח מעוניין שנתקדם לבדיקת מלאי?`
+      : "\n\nהמחיר יימסר אחרי בדיקה. האם הלקוח מעוניין שנתקדם לבדיקת מלאי?";
+    if (!priced.length && isOwner) {
+      ownerHint = Object.keys(guide.laptopBase).length || Object.keys(guide.desktopBase).length
+        ? "אין במחירון בסיס למפרט הזה"
+        : "מחירון השוק ריק. היכנסו ל\"מחירון שוק\" ולחצו על המילוי האוטומטי ואז שמירה (או חכו לריענון היומי)";
+    }
+  }
 
   const gq = raw.generalQuestion as { question?: string; keywords?: string[] } | null;
   if (gq?.question && options.length === 0) {
@@ -246,6 +263,7 @@ export async function advisorChat(history: AdvisorTurn[]): Promise<AdvisorReply>
     reply,
     source: "model",
     options,
+    ownerHint,
     quickReplies: (Array.isArray(raw.quickReplies) ? (raw.quickReplies as unknown[]) : []).map((x) => String(x).slice(0, 40)).slice(0, 4),
     lockedFields: locked,
     budgetILS: typeof raw.budgetILS === "number" && raw.budgetILS > 0 ? raw.budgetILS : null,

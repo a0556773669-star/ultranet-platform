@@ -4,21 +4,19 @@ import { useEffect, useRef, useState, useTransition, type FormEvent, type Keyboa
 import { useRouter } from "next/navigation";
 import { Send, Bot, Copy, Check } from "lucide-react";
 import type { AdvisorTurn, ChatOption } from "@/lib/store-advisor";
-import { advisorChatAction, createChatRequestAction, priceOptionsAction } from "../actions";
+import { advisorChatAction, createChatRequestAction } from "../actions";
 
 const FIELD =
   "w-full rounded-lg border border-card-border bg-[#f4f6f9] px-3 py-2 text-sm focus:border-teal focus:bg-white focus:outline-none";
 const money = (n: number) => n.toLocaleString("he-IL");
 
 type Branch = { id: string; name: string };
-type Priced = "loading" | "done";
 type Msg = AdvisorTurn & {
   id: number;
   time: string;
   options?: ChatOption[];
-  priced?: Priced;
-  /** סיבת כשל בבדיקת השוק - מוצג לבעלים בלבד */
-  priceError?: string;
+  /** רמז לבעלים בלבד כשאין מחירים */
+  ownerHint?: string;
   quickReplies?: string[];
   source?: "model" | "faq";
   /** הודעת פתיחה מקומית - לא נשלחת למודל */
@@ -103,16 +101,6 @@ export function ChatAdvisor({ branches }: { branches: Branch[] }) {
     setMsgs((cur) => cur.map((m) => (m.id === id ? fn(m) : m)));
   }
 
-  async function loadPrices(msgId: number, options: ChatOption[]) {
-    try {
-      const res = await priceOptionsAction(options.map((o) => o.spec));
-      const err = res.find((r) => r.error)?.error;
-      patch(msgId, (m) => ({ ...m, priced: "done", priceError: err, options: m.options?.map((o, i) => ({ ...o, estimate: res[i]?.estimate ?? null })) }));
-    } catch {
-      patch(msgId, (m) => ({ ...m, priced: "done" }));
-    }
-  }
-
   async function send(text: string) {
     const content = text.trim();
     if (!content || busy) return;
@@ -128,13 +116,12 @@ export function ChatAdvisor({ branches }: { branches: Branch[] }) {
       const id = idRef.current++;
       setMsgs((cur) => [
         ...cur,
-        { id, role: "assistant", content: r.reply, time: nowTime(), options: r.options, priced: r.options.length ? "loading" : undefined, quickReplies: r.quickReplies, source: r.source },
+        { id, role: "assistant", content: r.reply, time: nowTime(), options: r.options, ownerHint: r.ownerHint, quickReplies: r.quickReplies, source: r.source },
       ]);
       if (r.options.length) {
         setLocked(r.lockedFields);
         if (r.budgetILS) setBudget(r.budgetILS);
         if (r.notes) setNotes(r.notes);
-        void loadPrices(id, r.options);
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : "שגיאה ביועץ");
@@ -250,12 +237,7 @@ export function ChatAdvisor({ branches }: { branches: Branch[] }) {
                         </div>
                         <div className="mt-0.5 text-xs text-muted">{o.specText}</div>
 
-                        {m.priced === "loading" && !o.estimate ? (
-                          <div className="mt-2 flex items-center gap-2 text-xs text-muted">
-                            <TypingDots />
-                            בודק מחירי שוק...
-                          </div>
-                        ) : o.estimate ? (
+                        {o.estimate ? (
                           <div className="mt-1.5 font-bold text-teal-dark">
                             בערך {money(o.estimate.fromILS)} - {money(o.estimate.toILS)} ₪
                             <span className="mr-1 text-[11px] font-normal text-muted">(הערכה, לא מחיר סופי)</span>
@@ -263,7 +245,7 @@ export function ChatAdvisor({ branches }: { branches: Branch[] }) {
                         ) : (
                           <div className="mt-1.5 text-xs text-muted">
                             המחיר יימסר אחרי בדיקה
-                            {m.priceError ? <span className="block text-[11px] text-red-600">אבחון (לבעלים): {m.priceError}</span> : null}
+                            {m.ownerHint ? <span className="block text-[11px] text-red-600">אבחון (לבעלים): {m.ownerHint}</span> : null}
                           </div>
                         )}
                         {o.estimate?.accessories.length ? (

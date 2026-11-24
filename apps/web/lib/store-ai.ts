@@ -114,7 +114,7 @@ export async function draftPriceGuide(): Promise<PriceGuideDraft> {
       model: MODEL,
       max_tokens: 6000,
       output_config: { effort: "low" },
-      tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 10, user_location: { type: "approximate", country: "IL" } }],
+      tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 6, user_location: { type: "approximate", country: "IL" } }],
       messages,
     });
     if (response.stop_reason === "refusal") throw new Error("המודל סירב לבקשה");
