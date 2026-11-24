@@ -24,12 +24,13 @@ export default async function CommissionsPage({ searchParams }: { searchParams: 
     .map((d) => ({ ...(d.data() as Omit<StoreRequest, "id">), id: d.id }) as StoreRequest)
     .filter((r) => dealSettlement(r).month === month);
 
-  const byBranch = new Map<string, { name: string; count: number; collected: number; commission: number }>();
+  const byBranch = new Map<string, { name: string; count: number; collected: number; atOwner: number; commission: number }>();
   for (const r of deals) {
     const s = dealSettlement(r);
-    const row = byBranch.get(r.branchId) ?? { name: r.branchName, count: 0, collected: 0, commission: 0 };
+    const row = byBranch.get(r.branchId) ?? { name: r.branchName, count: 0, collected: 0, atOwner: 0, commission: 0 };
     row.count += 1;
     row.collected += s.collected;
+    if (r.collection?.by === "owner" && r.collection.commissionToBranch) row.atOwner += r.collection.amountILS || 0;
     row.commission += s.commission;
     byBranch.set(r.branchId, row);
   }
@@ -79,7 +80,7 @@ export default async function CommissionsPage({ searchParams }: { searchParams: 
           <table className="w-full text-sm">
             <thead>
               <tr className="text-right text-xs text-muted">
-                <th className="py-1">סניף</th><th>עסקאות</th><th>נגבה</th><th>עמלה</th><th>מועבר אליי</th>
+                <th className="py-1">סניף</th><th>עסקאות</th><th>נגבה אצל הסניף</th><th>שולם אצלי (אשראי באתר)</th><th>עמלה</th><th>מאזן</th>
               </tr>
             </thead>
             <tbody>
@@ -88,6 +89,7 @@ export default async function CommissionsPage({ searchParams }: { searchParams: 
                   <td className="py-1.5 font-semibold text-ink">{r.name}</td>
                   <td>{r.count}</td>
                   <td>{money(r.collected)}</td>
+                  <td>{money(r.atOwner)}</td>
                   <td className="text-teal-dark">{money(r.commission)}</td>
                   <td className="font-bold">{money(r.collected - r.commission)}</td>
                 </tr>
@@ -96,8 +98,9 @@ export default async function CommissionsPage({ searchParams }: { searchParams: 
           </table>
         )}
         <p className="mt-2 text-xs text-muted">
-          בסניפי השכרות הסכום בעמודה האחרונה כבר נכלל אוטומטית ב״צריך להעביר״ של החודש (דף העברות ובדו״ח החודשי).
-          בסוגי סניפים אחרים הוא מוצג כאן בלבד.
+          <b>מאזן חיובי</b> = הסניף גבה (מזומן או אשראי אצלו) ומעביר לי את הסכום פחות העמלה. <b>מאזן שלילי</b> = הלקוח שילם באשראי
+          באתר (הכסף אצלי) ואני מעביר לסניף את העמלה. בסניפי השכרות המאזן כבר נכלל אוטומטית ב״צריך להעביר״ של החודש (דף העברות
+          ובדו״ח החודשי), ולא נכלל ברווחיות הניידים. בסוגי סניפים אחרים הוא מוצג כאן בלבד.
         </p>
         <div className="mt-2 text-xs">
           <Link href="/dashboard/store/requests" className="font-semibold text-teal hover:underline">לכל הבקשות</Link>
