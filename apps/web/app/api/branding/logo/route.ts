@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getStoredLogo, decodeStoredLogo } from "@/lib/branding";
 
-/** Public on purpose: the same logo already appears on the login page and the shop, both of
+/** Public on purpose: the same logo already appears on the login page, both of
  *  which are reachable without a session. */
 export const dynamic = "force-dynamic";
 

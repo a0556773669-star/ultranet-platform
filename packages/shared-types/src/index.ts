@@ -133,7 +133,6 @@ export type PermissionKey =
   | "accounting"
   | "tasks"
   | "charging"
-  | "shop"
   | "store"
   | "duxus"
   | "investment";
@@ -958,77 +957,6 @@ export interface BranchTransfer {
   reportSentAt?: string;
   /** true once a receipt was issued for this branch/month's transfer, owner-marked. */
   receiptIssued?: boolean;
-}
-
-// --- חנות AI (עוזר קניה חכם למחשבים בהתאמה אישית) ---
-
-export type ShopUseCase = "torah" | "office" | "graphics" | "video" | "gaming" | "programming" | "general";
-
-export type ShopTier = "minimal" | "recommended" | "extreme";
-
-/** collection: n_shop_catalog - מחשבים אמיתיים למכירה, ממולאים ידנית ע"י הבעלים.
- *  כל עוד לא הוזן פריט תואם, מנוע ההמלצות (`apps/web/lib/shop-recommender.ts`) נופל חזרה
- *  למפרט גנרי לפי תחום/רמת עומס, בלי מחיר סופי. */
-export interface ShopComputerConfig {
-  id: string;
-  name: string;
-  tier: ShopTier;
-  useCases: ShopUseCase[];
-  /** רמת העומס המינימלית (1-5) שהתצורה הזו מכסה בנוחות */
-  minLoadLevel: number;
-  cpu: string;
-  ram: string;
-  storage: string;
-  gpu?: string;
-  extras?: string;
-  /** ריק = "יימסר בהצעת מחיר" */
-  priceILS?: number;
-  notes?: string;
-  active: boolean;
-}
-
-export type ShopAddonType = "bag" | "mouse" | "keyboard" | "flashdrive" | "other";
-
-/** collection: n_shop_addons - ציוד נלווה שניתן להוסיף להצעת המחיר (תיק, עכבר, מקלדת, דיסק און קי וכד') */
-export interface ShopAddon {
-  id: string;
-  name: string;
-  type: ShopAddonType;
-  /** ריק = "יימסר בהצעת מחיר" */
-  priceILS?: number;
-  active: boolean;
-}
-
-export type ShopLeadStatus = "new" | "contacted" | "closed";
-
-/** תמצית תצורה מומלצת אחת כפי שהוצגה ללקוח בזמן השיחה - נשמרת קפואה על הליד/בהצעת המחיר
- *  גם אם הקטלוג ישתנה אחר כך */
-export interface ShopRecommendedOption {
-  tier: ShopTier;
-  title: string;
-  specsSummary: string;
-  reason: string;
-  priceILS?: number;
-  catalogId?: string;
-}
-
-/** collection: n_shop_leads - פניות שהתקבלו מהצ'אטבוט הציבורי (`/shop`) */
-export interface ShopLead {
-  id: string;
-  createdAt: string; // ISO
-  useCase: ShopUseCase;
-  useCaseLabel: string;
-  loadLevel: number;
-  description: string;
-  answers: { question: string; answer: string }[];
-  recommendedOptions: ShopRecommendedOption[];
-  selectedTier?: ShopTier;
-  selectedAddonNames?: string[];
-  contactName?: string;
-  contactEmail: string;
-  contactPhone: string;
-  status: ShopLeadStatus;
-  notes?: string;
 }
 
 // --- חנות סניפים (התאמת מחשב ללקוח, מנהל הסניף -> הבעלים/מזכירה) ---

@@ -25,7 +25,6 @@ const PERM_OPTIONS: { key: PermissionKey; label: string; hint?: string }[] = [
   { key: "accounting", label: "הנה\"ח" },
   { key: "charging", label: "סליקה וקבלות" },
   { key: "store", label: "חנות סניפים - יועץ AI להתאמת מחשב ללקוח", hint: "זו החנות החדשה: צ'אט עם יועץ, מחירי שוק, נהלים, בדיקת מלאי ועמלות. לסמן לסניפים שמקבלים אותה" },
-  { key: "shop", label: "חנות AI ציבורית (ישן)", hint: "ניהול לידים וקטלוג של הצ'אטבוט הציבורי הישן. לא קשור לחנות הסניפים" },
   { key: "duxus", label: "משימות ונהלים" },
   { key: "investment", label: "השקעה", hint: "טאב ההשקעה (יצחק ברון) — צפייה בלבד; עריכה לבעלים" },
 ];

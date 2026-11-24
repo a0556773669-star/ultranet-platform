@@ -28,7 +28,6 @@ const NON_OWNER_MODULES: Record<string, string | null> = {
   computers: "computers",
   coworking: "coworking",
   duxus: "duxus",
-  shop: "shop",
 };
 
 export function helpScopeFor(session: Session | null | undefined): HelpScope {

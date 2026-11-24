@@ -5,7 +5,6 @@ import {
   Handshake,
   BarChart3,
   BookOpen,
-  Sparkles,
   Target,
   LifeBuoy,
   Users,
@@ -44,7 +43,6 @@ export const NAV_ITEMS: NavItem[] = [
   { href: "/dashboard/users", label: "משתמשים", icon: Users, group: "tools", ownerOnly: true },
   { href: "/dashboard/tutorials", label: "נהלים והדרכות", icon: BookOpen, group: "tools" },
   { href: "/dashboard/help", label: "עזרה ושאלות", icon: LifeBuoy, group: "tools" },
-  { href: "/dashboard/shop", label: "חנות ציבורית (ישן)", icon: Sparkles, perm: "shop", group: "tools" },
   { href: "/dashboard/store", label: "חנות סניפים (יועץ AI)", icon: ShoppingBag, perm: "store", group: "tools" },
   { href: "/dashboard/maintenance", label: "בדיקת נתונים", icon: Stethoscope, group: "tools", ownerOnly: true },
 ];

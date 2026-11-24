@@ -11,7 +11,6 @@ export type HelpModule =
   | "coworking"
   | "accounting"
   | "duxus"
-  | "shop"
   | "tutorials";
 
 export interface HelpFaq {
