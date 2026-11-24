@@ -129,6 +129,8 @@ export default async function RentalsAccountingPage({
         myIncomeToDate: f.ownerEarnedToDate,
         profitToDate: f.ownerBalanceToDate,
         incomingThisMonth: f.settlementNetToOwner,
+        storeCollected: f.storeCollectedThisMonth,
+        storeCommission: f.storeCommissionThisMonth,
         laptopCostToDate: f.laptopCostToDate,
         saleIncomeToDate: f.saleIncomeToDate,
         flow: flowOf(branch),

@@ -293,8 +293,9 @@ ${
       <td style="padding:18px 20px 4px">
         <div style="font-size:13px;font-weight:800;color:${MUTED};letter-spacing:.02em">חנות סניפים החודש</div>
         <table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse;margin-top:6px">
-          ${summaryRow("נגבה על ידי הסניף", money(report.storeCollected), INK)}
-          ${summaryRow("עמלת הסניף - מופחתת מההתחשבנות", money(-report.storeCommission), GREEN, true)}
+          ${report.storeCollected > 0 ? summaryRow("נגבה על ידי הסניף (נכלל בהתחשבנות)", money(report.storeCollected), INK) : ""}
+          ${summaryRow(report.storeCollected > 0 ? "עמלת הסניף - מופחתת מההתחשבנות" : "עמלת חנות סניפים - הכסף נגבה אצל ההנהלה, העמלה מופחתת מההתחשבנות", money(-report.storeCommission), GREEN, true)}
+          <tr><td colspan="2" style="padding:6px 10px;font-size:11px;color:${MUTED}">סכומי החנות משפיעים רק על "כמה להעביר" ולא על רווחיות הניידים.</td></tr>
         </table>
       </td>
     </tr>`
