@@ -93,7 +93,8 @@ export const GUIDE_PROMPT = `אני מוכר מחשבים בישראל. בדוק
 - storageAdd: התוספת כשעוברים מ-256GB ל-512, 1000, 2000 (מפתחות "512","1000","2000").
 - touchAdd: תוספת מסך מגע בנייד. screen17Add: תוספת מסך 17 אינץ' בנייד.
 - accessoriesLow: מחיר שוק נמוך ל: monitor (מסך 24 אינץ' פשוט), keyboardMouse (סט מקלדת ועכבר אלחוטיים פשוטים), keyboard, mouse, stick (דיסק און קי 64GB), speakers.
-אם אין לך מידע אמין על פריט - השמט אותו (null או בלי המפתח). החזר אך ורק אובייקט JSON, בלי טקסט נוסף ובלי בלוק קוד, במבנה:
+מקורות מומלצים: אתרי החנויות והשוואות המחירים הישראליים (למשל KSP, Ivory, Bug, Zap) - חפש בהם דגמים אמיתיים במחיר הנמוך הרגיל לכל דרגה.
+חובה להחזיר מחיר **לכל דרגה שנתבקשה** (i3, i5 ו-i7): אם לא מצאת דגם מדויק לדרגה, השתמש במחיר הדגם הקרוב ביותר שמצאת באותה דרגה, ורשום זאת ב-note. השמט פריט רק אם באמת אין לך שום מידע עליו (null או בלי המפתח). החזר אך ורק אובייקט JSON, בלי טקסט נוסף ובלי בלוק קוד, במבנה:
 {"laptopBase":{"i3":0,"i5":0,"i7":0},"desktopBase":{"i3":0,"i5":0,"i7":0},"ramAdd":{"16":0,"32":0},"storageAdd":{"512":0,"1000":0,"2000":0},"touchAdd":null,"screen17Add":null,"accessoriesLow":{"monitor":0,"keyboardMouse":0,"stick":0},"note":"מקורות/הערות קצרות"}`;
 
 function onlyNumbers(o: unknown): Record<string, number> {
@@ -108,24 +109,32 @@ function onlyNumbers(o: unknown): Record<string, number> {
 
 /** סקירת שוק מרוכזת למחירון (פעם בחודש בערך): Haiku + חיפוש ברשת. טיוטה לבעלים, לא נשמרת אוטומטית. */
 /** הנחיית הסריקה הלילית: ההנחיה הבסיסית + תצורות ספציפיות שצריך להן מחיר שוק נמוך מדויק (קלאסיות + נפוצות בבקשות). */
-export function buildGuidePrompt(targets: { key: string; description: string; requested: number }[] = []): string {
-  if (!targets.length) return GUIDE_PROMPT;
-  return `${GUIDE_PROMPT}
+export type ScanFocus = "laptop" | "desktop" | "extras";
+const FOCUS_TEXT: Record<ScanFocus, string> = {
+  laptop: "התמקד בסריקה הזו **רק** ב: laptopBase, ramAdd, storageAdd, touchAdd, screen17Add (מחשבים ניידים). השאר את שאר השדות ריקים.",
+  desktop: "התמקד בסריקה הזו **רק** ב: desktopBase (מחשבים נייחים, המחשב בלבד). השאר את שאר השדות ריקים.",
+  extras: "התמקד בסריקה הזו **רק** ב: accessoriesLow (מסך, מקלדת ועכבר, סטיק, רמקולים). השאר את שאר השדות ריקים.",
+};
+
+export function buildGuidePrompt(targets: { key: string; description: string; requested: number }[] = [], focus?: ScanFocus): string {
+  const head = focus ? `${GUIDE_PROMPT}\n\n${FOCUS_TEXT[focus]}` : GUIDE_PROMPT;
+  if (!targets.length) return head;
+  return `${head}
 
 בנוסף, החזר גם specPrices: אובייקט שבו המפתח הוא המזהה שבסוגריים המרובעים והערך הוא מחיר השוק הנמוך (אותם כללים: ממוצע נמוך בלי חריגים, מחשב מינימלי בלי מערכת הפעלה) לכל אחת מהתצורות הבאות. אם אין לך מידע אמין לתצורה מסוימת - השמט אותה, ואל תנחש.
 ${targets.map((t) => `[${t.key}] ${t.description}${t.requested ? ` (התבקשה ${t.requested} פעמים לאחרונה)` : ""}`).join("\n")}`;
 }
 
-export async function draftPriceGuide(targets: { key: string; description: string; requested: number }[] = []): Promise<PriceGuideDraft> {
+export async function draftPriceGuide(targets: { key: string; description: string; requested: number }[] = [], focus?: ScanFocus, maxUses = 4): Promise<PriceGuideDraft> {
   if (!storeAiConfigured()) throw new Error("ANTHROPIC_API_KEY לא מוגדר");
   const client = createAnthropic();
-  const messages: Anthropic.MessageParam[] = [{ role: "user", content: buildGuidePrompt(targets) }];
+  const messages: Anthropic.MessageParam[] = [{ role: "user", content: buildGuidePrompt(targets, focus) }];
   for (let turn = 0; turn <= MAX_PAUSE_TURNS; turn++) {
     const response = await client.messages.create({
       model: MODEL,
       max_tokens: 9000,
       output_config: { effort: "low" },
-      tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 4 }],
+      tools: [{ type: "web_search_20250305", name: "web_search", max_uses: maxUses }],
       messages,
     });
     if (response.stop_reason === "refusal") throw new Error("המודל סירב לבקשה");
@@ -168,15 +177,29 @@ export async function scanMarket(targets: ScanTarget[]): Promise<PriceGuideDraft
   const CHUNK = 10;
   const chunks: ScanTarget[][] = [];
   for (let i = 0; i < targets.length; i += CHUNK) chunks.push(targets.slice(i, i + CHUNK));
-  const results = await Promise.allSettled([draftPriceGuide([]), ...chunks.map((c) => draftPriceGuide(c))]);
+  // שלוש קריאות ממוקדות לבסיס (נייד / נייח / אביזרים) + קריאה לכל 10 תצורות - הכול במקביל
+  const results = await Promise.allSettled([
+    draftPriceGuide([], "laptop", 6),
+    draftPriceGuide([], "desktop", 5),
+    draftPriceGuide([], "extras", 4),
+    ...chunks.map((c) => draftPriceGuide(c, undefined, 4)),
+  ]);
   const ok = results.filter((r): r is PromiseFulfilledResult<PriceGuideDraft> => r.status === "fulfilled").map((r) => r.value);
   if (!ok.length) {
     const first = results.find((r): r is PromiseRejectedResult => r.status === "rejected");
     throw new Error(first?.reason instanceof Error ? first.reason.message : "הסריקה נכשלה");
   }
-  const first = results[0];
-  const base = first && first.status === "fulfilled" ? first.value : ok[0]!;
-  const specPrices: Record<string, number> = {};
-  for (const r of ok) Object.assign(specPrices, r?.specPrices ?? {});
-  return { ...base, specPrices };
+  const merged: PriceGuideDraft = { laptopBase: {}, desktopBase: {}, ramAdd: {}, storageAdd: {}, touchAdd: null, screen17Add: null, accessoriesLow: {}, specPrices: {}, note: "" };
+  for (const r of ok) {
+    Object.assign(merged.laptopBase, r.laptopBase);
+    Object.assign(merged.desktopBase, r.desktopBase);
+    Object.assign(merged.ramAdd, r.ramAdd);
+    Object.assign(merged.storageAdd, r.storageAdd);
+    Object.assign(merged.accessoriesLow, r.accessoriesLow);
+    Object.assign(merged.specPrices, r.specPrices);
+    merged.touchAdd ??= r.touchAdd;
+    merged.screen17Add ??= r.screen17Add;
+    if (r.note) merged.note = [merged.note, r.note].filter(Boolean).join(" | ").slice(0, 400);
+  }
+  return merged;
 }
