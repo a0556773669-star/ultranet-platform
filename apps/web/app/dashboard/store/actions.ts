@@ -375,12 +375,14 @@ export async function advisorChatAction(history: AdvisorTurn[]): Promise<Advisor
  * מחיר שוק חי לאפשרויות שהוצגו בצ'אט (נקרא מהדפדפן אחרי שהתשובה כבר הוצגה, כדי שהצ'אט לא יחכה לחיפוש).
  * מאגר יומי: מפרט שכבר נבדק היום לא נבדק שוב. פתוח לכל מי שיש לו הרשאת חנות.
  */
-export async function priceOptionsAction(specs: Partial<StoreSpec>[]): Promise<{ estimate: PriceEstimate | null; source: "market" | "guide" | "none" }[]> {
+export async function priceOptionsAction(specs: Partial<StoreSpec>[]): Promise<{ estimate: PriceEstimate | null; source: "market" | "guide" | "none"; error?: string }[]> {
   const scope = await currentModuleScope("store");
   if (!scope?.granted) throw new Error("אין הרשאה לחנות סניפים");
   const clean = (Array.isArray(specs) ? specs : []).slice(0, 3).map((x) => sanitizeSpec(x));
   if (!clean.length) return [];
-  return estimateMany(clean, await loadPriceGuide(), { allowLookup: true });
+  const res = await estimateMany(clean, await loadPriceGuide(), { allowLookup: true });
+  // סיבת הכשל מוצגת לבעלים בלבד (לאבחון); סניף רואה רק "המחיר יימסר אחרי בדיקה"
+  return scope.isOwner ? res : res.map(({ error: _error, ...rest }) => rest);
 }
 
 export interface CreateChatRequestInput {
@@ -584,19 +586,36 @@ export async function seedGlossaryAction(): Promise<void> {
   revalidatePath("/dashboard/store/glossary");
 }
 
-/** בדיקת חיבור ל-API: קריאה מינימלית אחת ל-Haiku (עלות זניחה). בעלים בלבד. */
+/** בדיקת חיבור ל-API וליכולת החיפוש ברשת (שני בדיקות מינימליות, עלות זניחה). בעלים בלבד. */
 export async function testAiConnectionAction(): Promise<{ ok: boolean; message: string }> {
   await requireOwner();
   if (!anthropicConfigured()) return { ok: false, message: "ANTHROPIC_API_KEY לא מוגדר בשרת (ב-Vercel, ואחרי הגדרה צריך Redeploy)" };
+  const client = createAnthropic();
+  let base: string;
   try {
-    const res = await createAnthropic().messages.create({
+    const res = await client.messages.create({
       model: "claude-haiku-5-5",
       max_tokens: 16,
       output_config: { effort: "low" },
       messages: [{ role: "user", content: "ענה במילה אחת: שלום" }],
     });
-    return { ok: true, message: `החיבור תקין (${res.usage.input_tokens + res.usage.output_tokens} טוקנים)` };
+    base = `המודל תקין (${res.usage.input_tokens + res.usage.output_tokens} טוקנים)`;
   } catch (e) {
     return { ok: false, message: `${e instanceof Error ? e.message : "שגיאה לא ידועה"} || אבחון מפתח: ${describeKey()}` };
+  }
+  try {
+    await client.messages.create({
+      model: "claude-haiku-5-5",
+      max_tokens: 300,
+      output_config: { effort: "low" },
+      tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 1, user_location: { type: "approximate", country: "IL" } }],
+      messages: [{ role: "user", content: "חפש באינטרנט: מה מזג האוויר בתל אביב היום? ענה במשפט אחד." }],
+    });
+    return { ok: true, message: `${base}. חיפוש ברשת: תקין` };
+  } catch (e) {
+    return {
+      ok: false,
+      message: `${base}, אבל החיפוש ברשת נכשל: ${e instanceof Error ? e.message : "שגיאה"} (אם כתוב שהכלי לא מופעל - בדרך כלל צריך להפעיל Web search בהגדרות הארגון ב-console.anthropic.com)`,
+    };
   }
 }
