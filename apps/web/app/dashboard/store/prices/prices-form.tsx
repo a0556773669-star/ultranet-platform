@@ -2,7 +2,8 @@
 
 import { useState, useTransition } from "react";
 import type { StorePriceGuide } from "@ultranet/shared-types";
-import { refreshPriceGuideDraftAction, savePriceGuideAction } from "../actions";
+import { useRouter } from "next/navigation";
+import { refreshPriceGuideNowAction, savePriceGuideAction } from "../actions";
 
 const FIELD =
   "w-full rounded-lg border border-card-border bg-[#f4f6f9] px-2 py-1.5 text-sm focus:border-teal focus:bg-white focus:outline-none";
@@ -34,6 +35,7 @@ const Row = ({ name, label, vals, set }: { name: string; label: string; vals: Va
 export function PricesForm({ guide, aiEnabled }: { guide: StorePriceGuide; aiEnabled: boolean }) {
   const [vals, setVals] = useState<Vals>(fromGuide(guide));
   const [note, setNote] = useState(guide.note ?? "");
+  const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [aiBusy, setAiBusy] = useState(false);
   const [msg, setMsg] = useState("");
@@ -43,21 +45,11 @@ export function PricesForm({ guide, aiEnabled }: { guide: StorePriceGuide; aiEna
     setAiBusy(true);
     setMsg("");
     try {
-      const d = await refreshPriceGuideDraftAction();
-      const next: Vals = {};
-      const put = (prefix: string, o: Record<string, number>) => {
-        for (const [k, n] of Object.entries(o)) next[`${prefix}_${k}`] = String(n);
-      };
-      put("lb", d.laptopBase);
-      put("db", d.desktopBase);
-      put("ram", d.ramAdd);
-      put("st", d.storageAdd);
-      put("acc", d.accessoriesLow);
-      if (d.touchAdd) next.touch = String(d.touchAdd);
-      if (d.screen17Add) next.s17 = String(d.screen17Add);
-      setVals((p) => ({ ...p, ...next }));
-      if (d.note) setNote(d.note);
-      setMsg("הטיוטה מולאה. בדקו את המספרים ולחצו שמירה.");
+      const r = await refreshPriceGuideNowAction();
+      setMsg(
+        `המחירון עודכן ונשמר (נסרקו ${r.scanned} תצורות).${r.rejected.length ? ` נדחו ${r.rejected.length} ערכים לא סבירים: ${r.rejected.slice(0, 3).join("; ")}` : ""}`,
+      );
+      router.refresh();
     } catch (e) {
       setMsg(e instanceof Error ? e.message : "שגיאה");
     } finally {
@@ -129,8 +121,8 @@ export function PricesForm({ guide, aiEnabled }: { guide: StorePriceGuide; aiEna
       <div className="flex flex-wrap items-center gap-2">
         <button type="submit" disabled={pending} className="btn-primary disabled:opacity-40">שמירה</button>
         {aiEnabled ? (
-          <button type="button" disabled={aiBusy} onClick={refresh} className="btn-outline text-xs disabled:opacity-40">
-            {aiBusy ? "סורק את השוק... (עד דקה)" : "מילוי טיוטה אוטומטי מהשוק (AI + חיפוש)"}
+          <button type="button" disabled={aiBusy} onClick={refresh} className="btn-primary disabled:opacity-40">
+            {aiBusy ? "סורק את השוק... (עד דקה, אל תסגרו את הדף)" : "עדכון המחירון עכשיו מהשוק (אוטומטי, שומר מיד)"}
           </button>
         ) : null}
       </div>
