@@ -11,11 +11,10 @@ import { computeDealCommission } from "@/lib/store-commission";
 import { anthropicConfigured, createAnthropic, describeKey } from "@/lib/anthropic-client";
 import { advisorChat, type AdvisorReply, type AdvisorTurn, type ChatOption } from "@/lib/store-advisor";
 import { estimateRange, loadPriceGuide, mergeGuide, PRICE_GUIDE_DOC, recordDemand, researchTargets, savePriceGuide, specDescription } from "@/lib/store-price-guide";
-import { notifyBranch, notifyOwnerNewRequest, notifyOwnerStockCheck } from "@/lib/store-notify";
+import { notifyBranch, notifyOwnerDealClosed, notifyOwnerNewRequest, notifyOwnerStockCheck } from "@/lib/store-notify";
 import { FAQ_COLLECTION } from "@/lib/store-faq";
 import { DEFAULT_GLOSSARY, GLOSSARY_COLLECTION } from "@/lib/store-glossary";
 import { resolveNedarimCreds } from "@/lib/nedarim";
-import { DEFAULT_STORE_PROCEDURES } from "@/lib/store-default-procedures";
 import { draftMarketPrice, scanMarket, storeAiConfigured, type MarketDraft } from "@/lib/store-ai";
 import { applyUsageDefaults, sanitizeSpec, specToText, type UsageKey } from "@/lib/store-wizard";
 import type { StoreAccessoryQuote, StoreCollection, StorePayment, StoreCommissionCategory, StoreRequest, StoreRequestMode, StoreRequestOption, StoreRequestStatus, StoreSpec } from "@ultranet/shared-types";
@@ -277,6 +276,7 @@ export async function closeDealAction(id: string, input: CloseDealInput): Promis
   };
   const commissionILS = input.collectedBy === "branch" ? computeDealCommission(request, await loadCommissionRules()) : 0;
   await ref.update({ status: "deal_closed", dealClosedAt: now, collection, commissionILS, updatedAt: now });
+  await notifyOwnerDealClosed({ ...request, status: "deal_closed", dealClosedAt: now, collection, commissionILS });
   revalidateRequest(id);
   revalidatePath("/dashboard/store/commissions");
   });
@@ -353,42 +353,6 @@ export async function aiMarketDraftAction(id: string): Promise<ActionResult<Mark
   const snap = await getAdminFirestore().collection(COLLECTION).doc(id).get();
   if (!snap.exists) throw new Error("הבקשה לא נמצאה");
   return draftMarketPrice({ ...(snap.data() as Omit<StoreRequest, "id">), id } as StoreRequest);
-  });
-}
-
-/** טעינה חד-פעמית של נהלי ברירת המחדל לחנות. לא דורסת נוהל קיים (מזהים קבועים). בעלים בלבד. */
-export async function seedStoreProceduresAction(): Promise<ActionResult<{ created: number }>> {
-  return guard(async () => {
-  const session = await requireOwner();
-  const db = getAdminFirestore();
-  const now = Date.now();
-  const by = session.user?.name ?? session.user?.email ?? "";
-  let created = 0;
-  for (const [index, p] of DEFAULT_STORE_PROCEDURES.entries()) {
-    const ref = db.collection("n_procedures").doc(p.id);
-    if ((await ref.get()).exists) continue;
-    await ref.set({
-      title: p.title,
-      content: p.content,
-      category: p.category,
-      summary: p.summary,
-      version: "1",
-      status: "active",
-      ownerName: by,
-      supersedesId: null,
-      attachmentName: "",
-      attachmentDataUrl: "",
-      order: index,
-      createdAt: now,
-      updatedAt: now,
-      createdBy: by,
-      updatedBy: by,
-      audience: { mode: "store" },
-    });
-    created++;
-  }
-  revalidatePath("/dashboard/store");
-  return { created };
   });
 }
 
@@ -738,6 +702,7 @@ export async function confirmStorePaymentAction(id: string, transactionId: strin
     const payment: StorePayment = { provider: "nedarim_plus", amountILS: amount, transactionId, routeId: creds.routeId, paidAt: now, ...(test ? { test: true } : {}) };
     const commissionILS = test ? 0 : computeDealCommission(request, await loadCommissionRules());
     await ref.update({ status: "deal_closed", dealClosedAt: now, collection, payment, commissionILS, updatedAt: now });
+    await notifyOwnerDealClosed({ ...request, status: "deal_closed", dealClosedAt: now, collection, payment, commissionILS });
     revalidateRequest(id);
     revalidatePath("/dashboard/store/commissions");
   });
