@@ -6,6 +6,8 @@ import { StoreTabs } from "../store-tabs";
 import { PricesForm } from "./prices-form";
 
 export const dynamic = "force-dynamic";
+/** המילוי האוטומטי (חיפוש ברשת) יכול לקחת עד כדקה - ללא זה Vercel חותך אחרי 10 שניות. */
+export const maxDuration = 60;
 
 export default async function PricesPage() {
   await requireOwner();
@@ -14,12 +16,14 @@ export default async function PricesPage() {
     <div className="max-w-3xl">
       <h1 className="mb-4 flex items-center gap-1.5 text-[21px] font-extrabold text-ink">
         <Tag className="h-5 w-5" />
-        מחירון גיבוי
+        מחירון שוק יומי
       </h1>
       <StoreTabs isOwner />
       <div className="card mb-4 text-sm text-muted">
-        המחיר בצ׳אט נבדק <b>חי בשוק</b> (חיפוש ברשת, ממוצע נמוך בלי מחירים חריגים, ועוד המרווח), ונשמר <b>למשך אותו יום</b> לכל
-        הסניפים, כך שמפרט שכבר נבדק היום לא נבדק שוב. המחירון כאן הוא <b>גיבוי בלבד</b>, למקרה שהחיפוש נכשל.
+        זה המחירון שממנו הצ׳אט מחשב <b>מיד</b> את טווחי המחיר לסניפים: מחיר שוק <b>נמוך</b> (ממוצע בלי מחירים חריגים, מחשב
+        מינימלי בלי מערכת הפעלה) <b>ועוד 300-500 ₪</b> למחשב. הוא מתרענן <b>אוטומטית כל לילה</b> (חיפוש ברשת עם Haiku),
+        ומחיר שמשתנה ביותר מ-40% או נראה לא הגיוני נדחה ונשמר הקודם. אפשר גם לערוך ידנית, או ללחוץ על המילוי האוטומטי
+        ולבדוק לפני שמירה. <b>בפעם הראשונה</b> כדאי ללחוץ עליו, כדי שיהיו מחירים כבר מהיום.
       </div>
       <PricesForm guide={guide} aiEnabled={advisorConfigured()} />
     </div>

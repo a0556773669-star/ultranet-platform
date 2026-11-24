@@ -9,6 +9,8 @@ import { AiTestButton } from "../ai-test-button";
 import { deleteGlossaryTermAction, saveGlossaryTermAction, seedGlossaryAction } from "../actions";
 
 export const dynamic = "force-dynamic";
+/** פעולות ה-AI (שיחה/חיפוש ברשת) יכולות לעבור 10 שניות - ללא זה Vercel חותך אותן. */
+export const maxDuration = 60;
 
 const FIELD =
   "w-full rounded-lg border border-card-border bg-[#f4f6f9] px-3 py-2 text-sm focus:border-teal focus:bg-white focus:outline-none";

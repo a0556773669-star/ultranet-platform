@@ -15,6 +15,8 @@ import { computeDealCommission } from "@/lib/store-commission";
 import { loadCommissionRules } from "@/lib/store-commission-data";
 
 export const dynamic = "force-dynamic";
+/** פעולות ה-AI (שיחה/חיפוש ברשת) יכולות לעבור 10 שניות - ללא זה Vercel חותך אותן. */
+export const maxDuration = 60;
 
 export default async function StoreRequestPage({ params }: { params: { id: string } }) {
   await requireModuleAccess("store");

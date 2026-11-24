@@ -6,6 +6,9 @@ import { advisorConfigured } from "@/lib/store-advisor";
 import { RequestWizard } from "./request-wizard";
 import { ChatAdvisor } from "./chat-advisor";
 
+/** פעולות ה-AI (שיחה/חיפוש ברשת) יכולות לעבור 10 שניות - ללא זה Vercel חותך אותן. */
+export const maxDuration = 60;
+
 export default async function NewStoreRequestPage({ searchParams }: { searchParams: { form?: string } }) {
   await requireModuleAccess("store");
   const scope = await currentModuleScope("store");
