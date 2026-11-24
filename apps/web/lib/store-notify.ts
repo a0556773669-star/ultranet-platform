@@ -81,6 +81,32 @@ async function stockCheckFollowUp(r: StoreRequest): Promise<void> {
   for (const to of await ownerEmails()) await safeSend(to, `בדיקת מלאי: ${r.customerName} (${r.branchName})`, body);
 }
 
+/** מייל לבעלים: הלקוח אישר והסניף סגר את העסקה - להזמין את המחשב ולשלוח לסניף. כולל איך נגבה, העמלה וקישורי החנויות שנמצאו. */
+export async function notifyOwnerDealClosed(r: StoreRequest): Promise<void> {
+  const chosen = r.options?.[r.chosenOptionIndex ?? -1];
+  const total = (r.finalPriceILS ?? 0) + (r.accessoriesFinalILS ?? 0);
+  const how = r.payment
+    ? `שולם באשראי דרך נדרים פלוס${r.payment.test ? " (בדיקה)" : ""} · עסקה ${r.payment.transactionId}`
+    : r.collection?.by === "branch"
+      ? `הסניף גבה${r.collection.method ? ` (${{ cash: "מזומן", card: "אשראי", transfer: "העברה" }[r.collection.method]})` : ""}`
+      : "ההנהלה גובה ישירות";
+  const lines = [
+    `סניף: ${r.branchName} · לקוח: ${r.customerName}${r.customerPhone ? ` · ${r.customerPhone}` : ""}`,
+    chosen ? `${chosen.label} - ${chosen.specText}` : specToText(r.spec),
+    r.accessories?.length ? `אביזרים: ${r.accessories.map((a) => a.name).join(", ")}` : "",
+    `מחיר סופי: ${total.toLocaleString("he-IL")} ₪ · ${how}`,
+    typeof r.commissionILS === "number" ? `עמלת הסניף: ${r.commissionILS.toLocaleString("he-IL")} ₪` : "",
+    "העסקה נסגרה - יש להזמין את המחשב ולשלוח לסניף.",
+  ].filter(Boolean);
+  const listingsHtml = r.listings?.length
+    ? `<h3 style="margin:16px 0 6px">איפה הכי זול להזמין</h3><ul style="padding-right:18px;margin:0">${r.listings
+        .map((l) => `<li style="margin:4px 0"><a href="${esc(l.url)}">${esc(l.store)}</a> · ${esc(l.title)} · <b>${l.priceILS.toLocaleString("he-IL")} ₪</b></li>`)
+        .join("")}</ul>`
+    : "";
+  const body = html("עסקה נסגרה - להזמין ולשלוח", lines, r.id).replace("</div>", `${listingsHtml}</div>`);
+  for (const to of await ownerEmails()) await safeSend(to, `עסקה נסגרה: ${r.customerName} (${r.branchName})`, body);
+}
+
 export async function notifyOwnerNewRequest(r: StoreRequest): Promise<void> {
   const body = html("בקשת התאמת מחשב חדשה", [`סניף: ${r.branchName} · לקוח: ${r.customerName}`, specToText(r.spec)], r.id);
   for (const to of await ownerEmails()) await safeSend(to, `בקשה חדשה: ${r.customerName} (${r.branchName})`, body);

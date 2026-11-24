@@ -1,21 +1,19 @@
 import Link from "next/link";
-import { ShoppingBag, BookOpen, ArrowLeft } from "lucide-react";
+import { ShoppingBag, BookOpen, ArrowLeft, ChevronDown } from "lucide-react";
 import { isOwnerSession, requireModuleAccess } from "@/lib/perms";
 import { listVisibleProcedures } from "../duxus/actions";
 import { StoreTabs } from "./store-tabs";
-import { SeedProceduresButton } from "./seed-button";
+import { ensureStoreProcedures } from "@/lib/store-procedures-seed";
 
 export default async function StoreHomePage() {
   const session = await requireModuleAccess("store");
   const isOwner = isOwnerSession(session);
-  // נהלים והדרכות של החנות = נהלים עם הרשאת צפייה "סניפים עם חנות סניפים" (נערכים במסך הנהלים).
+  // נהלי החנות נטענים אוטומטית בפעם הראשונה; נערכים אחר כך במסך הנהלים (הרשאת צפייה "סניפים עם חנות סניפים").
+  await ensureStoreProcedures().catch(() => {});
   const all = await listVisibleProcedures();
-  const procedures = all.filter((p) => p.audience?.mode === "store" && p.status !== "archived" && p.status !== "draft");
-  const byCategory = new Map<string, typeof procedures>();
-  for (const p of procedures) {
-    const key = p.category || "כללי";
-    byCategory.set(key, [...(byCategory.get(key) ?? []), p]);
-  }
+  const procedures = all
+    .filter((p) => p.audience?.mode === "store" && p.status !== "archived" && p.status !== "draft")
+    .sort((a, b) => (a.order ?? 0) - (b.order ?? 0) || a.title.localeCompare(b.title, "he", { numeric: true }));
 
   return (
     <div>
@@ -56,47 +54,31 @@ export default async function StoreHomePage() {
         </div>
       </div>
 
-      <div className="card">
-        <h2 className="mb-2 flex items-center gap-1.5 text-base font-bold text-ink">
-          <BookOpen className="h-4 w-4" />
-          נהלים והדרכות
-        </h2>
-        {!procedures.length ? (
-          <p className="text-sm text-muted">
-            עדיין לא פורסמו נהלים והדרכות לחנות.
-            {isOwner ? (
-              <>
-                {" "}
-                להוספה: <Link href="/dashboard/duxus/procedures/new" className="font-semibold text-teal hover:underline">נוהל חדש</Link>, ובשדה
-                ״מי רשאי לצפות״ בוחרים <b>״סניפים עם חנות סניפים״</b> (סטטוס ״בתוקף״). נהלי התקנה והדרכות נכנסים לאותו מקום
-                (קטגוריה לדוגמה: ״הדרכת התקנה״).
-                <SeedProceduresButton />
-              </>
-            ) : null}
-          </p>
-        ) : (
-          <div className="flex flex-col gap-4">
-            {Array.from(byCategory.entries()).map(([category, items]) => (
-              <div key={category}>
-                <div className="mb-1 text-xs font-bold text-muted">{category}</div>
-                <ul className="flex flex-col gap-1.5">
-                  {items.map((p) => (
-                    <li key={p.id}>
-                      <Link
-                        href={`/dashboard/tutorials/procedures/${p.id}`}
-                        className="block rounded-lg border border-card-border bg-white px-3 py-2 text-sm hover:border-teal"
-                      >
-                        <span className="font-bold text-ink">{p.title}</span>
-                        {p.summary ? <span className="mt-0.5 block text-xs text-muted">{p.summary}</span> : null}
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ))}
-          </div>
-        )}
+      <div className="mb-2 flex items-center gap-1.5 text-base font-bold text-ink">
+        <BookOpen className="h-4 w-4" />
+        נהלים
       </div>
+      {!procedures.length ? (
+        <div className="card text-sm text-muted">עדיין לא פורסמו נהלים.</div>
+      ) : (
+        <div className="flex flex-col gap-2">
+          {procedures.map((p) => (
+            <details key={p.id} className="group card !p-0 overflow-hidden">
+              <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-bold text-ink hover:bg-[#f4f6f9]">
+                <span>
+                  {p.title}
+                  {p.summary ? <span className="mt-0.5 block text-xs font-normal text-muted">{p.summary}</span> : null}
+                </span>
+                <ChevronDown className="h-4 w-4 shrink-0 text-muted transition group-open:rotate-180" />
+              </summary>
+              <div
+                className="border-t border-card-border px-4 py-3 text-sm leading-relaxed text-ink [&_h4]:mb-1 [&_h4]:mt-3 [&_h4]:font-bold [&_li]:mb-1 [&_ol]:list-decimal [&_ol]:pr-5 [&_ul]:list-disc [&_ul]:pr-5"
+                dangerouslySetInnerHTML={{ __html: p.content }}
+              />
+            </details>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
