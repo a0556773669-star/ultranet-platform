@@ -5,7 +5,7 @@ import { getAdminFirestore } from "./firebase-admin";
 import { DEFAULT_MIN_GENERATION, USAGE_OPTIONS, sanitizeSpec, specToText } from "./store-wizard";
 import { loadGlossary } from "./store-glossary";
 import { FAQ_COLLECTION, learnFaq, loadFaq, matchFaq } from "./store-faq";
-import { estimateRange, guideForPrompt, loadPriceGuide, type PriceEstimate } from "./store-price-guide";
+import { guideForPrompt, loadPriceGuide, type PriceEstimate } from "./store-price-guide";
 
 /**
  * יועץ הצ'אט של חנות הסניפים - **Claude Haiku 5.5** (הדגם הזול ביותר), מאמץ נמוך, פלט מובנה.
@@ -31,7 +31,12 @@ export type ChatOption = {
   kind: "as_requested" | "upgrade" | "alternative";
   spec: StoreSpec;
   specText: string;
+  /** משפט אחד: במה האפשרות הזו שונה/טובה */
   whyBetter: string;
+  /** יתרונות וחסרונות קצרים (+/-) להסבר ללקוח */
+  pros: string[];
+  cons: string[];
+  /** מחושב בנפרד (`priceOptionsAction`) כדי שהתשובה בצ'אט לא תחכה לחיפוש בשוק */
   estimate: PriceEstimate | null;
 };
 
@@ -40,6 +45,8 @@ export type AdvisorReply = {
   /** "faq" = נענה מהשאלות הנפוצות בלי קריאה למודל */
   source: "model" | "faq";
   options: ChatOption[];
+  /** תשובות מוכנות ללחיצה (כמו בצ'אט), כשהשאלה סגורה: ["נייד", "נייח"] */
+  quickReplies: string[];
   lockedFields: string[];
   budgetILS: number | null;
   notes: string;
@@ -50,7 +57,7 @@ const nullable = (schema: Record<string, unknown>) => ({ anyOf: [schema, { type:
 const OPTION_SCHEMA = {
   type: "object",
   additionalProperties: false,
-  required: ["label", "kind", "cpu", "ramGb", "storageGb", "screenInches", "touch", "extras", "whyBetter"],
+  required: ["label", "kind", "cpu", "ramGb", "storageGb", "screenInches", "touch", "extras", "whyBetter", "pros", "cons"],
   properties: {
     label: { type: "string" },
     kind: { type: "string", enum: ["as_requested", "upgrade", "alternative"] },
@@ -61,17 +68,20 @@ const OPTION_SCHEMA = {
     touch: nullable({ type: "boolean" }),
     extras: { type: "array", items: { type: "string" } },
     whyBetter: { type: "string" },
+    pros: { type: "array", items: { type: "string" } },
+    cons: { type: "array", items: { type: "string" } },
   },
 } as const;
 
 const SCHEMA = {
   type: "object",
   additionalProperties: false,
-  required: ["reply", "deviceKind", "options", "lockedFields", "budgetILS", "notes", "generalQuestion"],
+  required: ["reply", "deviceKind", "options", "quickReplies", "lockedFields", "budgetILS", "notes", "generalQuestion"],
   properties: {
     reply: { type: "string" },
     deviceKind: nullable({ type: "string", enum: ["laptop", "desktop"] }),
     options: { type: "array", items: OPTION_SCHEMA },
+    quickReplies: { type: "array", items: { type: "string" } },
     lockedFields: { type: "array", items: { type: "string", enum: ["cpu", "ramGb", "storageGb", "screenInches", "touch", "extras"] } },
     budgetILS: nullable({ type: "integer" }),
     notes: { type: "string" },
@@ -111,14 +121,15 @@ async function systemPrompt(): Promise<string> {
 איך עובדים:
 1. הבן מה הלקוח צריך (נייד/נייח, למה, מה חשוב לו). שאל שאלה אחת או שתיים קצרות בכל פעם, רק על מה שחסר.
 2. לקוחות לא תמיד רוצים לענות על הכול (למשל תקציב). שאל פעם אחת בעדינות; אם נמנע - המשך בלי זה ואל תחזור על השאלה.
-3. ברגע שיש מספיק מידע (לפחות נייד/נייח והשימוש), הצע 2 או 3 אפשרויות בשדה options: הראשונה "as_requested" = בדיוק מה שהלקוח אמר או ההתאמה הבסיסית, אחת "upgrade" = טיפה יותר טוב, ואם מתאים "alternative" = חלופה חסכונית. לכל אפשרות כתוב whyBetter בעברית פשוטה: במה היא טובה או שונה, כדי שמנהל הסניף יוכל להסביר ללקוח.
+3. ברגע שיש מספיק מידע (לפחות נייד/נייח והשימוש), הצע **תמיד 2 או 3 אפשרויות** בשדה options (לא אפשרות בודדת): הראשונה "as_requested" = בדיוק מה שהלקוח אמר או ההתאמה הבסיסית, אחת "upgrade" = טיפה יותר טוב, ואם מתאים "alternative" = חלופה חסכונית. לכל אפשרות: whyBetter = משפט אחד במה היא שונה, pros = עד 3 יתרונות קצרים, cons = עד 2 חסרונות או מגבלות קצרים (למשל "יקר יותר", "פחות עמיד לאורך זמן"). בעברית פשוטה, כדי שמנהל הסניף יוכל להסביר ללקוח.
 4. אל תציין מחירים בטקסט: המערכת מוסיפה לכל אפשרות טווח מחיר לפי המחירון. כבד תקציב שהלקוח אמר.
 5. שדה ב-lockedFields רק אם הלקוח אמר אותו במפורש. את מה שנעול אל תשנה באף אפשרות. אפשר להציע שדרוג רק בשדות שלא ננעלו.
 6. בנייח או כשהלקוח מבקש - הוסף extras (מסך, מקלדת, עכבר, סטיק, רמקולים).
 7. דור המעבד: ${DEFAULT_MIN_GENERATION} ומעלה כברירת מחדל. אל תשאל על זה.
 8. שאלות כלליות (אחריות, אנטיווירוס, רישיונות, זמני אספקה ועוד): ענה לפי הנהלים והשאלות הנפוצות שלמטה, והחזר ב-generalQuestion את השאלה וכמה מילות מפתח, כדי שנענה עליה בעתיד בלי קריאה נוספת. אל תמציא; אם אין תשובה - אמור שיפנה להנהלה. במקרה כזה options ריק.
 9. אל תעסוק בנושאים שאינם קשורים למחשבים והחנות.
-10. אם עדיין אין מספיק מידע, options ריק. כל פעם שאתה מציע אפשרויות חדשות או מעודכנות - החזר את כולן שוב.
+10. quickReplies: כששאלתך סגורה (למשל "נייד או נייח?"), החזר 2 עד 4 תשובות קצרות ללחיצה, כמו ["נייד","נייח"]. אחרת - רשימה ריקה.
+11. אם עדיין אין מספיק מידע, options ריק. כל פעם שאתה מציע אפשרויות חדשות או מעודכנות - החזר את כולן שוב.
 
 ערכי שימוש: 
 ${usage}
@@ -157,6 +168,8 @@ function buildOptions(raw: unknown, kind: "laptop" | "desktop", locked: string[]
       spec,
       specText: "",
       whyBetter: String(o.whyBetter ?? "").slice(0, 500),
+      pros: (Array.isArray(o.pros) ? (o.pros as unknown[]) : []).map((x) => String(x).slice(0, 90)).slice(0, 3),
+      cons: (Array.isArray(o.cons) ? (o.cons as unknown[]) : []).map((x) => String(x).slice(0, 90)).slice(0, 2),
     };
   });
   // מה שהלקוח קבע בוודאות - נאכף בקוד: כל אפשרות מקבלת את הערכים הנעולים מהאפשרות הראשונה.
@@ -186,7 +199,7 @@ export async function advisorChat(history: AdvisorTurn[]): Promise<AdvisorReply>
     if (id && !id.startsWith("builtin-")) {
       await getAdminFirestore().collection(FAQ_COLLECTION).doc(id).update({ hits: (faq.find((f) => f.id === id)?.hits ?? 0) + 1 }).catch(() => {});
     }
-    return { reply: hit.entry.answer, source: "faq", options: [], lockedFields: [], budgetILS: null, notes: "" };
+    return { reply: hit.entry.answer, source: "faq", options: [], quickReplies: [], lockedFields: [], budgetILS: null, notes: "" };
   }
 
   const messages: Anthropic.MessageParam[] = history.slice(-HISTORY_WINDOW).map((t) => ({ role: t.role, content: t.content.slice(0, 600) }));
@@ -214,8 +227,7 @@ export async function advisorChat(history: AdvisorTurn[]): Promise<AdvisorReply>
 
   const deviceKind = raw.deviceKind === "desktop" ? "desktop" : "laptop";
   const locked = Array.isArray(raw.lockedFields) ? (raw.lockedFields as string[]).map(String) : [];
-  const guide = await loadPriceGuide();
-  const options: ChatOption[] = buildOptions(raw.options, deviceKind, locked).map((o) => ({ ...o, estimate: estimateRange(o.spec, guide) }));
+  const options: ChatOption[] = buildOptions(raw.options, deviceKind, locked).map((o) => ({ ...o, estimate: null }));
   const reply = String(raw.reply ?? "").slice(0, 1200);
 
   const gq = raw.generalQuestion as { question?: string; keywords?: string[] } | null;
@@ -227,6 +239,7 @@ export async function advisorChat(history: AdvisorTurn[]): Promise<AdvisorReply>
     reply,
     source: "model",
     options,
+    quickReplies: (Array.isArray(raw.quickReplies) ? (raw.quickReplies as unknown[]) : []).map((x) => String(x).slice(0, 40)).slice(0, 4),
     lockedFields: locked,
     budgetILS: typeof raw.budgetILS === "number" && raw.budgetILS > 0 ? raw.budgetILS : null,
     notes: String(raw.notes ?? "").slice(0, 500),

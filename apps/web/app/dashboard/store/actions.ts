@@ -9,7 +9,10 @@ import { COMMISSION_CATEGORIES, COMMISSION_RULES_COLLECTION, currentIsraelMonth,
 import { computeDealCommission } from "@/lib/store-commission";
 import { anthropicConfigured, createAnthropic, describeKey } from "@/lib/anthropic-client";
 import { advisorChat, type AdvisorReply, type AdvisorTurn, type ChatOption } from "@/lib/store-advisor";
-import { estimateRange, loadPriceGuide, PRICE_GUIDE_DOC } from "@/lib/store-price-guide";
+import { loadPriceGuide, PRICE_GUIDE_DOC } from "@/lib/store-price-guide";
+import { estimateMany } from "@/lib/store-market";
+import { notifyBranch, notifyOwnerNewRequest, notifyOwnerStockCheck } from "@/lib/store-notify";
+import type { PriceEstimate } from "@/lib/store-price-guide";
 import { FAQ_COLLECTION } from "@/lib/store-faq";
 import { DEFAULT_GLOSSARY, GLOSSARY_COLLECTION } from "@/lib/store-glossary";
 import { DEFAULT_STORE_PROCEDURES } from "@/lib/store-default-procedures";
@@ -79,6 +82,7 @@ export async function createStoreRequestAction(input: CreateStoreRequestInput): 
     status: "new",
   };
   const ref = await db.collection(COLLECTION).add(doc);
+  await notifyOwnerNewRequest({ ...doc, id: ref.id } as StoreRequest);
   revalidatePath("/dashboard/store/requests");
   return { id: ref.id };
 }
@@ -182,6 +186,7 @@ export async function requestStockCheckAction(id: string, optionIndex: number): 
   if (!request.options?.[optionIndex]) throw new Error("האפשרות לא נמצאה");
   const now = new Date().toISOString();
   await ref.update({ status: "stock_check", chosenOptionIndex: optionIndex, stockCheckAt: now, updatedAt: now });
+  await notifyOwnerStockCheck({ ...request, status: "stock_check", chosenOptionIndex: optionIndex, id });
   revalidateRequest(id);
 }
 
@@ -196,7 +201,9 @@ export async function confirmStockAction(id: string, formData: FormData): Promis
   const accRaw = Number(String(formData.get("accessoriesFinalILS") ?? "").replace(/[^\d.]/g, ""));
   const accFinal = Number.isFinite(accRaw) && accRaw > 0 ? Math.round(accRaw) : 0;
   const now = new Date().toISOString();
-  await getAdminFirestore().collection(COLLECTION).doc(id).update({
+  const ref = getAdminFirestore().collection(COLLECTION).doc(id);
+  const before = (await ref.get()).data() as Omit<StoreRequest, "id"> | undefined;
+  await ref.update({
     status: "stock_confirmed" satisfies StoreRequestStatus,
     finalPriceILS: Math.round(price),
     ...(accFinal ? { accessoriesFinalILS: accFinal } : {}),
@@ -205,17 +212,18 @@ export async function confirmStockAction(id: string, formData: FormData): Promis
     stockConfirmedAt: now,
     updatedAt: now,
   });
+  if (before) await notifyBranch({ ...before, id }, "יש מלאי - אפשר לסגור עסקה", `המחיר הסופי ללקוח: ${(Math.round(price) + accFinal).toLocaleString("he-IL")} ₪. היכנסו למערכת וסגרו את העסקה.`);
   revalidateRequest(id);
 }
 
 export async function noStockAction(id: string, formData: FormData): Promise<void> {
   await requireOwner();
   const now = new Date().toISOString();
-  await getAdminFirestore().collection(COLLECTION).doc(id).update({
-    status: "no_stock" satisfies StoreRequestStatus,
-    stockNote: String(formData.get("stockNote") ?? "").trim().slice(0, 500),
-    updatedAt: now,
-  });
+  const ref = getAdminFirestore().collection(COLLECTION).doc(id);
+  const before = (await ref.get()).data() as Omit<StoreRequest, "id"> | undefined;
+  const note = String(formData.get("stockNote") ?? "").trim().slice(0, 500);
+  await ref.update({ status: "no_stock" satisfies StoreRequestStatus, stockNote: note, updatedAt: now });
+  if (before) await notifyBranch({ ...before, id }, "אין מלאי כרגע", note || "נחזור אליכם עם חלופה.");
   revalidateRequest(id);
 }
 
@@ -293,12 +301,11 @@ export async function saveCommissionRulesAction(formData: FormData): Promise<voi
 export async function markShippedAction(id: string, formData: FormData): Promise<void> {
   await requireOwner();
   const now = new Date().toISOString();
-  await getAdminFirestore().collection(COLLECTION).doc(id).update({
-    status: "shipped" satisfies StoreRequestStatus,
-    shippedAt: now,
-    shippingNote: String(formData.get("shippingNote") ?? "").trim().slice(0, 300),
-    updatedAt: now,
-  });
+  const ref = getAdminFirestore().collection(COLLECTION).doc(id);
+  const before = (await ref.get()).data() as Omit<StoreRequest, "id"> | undefined;
+  const note = String(formData.get("shippingNote") ?? "").trim().slice(0, 300);
+  await ref.update({ status: "shipped" satisfies StoreRequestStatus, shippedAt: now, shippingNote: note, updatedAt: now });
+  if (before) await notifyBranch({ ...before, id }, "המחשב נשלח לסניף", note || "יגיע בעוד כמה ימים.");
   revalidateRequest(id);
 }
 
@@ -364,13 +371,25 @@ export async function advisorChatAction(history: AdvisorTurn[]): Promise<Advisor
   return advisorChat(clean);
 }
 
+/**
+ * מחיר שוק חי לאפשרויות שהוצגו בצ'אט (נקרא מהדפדפן אחרי שהתשובה כבר הוצגה, כדי שהצ'אט לא יחכה לחיפוש).
+ * מאגר יומי: מפרט שכבר נבדק היום לא נבדק שוב. פתוח לכל מי שיש לו הרשאת חנות.
+ */
+export async function priceOptionsAction(specs: Partial<StoreSpec>[]): Promise<{ estimate: PriceEstimate | null; source: "market" | "guide" | "none" }[]> {
+  const scope = await currentModuleScope("store");
+  if (!scope?.granted) throw new Error("אין הרשאה לחנות סניפים");
+  const clean = (Array.isArray(specs) ? specs : []).slice(0, 3).map((x) => sanitizeSpec(x));
+  if (!clean.length) return [];
+  return estimateMany(clean, await loadPriceGuide(), { allowLookup: true });
+}
+
 export interface CreateChatRequestInput {
   branchId: string;
   customerName: string;
   customerPhone?: string;
   transcript: AdvisorTurn[];
   /** האפשרויות שהוצגו בצ'אט - נבנות מחדש בשרת (המחירים מחושבים כאן, לא נלקחים מהדפדפן) */
-  options: Pick<ChatOption, "label" | "kind" | "spec" | "whyBetter">[];
+  options: Pick<ChatOption, "label" | "kind" | "spec" | "whyBetter" | "pros" | "cons">[];
   /** האפשרות שהלקוח אישר. חסר = שמירה בלי אישור */
   chosenIndex?: number | null;
   lockedFields: string[];
@@ -382,6 +401,16 @@ export interface CreateChatRequestInput {
  * יצירת בקשה מצ'אט היועץ. ההצעות (לפי המחירון) נשמרות כתשובה אוטומטית (`status: answered`), ואם הלקוח אישר
  * אפשרות - הבקשה עוברת ישר לבדיקת מלאי (`stock_check`). הבעלים רשאי לעדכן הכול בטופס המענה.
  */
+/** משפט ההסבר + יתרונות/חסרונות, כטקסט אחד שנשמר על ההצעה. */
+function whyText(o: { whyBetter?: string; pros?: string[]; cons?: string[] }): string {
+  const pros = (o.pros ?? []).map((x) => String(x).slice(0, 90)).slice(0, 3);
+  const cons = (o.cons ?? []).map((x) => String(x).slice(0, 90)).slice(0, 2);
+  return [String(o.whyBetter ?? "").slice(0, 300), pros.length ? `יתרונות: ${pros.join(", ")}` : "", cons.length ? `חסרונות: ${cons.join(", ")}` : ""]
+    .filter(Boolean)
+    .join(" | ")
+    .slice(0, 800);
+}
+
 export async function createChatRequestAction(input: CreateChatRequestInput): Promise<{ id: string }> {
   const scope = await currentModuleScope("store");
   if (!scope?.granted) throw new Error("אין הרשאה לחנות סניפים");
@@ -393,7 +422,8 @@ export async function createChatRequestAction(input: CreateChatRequestInput): Pr
   const db = getAdminFirestore();
   const branch = await db.collection("n_branches").doc(input.branchId).get();
   if (!branch.exists) throw new Error("הסניף לא נמצא");
-  const guide = await loadPriceGuide();
+  // המחיר כבר הוצג בצ'אט ונשמר במאגר היומי - כאן רק קוראים אותו (בלי חיפוש חדש ובלי עלות)
+  const estimates = await estimateMany(input.options.slice(0, 3).map((o) => sanitizeSpec(o.spec)), await loadPriceGuide(), { allowLookup: false });
 
   const chosenIdx = typeof input.chosenIndex === "number" && input.options[input.chosenIndex] ? input.chosenIndex : null;
   const options: StoreRequestOption[] = [];
@@ -401,7 +431,7 @@ export async function createChatRequestAction(input: CreateChatRequestInput): Pr
   let spec: StoreSpec = sanitizeSpec(input.options[0]!.spec);
   input.options.slice(0, 3).forEach((o, i) => {
     const optSpec = sanitizeSpec(o.spec);
-    const est = estimateRange(optSpec, guide);
+    const est = estimates[i]?.estimate ?? null;
     if (i === (chosenIdx ?? 0)) {
       spec = optSpec;
       chosenAccessories = (est?.accessories ?? []).map((a) => ({ name: a.name, quotedFromILS: a.fromILS, quotedToILS: a.toILS }));
@@ -411,7 +441,7 @@ export async function createChatRequestAction(input: CreateChatRequestInput): Pr
       kind: o.kind === "upgrade" ? "upgrade" : "as_requested",
       source: "ai",
       specText: specToText(optSpec),
-      ...(o.whyBetter ? { whyBetter: String(o.whyBetter).slice(0, 500) } : {}),
+      ...(whyText(o) ? { whyBetter: whyText(o) } : {}),
       ...(est ? { quotedFromILS: est.fromILS, quotedToILS: est.toILS } : {}),
       ...(est?.accessories.length ? { accessoriesText: est.accessories.map((a) => `${a.name} ${a.fromILS}-${a.toILS}`).join(" · ") } : {}),
     });
@@ -453,6 +483,7 @@ export async function createChatRequestAction(input: CreateChatRequestInput): Pr
     ...(chosen !== null ? { chosenOptionIndex: chosen, stockCheckAt: now } : {}),
   };
   const ref = await db.collection(COLLECTION).add(doc);
+  if (chosen !== null) await notifyOwnerStockCheck({ ...doc, id: ref.id } as StoreRequest);
   revalidatePath("/dashboard/store/requests");
   return { id: ref.id };
 }
