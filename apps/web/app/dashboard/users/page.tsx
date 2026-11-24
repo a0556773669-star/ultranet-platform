@@ -21,7 +21,6 @@ const PERM_LABELS: Record<string, string> = {
   coworking: "משרד שיתופי",
   accounting: "הנה\"ח",
   charging: "סליקה וקבלות",
-  shop: "חנות ציבורית (ישן)",
   store: "חנות סניפים",
   duxus: "משימות ונהלים",
   investment: "השקעה",

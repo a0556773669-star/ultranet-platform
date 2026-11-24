@@ -64,6 +64,5 @@ export const MODULE_LABELS: Record<string, string> = {
   coworking: "משרד שיתופי",
   accounting: "הנה\"ח",
   duxus: "משימות ונהלים",
-  shop: "חנות AI",
   tutorials: "הדרכות",
 };
