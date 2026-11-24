@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { StorePayment } from "./store-payment";
 import type { StoreRequestStatus } from "@ultranet/shared-types";
 import type { ActionResult } from "@/lib/action-result";
 import {
@@ -33,7 +34,7 @@ type Props = {
 
 /** הפעולה הבאה בשרשרת (מהצעה לעסקה) - לסניף או לבעלים, לפי הסטטוס. */
 export function StageActions({ id, status, isOwner, options, finalPriceILS, accessoriesFinalILS, hasAccessories, expectedCommissionILS, commissionOverridden }: Props) {
-  const [collectedBy, setCollectedBy] = useState<"branch" | "owner">("branch");
+  const [collectedBy, setCollectedBy] = useState<"branch" | "owner" | "online">("branch");
   const [method, setMethod] = useState<"cash" | "card" | "transfer">("cash");
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -101,7 +102,6 @@ export function StageActions({ id, status, isOwner, options, finalPriceILS, acce
   }
 
   if (status === "stock_confirmed") {
-    if (isOwner) return <div className="card text-sm text-muted">ממתינים שהסניף יסגור את העסקה עם הלקוח.</div>;
     const total = (finalPriceILS ?? 0) + (accessoriesFinalILS ?? 0);
     return (
       <div className="card flex flex-col gap-3">
@@ -118,6 +118,7 @@ export function StageActions({ id, status, isOwner, options, finalPriceILS, acce
           <div className="mb-1 text-xs font-semibold text-muted">מי גובה את הכסף?</div>
           <div className="flex flex-wrap gap-2">
             <button type="button" onClick={() => setCollectedBy("branch")} className={collectedBy === "branch" ? "pill-active" : "pill-inactive"}>הסניף גובה (זכאי לעמלה)</button>
+            <button type="button" onClick={() => setCollectedBy("online")} className={collectedBy === "online" ? "pill-active" : "pill-inactive"}>אשראי באתר (נדרים פלוס)</button>
             <button type="button" onClick={() => setCollectedBy("owner")} className={collectedBy === "owner" ? "pill-active" : "pill-inactive"}>הנהלה גובה ישירות</button>
           </div>
         </div>
@@ -133,9 +134,13 @@ export function StageActions({ id, status, isOwner, options, finalPriceILS, acce
           </div>
         ) : null}
         <p className="text-xs text-muted">אחרי הסגירה המחשב יוצא אליכם במשלוח ויגיע לסניף בעוד כמה ימים. מומלץ להגיד ללקוח שזה ייקח כמה ימים.</p>
-        <button type="button" disabled={pending} onClick={() => run(() => closeDealAction(id, { collectedBy, method: collectedBy === "branch" ? method : undefined }))} className="btn-primary w-fit disabled:opacity-40">
-          סגרתי את העסקה
-        </button>
+        {collectedBy === "online" ? (
+          <StorePayment id={id} amountILS={total} isOwner={isOwner} onClosed={() => router.refresh()} />
+        ) : (
+          <button type="button" disabled={pending} onClick={() => run(() => closeDealAction(id, { collectedBy, method: collectedBy === "branch" ? method : undefined }))} className="btn-primary w-fit disabled:opacity-40">
+            סגרתי את העסקה
+          </button>
+        )}
         {err}
       </div>
     );

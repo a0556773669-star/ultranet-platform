@@ -1036,6 +1036,10 @@ export interface StoreCommissionRule {
 export interface StoreCollection {
   by: "branch" | "owner";
   method?: "cash" | "card" | "transfer";
+  /** שולם אונליין דרך נדרים פלוס באתר (`StoreRequest.payment`). כשהכסף נכנס לחשבון של הבעלים (מסלול גלובלי) - `by: "owner"` */
+  online?: boolean;
+  /** `by: "owner"` + `online`: הסניף זכאי לעמלה (המכירה שלו) והבעלים חייב לו אותה; בלי זה - אין עמלה כשהבעלים גובה */
+  commissionToBranch?: boolean;
   /** הסכום שנגבה בפועל - ברירת המחדל: המחיר הסופי של העסקה */
   amountILS: number;
   at: string; // ISO
@@ -1088,6 +1092,25 @@ export interface StoreFaqEntry {
   createdAt: string; // ISO
 }
 
+/** מוצר שנמצא בחנות ישראלית (קישור אמיתי מתוצאות החיפוש) */
+export interface StoreListing {
+  store: string;
+  title: string;
+  priceILS: number;
+  url: string;
+}
+
+export interface StorePayment {
+  provider: "nedarim_plus";
+  amountILS: number;
+  /** מזהה העסקה בנדרים פלוס */
+  transactionId: string;
+  routeId?: string;
+  paidAt: string; // ISO
+  /** נעשה במצב בדיקה (Sandbox) - לא חיוב אמיתי */
+  test?: boolean;
+}
+
 /** collection: n_store_requests - בקשת התאמת מחשב שמנהל סניף שלח מ-`/dashboard/store` */
 export interface StoreRequest {
   id: string;
@@ -1125,6 +1148,11 @@ export interface StoreRequest {
   accessoriesFinalILS?: number;
   /** הגבייה בסגירת העסקה */
   collection?: StoreCollection;
+  /** תשלום באשראי דרך נדרים פלוס (שלב הסגירה). **אף פעם לא פרטי כרטיס** - רק מזהה עסקה */
+  payment?: StorePayment;
+  /** איפה הכי זול להזמין את המחשב (מהחיפוש שנעשה כשהלקוח ביקש בדיקת מלאי) - לבעלים, למקרה שאין מלאי אצל היבואנים */
+  listings?: StoreListing[];
+  listingsAt?: string;
   /** העמלה שהסניף צבר על העסקה - נקבעת בסגירה לפי כללי העמלה, והבעלים רשאי לעדכן.
    *  נספרת רק כש-`collection.by === "branch"`. */
   commissionILS?: number;

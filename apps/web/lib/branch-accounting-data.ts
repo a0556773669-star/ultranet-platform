@@ -342,6 +342,7 @@ export async function loadBranchAccountingRawData(): Promise<BranchAccountingRaw
     costRatesSnap,
     repairsSnap,
     storeDealsSnap,
+    storeOnlineDealsSnap,
   ] = await Promise.all([
     db.collection("n_branches").get(),
     db.collection("n_fixed_expenses").get(),
@@ -357,6 +358,7 @@ export async function loadBranchAccountingRawData(): Promise<BranchAccountingRaw
     db.collection(LAPTOP_COST_RATES_COLLECTION).get(),
     db.collection(LAPTOP_REPAIRS_COLLECTION).get(),
     db.collection("n_store_requests").where("collection.by", "==", "branch").get(),
+    db.collection("n_store_requests").where("collection.commissionToBranch", "==", true).get(),
   ]);
 
   const branches = branchesSnap.docs.map((d) => ({ ...(d.data() as Omit<Branch, "id">), id: d.id }) as Branch);
@@ -499,7 +501,7 @@ export async function loadBranchAccountingRawData(): Promise<BranchAccountingRaw
     salesByBranch.set(sale.branchId, arr);
   }
   const storeDealsByBranch = new Map<string, StoreRequest[]>();
-  for (const d of storeDealsSnap.docs) {
+  for (const d of [...storeDealsSnap.docs, ...storeOnlineDealsSnap.docs]) {
     const deal = { ...(d.data() as Omit<StoreRequest, "id">), id: d.id } as StoreRequest;
     const arr = storeDealsByBranch.get(deal.branchId) ?? [];
     arr.push(deal);

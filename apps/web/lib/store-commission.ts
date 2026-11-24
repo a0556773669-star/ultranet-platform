@@ -53,12 +53,16 @@ export const COMMISSION_CATEGORY_LABEL: Record<StoreCommissionCategory, string> 
   accessory: "אביזר נוסף (סטיק, מקלדת, עכבר, מסך) - לכל אביזר",
 };
 
-/** סך מה שהסניף גבה ומה שהוא צבר בעמלות, לפי חודש - לקריאה מהנה"ח ומסך העמלות. */
+/**
+ * מה נכנס להתחשבנות של הסניף מול הבעלים:
+ * - הסניף גבה (`by: "branch"`): הסכום שגבה נכנס במלואו, והעמלה מופחתת ממנו.
+ * - שולם אונליין לחשבון הבעלים (`by: "owner"` + `commissionToBranch`): לא נכנס סכום (הכסף כבר אצל הבעלים), והעמלה נזקפת
+ *   לטובת הסניף - הבעלים חייב לו אותה (ההתחשבנות יורדת בעמלה).
+ * - הבעלים גבה בעצמו בלי אונליין: אין עמלה ואין השפעה.
+ */
 export function dealSettlement(request: Pick<StoreRequest, "collection" | "commissionILS">) {
-  if (request.collection?.by !== "branch") return { collected: 0, commission: 0, month: "" };
-  return {
-    collected: request.collection.amountILS || 0,
-    commission: request.commissionILS ?? 0,
-    month: request.collection.month,
-  };
+  const c = request.collection;
+  if (c?.by === "branch") return { collected: c.amountILS || 0, commission: request.commissionILS ?? 0, month: c.month };
+  if (c?.by === "owner" && c.commissionToBranch) return { collected: 0, commission: request.commissionILS ?? 0, month: c.month };
+  return { collected: 0, commission: 0, month: "" };
 }
