@@ -1069,6 +1069,8 @@ export interface StorePriceGuide {
   screen17Add?: number;
   /** מחיר שוק נמוך לאביזרים: monitor, keyboardMouse, keyboard, mouse, stick, speakers */
   accessoriesLow: Partial<Record<string, number>>;
+  /** מחיר שוק נמוך **מדויק** לתצורות נפוצות (מפתח = `specKey`) - גובר על חישוב הבסיס+תוספות כשיש התאמה מלאה */
+  specPrices?: Record<string, number>;
   note?: string;
   updatedAt?: string;
 }
