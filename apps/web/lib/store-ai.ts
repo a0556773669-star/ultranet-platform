@@ -53,7 +53,7 @@ export async function draftMarketPrice(request: StoreRequest): Promise<MarketDra
       model: MODEL,
       max_tokens: 4000,
       output_config: { effort: "low" },
-      tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 4, user_location: { type: "approximate", country: "IL" } }],
+      tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 4 }],
       messages,
     });
     if (response.stop_reason === "refusal") throw new Error("המודל סירב לבקשה");
@@ -125,7 +125,7 @@ export async function draftPriceGuide(targets: { key: string; description: strin
       model: MODEL,
       max_tokens: 9000,
       output_config: { effort: "low" },
-      tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 4, user_location: { type: "approximate", country: "IL" } }],
+      tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 4 }],
       messages,
     });
     if (response.stop_reason === "refusal") throw new Error("המודל סירב לבקשה");
