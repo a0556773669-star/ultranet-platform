@@ -9,7 +9,7 @@ import { COMMISSION_CATEGORIES, COMMISSION_RULES_COLLECTION, currentIsraelMonth,
 import { computeDealCommission } from "@/lib/store-commission";
 import { anthropicConfigured, createAnthropic, describeKey } from "@/lib/anthropic-client";
 import { advisorChat, type AdvisorReply, type AdvisorTurn, type ChatOption } from "@/lib/store-advisor";
-import { estimateRange, loadPriceGuide, mergeGuide, PRICE_GUIDE_DOC, savePriceGuide } from "@/lib/store-price-guide";
+import { estimateRange, loadPriceGuide, mergeGuide, PRICE_GUIDE_DOC, researchTargets, savePriceGuide, specDescription } from "@/lib/store-price-guide";
 import { notifyBranch, notifyOwnerNewRequest, notifyOwnerStockCheck } from "@/lib/store-notify";
 import { FAQ_COLLECTION } from "@/lib/store-faq";
 import { DEFAULT_GLOSSARY, GLOSSARY_COLLECTION } from "@/lib/store-glossary";
@@ -503,11 +503,19 @@ export async function savePriceGuideAction(formData: FormData): Promise<void> {
   revalidatePath("/dashboard/store/prices");
 }
 
-/** רענון המחירון באמצעות Haiku + חיפוש ברשת. מחזיר **טיוטה** בלבד - הבעלים בודק ושומר. עלות: כמה סנטים. */
-export async function refreshPriceGuideDraftAction() {
+/**
+ * עדכון המחירון עכשיו, בלחיצה אחת: סורק את השוק (Haiku + חיפוש ברשת) את התצורות הקלאסיות והנפוצות בבקשות, ממזג
+ * למחירון עם ההגנות (טווח סביר, שינוי עד 40%) **ושומר מיד**. זה אותו מסלול כמו הרענון הלילי. עלות: בערך 10 אגורות.
+ */
+export async function refreshPriceGuideNowAction(): Promise<{ scanned: number; rejected: string[] }> {
   await requireOwner();
   if (!storeAiConfigured()) throw new Error("ההכנה האוטומטית לא מופעלת (חסר ANTHROPIC_API_KEY)");
-  return draftPriceGuide();
+  const targets = (await researchTargets()).map((t) => ({ key: t.key, description: specDescription(t.spec), requested: t.requested }));
+  const draft = await draftPriceGuide(targets);
+  const { guide, notes } = mergeGuide(await loadPriceGuide(), draft);
+  await savePriceGuide(guide);
+  revalidatePath("/dashboard/store/prices");
+  return { scanned: targets.length, rejected: notes };
 }
 
 // ---------------------------------------------------------------------------
