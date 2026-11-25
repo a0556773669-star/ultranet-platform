@@ -1,7 +1,7 @@
 /**
  * דוחות השכרות — תפוסה, רווחיות, מחזור, מספר שוכרים וממוצע משך השכרה, לכל סניפי ההשכרות או לבחירה.
  *
- * רק סניפי `branchType === "rentals"` נכנסים לכאן; חדרי מחשבים ומשרד שיתופי לעולם לא.
+ * רק סניפי `branchType === "rentals"` של שותפים נכנסים לכאן (לא הסניף הראשי שלי, `isMine`); חדרי מחשבים ומשרד שיתופי לעולם לא.
  * והמחשבים הם מחשבים ניידים (`Rental.kind === "laptop"`) — סטיקים לא נספרים בתפוסה.
  *
  * ── הגדרות ──
@@ -162,7 +162,8 @@ export function resolveRange(
 /* ───────────────────────── נתונים ───────────────────────── */
 
 export function reportBranches(raw: BranchAccountingRawData): Branch[] {
-  return raw.branches.filter((b) => b.branchType === "rentals" && !b.deleted && !b.closedAt);
+  // הסניף הראשי (`isMine`) הוא החשבון שלי — הכנסות והוצאות אחרות לגמרי — ולכן לא נכנס לדוחות.
+  return raw.branches.filter((b) => b.branchType === "rentals" && !b.deleted && !b.closedAt && b.isMine === false);
 }
 
 function firstActiveMonth(branch: Branch): string | null {
@@ -179,10 +180,13 @@ function laptopStart(l: Laptop, raw: BranchAccountingRawData, fallback: number):
 
 /** תחילת כל הפעילות בסניפים הנבחרים: ההוספה/ההשכרה הראשונה של המחשבים, או פתיחת הסניף. */
 export function earliestActivity(raw: BranchAccountingRawData, branches: Branch[], today = todayIsrael()): string {
-  let min = dayIndex(today);
+  // תחילת הפעילות = המחשב/ההשכרה הראשונים; תאריך פתיחה של סניף בלי מחשבים לא מזיז אותה (אחרת הגרף
+  // מתחיל בחודש ריק). אם אין שום מחשב — נופלים לתאריך הפתיחה.
+  let min = Number.POSITIVE_INFINITY;
+  let openedMin = Number.POSITIVE_INFINITY;
   for (const b of branches) {
     const opened = b.openedAt || b.founded;
-    if (opened) min = Math.min(min, dayIndex(opened));
+    if (opened) openedMin = Math.min(openedMin, dayIndex(opened));
     for (const l of raw.laptopsByBranch.get(b.id) ?? []) {
       if (l.addedDate) min = Math.min(min, dayIndex(l.addedDate));
       else {
@@ -191,7 +195,8 @@ export function earliestActivity(raw: BranchAccountingRawData, branches: Branch[
       }
     }
   }
-  return dayString(min);
+  const pick = Number.isFinite(min) ? min : openedMin;
+  return dayString(Number.isFinite(pick) ? Math.min(pick, dayIndex(today)) : dayIndex(today));
 }
 
 interface BranchDays {
