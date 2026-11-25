@@ -139,8 +139,13 @@ export default async function ReportsPage({
         </div>
         <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
           <div className="grid grid-cols-2 gap-2 self-start">
-            <Stat label="רווח נטו" value={money(t.netProfit)} />
-            <Stat label="הרווח שלי" value={money(t.myProfit)} hint="אחרי אחוזי שותף" />
+            <Stat label="רווח נטו (כל הסניף)" value={money(t.netProfit)} hint="שלי + חלק השותף" />
+            <Stat label="הרווח שלי" value={money(t.myProfit)} hint="החלק שלי בלבד" />
+            <Stat
+              label="חלק השותף"
+              value={money(t.netProfit - t.myProfit)}
+              hint={t.netProfit - t.myProfit < 0 ? "שלילי: השותף בהפסד, והנטו נמוך משלי" : undefined}
+            />
             <Stat label="נטו למחשב" value={money(t.netPerComputer)} />
             <Stat label="שלי למחשב" value={money(t.myPerComputer)} />
           </div>
@@ -199,7 +204,7 @@ export default async function ReportsPage({
               <th className="py-1.5 font-bold">סניף</th>
               <th className="font-bold">תפוסה</th>
               <th className="font-bold">מחזור</th>
-              <th className="font-bold">רווח נטו</th>
+              <th className="font-bold">נטו (כולו)</th>
               <th className="font-bold">שלי</th>
               <th className="font-bold">נטו למחשב</th>
               <th className="font-bold">שוכרים</th>
