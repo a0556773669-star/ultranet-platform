@@ -96,11 +96,13 @@ ${specDescription(spec)}
       }))
       .sort((a, b) => a.priceILS - b.priceILS)
       .slice(0, 4);
-    // אימות מול דף המוצר (במקביל). מודעה שאי אפשר לאמת - נפסלת.
+    // אימות מול דף המוצר (במקביל). מודעה שהדף שלה נקרא והמחיר לא תואם - נפסלת; אתר שחוסם בדיקה - נשארת כ"לא מאומתת".
     const checked = await Promise.all(
-      candidates.map(async (l) => {
+      candidates.map(async (l): Promise<StoreListing | null> => {
         const v = await verifiedListingPrice(l.url, l.priceILS);
-        return v === null ? null : { ...l, priceILS: v };
+        return v === null
+          ? null
+          : { ...l, priceILS: v.price, verified: v.verified };
       }),
     );
     return checked
@@ -168,15 +170,17 @@ export async function inspectPage(url: string): Promise<PageInspection> {
   }
 }
 
-/** המחיר המאומת של המודעה, או null אם אי אפשר לאמת. */
+/** המחיר המאומת של המודעה. `verified:false` = האתר חוסם בדיקה אוטומטית (המחיר מהחיפוש בלבד). null = הדף נקרא והמחיר לא תואם - נפסלת. */
 export async function verifiedListingPrice(
   url: string,
   claimed: number,
-): Promise<number | null> {
+): Promise<{ price: number; verified: boolean } | null> {
   const page = await inspectPage(url);
-  if (!page.ok) return null;
+  if (!page.ok) return { price: claimed, verified: false };
   const all = new Set([...page.structured, ...page.shekel]);
-  if (all.has(claimed)) return claimed;
+  if (all.has(claimed)) return { price: claimed, verified: true };
   // המחיר שהמודל דיווח לא בדף: סומכים רק על מחיר מובנה של הדף
-  return page.structured[0] ?? null;
+  return page.structured[0]
+    ? { price: page.structured[0], verified: true }
+    : null;
 }

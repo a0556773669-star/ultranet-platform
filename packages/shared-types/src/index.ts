@@ -1106,6 +1106,8 @@ export interface StoreListing {
   title: string;
   priceILS: number;
   url: string;
+  /** true = המחיר אומת מול דף המוצר; false = האתר חוסם בדיקה אוטומטית והמחיר מהחיפוש בלבד (ייתכן ללא מע"מ) */
+  verified?: boolean;
 }
 
 export interface StorePayment {
