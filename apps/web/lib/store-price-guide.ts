@@ -264,8 +264,9 @@ const MONITOR_MAX_PRICED_INCHES = 24;
 export function estimateRange(
   spec: StoreSpec,
   guide: StorePriceGuide,
+  computerLowOverrideILS?: number,
 ): PriceEstimate | null {
-  const low = estimateMarketLow(spec, guide);
+  const low = computerLowOverrideILS ?? estimateMarketLow(spec, guide);
   if (low === null) return null;
   const r = quotedRange(low);
   const extras = spec.extras ?? [];
@@ -293,13 +294,28 @@ export function estimateRange(
       }
       continue;
     }
-    if (
-      name === "מסך" &&
-      (spec.monitorNote ||
-        (spec.monitorInches ?? 0) > MONITOR_MAX_PRICED_INCHES)
-    ) {
-      const monName = `מסך${spec.monitorInches ? ` ${spec.monitorInches}"` : ""}${spec.monitorNote ? ` (${spec.monitorNote})` : ""}`;
-      pending.push({ name: monName, text: `${monName} - המחיר ייבדק` });
+    if (name === "מסך") {
+      // מסך לפי גודל: עד 24" = "monitor"; 27" = "monitor27"; 28" ומעלה = "monitor32". בלי מחיר במחירון או עם בקשה מיוחדת - ייבדק.
+      const inches = spec.monitorInches ?? 24;
+      const key =
+        inches <= MONITOR_MAX_PRICED_INCHES
+          ? "monitor"
+          : inches <= 27
+            ? "monitor27"
+            : "monitor32";
+      const monLow = guide.accessoriesLow[key];
+      const monLabel = `מסך${spec.monitorInches ? ` ${spec.monitorInches}"` : ""}`;
+      if (!spec.monitorNote && typeof monLow === "number") {
+        const a = accessoryRange("מסך", monLow);
+        accessories.push({
+          name: monLabel,
+          fromILS: roundTen(a.from),
+          toILS: roundTen(a.to),
+        });
+      } else {
+        const monName = `${monLabel}${spec.monitorNote ? ` (${spec.monitorNote})` : ""}`;
+        pending.push({ name: monName, text: `${monName} - המחיר ייבדק` });
+      }
       continue;
     }
     const accLow = guide.accessoriesLow[ACCESSORY_KEYS[name] ?? ""];

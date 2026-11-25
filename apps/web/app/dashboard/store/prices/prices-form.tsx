@@ -13,7 +13,8 @@ type Vals = Record<string, string>;
 function fromGuide(g: StorePriceGuide): Vals {
   const v: Vals = {};
   const put = (prefix: string, o: Partial<Record<string, number>>) => {
-    for (const [k, n] of Object.entries(o)) if (typeof n === "number") v[`${prefix}_${k}`] = String(n);
+    for (const [k, n] of Object.entries(o))
+      if (typeof n === "number") v[`${prefix}_${k}`] = String(n);
   };
   put("lb", g.laptopBase);
   put("db", g.desktopBase);
@@ -25,14 +26,38 @@ function fromGuide(g: StorePriceGuide): Vals {
   return v;
 }
 
-const Row = ({ name, label, vals, set }: { name: string; label: string; vals: Vals; set: (k: string, v: string) => void }) => (
+const Row = ({
+  name,
+  label,
+  vals,
+  set,
+}: {
+  name: string;
+  label: string;
+  vals: Vals;
+  set: (k: string, v: string) => void;
+}) => (
   <div>
-    <label className="mb-1 block text-xs font-semibold text-muted">{label}</label>
-    <input name={name} value={vals[name] ?? ""} onChange={(e) => set(name, e.target.value.replace(/\D/g, ""))} inputMode="numeric" className={FIELD} />
+    <label className="mb-1 block text-xs font-semibold text-muted">
+      {label}
+    </label>
+    <input
+      name={name}
+      value={vals[name] ?? ""}
+      onChange={(e) => set(name, e.target.value.replace(/\D/g, ""))}
+      inputMode="numeric"
+      className={FIELD}
+    />
   </div>
 );
 
-export function PricesForm({ guide, aiEnabled }: { guide: StorePriceGuide; aiEnabled: boolean }) {
+export function PricesForm({
+  guide,
+  aiEnabled,
+}: {
+  guide: StorePriceGuide;
+  aiEnabled: boolean;
+}) {
   const [vals, setVals] = useState<Vals>(fromGuide(guide));
   const [note, setNote] = useState(guide.note ?? "");
   // אחרי עדכון אוטומטי הדף נטען מחדש עם מחירים חדשים - מרעננים את השדות בלי לאבד את הודעת התוצאה
@@ -62,7 +87,9 @@ export function PricesForm({ guide, aiEnabled }: { guide: StorePriceGuide; aiEna
       );
       router.refresh();
     } catch {
-      setMsg("העדכון לא הסתיים - ייתכן שהסריקה ארכה מדי (מעל דקה) ונחתכה. רעננו את הדף: אם המחירים התעדכנו, הכול תקין; אחרת נסו שוב.");
+      setMsg(
+        "העדכון לא הסתיים - ייתכן שהסריקה ארכה מדי (מעל דקה) ונחתכה. רעננו את הדף: אם המחירים התעדכנו, הכול תקין; אחרת נסו שוב.",
+      );
     } finally {
       setAiBusy(false);
     }
@@ -83,12 +110,15 @@ export function PricesForm({ guide, aiEnabled }: { guide: StorePriceGuide; aiEna
       }
     >
       <p className="text-xs text-muted">
-        מחיר שוק <b>נמוך</b> בשקלים (בלי מרווח). הצ׳אט מוסיף לבד 300-500 ₪ למחשב ומרווח קטן לאביזר, ומציג לסניף טווח הערכה.
-        מחשב ייחוס: 8GB זיכרון, 256GB אחסון, נייד 15.6 בלי מגע; בנייח - המחשב בלבד בלי מסך.
+        מחיר שוק <b>נמוך</b> בשקלים (בלי מרווח). הצ׳אט מוסיף לבד 300-500 ₪ למחשב
+        ומרווח קטן לאביזר, ומציג לסניף טווח הערכה. מחשב ייחוס: 8GB זיכרון, 256GB
+        אחסון, נייד 15.6 בלי מגע; בנייח - המחשב בלבד בלי מסך.
       </p>
 
       <div>
-        <div className="mb-1 text-sm font-bold text-ink">מחשב נייד - מחיר בסיס</div>
+        <div className="mb-1 text-sm font-bold text-ink">
+          מחשב נייד - מחיר בסיס
+        </div>
         <div className="grid grid-cols-3 gap-2">
           <Row name="lb_i3" label="i3" vals={vals} set={set} />
           <Row name="lb_i5" label="i5" vals={vals} set={set} />
@@ -96,7 +126,9 @@ export function PricesForm({ guide, aiEnabled }: { guide: StorePriceGuide; aiEna
         </div>
       </div>
       <div>
-        <div className="mb-1 text-sm font-bold text-ink">מחשב נייח (בלי מסך) - מחיר בסיס</div>
+        <div className="mb-1 text-sm font-bold text-ink">
+          מחשב נייח (בלי מסך) - מחיר בסיס
+        </div>
         <div className="grid grid-cols-3 gap-2">
           <Row name="db_i3" label="i3" vals={vals} set={set} />
           <Row name="db_i5" label="i5" vals={vals} set={set} />
@@ -106,9 +138,19 @@ export function PricesForm({ guide, aiEnabled }: { guide: StorePriceGuide; aiEna
       <div>
         <div className="mb-1 text-sm font-bold text-ink">תוספות למחיר</div>
         <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
-          <Row name="ram_16" label="זיכרון 16GB (מעל 8)" vals={vals} set={set} />
+          <Row
+            name="ram_16"
+            label="זיכרון 16GB (מעל 8)"
+            vals={vals}
+            set={set}
+          />
           <Row name="ram_32" label="זיכרון 32GB" vals={vals} set={set} />
-          <Row name="st_512" label="אחסון 512GB (מעל 256)" vals={vals} set={set} />
+          <Row
+            name="st_512"
+            label="אחסון 512GB (מעל 256)"
+            vals={vals}
+            set={set}
+          />
           <Row name="st_1000" label="אחסון טרה" vals={vals} set={set} />
           <Row name="st_2000" label="אחסון 2 טרה" vals={vals} set={set} />
           <Row name="touch" label="מסך מגע" vals={vals} set={set} />
@@ -116,28 +158,79 @@ export function PricesForm({ guide, aiEnabled }: { guide: StorePriceGuide; aiEna
         </div>
       </div>
       <div>
-        <div className="mb-1 text-sm font-bold text-ink">אביזרים - מחיר שוק נמוך</div>
+        <div className="mb-1 text-sm font-bold text-ink">
+          אביזרים - מחיר שוק נמוך
+        </div>
         <div className="grid grid-cols-2 gap-2 md:grid-cols-3">
-          <Row name="acc_monitor" label="מסך" vals={vals} set={set} />
-          <Row name="acc_keyboardMouse" label="מקלדת ועכבר אלחוטיים (סט)" vals={vals} set={set} />
+          <Row
+            name="acc_monitor"
+            label="מסך עד 24 אינץ'"
+            vals={vals}
+            set={set}
+          />
+          <Row
+            name="acc_monitor27"
+            label="מסך 27 אינץ'"
+            vals={vals}
+            set={set}
+          />
+          <Row
+            name="acc_monitor32"
+            label="מסך 32 אינץ'"
+            vals={vals}
+            set={set}
+          />
+          <Row
+            name="acc_keyboardMouse"
+            label="מקלדת ועכבר אלחוטיים (סט)"
+            vals={vals}
+            set={set}
+          />
           <Row name="acc_keyboard" label="מקלדת" vals={vals} set={set} />
           <Row name="acc_mouse" label="עכבר" vals={vals} set={set} />
           <Row name="acc_stick" label="סטיק" vals={vals} set={set} />
           <Row name="acc_speakers" label="רמקולים" vals={vals} set={set} />
         </div>
       </div>
-      <input name="note" value={note} onChange={(e) => setNote(e.target.value)} placeholder="הערה (רשות)" className={FIELD} />
+      <input
+        name="note"
+        value={note}
+        onChange={(e) => setNote(e.target.value)}
+        placeholder="הערה (רשות)"
+        className={FIELD}
+      />
 
-      {msg ? <div className="rounded-lg bg-[#f4f6f9] px-3 py-2 text-sm font-semibold text-ink">{msg}</div> : null}
+      {msg ? (
+        <div className="rounded-lg bg-[#f4f6f9] px-3 py-2 text-sm font-semibold text-ink">
+          {msg}
+        </div>
+      ) : null}
       <div className="flex flex-wrap items-center gap-2">
-        <button type="submit" disabled={pending} className="btn-primary disabled:opacity-40">שמירה</button>
+        <button
+          type="submit"
+          disabled={pending}
+          className="btn-primary disabled:opacity-40"
+        >
+          שמירה
+        </button>
         {aiEnabled ? (
-          <button type="button" disabled={aiBusy} onClick={refresh} className="btn-primary disabled:opacity-40">
-            {aiBusy ? "סורק את השוק... (עד דקה, אל תסגרו את הדף)" : "עדכון המחירון עכשיו מהשוק (אוטומטי, שומר מיד)"}
+          <button
+            type="button"
+            disabled={aiBusy}
+            onClick={refresh}
+            className="btn-primary disabled:opacity-40"
+          >
+            {aiBusy
+              ? "סורק את השוק... (עד דקה, אל תסגרו את הדף)"
+              : "עדכון המחירון עכשיו מהשוק (אוטומטי, שומר מיד)"}
           </button>
         ) : null}
       </div>
-      {guide.updatedAt ? <div className="text-[11px] text-muted">עודכן לאחרונה: {new Date(guide.updatedAt).toLocaleString("he-IL")}</div> : null}
+      {guide.updatedAt ? (
+        <div className="text-[11px] text-muted">
+          עודכן לאחרונה: {new Date(guide.updatedAt).toLocaleString("he-IL")}
+        </div>
+      ) : null}
     </form>
   );
 }
