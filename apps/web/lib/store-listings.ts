@@ -16,14 +16,20 @@ const MAX_PAUSE_TURNS = 3;
 function resultUrls(content: Anthropic.ContentBlock[]): Set<string> {
   const urls = new Set<string>();
   for (const block of content) {
-    if (block.type === "web_search_tool_result" && Array.isArray(block.content)) {
-      for (const r of block.content) if (r.type === "web_search_result" && r.url) urls.add(r.url);
+    if (
+      block.type === "web_search_tool_result" &&
+      Array.isArray(block.content)
+    ) {
+      for (const r of block.content)
+        if (r.type === "web_search_result" && r.url) urls.add(r.url);
     }
   }
   return urls;
 }
 
-export async function findCheapestListings(spec: StoreSpec): Promise<StoreListing[]> {
+export async function findCheapestListings(
+  spec: StoreSpec,
+): Promise<StoreListing[]> {
   if (!anthropicConfigured()) return [];
   const client = createAnthropic();
   const messages: Anthropic.MessageParam[] = [
@@ -60,17 +66,117 @@ ${specDescription(spec)}
     const start = text.indexOf("{");
     const end = text.lastIndexOf("}");
     if (start < 0 || end <= start) return [];
-    let raw: { listings?: { store?: string; title?: string; priceILS?: number; url?: string }[] };
+    let raw: {
+      listings?: {
+        store?: string;
+        title?: string;
+        priceILS?: number;
+        url?: string;
+      }[];
+    };
     try {
       raw = JSON.parse(text.slice(start, end + 1));
     } catch {
       return [];
     }
-    return (raw.listings ?? [])
-      .filter((l) => typeof l.priceILS === "number" && l.priceILS > 300 && typeof l.url === "string" && /^https?:\/\//.test(l.url) && seen.has(l.url))
-      .map((l) => ({ store: String(l.store ?? "").slice(0, 60), title: String(l.title ?? "").slice(0, 140), priceILS: Math.round(l.priceILS!), url: l.url! }))
+    const candidates = (raw.listings ?? [])
+      .filter(
+        (l) =>
+          typeof l.priceILS === "number" &&
+          l.priceILS > 300 &&
+          typeof l.url === "string" &&
+          /^https?:\/\//.test(l.url) &&
+          seen.has(l.url),
+      )
+      .map((l) => ({
+        store: String(l.store ?? "").slice(0, 60),
+        title: String(l.title ?? "").slice(0, 140),
+        priceILS: Math.round(l.priceILS!),
+        url: l.url!,
+      }))
+      .sort((a, b) => a.priceILS - b.priceILS)
+      .slice(0, 4);
+    // אימות מול דף המוצר (במקביל). מודעה שאי אפשר לאמת - נפסלת.
+    const checked = await Promise.all(
+      candidates.map(async (l) => {
+        const v = await verifiedListingPrice(l.url, l.priceILS);
+        return v === null ? null : { ...l, priceILS: v };
+      }),
+    );
+    return checked
+      .filter((l): l is StoreListing => l !== null)
       .sort((a, b) => a.priceILS - b.priceILS)
       .slice(0, 3);
   }
   return [];
+}
+
+/**
+ * אימות מחיר מול דף המוצר עצמו. מודל שקורא תוצאות חיפוש טועה לפעמים (מחיר ללא מע"מ, תשלום חודשי, מוצר אחר באותו עמוד).
+ * לכן כל מודעה נבדקת מול ה-HTML של הדף: אם המחיר שהמודל דיווח לא מופיע בו - מחליפים אותו במחיר המובנה של הדף
+ * (JSON-LD / meta / itemprop), ואם אין כזה - המודעה נפסלת.
+ */
+const PAGE_TIMEOUT_MS = 8000;
+
+function toNumber(s: string): number | null {
+  const n = Number(s.replace(/[^\d.]/g, ""));
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
+export type PageInspection = {
+  structured: number[];
+  shekel: number[];
+  ok: boolean;
+  status?: number;
+};
+
+export async function inspectPage(url: string): Promise<PageInspection> {
+  try {
+    const res = await fetch(url, {
+      signal: AbortSignal.timeout(PAGE_TIMEOUT_MS),
+      headers: {
+        "user-agent": "Mozilla/5.0 (compatible; UltranetPriceCheck/1.0)",
+        "accept-language": "he-IL,he;q=0.9",
+      },
+      redirect: "follow",
+    });
+    if (!res.ok)
+      return { structured: [], shekel: [], ok: false, status: res.status };
+    const html = (await res.text()).slice(0, 1_500_000);
+    const structured: number[] = [];
+    for (const re of [
+      /"price"\s*:\s*"?([\d.,]{3,9})"?/g,
+      /property=["']product:price:amount["'][^>]*content=["']([\d.,]+)["']/g,
+      /property=["']og:price:amount["'][^>]*content=["']([\d.,]+)["']/g,
+      /itemprop=["']price["'][^>]*content=["']([\d.,]+)["']/g,
+    ]) {
+      for (const m of html.matchAll(re)) {
+        const n = toNumber(m[1]!);
+        if (n && n >= 300 && n <= 60000) structured.push(Math.round(n));
+      }
+    }
+    const shekel: number[] = [];
+    for (const m of html.matchAll(
+      /([\d]{1,2},?\d{3})\s*(?:₪|&#8362;|ש"ח|שח)|(?:₪|&#8362;)\s*([\d]{1,2},?\d{3})/g,
+    )) {
+      const n = toNumber(m[1] ?? m[2] ?? "");
+      if (n && n >= 300 && n <= 60000) shekel.push(Math.round(n));
+    }
+    return { structured, shekel, ok: true, status: res.status };
+  } catch {
+    return { structured: [], shekel: [], ok: false };
+  }
+}
+
+/** המחיר המאומת של המודעה, או null אם אי אפשר לאמת. */
+export async function verifiedListingPrice(
+  url: string,
+  claimed: number,
+): Promise<number | null> {
+  const page = await inspectPage(url);
+  if (!page.ok) return null;
+  const all = new Set([...page.structured, ...page.shekel]);
+  if (all.has(claimed)) return claimed;
+  // המחיר שהמודל דיווח לא בדף: סומכים רק על מחיר מובנה של הדף
+  return page.structured[0] ?? null;
 }
