@@ -1,4 +1,7 @@
 import Link from "next/link";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
+import { canAccessStoreRequest } from "@/lib/store-access";
 import { notFound } from "next/navigation";
 import { ArrowRight } from "lucide-react";
 import { currentModuleScope, requireModuleAccess } from "@/lib/perms";
@@ -24,7 +27,8 @@ export default async function StoreRequestPage({ params }: { params: { id: strin
   const doc = await getAdminFirestore().collection("n_store_requests").doc(params.id).get();
   if (!doc.exists) notFound();
   const r = { ...(doc.data() as Omit<StoreRequest, "id">), id: doc.id } as StoreRequest;
-  if (!scope?.isOwner && !scope?.allows(r.branchId)) notFound();
+  const session = await getServerSession(authOptions);
+  if (!canAccessStoreRequest(scope, r, session?.user?.email)) notFound();
 
   const isOwner = Boolean(scope?.isOwner);
   const upgrade = suggestUpgrade(r.spec, r.lockedFields);

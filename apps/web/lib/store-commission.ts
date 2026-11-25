@@ -21,7 +21,9 @@ export const DEFAULT_COMMISSION_RULES: Record<StoreCommissionCategory, StoreComm
 
 /** כמה אביזרים בעסקה. "מקלדת ועכבר" שמתומחרים יחד נספרים כשניים. */
 export function accessoryCount(names: string[] | undefined): number {
-  return (names ?? []).reduce((n, name) => n + (name.includes("מקלדת") && name.includes("עכבר") ? 2 : 1), 0);
+  return (names ?? [])
+    .filter((name) => !name.startsWith("תיק")) // תיק נמכר בלי רווח - אין עליו עמלה
+    .reduce((n, name) => n + (name.includes("מקלדת") && name.includes("עכבר") ? 2 : 1), 0);
 }
 
 export function commissionFor(

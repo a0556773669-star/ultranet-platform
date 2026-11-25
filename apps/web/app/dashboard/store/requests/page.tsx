@@ -1,4 +1,7 @@
 import Link from "next/link";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
+import { canAccessStoreRequest } from "@/lib/store-access";
 import { ShoppingBag } from "lucide-react";
 import { currentModuleScope, requireModuleAccess } from "@/lib/perms";
 import { getAdminFirestore } from "@/lib/firebase-admin";
@@ -19,10 +22,11 @@ const STATUS_CLASS: Record<string, string> = {
 export default async function StoreRequestsPage() {
   await requireModuleAccess("store");
   const scope = await currentModuleScope("store");
+  const session = await getServerSession(authOptions);
   const snap = await getAdminFirestore().collection("n_store_requests").get();
   const requests = snap.docs
     .map((d) => ({ ...(d.data() as Omit<StoreRequest, "id">), id: d.id }) as StoreRequest)
-    .filter((r) => scope?.isOwner || scope?.allows(r.branchId))
+    .filter((r) => canAccessStoreRequest(scope, r, session?.user?.email))
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 
   return (

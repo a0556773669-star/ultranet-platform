@@ -1,4 +1,8 @@
-import type { StoreCpuTier, StoreRequest, StoreSpec } from "@ultranet/shared-types";
+import type {
+  StoreCpuTier,
+  StoreRequest,
+  StoreSpec,
+} from "@ultranet/shared-types";
 
 /**
  * מנוע ההתאמה של "חנות סניפים" - **חוקים דטרמיניסטיים, בלי מודל שפה ובלי עלות טוקנים**.
@@ -10,9 +14,21 @@ import type { StoreCpuTier, StoreRequest, StoreSpec } from "@ultranet/shared-typ
 export type UsageKey = "basic" | "office" | "heavy";
 
 export const USAGE_OPTIONS: { key: UsageKey; label: string; hint: string }[] = [
-  { key: "basic", label: "בסיסי", hint: "חידושי תורה, מיילים, Word, גלישה ב-Chrome" },
-  { key: "office", label: "משרדי", hint: "Office מלא, Excel כבד, כמה תוכנות פתוחות במקביל, הנה\"ח" },
-  { key: "heavy", label: "כבד", hint: "עריכת תמונות/וידאו, תכנות, תוכנות מקצועיות" },
+  {
+    key: "basic",
+    label: "בסיסי",
+    hint: "חידושי תורה, מיילים, Word, גלישה ב-Chrome",
+  },
+  {
+    key: "office",
+    label: "משרדי",
+    hint: 'Office מלא, Excel כבד, כמה תוכנות פתוחות במקביל, הנה"ח',
+  },
+  {
+    key: "heavy",
+    label: "כבד",
+    hint: "עריכת תמונות/וידאו, תכנות, תוכנות מקצועיות",
+  },
 ];
 
 /** ברירת המחדל של העסק: מעבד מדור 12 ומעלה (אלא אם הלקוח/הבעלים קבעו אחרת). */
@@ -23,7 +39,10 @@ const RAM_STEPS = [8, 16, 32];
 const STORAGE_STEPS = [256, 512, 1000, 2000];
 
 /** ברירות המחדל לפי שימוש - הבסיס שמהן בונים את ה"מה מומלץ" כשהלקוח לא קבע. */
-const USAGE_DEFAULTS: Record<UsageKey, { cpu: StoreCpuTier; ramGb: number; storageGb: number }> = {
+const USAGE_DEFAULTS: Record<
+  UsageKey,
+  { cpu: StoreCpuTier; ramGb: number; storageGb: number }
+> = {
   basic: { cpu: "i3", ramGb: 8, storageGb: 256 },
   office: { cpu: "i5", ramGb: 16, storageGb: 512 },
   heavy: { cpu: "i7", ramGb: 16, storageGb: 1000 },
@@ -33,20 +52,44 @@ export function storageLabel(gb: number): string {
   return gb >= 1000 ? `${gb / 1000} טרה` : `${gb}GB`;
 }
 
+/** תיאור הציוד הנלווה כולל גודל מסך, בקשות מסך, אלחוטי/חוטי ותיק. */
+export function extrasText(spec: StoreSpec): string {
+  const wiredLabel =
+    spec.wireless === undefined ? "" : spec.wireless ? " אלחוטיים" : " חוטיים";
+  return (spec.extras ?? [])
+    .map((e) => {
+      if (e === "מסך")
+        return `מסך${spec.monitorInches ? ` ${spec.monitorInches}"` : ""}${spec.monitorNote ? ` (${spec.monitorNote})` : ""}`;
+      if (e === "מקלדת ועכבר") return `מקלדת ועכבר${wiredLabel}`;
+      if (e === "מקלדת" || e === "עכבר")
+        return `${e}${spec.wireless === undefined ? "" : spec.wireless ? " אלחוטי" : " חוטי"}`;
+      if (e === "תיק")
+        return `תיק${spec.bagInches ? ` ל-${spec.bagInches}"` : ""}${spec.bagNote ? ` (${spec.bagNote})` : ""}`;
+      return e;
+    })
+    .join(", ");
+}
+
 export function specToText(spec: StoreSpec): string {
   const parts: string[] = [spec.kind === "laptop" ? "נייד" : "נייח"];
   if (spec.cpu) parts.push(`מעבד ${spec.cpu}`);
   parts.push(`דור ${spec.minGeneration ?? DEFAULT_MIN_GENERATION}+`);
   if (spec.ramGb) parts.push(`${spec.ramGb}GB RAM`);
   if (spec.storageGb) parts.push(`${storageLabel(spec.storageGb)} SSD`);
-  if (spec.kind === "laptop" && spec.screenInches) parts.push(`${spec.screenInches}"`);
-  if (spec.kind === "laptop") parts.push(spec.touch ? "עם מסך מגע" : "בלי מסך מגע");
-  if (spec.extras?.length) parts.push(`+ ${spec.extras.join(", ")}`);
+  if (spec.kind === "laptop" && spec.screenInches)
+    parts.push(`${spec.screenInches}"`);
+  if (spec.kind === "laptop")
+    parts.push(spec.touch ? "עם מסך מגע" : "בלי מסך מגע");
+  if (spec.extras?.length) parts.push(`+ ${extrasText(spec)}`);
   return parts.join(" · ");
 }
 
 /** משלים לפי שימוש רק שדות שהלקוח לא קבע ("לא יודע"). */
-export function applyUsageDefaults(spec: StoreSpec, usage: UsageKey, locked: (keyof StoreSpec)[]): StoreSpec {
+export function applyUsageDefaults(
+  spec: StoreSpec,
+  usage: UsageKey,
+  locked: (keyof StoreSpec)[],
+): StoreSpec {
   const d = USAGE_DEFAULTS[usage];
   const out: StoreSpec = { ...spec };
   if (!locked.includes("cpu")) out.cpu = d.cpu;
@@ -56,17 +99,27 @@ export function applyUsageDefaults(spec: StoreSpec, usage: UsageKey, locked: (ke
 }
 
 /** משלים רק שדות חסרים לפי שימוש (בשונה מ-`applyUsageDefaults` שדורס כל שדה לא נעול) - לתשובות היועץ. */
-export function fillMissingFromUsage(spec: StoreSpec, usage: UsageKey): StoreSpec {
+export function fillMissingFromUsage(
+  spec: StoreSpec,
+  usage: UsageKey,
+): StoreSpec {
   const d = USAGE_DEFAULTS[usage];
-  return { ...spec, cpu: spec.cpu ?? d.cpu, ramGb: spec.ramGb ?? d.ramGb, storageGb: spec.storageGb ?? d.storageGb };
+  return {
+    ...spec,
+    cpu: spec.cpu ?? d.cpu,
+    ramGb: spec.ramGb ?? d.ramGb,
+    storageGb: spec.storageGb ?? d.storageGb,
+  };
 }
 
 export type UpgradeSuggestion = { spec: StoreSpec; reasons: string[] };
 
 const WHY: Record<string, string> = {
   cpu: "מעבד חזק יותר - עובד מהר יותר עם כמה תוכנות וחלונות פתוחים יחד, ולא מרגיש איטי אחרי שנתיים-שלוש",
-  ramGb: "זיכרון גדול יותר - פחות תקיעות כשפותחים הרבה לשוניות וקבצים, וחשוב לכל מי שעובד בכמה תוכנות במקביל",
-  storageGb: "נפח אחסון גדול יותר - מקום לספרים, קבצים ותמונות בלי להתחיל למחוק, ופחות צורך בדיסק חיצוני",
+  ramGb:
+    "זיכרון גדול יותר - פחות תקיעות כשפותחים הרבה לשוניות וקבצים, וחשוב לכל מי שעובד בכמה תוכנות במקביל",
+  storageGb:
+    "נפח אחסון גדול יותר - מקום לספרים, קבצים ותמונות בלי להתחיל למחוק, ופחות צורך בדיסק חיצוני",
 };
 
 function bump<T>(steps: T[], current: T): T | undefined {
@@ -78,7 +131,10 @@ function bump<T>(steps: T[], current: T): T | undefined {
  * אפשרות "טיפה יותר טוב": מעלה דרגה אחת בעד שני שדות **שהלקוח לא קבע**, לפי סדר חשיבות
  * (מעבד, זיכרון, אחסון). אם הכול נעול - אין הצעת שדרוג.
  */
-export function suggestUpgrade(spec: StoreSpec, locked: (keyof StoreSpec)[]): UpgradeSuggestion | null {
+export function suggestUpgrade(
+  spec: StoreSpec,
+  locked: (keyof StoreSpec)[],
+): UpgradeSuggestion | null {
   const next: StoreSpec = { ...spec };
   const reasons: string[] = [];
 
@@ -100,7 +156,9 @@ export function suggestUpgrade(spec: StoreSpec, locked: (keyof StoreSpec)[]): Up
     const up = bump(STORAGE_STEPS, spec.storageGb);
     if (up) {
       next.storageGb = up;
-      reasons.push(`${storageLabel(spec.storageGb)} ← ${storageLabel(up)}: ${WHY.storageGb}`);
+      reasons.push(
+        `${storageLabel(spec.storageGb)} ← ${storageLabel(up)}: ${WHY.storageGb}`,
+      );
     }
   }
   return reasons.length ? { spec: next, reasons } : null;
@@ -111,16 +169,52 @@ export function sanitizeSpec(raw: Partial<StoreSpec> | undefined): StoreSpec {
   const kind = raw?.kind === "desktop" ? "desktop" : "laptop";
   const spec: StoreSpec = { kind };
   if (raw?.cpu && CPU_ORDER.includes(raw.cpu)) spec.cpu = raw.cpu;
-  if (typeof raw?.ramGb === "number" && raw.ramGb >= 2 && raw.ramGb <= 128) spec.ramGb = raw.ramGb;
-  if (typeof raw?.storageGb === "number" && raw.storageGb >= 64 && raw.storageGb <= 8000) spec.storageGb = raw.storageGb;
+  if (typeof raw?.ramGb === "number" && raw.ramGb >= 2 && raw.ramGb <= 128)
+    spec.ramGb = raw.ramGb;
+  if (
+    typeof raw?.storageGb === "number" &&
+    raw.storageGb >= 64 &&
+    raw.storageGb <= 8000
+  )
+    spec.storageGb = raw.storageGb;
   if (kind === "laptop") {
-    if (typeof raw?.screenInches === "number" && raw.screenInches >= 10 && raw.screenInches <= 20) spec.screenInches = raw.screenInches;
+    if (
+      typeof raw?.screenInches === "number" &&
+      raw.screenInches >= 10 &&
+      raw.screenInches <= 20
+    )
+      spec.screenInches = raw.screenInches;
     if (typeof raw?.touch === "boolean") spec.touch = raw.touch;
   }
-  if (typeof raw?.minGeneration === "number" && raw.minGeneration >= 1 && raw.minGeneration <= 30) spec.minGeneration = raw.minGeneration;
+  if (
+    typeof raw?.minGeneration === "number" &&
+    raw.minGeneration >= 1 &&
+    raw.minGeneration <= 30
+  )
+    spec.minGeneration = raw.minGeneration;
   if (Array.isArray(raw?.extras)) {
-    spec.extras = raw.extras.map((e) => String(e).trim().slice(0, 40)).filter(Boolean).slice(0, 8);
+    spec.extras = raw.extras
+      .map((e) => String(e).trim().slice(0, 40))
+      .filter(Boolean)
+      .slice(0, 8);
   }
+  if (
+    typeof raw?.monitorInches === "number" &&
+    raw.monitorInches >= 15 &&
+    raw.monitorInches <= 50
+  )
+    spec.monitorInches = raw.monitorInches;
+  if (typeof raw?.monitorNote === "string" && raw.monitorNote.trim())
+    spec.monitorNote = raw.monitorNote.trim().slice(0, 60);
+  if (typeof raw?.wireless === "boolean") spec.wireless = raw.wireless;
+  if (
+    typeof raw?.bagInches === "number" &&
+    raw.bagInches >= 10 &&
+    raw.bagInches <= 20
+  )
+    spec.bagInches = raw.bagInches;
+  if (typeof raw?.bagNote === "string" && raw.bagNote.trim())
+    spec.bagNote = raw.bagNote.trim().slice(0, 60);
   return spec;
 }
 

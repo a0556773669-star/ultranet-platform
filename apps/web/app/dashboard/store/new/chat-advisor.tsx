@@ -1,6 +1,13 @@
 "use client";
 
-import { useEffect, useRef, useState, useTransition, type FormEvent, type KeyboardEvent } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  useTransition,
+  type FormEvent,
+  type KeyboardEvent,
+} from "react";
 import { useRouter } from "next/navigation";
 import { Send, Bot, Copy, Check } from "lucide-react";
 import type { AdvisorTurn, ChatOption } from "@/lib/store-advisor";
@@ -18,30 +25,50 @@ type Msg = AdvisorTurn & {
   ownerHint?: string;
   quickReplies?: string[];
   source?: "model" | "faq";
+  /** הלקוח קבע הכול - הצעה אחת במחיר אחד */
+  finalOffer?: boolean;
   /** הודעת פתיחה מקומית - לא נשלחת למודל */
   local?: boolean;
 };
 
 const WELCOME =
   "שלום! ספרו לי מה הלקוח מחפש, בחופשיות. למשל: למה הוא צריך את המחשב, ואם יש לו תקציב או העדפה. אפשר גם לשאול אותי שאלה כללית (אחריות, אנטיווירוס, זמני אספקה).";
-const STARTERS = ["נייד לחידושי תורה", "נייח למשרד", "הלקוח לא יודע מה הוא צריך"];
+const STARTERS = [
+  "נייד לחידושי תורה",
+  "נייח למשרד",
+  "הלקוח לא יודע מה הוא צריך",
+];
 
-const nowTime = () => new Date().toLocaleTimeString("he-IL", { hour: "2-digit", minute: "2-digit" });
+const nowTime = () =>
+  new Date().toLocaleTimeString("he-IL", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 
 /** המשפט שמנהל הסניף אומר ללקוח לפני בדיקת מלאי. */
-function customerSentence(o: ChatOption): string | null {
-  if (!o.estimate) return null;
-  const acc = o.estimate.accessories.length
-    ? ` ${o.estimate.accessories.map((a) => `${a.name} ${money(a.fromILS)}-${money(a.toILS)} ₪`).join(", ")}.`
+function customerSentence(o: ChatOption, single = false): string | null {
+  const e = o.estimate;
+  if (!e) return null;
+  const pend = e.pending.length
+    ? ` בנוסף נבדוק מחיר ל: ${e.pending.map((p) => p.name).join(", ")}.`
     : "";
-  return `אני יכול לבדוק מלאי. המחיר נע בערך בין ${money(o.estimate.fromILS)} ל-${money(o.estimate.toILS)} ₪.${acc} זה מעניין אותך?`;
+  if (single)
+    return `אני יכול לבדוק מלאי. המחיר בערך ${money(e.finalILS)} ₪${e.pending.length ? " (בלי " + e.pending.map((p) => p.name).join(", ") + ")" : ", כולל כל מה שביקשת"}.${pend} זה מעניין אותך?`;
+  return `אני יכול לבדוק מלאי. המחיר נע בערך בין ${money(e.totalFromILS)} ל-${money(e.totalToILS)} ₪ (כולל הציוד).${pend} זה מעניין אותך?`;
 }
 
 function TypingDots() {
   return (
-    <div className="flex items-center gap-1 px-1 py-1.5" aria-label="היועץ מקליד">
+    <div
+      className="flex items-center gap-1 px-1 py-1.5"
+      aria-label="היועץ מקליד"
+    >
       {[0, 1, 2].map((i) => (
-        <span key={i} className="h-2 w-2 animate-bounce rounded-full bg-teal/60" style={{ animationDelay: `${i * 0.15}s` }} />
+        <span
+          key={i}
+          className="h-2 w-2 animate-bounce rounded-full bg-teal/60"
+          style={{ animationDelay: `${i * 0.15}s` }}
+        />
       ))}
     </div>
   );
@@ -75,7 +102,16 @@ export function ChatAdvisor({ branchLabel }: { branchLabel: string }) {
   const [customerName, setCustomerName] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
   const [showDetails, setShowDetails] = useState(true);
-  const [msgs, setMsgs] = useState<Msg[]>([{ id: 0, role: "assistant", content: WELCOME, time: nowTime(), local: true, quickReplies: STARTERS }]);
+  const [msgs, setMsgs] = useState<Msg[]>([
+    {
+      id: 0,
+      role: "assistant",
+      content: WELCOME,
+      time: nowTime(),
+      local: true,
+      quickReplies: STARTERS,
+    },
+  ]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -90,7 +126,9 @@ export function ChatAdvisor({ branchLabel }: { branchLabel: string }) {
     endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [msgs, busy]);
 
-  const latestOptionsMsg = [...msgs].reverse().find((m) => m.role === "assistant" && m.options?.length);
+  const latestOptionsMsg = [...msgs]
+    .reverse()
+    .find((m) => m.role === "assistant" && m.options?.length);
   const lastMsg = msgs[msgs.length - 1];
   const userTurns = msgs.filter((m) => m.role === "user").length;
 
@@ -101,15 +139,25 @@ export function ChatAdvisor({ branchLabel }: { branchLabel: string }) {
   async function send(text: string) {
     const content = text.trim();
     if (!content || busy) return;
-    const userMsg: Msg = { id: idRef.current++, role: "user", content, time: nowTime() };
+    const userMsg: Msg = {
+      id: idRef.current++,
+      role: "user",
+      content,
+      time: nowTime(),
+    };
     const history = [...msgs.filter((m) => !m.local), userMsg];
-    setMsgs((cur) => [...cur.map((m) => ({ ...m, quickReplies: undefined })), userMsg]);
+    setMsgs((cur) => [
+      ...cur.map((m) => ({ ...m, quickReplies: undefined })),
+      userMsg,
+    ]);
     setShowDetails(false); // יותר מקום לשיחה
     setInput("");
     setBusy(true);
     setError("");
     try {
-      const res = await advisorChatAction(history.map(({ role, content: c }) => ({ role, content: c })));
+      const res = await advisorChatAction(
+        history.map(({ role, content: c }) => ({ role, content: c })),
+      );
       if (!res.ok) {
         setError(res.error);
         return;
@@ -118,7 +166,17 @@ export function ChatAdvisor({ branchLabel }: { branchLabel: string }) {
       const id = idRef.current++;
       setMsgs((cur) => [
         ...cur,
-        { id, role: "assistant", content: r.reply, time: nowTime(), options: r.options, ownerHint: r.ownerHint, quickReplies: r.quickReplies, source: r.source },
+        {
+          id,
+          role: "assistant",
+          content: r.reply,
+          time: nowTime(),
+          options: r.options,
+          ownerHint: r.ownerHint,
+          quickReplies: r.quickReplies,
+          source: r.source,
+          finalOffer: r.finalOffer,
+        },
       ]);
       if (r.options.length) {
         setLocked(r.lockedFields);
@@ -126,7 +184,9 @@ export function ChatAdvisor({ branchLabel }: { branchLabel: string }) {
         if (r.notes) setNotes(r.notes);
       }
     } catch {
-      setError("אירעה שגיאה בחיבור לשרת (ייתכן שהתשובה ארכה מדי). נסו לשלוח שוב.");
+      setError(
+        "אירעה שגיאה בחיבור לשרת (ייתכן שהתשובה ארכה מדי). נסו לשלוח שוב.",
+      );
     } finally {
       setBusy(false);
       inputRef.current?.focus();
@@ -154,8 +214,17 @@ export function ChatAdvisor({ branchLabel }: { branchLabel: string }) {
         const res = await createChatRequestAction({
           customerName,
           customerPhone,
-          transcript: msgs.filter((m) => !m.local).map(({ role, content }) => ({ role, content })),
-          options: latestOptionsMsg.options!.map((o) => ({ label: o.label, kind: o.kind, spec: o.spec, whyBetter: o.whyBetter, pros: o.pros, cons: o.cons })),
+          transcript: msgs
+            .filter((m) => !m.local)
+            .map(({ role, content }) => ({ role, content })),
+          options: latestOptionsMsg.options!.map((o) => ({
+            label: o.label,
+            kind: o.kind,
+            spec: o.spec,
+            whyBetter: o.whyBetter,
+            pros: o.pros,
+            cons: o.cons,
+          })),
           chosenIndex,
           lockedFields: locked,
           budgetILS: budget,
@@ -173,7 +242,10 @@ export function ChatAdvisor({ branchLabel }: { branchLabel: string }) {
   }
 
   return (
-    <div className="flex max-w-2xl flex-col overflow-hidden rounded-card border border-card-border bg-white shadow-card" style={{ height: "min(78vh, 46rem)" }}>
+    <div
+      className="flex max-w-2xl flex-col overflow-hidden rounded-card border border-card-border bg-white shadow-card"
+      style={{ height: "min(78vh, 46rem)" }}
+    >
       {/* כותרת */}
       <div className="flex items-center justify-between gap-2 border-b border-card-border bg-teal-bg px-4 py-2.5">
         <div className="flex items-center gap-2">
@@ -181,19 +253,42 @@ export function ChatAdvisor({ branchLabel }: { branchLabel: string }) {
             <Bot className="h-4 w-4" />
           </span>
           <div>
-            <div className="text-sm font-bold text-teal-dark">יועץ התאמת מחשבים</div>
-            <div className="text-[11px] text-muted">{busy ? "מקליד..." : branchLabel}</div>
+            <div className="text-sm font-bold text-teal-dark">
+              יועץ התאמת מחשבים
+            </div>
+            <div className="text-[11px] text-muted">
+              {busy ? "מקליד..." : branchLabel}
+            </div>
           </div>
         </div>
-        <button type="button" onClick={() => setShowDetails((v) => !v)} className="text-xs font-semibold text-teal hover:underline">
-          {showDetails ? "הסתרת פרטי לקוח" : customerName ? `לקוח: ${customerName}` : "פרטי לקוח"}
+        <button
+          type="button"
+          onClick={() => setShowDetails((v) => !v)}
+          className="text-xs font-semibold text-teal hover:underline"
+        >
+          {showDetails
+            ? "הסתרת פרטי לקוח"
+            : customerName
+              ? `לקוח: ${customerName}`
+              : "פרטי לקוח"}
         </button>
       </div>
 
       {showDetails ? (
         <div className="grid gap-2 border-b border-card-border bg-[#fafbfc] px-4 py-2.5 md:grid-cols-2">
-          <input value={customerName} onChange={(e) => setCustomerName(e.target.value)} placeholder="שם הלקוח (רשות)" className={FIELD} />
-          <input value={customerPhone} onChange={(e) => setCustomerPhone(e.target.value)} placeholder="טלפון (רשות)" dir="ltr" className={FIELD} />
+          <input
+            value={customerName}
+            onChange={(e) => setCustomerName(e.target.value)}
+            placeholder="שם הלקוח (רשות)"
+            className={FIELD}
+          />
+          <input
+            value={customerPhone}
+            onChange={(e) => setCustomerPhone(e.target.value)}
+            placeholder="טלפון (רשות)"
+            dir="ltr"
+            className={FIELD}
+          />
         </div>
       ) : null}
 
@@ -203,14 +298,23 @@ export function ChatAdvisor({ branchLabel }: { branchLabel: string }) {
           const mine = m.role === "user";
           const showCards = m.options?.length && latestOptionsMsg?.id === m.id;
           return (
-            <div key={m.id} className={`flex flex-col ${mine ? "items-start" : "items-end"}`}>
+            <div
+              key={m.id}
+              className={`flex flex-col ${mine ? "items-start" : "items-end"}`}
+            >
               <div
                 className={`max-w-[92%] rounded-2xl px-3 py-2 shadow-sm ${
-                  mine ? "rounded-tr-sm bg-teal text-white" : "rounded-tl-sm border border-card-border bg-white text-ink"
+                  mine
+                    ? "rounded-tr-sm bg-teal text-white"
+                    : "rounded-tl-sm border border-card-border bg-white text-ink"
                 }`}
               >
-                <div className="whitespace-pre-wrap leading-relaxed">{m.content}</div>
-                <div className={`mt-0.5 flex items-center gap-2 text-[10px] ${mine ? "text-white/70" : "text-muted"}`}>
+                <div className="whitespace-pre-wrap leading-relaxed">
+                  {m.content}
+                </div>
+                <div
+                  className={`mt-0.5 flex items-center gap-2 text-[10px] ${mine ? "text-white/70" : "text-muted"}`}
+                >
                   <span>{m.time}</span>
                   {m.source === "faq" ? <span>· מהשאלות הנפוצות</span> : null}
                 </div>
@@ -219,42 +323,91 @@ export function ChatAdvisor({ branchLabel }: { branchLabel: string }) {
               {showCards ? (
                 <div className="mt-2 flex w-full max-w-[96%] flex-col gap-2">
                   {m.options!.map((o, idx) => {
-                    const sentence = customerSentence(o);
+                    const sentence = customerSentence(o, Boolean(m.finalOffer));
                     return (
-                      <div key={idx} className="rounded-xl border border-card-border bg-white p-3 shadow-sm">
+                      <div
+                        key={idx}
+                        className="rounded-xl border border-card-border bg-white p-3 shadow-sm"
+                      >
                         <div className="flex flex-wrap items-center justify-between gap-2">
                           <span className="font-bold text-ink">{o.label}</span>
                           <span className="rounded-full bg-teal-bg px-2 py-0.5 text-[11px] font-bold text-teal-dark">
-                            {o.kind === "upgrade" ? "טיפה יותר טוב" : o.kind === "alternative" ? "חלופה חסכונית" : "לפי הבקשה"}
+                            {o.kind === "upgrade"
+                              ? "טיפה יותר טוב"
+                              : o.kind === "alternative"
+                                ? "חלופה חסכונית"
+                                : "לפי הבקשה"}
                           </span>
                         </div>
-                        <div className="mt-0.5 text-xs text-muted">{o.specText}</div>
+                        <div className="mt-0.5 text-xs text-muted">
+                          {o.specText}
+                        </div>
 
                         {o.estimate ? (
                           <div className="mt-1.5 font-bold text-teal-dark">
-                            בערך {money(o.estimate.fromILS)} - {money(o.estimate.toILS)} ₪
-                            <span className="mr-1 text-[11px] font-normal text-muted">(הערכה, לא מחיר סופי)</span>
+                            {m.finalOffer ? (
+                              <>
+                                {money(o.estimate.finalILS)} ₪
+                                <span className="mr-1 text-[11px] font-normal text-muted">
+                                  {o.estimate.pending.length
+                                    ? "(מחשב + ציוד, בלי הפריטים לבדיקה)"
+                                    : "(כולל כל מה שביקש)"}
+                                </span>
+                              </>
+                            ) : (
+                              <>
+                                בערך {money(o.estimate.totalFromILS)} -{" "}
+                                {money(o.estimate.totalToILS)} ₪
+                                <span className="mr-1 text-[11px] font-normal text-muted">
+                                  (הערכה, לא מחיר סופי)
+                                </span>
+                              </>
+                            )}
                           </div>
                         ) : (
                           <div className="mt-1.5 text-xs text-muted">
                             המחיר יימסר אחרי בדיקה
-                            {m.ownerHint ? <span className="block text-[11px] text-red-600">אבחון (לבעלים): {m.ownerHint}</span> : null}
+                            {m.ownerHint ? (
+                              <span className="block text-[11px] text-red-600">
+                                אבחון (לבעלים): {m.ownerHint}
+                              </span>
+                            ) : null}
                           </div>
                         )}
                         {o.estimate?.accessories.length ? (
                           <div className="mt-0.5 text-xs text-ink">
-                            {o.estimate.accessories.map((a) => `${a.name} ${money(a.fromILS)}-${money(a.toILS)} ₪`).join(" · ")}
+                            כולל:{" "}
+                            {o.estimate.accessories
+                              .map((a) =>
+                                a.fixed
+                                  ? `${a.name} ${money(a.fromILS)} ₪ (בלי רווח)`
+                                  : `${a.name} ${money(a.fromILS)}-${money(a.toILS)} ₪`,
+                              )
+                              .join(" · ")}
+                          </div>
+                        ) : null}
+                        {o.estimate?.pending.length ? (
+                          <div className="mt-0.5 text-xs text-amber-700">
+                            {o.estimate.pending.map((p) => p.text).join(" · ")}
                           </div>
                         ) : null}
 
-                        {o.whyBetter ? <div className="mt-1.5 text-xs text-ink">{o.whyBetter}</div> : null}
+                        {o.whyBetter ? (
+                          <div className="mt-1.5 text-xs text-ink">
+                            {o.whyBetter}
+                          </div>
+                        ) : null}
                         {o.pros.length || o.cons.length ? (
                           <ul className="mt-1.5 space-y-0.5 text-xs">
                             {o.pros.map((p, i) => (
-                              <li key={`p${i}`} className="text-emerald-700">＋ {p}</li>
+                              <li key={`p${i}`} className="text-emerald-700">
+                                ＋ {p}
+                              </li>
                             ))}
                             {o.cons.map((c, i) => (
-                              <li key={`c${i}`} className="text-amber-700">－ {c}</li>
+                              <li key={`c${i}`} className="text-amber-700">
+                                － {c}
+                              </li>
                             ))}
                           </ul>
                         ) : null}
@@ -262,20 +415,32 @@ export function ChatAdvisor({ branchLabel }: { branchLabel: string }) {
                         {sentence ? (
                           <div className="mt-2 rounded-lg bg-[#f4f6f9] px-2.5 py-1.5 text-xs text-ink">
                             <div className="mb-0.5 flex items-center justify-between">
-                              <span className="font-semibold text-muted">מה להגיד ללקוח</span>
+                              <span className="font-semibold text-muted">
+                                מה להגיד ללקוח
+                              </span>
                               <CopyButton text={sentence} />
                             </div>
                             {sentence}
                           </div>
                         ) : null}
 
-                        <button type="button" disabled={pending} onClick={() => submit(idx)} className="btn-primary mt-2 text-xs disabled:opacity-40">
+                        <button
+                          type="button"
+                          disabled={pending}
+                          onClick={() => submit(idx)}
+                          className="btn-primary mt-2 text-xs disabled:opacity-40"
+                        >
                           הלקוח מעוניין - בדיקת מלאי
                         </button>
                       </div>
                     );
                   })}
-                  <button type="button" disabled={pending} onClick={() => submit(null)} className="w-fit text-xs font-semibold text-teal hover:underline disabled:opacity-40">
+                  <button
+                    type="button"
+                    disabled={pending}
+                    onClick={() => submit(null)}
+                    className="w-fit text-xs font-semibold text-teal hover:underline disabled:opacity-40"
+                  >
                     שמירת ההצעות בלי אישור (הלקוח עדיין חושב)
                   </button>
                 </div>
@@ -309,10 +474,17 @@ export function ChatAdvisor({ branchLabel }: { branchLabel: string }) {
         <div ref={endRef} />
       </div>
 
-      {error ? <div className="border-t border-red-100 bg-red-50 px-4 py-2 text-xs font-semibold text-red-700">{error}</div> : null}
+      {error ? (
+        <div className="border-t border-red-100 bg-red-50 px-4 py-2 text-xs font-semibold text-red-700">
+          {error}
+        </div>
+      ) : null}
 
       {/* שורת כתיבה */}
-      <form onSubmit={onSubmit} className="flex items-end gap-2 border-t border-card-border bg-white px-3 py-2.5">
+      <form
+        onSubmit={onSubmit}
+        className="flex items-end gap-2 border-t border-card-border bg-white px-3 py-2.5"
+      >
         <textarea
           ref={inputRef}
           value={input}
@@ -333,8 +505,17 @@ export function ChatAdvisor({ branchLabel }: { branchLabel: string }) {
         </button>
       </form>
       <div className="flex items-center justify-between bg-white px-4 pb-2 text-[11px] text-muted">
-        <span>{userTurns ? `${userTurns} הודעות` : "Enter לשליחה, Shift+Enter לשורה חדשה"}</span>
-        <a href="/dashboard/store/new?form=1" className="font-semibold text-teal hover:underline">מעבר לטופס הרגיל</a>
+        <span>
+          {userTurns
+            ? `${userTurns} הודעות`
+            : "Enter לשליחה, Shift+Enter לשורה חדשה"}
+        </span>
+        <a
+          href="/dashboard/store/new?form=1"
+          className="font-semibold text-teal hover:underline"
+        >
+          מעבר לטופס הרגיל
+        </a>
       </div>
     </div>
   );
