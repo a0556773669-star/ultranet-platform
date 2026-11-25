@@ -27,7 +27,7 @@ const SEARCH_TIMEOUT_MS = 32_000;
 /** סטייה סבירה בין מחיר חי למחירון: בתוכה סומכים על המחיר החי. מחוצה לה - לוקחים את הגבוה (לא להציע מתחת לשוק) ומסמנים "לא ודאי". */
 const TRUST_RATIO: [number, number] = [0.75, 1.35];
 
-const docId = (key: string) => createHash("sha1").update(key).digest("hex");
+const docId = (key: string) => createHash("sha1").update(`v2|${key}`).digest("hex");
 
 function withTimeout<T>(p: Promise<T>, ms: number): Promise<T | null> {
   return Promise.race([
