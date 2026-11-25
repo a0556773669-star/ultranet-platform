@@ -8,6 +8,7 @@ import {
   canAccessStoreRequest,
   UNASSIGNED_BRANCH_ID,
 } from "@/lib/store-access";
+import { priceOptions } from "@/lib/store-live-price";
 import { getAdminFirestore } from "@/lib/firebase-admin";
 import { currentModuleScope, requireOwner } from "@/lib/perms";
 import {
@@ -188,12 +189,10 @@ export async function createStoreRequestAction(
       ...(budget ? { budgetILS: budget } : {}),
       spec,
       lockedFields: locked,
-      answers: input.answers
-        .slice(0, 30)
-        .map((a) => ({
-          question: String(a.question).slice(0, 200),
-          answer: String(a.answer).slice(0, 300),
-        })),
+      answers: input.answers.slice(0, 30).map((a) => ({
+        question: String(a.question).slice(0, 200),
+        answer: String(a.answer).slice(0, 300),
+      })),
       ...(input.notes?.trim()
         ? { notes: input.notes.trim().slice(0, 1000) }
         : {}),
@@ -676,9 +675,14 @@ export async function createChatRequestAction(
     const options: StoreRequestOption[] = [];
     let chosenAccessories: StoreAccessoryQuote[] = [];
     let spec: StoreSpec = sanitizeSpec(input.options[0]!.spec);
+    // אותו תמחור כמו בצ'אט (מחיר מאומת מול השוק; המטמון כבר חם ולכן המחיר זהה לזה שהוצג)
+    const priced = await priceOptions(
+      input.options.slice(0, 3).map((o) => sanitizeSpec(o.spec)),
+      guide,
+    );
     input.options.slice(0, 3).forEach((o, i) => {
       const optSpec = sanitizeSpec(o.spec);
-      const est = estimateRange(optSpec, guide);
+      const est = priced.estimates[i] ?? null;
       if (i === (chosenIdx ?? 0)) {
         spec = optSpec;
         chosenAccessories = [
@@ -803,7 +807,16 @@ export async function savePriceGuideAction(formData: FormData): Promise<void> {
     ramAdd: pick(["16", "32"], "ram"),
     storageAdd: pick(["512", "1000", "2000"], "st"),
     accessoriesLow: pick(
-      ["monitor", "keyboardMouse", "keyboard", "mouse", "stick", "speakers"],
+      [
+        "monitor",
+        "monitor27",
+        "monitor32",
+        "keyboardMouse",
+        "keyboard",
+        "mouse",
+        "stick",
+        "speakers",
+      ],
       "acc",
     ),
     ...(numField(formData, "touch")
@@ -871,17 +884,15 @@ export async function saveFaqAction(formData: FormData): Promise<void> {
   const id = String(formData.get("id") ?? "").trim();
   const col = getAdminFirestore().collection(FAQ_COLLECTION);
   if (id)
-    await col
-      .doc(id)
-      .set(
-        {
-          question,
-          answer,
-          keywords,
-          approved: formData.get("approved") !== "off",
-        },
-        { merge: true },
-      );
+    await col.doc(id).set(
+      {
+        question,
+        answer,
+        keywords,
+        approved: formData.get("approved") !== "off",
+      },
+      { merge: true },
+    );
   else
     await col.add({
       question,
