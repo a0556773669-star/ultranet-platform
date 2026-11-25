@@ -33,20 +33,38 @@ function parseDraft(text: string): MarketDraft {
   const end = text.lastIndexOf("}");
   if (start < 0 || end <= start) throw new Error("לא התקבלה תשובה מובנית");
   const raw = JSON.parse(text.slice(start, end + 1)) as Partial<MarketDraft>;
-  const low = typeof raw.lowAverageILS === "number" && raw.lowAverageILS > 0 ? Math.round(raw.lowAverageILS) : null;
+  const low =
+    typeof raw.lowAverageILS === "number" && raw.lowAverageILS > 0
+      ? Math.round(raw.lowAverageILS)
+      : null;
   const stores = Array.isArray(raw.stores)
     ? raw.stores
         .filter((s) => s && typeof s.priceILS === "number" && s.priceILS > 0)
         .slice(0, 8)
-        .map((s) => ({ store: String(s.store ?? "").slice(0, 60), model: String(s.model ?? "").slice(0, 120), priceILS: Math.round(s.priceILS) }))
+        .map((s) => ({
+          store: String(s.store ?? "").slice(0, 60),
+          model: String(s.model ?? "").slice(0, 120),
+          priceILS: Math.round(s.priceILS),
+        }))
     : [];
-  return { lowAverageILS: low, stores, upgradeNote: String(raw.upgradeNote ?? "").slice(0, 600) };
+  return {
+    lowAverageILS: low,
+    stores,
+    upgradeNote: String(raw.upgradeNote ?? "").slice(0, 600),
+  };
 }
 
-export async function draftMarketPrice(request: StoreRequest): Promise<MarketDraft> {
+export async function draftMarketPrice(
+  request: StoreRequest,
+): Promise<MarketDraft> {
   if (!storeAiConfigured()) throw new Error("ANTHROPIC_API_KEY לא מוגדר");
   const client = createAnthropic();
-  const messages: Anthropic.MessageParam[] = [{ role: "user", content: buildMarketPrompt(request) + "\n" + FORMAT_INSTRUCTION }];
+  const messages: Anthropic.MessageParam[] = [
+    {
+      role: "user",
+      content: buildMarketPrompt(request) + "\n" + FORMAT_INSTRUCTION,
+    },
+  ];
 
   for (let turn = 0; turn <= MAX_PAUSE_TURNS; turn++) {
     const response = await client.messages.create({
@@ -70,7 +88,6 @@ export async function draftMarketPrice(request: StoreRequest): Promise<MarketDra
   throw new Error("החיפוש לא הסתיים - נסו שוב");
 }
 
-
 export type PriceGuideDraft = {
   laptopBase: Record<string, number>;
   desktopBase: Record<string, number>;
@@ -92,16 +109,17 @@ export const GUIDE_PROMPT = `אני מוכר מחשבים בישראל. בדוק
 - ramAdd: התוספת למחיר כשעוברים מ-8GB ל-16 ול-32 (מפתחות "16","32").
 - storageAdd: התוספת כשעוברים מ-256GB ל-512, 1000, 2000 (מפתחות "512","1000","2000").
 - touchAdd: תוספת מסך מגע בנייד. screen17Add: תוספת מסך 17 אינץ' בנייד.
-- accessoriesLow: מחיר שוק נמוך ל: monitor (מסך 24 אינץ' פשוט), keyboardMouse (סט מקלדת ועכבר אלחוטיים פשוטים), keyboard, mouse, stick (דיסק און קי 64GB), speakers.
+- accessoriesLow: מחיר שוק נמוך ל: monitor (מסך 24 אינץ' פשוט), monitor27 (מסך 27 אינץ' פשוט), monitor32 (מסך 32 אינץ' פשוט), keyboardMouse (סט מקלדת ועכבר אלחוטיים פשוטים), keyboard, mouse, stick (דיסק און קי 64GB), speakers.
 מקורות מומלצים: אתרי החנויות והשוואות המחירים הישראליים (למשל KSP, Ivory, Bug, Zap) - חפש בהם דגמים אמיתיים במחיר הנמוך הרגיל לכל דרגה.
 חובה להחזיר מחיר **לכל דרגה שנתבקשה** (i3, i5 ו-i7): אם לא מצאת דגם מדויק לדרגה, השתמש במחיר הדגם הקרוב ביותר שמצאת באותה דרגה, ורשום זאת ב-note. השמט פריט רק אם באמת אין לך שום מידע עליו (null או בלי המפתח). החזר אך ורק אובייקט JSON, בלי טקסט נוסף ובלי בלוק קוד, במבנה:
-{"laptopBase":{"i3":0,"i5":0,"i7":0},"desktopBase":{"i3":0,"i5":0,"i7":0},"ramAdd":{"16":0,"32":0},"storageAdd":{"512":0,"1000":0,"2000":0},"touchAdd":null,"screen17Add":null,"accessoriesLow":{"monitor":0,"keyboardMouse":0,"stick":0},"note":"מקורות/הערות קצרות"}`;
+{"laptopBase":{"i3":0,"i5":0,"i7":0},"desktopBase":{"i3":0,"i5":0,"i7":0},"ramAdd":{"16":0,"32":0},"storageAdd":{"512":0,"1000":0,"2000":0},"touchAdd":null,"screen17Add":null,"accessoriesLow":{"monitor":0,"monitor27":0,"monitor32":0,"keyboardMouse":0,"stick":0},"note":"מקורות/הערות קצרות"}`;
 
 function onlyNumbers(o: unknown): Record<string, number> {
   const out: Record<string, number> = {};
   if (o && typeof o === "object") {
     for (const [k, v] of Object.entries(o as Record<string, unknown>)) {
-      if (typeof v === "number" && Number.isFinite(v) && v > 0) out[k] = Math.round(v);
+      if (typeof v === "number" && Number.isFinite(v) && v > 0)
+        out[k] = Math.round(v);
     }
   }
   return out;
@@ -111,12 +129,18 @@ function onlyNumbers(o: unknown): Record<string, number> {
 /** הנחיית הסריקה הלילית: ההנחיה הבסיסית + תצורות ספציפיות שצריך להן מחיר שוק נמוך מדויק (קלאסיות + נפוצות בבקשות). */
 export type ScanFocus = "laptop" | "desktop" | "extras";
 const FOCUS_TEXT: Record<ScanFocus, string> = {
-  laptop: "התמקד בסריקה הזו **רק** ב: laptopBase, ramAdd, storageAdd, touchAdd, screen17Add (מחשבים ניידים). השאר את שאר השדות ריקים.",
-  desktop: "התמקד בסריקה הזו **רק** ב: desktopBase (מחשבים נייחים, המחשב בלבד). השאר את שאר השדות ריקים.",
-  extras: "התמקד בסריקה הזו **רק** ב: accessoriesLow (מסך, מקלדת ועכבר, סטיק, רמקולים). השאר את שאר השדות ריקים.",
+  laptop:
+    "התמקד בסריקה הזו **רק** ב: laptopBase, ramAdd, storageAdd, touchAdd, screen17Add (מחשבים ניידים). השאר את שאר השדות ריקים.",
+  desktop:
+    "התמקד בסריקה הזו **רק** ב: desktopBase (מחשבים נייחים, המחשב בלבד). השאר את שאר השדות ריקים.",
+  extras:
+    "התמקד בסריקה הזו **רק** ב: accessoriesLow (מסך, מקלדת ועכבר, סטיק, רמקולים). השאר את שאר השדות ריקים.",
 };
 
-export function buildGuidePrompt(targets: { key: string; description: string; requested: number }[] = [], focus?: ScanFocus): string {
+export function buildGuidePrompt(
+  targets: { key: string; description: string; requested: number }[] = [],
+  focus?: ScanFocus,
+): string {
   const head = focus ? `${GUIDE_PROMPT}\n\n${FOCUS_TEXT[focus]}` : GUIDE_PROMPT;
   if (!targets.length) return head;
   return `${head}
@@ -125,16 +149,24 @@ export function buildGuidePrompt(targets: { key: string; description: string; re
 ${targets.map((t) => `[${t.key}] ${t.description}${t.requested ? ` (התבקשה ${t.requested} פעמים לאחרונה)` : ""}`).join("\n")}`;
 }
 
-export async function draftPriceGuide(targets: { key: string; description: string; requested: number }[] = [], focus?: ScanFocus, maxUses = 4): Promise<PriceGuideDraft> {
+export async function draftPriceGuide(
+  targets: { key: string; description: string; requested: number }[] = [],
+  focus?: ScanFocus,
+  maxUses = 4,
+): Promise<PriceGuideDraft> {
   if (!storeAiConfigured()) throw new Error("ANTHROPIC_API_KEY לא מוגדר");
   const client = createAnthropic();
-  const messages: Anthropic.MessageParam[] = [{ role: "user", content: buildGuidePrompt(targets, focus) }];
+  const messages: Anthropic.MessageParam[] = [
+    { role: "user", content: buildGuidePrompt(targets, focus) },
+  ];
   for (let turn = 0; turn <= MAX_PAUSE_TURNS; turn++) {
     const response = await client.messages.create({
       model: MODEL,
       max_tokens: 9000,
       output_config: { effort: "low" },
-      tools: [{ type: "web_search_20250305", name: "web_search", max_uses: maxUses }],
+      tools: [
+        { type: "web_search_20250305", name: "web_search", max_uses: maxUses },
+      ],
       messages,
     });
     if (response.stop_reason === "refusal") throw new Error("המודל סירב לבקשה");
@@ -149,14 +181,23 @@ export async function draftPriceGuide(targets: { key: string; description: strin
     const start = text.indexOf("{");
     const end = text.lastIndexOf("}");
     if (start < 0 || end <= start) throw new Error("לא התקבלה תשובה מובנית");
-    const raw = JSON.parse(text.slice(start, end + 1)) as Record<string, unknown>;
+    const raw = JSON.parse(text.slice(start, end + 1)) as Record<
+      string,
+      unknown
+    >;
     return {
       laptopBase: onlyNumbers(raw.laptopBase),
       desktopBase: onlyNumbers(raw.desktopBase),
       ramAdd: onlyNumbers(raw.ramAdd),
       storageAdd: onlyNumbers(raw.storageAdd),
-      touchAdd: typeof raw.touchAdd === "number" && raw.touchAdd > 0 ? Math.round(raw.touchAdd) : null,
-      screen17Add: typeof raw.screen17Add === "number" && raw.screen17Add > 0 ? Math.round(raw.screen17Add) : null,
+      touchAdd:
+        typeof raw.touchAdd === "number" && raw.touchAdd > 0
+          ? Math.round(raw.touchAdd)
+          : null,
+      screen17Add:
+        typeof raw.screen17Add === "number" && raw.screen17Add > 0
+          ? Math.round(raw.screen17Add)
+          : null,
       accessoriesLow: onlyNumbers(raw.accessoriesLow),
       specPrices: onlyNumbers(raw.specPrices),
       note: String(raw.note ?? "").slice(0, 300),
@@ -165,7 +206,6 @@ export async function draftPriceGuide(targets: { key: string; description: strin
   throw new Error("החיפוש לא הסתיים - נסו שוב");
 }
 
-
 type ScanTarget = { key: string; description: string; requested: number };
 
 /**
@@ -173,10 +213,13 @@ type ScanTarget = { key: string; description: string; requested: number };
  * (כ-30-45 שניות) ולכן הסריקה כולה נכנסת במגבלת הזמן של הפונקציה (60 שניות) גם כשהרשימה גדלה עם הביקוש. אם חלק
  * מהקריאות נכשלות - ממשיכים עם מה שחזר; אם כולן נכשלו - שגיאה עם הסיבה.
  */
-export async function scanMarket(targets: ScanTarget[]): Promise<PriceGuideDraft> {
+export async function scanMarket(
+  targets: ScanTarget[],
+): Promise<PriceGuideDraft> {
   const CHUNK = 10;
   const chunks: ScanTarget[][] = [];
-  for (let i = 0; i < targets.length; i += CHUNK) chunks.push(targets.slice(i, i + CHUNK));
+  for (let i = 0; i < targets.length; i += CHUNK)
+    chunks.push(targets.slice(i, i + CHUNK));
   // שלוש קריאות ממוקדות לבסיס (נייד / נייח / אביזרים) + קריאה לכל 10 תצורות - הכול במקביל
   const results = await Promise.allSettled([
     draftPriceGuide([], "laptop", 6),
@@ -184,12 +227,31 @@ export async function scanMarket(targets: ScanTarget[]): Promise<PriceGuideDraft
     draftPriceGuide([], "extras", 4),
     ...chunks.map((c) => draftPriceGuide(c, undefined, 4)),
   ]);
-  const ok = results.filter((r): r is PromiseFulfilledResult<PriceGuideDraft> => r.status === "fulfilled").map((r) => r.value);
+  const ok = results
+    .filter(
+      (r): r is PromiseFulfilledResult<PriceGuideDraft> =>
+        r.status === "fulfilled",
+    )
+    .map((r) => r.value);
   if (!ok.length) {
-    const first = results.find((r): r is PromiseRejectedResult => r.status === "rejected");
-    throw new Error(first?.reason instanceof Error ? first.reason.message : "הסריקה נכשלה");
+    const first = results.find(
+      (r): r is PromiseRejectedResult => r.status === "rejected",
+    );
+    throw new Error(
+      first?.reason instanceof Error ? first.reason.message : "הסריקה נכשלה",
+    );
   }
-  const merged: PriceGuideDraft = { laptopBase: {}, desktopBase: {}, ramAdd: {}, storageAdd: {}, touchAdd: null, screen17Add: null, accessoriesLow: {}, specPrices: {}, note: "" };
+  const merged: PriceGuideDraft = {
+    laptopBase: {},
+    desktopBase: {},
+    ramAdd: {},
+    storageAdd: {},
+    touchAdd: null,
+    screen17Add: null,
+    accessoriesLow: {},
+    specPrices: {},
+    note: "",
+  };
   for (const r of ok) {
     Object.assign(merged.laptopBase, r.laptopBase);
     Object.assign(merged.desktopBase, r.desktopBase);
@@ -199,7 +261,11 @@ export async function scanMarket(targets: ScanTarget[]): Promise<PriceGuideDraft
     Object.assign(merged.specPrices, r.specPrices);
     merged.touchAdd ??= r.touchAdd;
     merged.screen17Add ??= r.screen17Add;
-    if (r.note) merged.note = [merged.note, r.note].filter(Boolean).join(" | ").slice(0, 400);
+    if (r.note)
+      merged.note = [merged.note, r.note]
+        .filter(Boolean)
+        .join(" | ")
+        .slice(0, 400);
   }
   return merged;
 }

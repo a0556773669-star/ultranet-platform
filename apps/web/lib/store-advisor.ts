@@ -10,8 +10,8 @@ import {
 } from "./store-wizard";
 import { loadGlossary } from "./store-glossary";
 import { FAQ_COLLECTION, learnFaq, loadFaq, matchFaq } from "./store-faq";
+import { priceOptions } from "./store-live-price";
 import {
-  estimateRange,
   guideForPrompt,
   loadPriceGuide,
   recordDemand,
@@ -243,6 +243,41 @@ ${procedures || "(אין נהלים)"}
 ${faqText || "(אין)"}`;
 }
 
+/** ממפה טקסט חופשי של ציוד נלווה לשמות הקבועים (מסך / מקלדת / עכבר / סטיק / רמקולים / תיק), ומחלץ גודל מסך ואלחוטי. */
+export function canonicalizeExtras(spec: StoreSpec): {
+  extras: string[];
+  monitorInches?: number;
+  wireless?: boolean;
+} {
+  const out = new Set<string>();
+  let monitorInches: number | undefined;
+  let wireless: boolean | undefined;
+  for (const raw of spec.extras ?? []) {
+    const e = raw.trim();
+    if (e.includes("מסך")) {
+      out.add("מסך");
+      const m = e.match(/(\d{2}(?:\.\d)?)/);
+      if (m) monitorInches = Number(m[1]);
+    } else if (e.includes("מקלדת") && e.includes("עכבר")) {
+      out.add("מקלדת");
+      out.add("עכבר");
+    } else if (e.includes("מקלדת")) out.add("מקלדת");
+    else if (e.includes("עכבר")) out.add("עכבר");
+    else if (
+      e.includes("סטיק") ||
+      e.includes("רשת") ||
+      e.toLowerCase().includes("wifi")
+    )
+      out.add("סטיק");
+    else if (e.includes("רמקול")) out.add("רמקולים");
+    else if (e.includes("תיק")) out.add("תיק");
+    else out.add(e);
+    if (e.includes("אלחוט")) wireless = true;
+    else if (e.includes("חוטי")) wireless = false;
+  }
+  return { extras: [...out], monitorInches, wireless };
+}
+
 const SPEC_FIELDS = [
   "cpu",
   "ramGb",
@@ -278,6 +313,13 @@ function buildOptions(
       bagInches: (o.bagInches as number | null) ?? undefined,
       bagNote: (o.bagNote as string | null) ?? undefined,
     });
+    // נרמול: המודל לפעמים כותב טקסט חופשי ("מסך 27 אינץ", "מקלדת אלחוטית") - מתורגם לשמות הקבועים כדי שיתומחר
+    const canon = canonicalizeExtras(spec);
+    spec.extras = canon.extras;
+    if (canon.monitorInches !== undefined && spec.monitorInches === undefined)
+      spec.monitorInches = canon.monitorInches;
+    if (canon.wireless !== undefined && spec.wireless === undefined)
+      spec.wireless = canon.wireless;
     // תיק רק בנייד, ומסך/אלחוטי רק בנייח - ניקוי שדות שלא רלוונטיים
     if (kind === "desktop") {
       delete spec.bagInches;
@@ -413,9 +455,18 @@ export async function advisorChat(
   const finalOffer = raw.finalOffer === true;
   // הצעה אחת במחיר אחד כשהלקוח קבע הכול (נאכף בקוד, לא רק בהנחיה)
   const built = buildOptions(raw.options, deviceKind, locked);
-  const options: ChatOption[] = (finalOffer ? built.slice(0, 1) : built).map(
-    (o) => ({ ...o, estimate: estimateRange(o.spec, guide) }),
-  );
+  const kept = finalOffer ? built.slice(0, 1) : built;
+  // מחיר מאומת מול השוק (מטמון 24 שעות); נפילה למחירון אם החיפוש לא חזר בזמן
+  const priced0 = kept.length
+    ? await priceOptions(
+        kept.map((o) => o.spec),
+        guide,
+      )
+    : null;
+  const options: ChatOption[] = kept.map((o, i) => ({
+    ...o,
+    estimate: priced0?.estimates[i] ?? null,
+  }));
   let reply = String(raw.reply ?? "").slice(0, 1500);
   let ownerHint: string | undefined;
   if (options.length) {
@@ -432,26 +483,32 @@ export async function advisorChat(
     const priced = options.filter((o) => o.estimate);
     const single = options.length === 1 && finalOffer;
     const money = (n: number) => n.toLocaleString("he-IL");
-    const lines = priced.map((o) => {
+    const lineFor = (o: ChatOption) => {
       const e = o.estimate!;
-      const extras = [
-        ...e.accessories.map((a) => a.name),
-        ...e.pending.map((p) => p.name),
-      ];
-      const inc = extras.length ? ` (כולל ${extras.join(", ")})` : "";
+      const inc = e.accessories.length
+        ? ` (כולל ${e.accessories.map((a) => a.name).join(", ")})`
+        : "";
       return `• ${o.label}: בערך ${money(e.totalFromILS)}-${money(e.totalToILS)} ₪${inc}`;
-    });
+    };
+    // מה **לא** כלול במחיר (אין לו מחיר במחירון) - נאמר במפורש, כדי שהמחיר לא ייראה סופי כשהוא חלקי
     const pendingLines = [
       ...new Set(priced.flatMap((o) => o.estimate!.pending.map((p) => p.text))),
     ];
+    const notIncluded = pendingLines.length
+      ? `\n\nלא כלול במחיר (ייבדק בנפרד): ${pendingLines.join("; ")}`
+      : "";
+    const uncertain = priced0?.uncertain
+      ? "\n\nשימו לב: מחירי השוק לא עקביים כרגע, לכן המחיר הוא הערכה זהירה והבעלים יאשר אותו בבדיקת המלאי."
+      : "";
     if (single && priced.length) {
       const e = priced[0]!.estimate!;
-      reply += `\n\nההצעה ללקוח: ${priced[0]!.label}${e.pending.length ? "" : `\nמחיר: ${money(e.finalILS)} ₪ - כולל את כל מה שביקש`}`;
-      if (e.pending.length)
-        reply += `\nמחיר המחשב${e.accessories.length ? " והציוד" : ""}: ${money(e.finalILS)} ₪\nנוסף (ייבדק): ${e.pending.map((p) => p.text).join("; ")}`;
+      const inc = e.accessories.length
+        ? ` (כולל ${e.accessories.map((a) => a.name).join(", ")})`
+        : "";
+      reply += `\n\nההצעה ללקוח: ${priced[0]!.label}\nמחיר: ${money(e.finalILS)} ₪${e.pending.length ? ` ${inc.trim()}`.trimEnd() : ` - כולל את כל מה שביקש${inc}`}${notIncluded}${uncertain}`;
       reply += `\n(הערכה לפי מחירי השוק - המחיר הסופי נקבע אחרי בדיקת מלאי.)\n\nהאם הלקוח מעוניין שנתקדם לבדיקת מלאי?`;
     } else if (priced.length) {
-      reply += `\n\nטווחי מחיר (הערכה לפי מחירי השוק, לא מחיר סופי):\n${lines.join("\n")}${pendingLines.length ? `\n\nשימו לב: ${pendingLines.join("; ")}` : ""}\n\nהאם הלקוח מעוניין שנתקדם לבדיקת מלאי?`;
+      reply += `\n\nטווחי מחיר (הערכה לפי מחירי השוק, לא מחיר סופי):\n${priced.map(lineFor).join("\n")}${notIncluded}${uncertain}\n\nהאם הלקוח מעוניין שנתקדם לבדיקת מלאי?`;
     } else {
       reply +=
         "\n\nהמחיר יימסר אחרי בדיקה. האם הלקוח מעוניין שנתקדם לבדיקת מלאי?";

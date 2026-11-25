@@ -1132,6 +1132,8 @@ export interface StoreRequest {
   createdVia?: "chat" | "form";
   customerName: string;
   customerPhone?: string;
+  /** מייל הלקוח (רשות) - נרשם ע"י הסניף */
+  customerEmail?: string;
   /** תקציב שהלקוח אמר (רשות) */
   budgetILS?: number;
   spec: StoreSpec;

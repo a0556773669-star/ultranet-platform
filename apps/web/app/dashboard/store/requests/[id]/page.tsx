@@ -49,6 +49,7 @@ export default async function StoreRequestPage({ params }: { params: { id: strin
           {r.branchName} · {r.createdByName || r.createdByEmail} · {new Date(r.createdAt).toLocaleString("he-IL")} ·{" "}
           <b className="text-ink">{STATUS_LABEL[r.status]}</b>
           {r.customerPhone ? <> · <span dir="ltr">{r.customerPhone}</span></> : null}
+          {r.customerEmail ? <> · <span dir="ltr">{r.customerEmail}</span></> : null}
         </div>
         <div>
           <span className="text-xs font-semibold text-muted">{r.mode === "guided" ? "התאמה לפי שאלות" : "לפי רצון הלקוח"}</span>
