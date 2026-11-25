@@ -27,8 +27,17 @@ function resultUrls(content: Anthropic.ContentBlock[]): Set<string> {
   return urls;
 }
 
+/** אתרים שדף המוצר שלהם נגיש לבדיקה אוטומטית (אחרים כמו KSP ו-PC Online חוסמים) - מהם אפשר לאמת מחיר. */
+export const VERIFIABLE_DOMAINS = [
+  "bug.co.il",
+  "ivory.co.il",
+  "pcil.co.il",
+  "zap.co.il",
+];
+
 export async function findCheapestListings(
   spec: StoreSpec,
+  allowedDomains?: string[],
 ): Promise<StoreListing[]> {
   if (!anthropicConfigured()) return [];
   const client = createAnthropic();
@@ -50,7 +59,16 @@ ${specDescription(spec)}
       model: MODEL,
       max_tokens: 3000,
       output_config: { effort: "low" },
-      tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 4 }],
+      tools: [
+        {
+          type: "web_search_20250305",
+          name: "web_search",
+          max_uses: 4,
+          ...(allowedDomains?.length
+            ? { allowed_domains: allowedDomains }
+            : {}),
+        },
+      ],
       messages,
     });
     for (const u of resultUrls(response.content)) seen.add(u);
