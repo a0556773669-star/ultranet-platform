@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { timingSafeEqual } from "node:crypto";
 import { buildGuidePrompt, scanMarket } from "@/lib/store-ai";
+import { inspectPage } from "@/lib/store-listings";
 import { liveQuote, priceOptions } from "@/lib/store-live-price";
 import { sanitizeSpec, specToText } from "@/lib/store-wizard";
 import {
@@ -87,6 +88,10 @@ export async function GET(req: Request) {
       });
     }
   }
+  // ?inspect=<url> - מה מופיע בפועל בדף מוצר (לאבחון אימות המחירים)
+  const inspectUrl = new URL(req.url).searchParams.get("inspect");
+  if (inspectUrl && /^https:\/\//.test(inspectUrl))
+    return NextResponse.json({ ...(await inspectPage(inspectUrl)) });
   // ?run=1 - מריץ את הסריקה המלאה בשרת (עם מפתח ה-API של האתר) ושומר, ומחזיר תוצאה מפורטת כולל שגיאה. לבדיקה והפעלה ידנית.
   if (new URL(req.url).searchParams.get("run") === "1") {
     try {

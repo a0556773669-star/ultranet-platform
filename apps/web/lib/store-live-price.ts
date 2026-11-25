@@ -27,7 +27,7 @@ const SEARCH_TIMEOUT_MS = 32_000;
 /** סטייה סבירה בין מחיר חי למחירון: בתוכה סומכים על המחיר החי. מחוצה לה - לוקחים את הגבוה (לא להציע מתחת לשוק) ומסמנים "לא ודאי". */
 const TRUST_RATIO: [number, number] = [0.75, 1.35];
 
-const docId = (key: string) => createHash("sha1").update(key).digest("hex");
+const docId = (key: string) => createHash("sha1").update(`v2|${key}`).digest("hex");
 
 function withTimeout<T>(p: Promise<T>, ms: number): Promise<T | null> {
   return Promise.race([
@@ -109,22 +109,28 @@ export async function priceOptions(
   guide: StorePriceGuide,
 ): Promise<PricedOptions> {
   const guideLows = specs.map((s) => estimateMarketLow(s, guide));
-  const live = specs[0] ? await liveMarketLow(specs[0]) : null;
+  const quote = specs[0] ? await liveQuote(specs[0]) : null;
   let delta = 0;
   let source: PricedOptions["source"] = "guide";
   let uncertain = false;
   let firstLow: number | null = guideLows[0] ?? null;
-  if (live !== null) {
+  if (quote && quote.listings.length) {
+    const prices = quote.listings.map((l) => l.priceILS);
     if (firstLow === null) {
-      firstLow = live;
+      firstLow = Math.min(...prices);
       source = "live";
     } else {
-      const ratio = live / firstLow;
-      if (ratio >= TRUST_RATIO[0] && ratio <= TRUST_RATIO[1]) {
-        firstLow = live;
+      // מודעות שמתאימות למחירון (בטווח הסביר) - הזולה מהן. מודעה חריגה (למשל מחיר לפני מע"מ או דגם אחר) לא קובעת.
+      const inWindow = prices.filter(
+        (p) =>
+          p >= firstLow! * TRUST_RATIO[0] && p <= firstLow! * TRUST_RATIO[1],
+      );
+      if (inWindow.length) {
+        firstLow = Math.min(...inWindow);
         source = "live";
       } else {
-        firstLow = Math.max(live, firstLow);
+        // אין התאמה: לא מציעים מתחת לשוק - לוקחים את הגבוה בין המחירון לזול שנמצא, ומסמנים "לא ודאי"
+        firstLow = Math.max(Math.min(...prices), firstLow);
         uncertain = true;
       }
       delta = firstLow - (guideLows[0] ?? firstLow);
