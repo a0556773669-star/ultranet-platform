@@ -6,7 +6,7 @@ import type {
   StoreSpec,
 } from "@ultranet/shared-types";
 import { getAdminFirestore } from "./firebase-admin";
-import { VERIFIABLE_DOMAINS, findCheapestListings } from "./store-listings";
+import { findCheapestListings } from "./store-listings";
 import {
   estimateMarketLow,
   estimateRange,
@@ -31,7 +31,7 @@ const UNCERTAIN_EXTRA_RATIO = 0.15;
 const TRUST_RATIO: [number, number] = [0.75, 1.35];
 
 const docId = (key: string) =>
-  createHash("sha1").update(`v3|${key}`).digest("hex");
+  createHash("sha1").update(`v4|${key}`).digest("hex");
 
 function withTimeout<T>(p: Promise<T>, ms: number): Promise<T | null> {
   return Promise.race([
@@ -72,7 +72,7 @@ export async function liveQuote(spec: StoreSpec): Promise<LiveQuote | null> {
   const cached = await cachedQuote(spec);
   if (cached) return cached;
   const listings = await withTimeout(
-    findCheapestListings(spec, VERIFIABLE_DOMAINS).catch(() => []),
+    findCheapestListings(spec).catch(() => []),
     SEARCH_TIMEOUT_MS,
   );
   const prices = (listings ?? []).map((l) => l.priceILS).filter((n) => n > 500);
@@ -118,31 +118,35 @@ export async function priceOptions(
   let source: PricedOptions["source"] = "guide";
   let uncertain = true;
   let firstLow: number | null = guideLows[0] ?? null;
-  // רק מודעות **מאומתות מול דף המוצר** קובעות מחיר. מודעה לא מאומתת (אתר חוסם) עלולה להיות ללא מע"מ או דגם אחר.
-  const verified = (quote?.listings ?? [])
-    .filter((l) => l.verified === true)
+  // מודעה **מאומתת** מול דף המוצר קובעת מחיר בביטחון. מודעה שלא אומתה (אתר חוסם) עלולה להיות ללא מע"מ - היא משמשת רק כ"רצפה"
+  // (לא יורדים מתחתיה) וההערכה מסומנת זהירה עם טווח מורחב כלפי מעלה.
+  const all = quote?.listings ?? [];
+  const inWindow = (l: { priceILS: number }) =>
+    guideLows[0] == null ||
+    (l.priceILS >= guideLows[0] * TRUST_RATIO[0] &&
+      l.priceILS <= guideLows[0] * TRUST_RATIO[1]);
+  const verified = all
+    .filter((l) => l.verified === true && inWindow(l))
+    .map((l) => l.priceILS);
+  const unverified = all
+    .filter((l) => l.verified !== true && inWindow(l))
     .map((l) => l.priceILS);
   if (verified.length) {
-    if (firstLow === null) {
-      firstLow = Math.min(...verified);
-      source = "live";
-      uncertain = false;
-    } else {
-      const inWindow = verified.filter(
-        (p) =>
-          p >= firstLow! * TRUST_RATIO[0] && p <= firstLow! * TRUST_RATIO[1],
-      );
-      if (inWindow.length) {
-        firstLow = Math.min(...inWindow);
-        source = "live";
-        uncertain = false;
-      } else {
-        // מאומת אך רחוק מהמחירון: לא מציעים מתחת לשוק - הגבוה מהשניים
-        firstLow = Math.max(Math.min(...verified), firstLow);
-      }
-      delta = firstLow - (guideLows[0] ?? firstLow);
-    }
+    firstLow = Math.min(...verified);
+    source = "live";
+    uncertain = false;
+  } else if (unverified.length) {
+    firstLow = Math.max(Math.min(...unverified), firstLow ?? 0);
+    source = "live";
+  } else {
+    // אין מודעה בטווח: אם כל המודעות יקרות מהמחירון - לא מציעים מתחת לשוק
+    const above = all
+      .map((l) => l.priceILS)
+      .filter((p) => guideLows[0] != null && p > guideLows[0] * TRUST_RATIO[1]);
+    if (above.length) firstLow = Math.min(...above);
   }
+  delta =
+    firstLow !== null && guideLows[0] != null ? firstLow - guideLows[0] : 0;
   const estimates = specs.map((spec, i) => {
     if (i === 0) return estimateRange(spec, guide, firstLow ?? undefined);
     const g = guideLows[i];
