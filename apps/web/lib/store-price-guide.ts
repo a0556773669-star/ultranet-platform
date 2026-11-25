@@ -1,16 +1,39 @@
 import { createHash } from "node:crypto";
 import { FieldValue } from "firebase-admin/firestore";
 import { getAdminFirestore } from "./firebase-admin";
-import type { StoreCpuTier, StorePriceGuide, StoreSpec } from "@ultranet/shared-types";
-import { accessoryRange, quotedRange, roundTen } from "./store-pricing";
+import type {
+  StoreCpuTier,
+  StorePriceGuide,
+  StoreSpec,
+} from "@ultranet/shared-types";
+import {
+  STORE_BAG_NAME,
+  STORE_STANDARD_BAG_ILS,
+  accessoryRange,
+  isStandardBag,
+  quotedRange,
+  roundTen,
+} from "./store-pricing";
 import { DEFAULT_MIN_GENERATION } from "./store-wizard";
 
-export const PRICE_GUIDE_DOC = { collection: "n_store_settings", id: "price_guide" } as const;
+export const PRICE_GUIDE_DOC = {
+  collection: "n_store_settings",
+  id: "price_guide",
+} as const;
 
-export const EMPTY_GUIDE: StorePriceGuide = { laptopBase: {}, desktopBase: {}, ramAdd: {}, storageAdd: {}, accessoriesLow: {} };
+export const EMPTY_GUIDE: StorePriceGuide = {
+  laptopBase: {},
+  desktopBase: {},
+  ramAdd: {},
+  storageAdd: {},
+  accessoriesLow: {},
+};
 
 export async function loadPriceGuide(): Promise<StorePriceGuide> {
-  const snap = await getAdminFirestore().collection(PRICE_GUIDE_DOC.collection).doc(PRICE_GUIDE_DOC.id).get();
+  const snap = await getAdminFirestore()
+    .collection(PRICE_GUIDE_DOC.collection)
+    .doc(PRICE_GUIDE_DOC.id)
+    .get();
   if (!snap.exists) return { ...EMPTY_GUIDE };
   const d = (snap.data() ?? {}) as Partial<StorePriceGuide>;
   return {
@@ -47,7 +70,11 @@ export function specDescription(spec: StoreSpec): string {
     `${spec.ramGb ?? 8}GB זיכרון`,
     `${spec.storageGb ?? 256}GB SSD`,
   ];
-  if (spec.kind === "laptop") parts.push(`מסך ${spec.screenInches ?? 15.6} אינץ'`, spec.touch ? "עם מגע" : "בלי מגע");
+  if (spec.kind === "laptop")
+    parts.push(
+      `מסך ${spec.screenInches ?? 15.6} אינץ'`,
+      spec.touch ? "עם מגע" : "בלי מגע",
+    );
   return parts.join(", ");
 }
 
@@ -59,7 +86,18 @@ export function classicSpecs(): StoreSpec[] {
       if (kind === "desktop" && cpu === "i7") continue;
       for (const ramGb of [8, 16]) {
         for (const storageGb of [256, 512]) {
-          out.push(kind === "laptop" ? { kind, cpu, ramGb, storageGb, screenInches: 15.6, touch: false } : { kind, cpu, ramGb, storageGb });
+          out.push(
+            kind === "laptop"
+              ? {
+                  kind,
+                  cpu,
+                  ramGb,
+                  storageGb,
+                  screenInches: 15.6,
+                  touch: false,
+                }
+              : { kind, cpu, ramGb, storageGb },
+          );
         }
       }
     }
@@ -83,7 +121,8 @@ export function isMainstream(spec: StoreSpec): boolean {
   );
 }
 
-const demandDocId = (key: string) => createHash("sha1").update(key).digest("hex");
+const demandDocId = (key: string) =>
+  createHash("sha1").update(key).digest("hex");
 
 /** רושם בקשה לתצורה (נקרא כשהיועץ מציע לראשונה בשיחה, ובטופס). כשל ברישום לא מפיל כלום. */
 export async function recordDemand(spec: StoreSpec): Promise<void> {
@@ -93,20 +132,36 @@ export async function recordDemand(spec: StoreSpec): Promise<void> {
     await getAdminFirestore()
       .collection(DEMAND_COLLECTION)
       .doc(demandDocId(key))
-      .set({ key, spec, count: FieldValue.increment(1), lastAt: now }, { merge: true });
+      .set(
+        { key, spec, count: FieldValue.increment(1), lastAt: now },
+        { merge: true },
+      );
   } catch {
     // ספירת ביקוש היא בונוס
   }
 }
 
-export type DemandEntry = { spec: StoreSpec; key: string; count: number; lastAt: string };
+export type DemandEntry = {
+  spec: StoreSpec;
+  key: string;
+  count: number;
+  lastAt: string;
+};
 
 export async function loadDemand(): Promise<DemandEntry[]> {
   const snap = await getAdminFirestore().collection(DEMAND_COLLECTION).get();
   const cutoff = Date.now() - DEMAND_DECAY_DAYS * 86_400_000;
   return snap.docs
     .map((d) => d.data() as Partial<DemandEntry>)
-    .filter((d): d is DemandEntry => Boolean(d.spec && d.key && typeof d.count === "number" && d.lastAt && Date.parse(d.lastAt) >= cutoff))
+    .filter((d): d is DemandEntry =>
+      Boolean(
+        d.spec &&
+        d.key &&
+        typeof d.count === "number" &&
+        d.lastAt &&
+        Date.parse(d.lastAt) >= cutoff,
+      ),
+    )
     .sort((a, b) => b.count - a.count);
 }
 
@@ -116,7 +171,9 @@ export async function loadDemand(): Promise<DemandEntry[]> {
  * התבקשה 90 יום יוצאת. תקרה: 12 ועוד אחד לכל 10 בקשות, עד 30 - כדי שהעלות לא תברח.
  * אין כאן שום פרט אישי של לקוח - רק מפרטים ומספר הפעמים.
  */
-export async function researchTargets(): Promise<{ spec: StoreSpec; key: string; requested: number }[]> {
+export async function researchTargets(): Promise<
+  { spec: StoreSpec; key: string; requested: number }[]
+> {
   const classic = classicSpecs();
   const classicKeys = new Set(classic.map(specKey));
   const demand = await loadDemand();
@@ -125,27 +182,47 @@ export async function researchTargets(): Promise<{ spec: StoreSpec; key: string;
   const demandByKey = new Map(demand.map((d) => [d.key, d.count]));
   const tracked = demand
     .filter((d) => !classicKeys.has(d.key))
-    .filter((d) => d.count >= (isMainstream(d.spec) ? DEMAND_MIN_MAINSTREAM : DEMAND_MIN_UNUSUAL))
+    .filter(
+      (d) =>
+        d.count >=
+        (isMainstream(d.spec) ? DEMAND_MIN_MAINSTREAM : DEMAND_MIN_UNUSUAL),
+    )
     .slice(0, cap)
     .map((d) => ({ spec: d.spec, key: d.key, requested: d.count }));
-  return [...classic.map((spec) => ({ spec, key: specKey(spec), requested: demandByKey.get(specKey(spec)) ?? 0 })), ...tracked];
+  return [
+    ...classic.map((spec) => ({
+      spec,
+      key: specKey(spec),
+      requested: demandByKey.get(specKey(spec)) ?? 0,
+    })),
+    ...tracked,
+  ];
 }
 /** מחיר שוק נמוך מוערך למחשב (בלי אביזרים), או null כשאין במחירון בסיס לדגם. תצורה עם מחיר מדויק במחירון גוברת. */
-export function estimateMarketLow(spec: StoreSpec, guide: StorePriceGuide): number | null {
+export function estimateMarketLow(
+  spec: StoreSpec,
+  guide: StorePriceGuide,
+): number | null {
   const exact = guide.specPrices?.[specKey(spec)];
   if (typeof exact === "number") return exact;
   const cpu: StoreCpuTier = spec.cpu ?? "i3";
-  const base = (spec.kind === "laptop" ? guide.laptopBase : guide.desktopBase)[cpu];
+  const base = (spec.kind === "laptop" ? guide.laptopBase : guide.desktopBase)[
+    cpu
+  ];
   if (typeof base !== "number") return null;
   let total = base;
-  if (spec.ramGb && spec.ramGb > 8) total += guide.ramAdd[String(spec.ramGb >= 32 ? 32 : 16) as "16" | "32"] ?? 0;
+  if (spec.ramGb && spec.ramGb > 8)
+    total +=
+      guide.ramAdd[String(spec.ramGb >= 32 ? 32 : 16) as "16" | "32"] ?? 0;
   if (spec.storageGb && spec.storageGb > 256) {
-    const key = spec.storageGb >= 2000 ? "2000" : spec.storageGb >= 1000 ? "1000" : "512";
+    const key =
+      spec.storageGb >= 2000 ? "2000" : spec.storageGb >= 1000 ? "1000" : "512";
     total += guide.storageAdd[key] ?? 0;
   }
   if (spec.kind === "laptop") {
     if (spec.touch) total += guide.touchAdd ?? 0;
-    if (spec.screenInches && spec.screenInches >= 17) total += guide.screen17Add ?? 0;
+    if (spec.screenInches && spec.screenInches >= 17)
+      total += guide.screen17Add ?? 0;
   }
   return total;
 }
@@ -162,30 +239,94 @@ const ACCESSORY_KEYS: Record<string, string> = {
 export type PriceEstimate = {
   fromILS: number;
   toILS: number;
-  accessories: { name: string; fromILS: number; toILS: number }[];
+  accessories: {
+    name: string;
+    fromILS: number;
+    toILS: number;
+    /** מחיר קבוע בלי רווח (תיק) */ fixed?: boolean;
+  }[];
+  /** פריטים שאין להם מחיר במחירון (תיק ספציפי, מסך גדול/מיוחד...) - הבעלים בודק ומחזיר בתשובת המלאי */
+  pending: { name: string; text: string }[];
+  /** סך הכול (מחשב + ציוד) בטווח */
+  totalFromILS: number;
+  totalToILS: number;
+  /** מחיר אחד ללקוח כשהוא קבע הכול: אמצע הטווח, מעוגל. מחושב תמיד אך מוצג כסופי רק כשאין `pending` */
+  finalILS: number;
 };
+
+/** מסך עד 24" בלי בקשה מיוחדת = מחיר המחירון; גדול או מיוחד (מגן עיניים וכו') - המחיר ייבדק. */
+const MONITOR_MAX_PRICED_INCHES = 24;
 
 /**
  * טווח הערכה לפי המחירון: מחיר שוק נמוך + מרווח (מחשב 300-500, אביזר לפי סוגו). null כשאין במחירון בסיס
- * לדגם - אז אין הערכה והצ'אט אומר שהמחיר יימסר אחרי בדיקה.
+ * לדגם - אז אין הערכה והצ'אט אומר שהמחיר יימסר אחרי בדיקה. תיק: 50 ₪ קבוע בלי רווח (גדלים קלאסיים).
  */
-export function estimateRange(spec: StoreSpec, guide: StorePriceGuide): PriceEstimate | null {
+export function estimateRange(
+  spec: StoreSpec,
+  guide: StorePriceGuide,
+): PriceEstimate | null {
   const low = estimateMarketLow(spec, guide);
   if (low === null) return null;
   const r = quotedRange(low);
-  const names = spec.extras?.length
-    ? spec.extras.includes("מקלדת") && spec.extras.includes("עכבר")
-      ? ["מקלדת ועכבר", ...spec.extras.filter((e) => e !== "מקלדת" && e !== "עכבר")]
-      : spec.extras
-    : [];
+  const extras = spec.extras ?? [];
+  const names =
+    extras.includes("מקלדת") && extras.includes("עכבר")
+      ? ["מקלדת ועכבר", ...extras.filter((e) => e !== "מקלדת" && e !== "עכבר")]
+      : extras;
   const accessories: PriceEstimate["accessories"] = [];
+  const pending: PriceEstimate["pending"] = [];
   for (const name of names) {
+    if (name === STORE_BAG_NAME) {
+      if (isStandardBag(spec.bagInches, spec.bagNote))
+        accessories.push({
+          name: `תיק ל-${spec.bagInches}"`,
+          fromILS: STORE_STANDARD_BAG_ILS,
+          toILS: STORE_STANDARD_BAG_ILS,
+          fixed: true,
+        });
+      else {
+        const bagName = `תיק${spec.bagInches ? ` ל-${spec.bagInches}"` : ""}${spec.bagNote ? ` (${spec.bagNote})` : ""}`;
+        pending.push({
+          name: bagName,
+          text: `${bagName} - המחיר ייבדק ויועבר בלי רווח`,
+        });
+      }
+      continue;
+    }
+    if (
+      name === "מסך" &&
+      (spec.monitorNote ||
+        (spec.monitorInches ?? 0) > MONITOR_MAX_PRICED_INCHES)
+    ) {
+      const monName = `מסך${spec.monitorInches ? ` ${spec.monitorInches}"` : ""}${spec.monitorNote ? ` (${spec.monitorNote})` : ""}`;
+      pending.push({ name: monName, text: `${monName} - המחיר ייבדק` });
+      continue;
+    }
     const accLow = guide.accessoriesLow[ACCESSORY_KEYS[name] ?? ""];
-    if (typeof accLow !== "number") continue;
+    if (typeof accLow !== "number") {
+      pending.push({ name, text: `${name} - המחיר ייבדק` });
+      continue;
+    }
     const a = accessoryRange(name, accLow);
-    accessories.push({ name, fromILS: roundTen(a.from), toILS: roundTen(a.to) });
+    accessories.push({
+      name,
+      fromILS: roundTen(a.from),
+      toILS: roundTen(a.to),
+    });
   }
-  return { fromILS: roundTen(r.from), toILS: roundTen(r.to), accessories };
+  const from = roundTen(r.from);
+  const to = roundTen(r.to);
+  const totalFrom = from + accessories.reduce((n, a) => n + a.fromILS, 0);
+  const totalTo = to + accessories.reduce((n, a) => n + a.toILS, 0);
+  return {
+    fromILS: from,
+    toILS: to,
+    accessories,
+    pending,
+    totalFromILS: totalFrom,
+    totalToILS: totalTo,
+    finalILS: roundTen((totalFrom + totalTo) / 2),
+  };
 }
 
 /** תיאור קצר של המחירון למודל (מחירי שוק נמוכים בלבד, בלי מרווח) - כדי שיכבד תקציב לקוח בהצעות. */
@@ -201,12 +342,15 @@ export function guideForPrompt(guide: StorePriceGuide): string {
 (מחירי שוק נמוכים בשקלים. הלקוח מקבל טווח הערכה גבוה יותר - אל תציין מחירים בטקסט, המערכת מציגה אותם.)`;
 }
 
-
 export async function savePriceGuide(guide: StorePriceGuide): Promise<void> {
   await getAdminFirestore()
     .collection(PRICE_GUIDE_DOC.collection)
     .doc(PRICE_GUIDE_DOC.id)
-    .set(JSON.parse(JSON.stringify({ ...guide, updatedAt: new Date().toISOString() })));
+    .set(
+      JSON.parse(
+        JSON.stringify({ ...guide, updatedAt: new Date().toISOString() }),
+      ),
+    );
 }
 
 /** טווחים סבירים לכל קבוצת מחירים (₪) - מחיר מחוץ לטווח נחשב שגיאת קריאה ונדחה. */
@@ -220,14 +364,23 @@ const BOUNDS: Record<string, [number, number]> = {
 /** סטייה מקסימלית מהמחיר הקודם בעדכון אוטומטי. מעבר לזה - נשמר הישן, כדי שמחיר חריג לא יזהם את ההצעות. */
 const MAX_DEVIATION = 0.4;
 
-function pickValue(prev: number | undefined, next: number | undefined, kind: string, label: string, notes: string[]): number | undefined {
+function pickValue(
+  prev: number | undefined,
+  next: number | undefined,
+  kind: string,
+  label: string,
+  notes: string[],
+): number | undefined {
   if (typeof next !== "number") return prev;
   const [lo, hi] = BOUNDS[kind]!;
   if (next < lo || next > hi) {
     notes.push(`${label}: ${next} מחוץ לטווח הסביר - נדחה`);
     return prev;
   }
-  if (typeof prev === "number" && Math.abs(next - prev) / prev > MAX_DEVIATION) {
+  if (
+    typeof prev === "number" &&
+    Math.abs(next - prev) / prev > MAX_DEVIATION
+  ) {
     notes.push(`${label}: ${prev}->${next} שינוי גדול מדי - נשמר הקודם`);
     return prev;
   }
@@ -253,7 +406,10 @@ export type GuideDraftLike = {
   note?: string;
 };
 
-export function mergeGuide(existingIn: StorePriceGuide | undefined | null, draftIn: GuideDraftLike | undefined | null): { guide: StorePriceGuide; notes: string[] } {
+export function mergeGuide(
+  existingIn: StorePriceGuide | undefined | null,
+  draftIn: GuideDraftLike | undefined | null,
+): { guide: StorePriceGuide; notes: string[] } {
   // הגנתי: קלט חסר (או מבנה לא מלא) לא מפיל את המיזוג
   const existing: StorePriceGuide = { ...EMPTY_GUIDE, ...(existingIn ?? {}) };
   existing.laptopBase ??= {};
@@ -263,9 +419,17 @@ export function mergeGuide(existingIn: StorePriceGuide | undefined | null, draft
   existing.accessoriesLow ??= {};
   const draft: GuideDraftLike = draftIn ?? {};
   const notes: string[] = [];
-  const mergeMap = (prev: Partial<Record<string, number>>, next: Partial<Record<string, number>> | undefined, kind: string, label: string) => {
+  const mergeMap = (
+    prev: Partial<Record<string, number>>,
+    next: Partial<Record<string, number>> | undefined,
+    kind: string,
+    label: string,
+  ) => {
     const out: Record<string, number> = {};
-    for (const k of new Set([...Object.keys(prev ?? {}), ...Object.keys(next ?? {})])) {
+    for (const k of new Set([
+      ...Object.keys(prev ?? {}),
+      ...Object.keys(next ?? {}),
+    ])) {
       const v = pickValue(prev?.[k], next?.[k], kind, `${label} ${k}`, notes);
       if (typeof v === "number") out[k] = v;
     }
@@ -273,27 +437,74 @@ export function mergeGuide(existingIn: StorePriceGuide | undefined | null, draft
   };
   const guide: StorePriceGuide = {
     laptopBase: mergeMap(existing.laptopBase, draft.laptopBase, "base", "נייד"),
-    desktopBase: mergeMap(existing.desktopBase, draft.desktopBase, "base", "נייח"),
+    desktopBase: mergeMap(
+      existing.desktopBase,
+      draft.desktopBase,
+      "base",
+      "נייח",
+    ),
     ramAdd: mergeMap(existing.ramAdd, draft.ramAdd, "ramAdd", "זיכרון"),
-    storageAdd: mergeMap(existing.storageAdd, draft.storageAdd, "storageAdd", "אחסון"),
-    accessoriesLow: mergeMap(existing.accessoriesLow, draft.accessoriesLow, "accessory", "אביזר"),
-    specPrices: mergeMap(existing.specPrices ?? {}, draft.specPrices, "base", "תצורה"),
-    touchAdd: pickValue(existing.touchAdd, draft.touchAdd ?? undefined, "extra", "מגע", notes),
-    screen17Add: pickValue(existing.screen17Add, draft.screen17Add ?? undefined, "extra", "17 אינץ'", notes),
-    note: [draft.note ?? "", ...notes].filter(Boolean).join(" | ").slice(0, 500),
+    storageAdd: mergeMap(
+      existing.storageAdd,
+      draft.storageAdd,
+      "storageAdd",
+      "אחסון",
+    ),
+    accessoriesLow: mergeMap(
+      existing.accessoriesLow,
+      draft.accessoriesLow,
+      "accessory",
+      "אביזר",
+    ),
+    specPrices: mergeMap(
+      existing.specPrices ?? {},
+      draft.specPrices,
+      "base",
+      "תצורה",
+    ),
+    touchAdd: pickValue(
+      existing.touchAdd,
+      draft.touchAdd ?? undefined,
+      "extra",
+      "מגע",
+      notes,
+    ),
+    screen17Add: pickValue(
+      existing.screen17Add,
+      draft.screen17Add ?? undefined,
+      "extra",
+      "17 אינץ'",
+      notes,
+    ),
+    note: [draft.note ?? "", ...notes]
+      .filter(Boolean)
+      .join(" | ")
+      .slice(0, 500),
   };
   // עקביות: דרגה גבוהה לא יכולה להיות זולה מדרגה נמוכה (i3 <= i5 <= i7). אם הסריקה החזירה סדר הפוך - הערכים של הסריקה נדחים
   // ונשאר מה שהיה קודם (ריק אם לא היה), כדי שמספר משובש לא ייכנס להצעות.
   const monotonic = (m: Partial<Record<string, number>>) => {
-    const a = m.i3, b = m.i5, c = m.i7;
-    return !((a != null && b != null && a > b) || (b != null && c != null && b > c) || (a != null && c != null && a > c));
+    const a = m.i3,
+      b = m.i5,
+      c = m.i7;
+    return !(
+      (a != null && b != null && a > b) ||
+      (b != null && c != null && b > c) ||
+      (a != null && c != null && a > c)
+    );
   };
-  for (const [field, label] of [["laptopBase", "נייד"], ["desktopBase", "נייח"]] as const) {
+  for (const [field, label] of [
+    ["laptopBase", "נייד"],
+    ["desktopBase", "נייח"],
+  ] as const) {
     if (!monotonic(guide[field])) {
       notes.push(`${label}: מחירי הדרגות לא עקביים (i3/i5/i7) - התוצאה נדחתה`);
       guide[field] = monotonic(existing[field]) ? { ...existing[field] } : {};
     }
   }
-  guide.note = [draft.note ?? "", ...notes].filter(Boolean).join(" | ").slice(0, 500);
+  guide.note = [draft.note ?? "", ...notes]
+    .filter(Boolean)
+    .join(" | ")
+    .slice(0, 500);
   return { guide, notes };
 }

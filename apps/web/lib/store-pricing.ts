@@ -32,3 +32,14 @@ export function accessoryRange(name: string, marketLowILS: number): { from: numb
   const m = ACCESSORY_MARKUP_ILS[name] ?? ACCESSORY_DEFAULT_MARKUP;
   return { from: marketLowILS + m.min, to: marketLowILS + m.max };
 }
+
+/**
+ * תיק למחשב נייד - **בלי רווח** לא לעסק ולא לסניף (גם בלי עמלה). תיק לגדלים הקלאסיים (15 / 15.6 / 16 אינץ')
+ * עולה 50 ₪. תיק ספציפי (14 אינץ' או דגם מסוים) - הבעלים בודק מחיר בחנות ומעביר אותו כמו שהוא.
+ */
+export const STORE_BAG_NAME = "תיק";
+export const STORE_STANDARD_BAG_ILS = 50;
+export const STANDARD_BAG_INCHES = [15, 15.6, 16];
+export function isStandardBag(inches: number | undefined, note: string | undefined): boolean {
+  return !note?.trim() && typeof inches === "number" && STANDARD_BAG_INCHES.includes(inches);
+}
