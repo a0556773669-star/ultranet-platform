@@ -82,6 +82,8 @@ export interface ReportResult {
   to: string;
   branches: BranchOption[];
   selectedIds: string[];
+  /** נבחר "נקה הכל" — אף סניף בסיכומים */
+  noneSelected: boolean;
   totals: PeriodTotals;
   /** התקופה שקדמה לטווח באותו אורך; null כשאין נתונים לפניה */
   previous: PeriodTotals | null;
@@ -455,6 +457,8 @@ export interface ReportQuery {
   to?: string;
   /** מזהי סניפים; ריק = כל סניפי ההשכרות */
   branchIds: string[];
+  /** "נקה הכל": אף סניף לא נבחר. נפרד מ-`branchIds` ריק, שפירושו "כולם". */
+  none?: boolean;
 }
 
 export async function loadRentalReport(query: ReportQuery): Promise<ReportResult & { allStart: string }> {
@@ -463,9 +467,11 @@ export async function loadRentalReport(query: ReportQuery): Promise<ReportResult
   const all = reportBranches(raw).sort((a, b) => a.name.localeCompare(b.name, "he"));
   const allowed = new Set(all.map((b) => b.id));
   const selectedIds = query.branchIds.filter((id) => allowed.has(id));
-  const chosen = selectedIds.length > 0 ? all.filter((b) => selectedIds.includes(b.id)) : all;
+  const noneSelected = !!query.none;
+  const chosen = noneSelected ? [] : selectedIds.length > 0 ? all.filter((b) => selectedIds.includes(b.id)) : all;
 
-  const allStart = earliestActivity(raw, chosen, today);
+  // טווח "מתחילת הפעילות" נקבע לפי הבחירה (או לפי כולם כשלא נבחר דבר), והטבלה למטה משתמשת באותו טווח.
+  const allStart = earliestActivity(raw, chosen.length > 0 ? chosen : all, today);
   const { from, to } = resolveRange(query.preset, { month: query.month, from: query.from, to: query.to, allStart }, today);
   const lo = dayIndex(from);
   const hi = dayIndex(to);
@@ -477,16 +483,19 @@ export async function loadRentalReport(query: ReportQuery): Promise<ReportResult
   const hasPrev = prevHi >= dayIndex(allStart);
 
   const winStart = hasPrev ? prevLo : lo;
-  const slices: (Slice & { branch: Branch })[] = chosen.map((branch) => ({
+  // הטבלה למטה תמיד מכילה את כל סניפי ההשכרות, בלי קשר לבחירה; הסיכומים והגרפים — רק את הנבחרים.
+  const allSlices: (Slice & { branch: Branch })[] = all.map((branch) => ({
     branch,
     days: buildBranchDays(raw, branch, winStart, hi, todayIdx),
     rentals: (raw.rentalsByBranch.get(branch.id) ?? []) as Rental[],
   }));
+  const chosenIds = new Set(chosen.map((b) => b.id));
+  const slices = allSlices.filter((s) => chosenIds.has(s.branch.id));
 
   const totals = summarize(slices, lo, hi, winStart, todayIdx);
   const previous = hasPrev ? summarize(slices, Math.max(prevLo, dayIndex(allStart)), prevHi, winStart, todayIdx) : null;
   const { series, bucket } = buildSeries(slices, lo, hi, winStart);
-  const perBranch = slices.map((s) => ({
+  const perBranch = allSlices.map((s) => ({
     id: s.branch.id,
     name: s.branch.name,
     ...summarize([s], lo, hi, winStart, todayIdx),
@@ -498,6 +507,7 @@ export async function loadRentalReport(query: ReportQuery): Promise<ReportResult
     to,
     branches: all.map((b) => ({ id: b.id, name: b.name })),
     selectedIds,
+    noneSelected,
     totals,
     previous,
     series,

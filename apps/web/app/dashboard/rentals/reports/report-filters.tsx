@@ -21,6 +21,7 @@ const MONTHS = ["ינואר", "פברואר", "מרץ", "אפריל", "מאי", 
 export function ReportFilters({
   branches,
   selected,
+  none,
   preset,
   month,
   from,
@@ -28,6 +29,7 @@ export function ReportFilters({
 }: {
   branches: BranchOption[];
   selected: string[];
+  none: boolean;
   preset: string;
   month: string;
   from: string;
@@ -51,12 +53,12 @@ export function ReportFilters({
   const thisYear = new Date().getFullYear();
   const years = Array.from({ length: thisYear - 2022 }, (_, i) => String(thisYear - i));
   const allIds = branches.map((b) => b.id);
-  const effective = selected.length === 0 ? allIds : selected;
+  const effective = none ? [] : selected.length === 0 ? allIds : selected;
 
   function toggleBranch(id: string) {
     const next = effective.includes(id) ? effective.filter((x) => x !== id) : [...effective, id];
-    // כולם סומנו (או אף אחד) = "כל הסניפים" = בלי פרמטר
-    update({ b: next.length === 0 || next.length === allIds.length ? null : next.join(",") });
+    // כולם סומנו = "כל הסניפים" = בלי פרמטר; אף אחד = `none` (בלי להקפיץ בחזרה לכולם)
+    update({ b: next.length === allIds.length ? null : next.length === 0 ? "none" : next.join(",") });
   }
 
   return (
@@ -122,7 +124,10 @@ export function ReportFilters({
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-[13px] font-bold text-muted">סניפים</span>
         <button type="button" onClick={() => update({ b: null })} className="text-xs font-bold text-teal hover:underline">
-          כולם
+          סמן הכל
+        </button>
+        <button type="button" onClick={() => update({ b: "none" })} className="text-xs font-bold text-muted hover:underline">
+          בטל סימון הכל
         </button>
         {branches.map((b) => {
           const on = effective.includes(b.id);
