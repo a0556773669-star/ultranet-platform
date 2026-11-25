@@ -91,7 +91,7 @@ export async function notifyOwnerDealClosed(r: StoreRequest): Promise<void> {
       ? `הסניף גבה${r.collection.method ? ` (${{ cash: "מזומן", card: "אשראי", transfer: "העברה" }[r.collection.method]})` : ""}`
       : "ההנהלה גובה ישירות";
   const lines = [
-    `סניף: ${r.branchName} · לקוח: ${r.customerName}${r.customerPhone ? ` · ${r.customerPhone}` : ""}`,
+    `סניף: ${r.branchName} · לקוח: ${r.customerName}${r.customerPhone ? ` · ${r.customerPhone}` : ""}${r.customerEmail ? ` · ${r.customerEmail}` : ""}`,
     chosen ? `${chosen.label} - ${chosen.specText}` : specToText(r.spec),
     r.accessories?.length ? `אביזרים: ${r.accessories.map((a) => a.name).join(", ")}` : "",
     `מחיר סופי: ${total.toLocaleString("he-IL")} ₪ · ${how}`,
