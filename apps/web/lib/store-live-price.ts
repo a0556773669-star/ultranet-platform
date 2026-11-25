@@ -1,3 +1,4 @@
+import { roundTen } from "./store-pricing";
 import { createHash } from "node:crypto";
 import type {
   StoreListing,
@@ -5,7 +6,7 @@ import type {
   StoreSpec,
 } from "@ultranet/shared-types";
 import { getAdminFirestore } from "./firebase-admin";
-import { findCheapestListings } from "./store-listings";
+import { VERIFIABLE_DOMAINS, findCheapestListings } from "./store-listings";
 import {
   estimateMarketLow,
   estimateRange,
@@ -25,9 +26,12 @@ const COLLECTION = "n_store_live_prices";
 const TTL_MS = 24 * 3_600_000;
 const SEARCH_TIMEOUT_MS = 32_000;
 /** סטייה סבירה בין מחיר חי למחירון: בתוכה סומכים על המחיר החי. מחוצה לה - לוקחים את הגבוה (לא להציע מתחת לשוק) ומסמנים "לא ודאי". */
+/** תוספת לטווח כשההערכה לא אומתה: 15% ממחיר השוק של המחשב. */
+const UNCERTAIN_EXTRA_RATIO = 0.15;
 const TRUST_RATIO: [number, number] = [0.75, 1.35];
 
-const docId = (key: string) => createHash("sha1").update(`v2|${key}`).digest("hex");
+const docId = (key: string) =>
+  createHash("sha1").update(`v3|${key}`).digest("hex");
 
 function withTimeout<T>(p: Promise<T>, ms: number): Promise<T | null> {
   return Promise.race([
@@ -68,7 +72,7 @@ export async function liveQuote(spec: StoreSpec): Promise<LiveQuote | null> {
   const cached = await cachedQuote(spec);
   if (cached) return cached;
   const listings = await withTimeout(
-    findCheapestListings(spec).catch(() => []),
+    findCheapestListings(spec, VERIFIABLE_DOMAINS).catch(() => []),
     SEARCH_TIMEOUT_MS,
   );
   const prices = (listings ?? []).map((l) => l.priceILS).filter((n) => n > 500);
@@ -96,7 +100,7 @@ export type PricedOptions = {
   estimates: (PriceEstimate | null)[];
   /** המחיר אומת מול מודעות חיות (או מקורו מהמחירון בלבד) */
   source: "live" | "guide";
-  /** מחיר חי וממחירון לא תואמים - נבחר הגבוה, והבעלים יאשר */
+  /** אין מודעה מאומתת מול דף המוצר שמתאימה למחירון - ההערכה זהירה (טווח מורחב כלפי מעלה) והבעלים יאשר */
   uncertain: boolean;
 };
 
@@ -112,26 +116,29 @@ export async function priceOptions(
   const quote = specs[0] ? await liveQuote(specs[0]) : null;
   let delta = 0;
   let source: PricedOptions["source"] = "guide";
-  let uncertain = false;
+  let uncertain = true;
   let firstLow: number | null = guideLows[0] ?? null;
-  if (quote && quote.listings.length) {
-    const prices = quote.listings.map((l) => l.priceILS);
+  // רק מודעות **מאומתות מול דף המוצר** קובעות מחיר. מודעה לא מאומתת (אתר חוסם) עלולה להיות ללא מע"מ או דגם אחר.
+  const verified = (quote?.listings ?? [])
+    .filter((l) => l.verified === true)
+    .map((l) => l.priceILS);
+  if (verified.length) {
     if (firstLow === null) {
-      firstLow = Math.min(...prices);
+      firstLow = Math.min(...verified);
       source = "live";
+      uncertain = false;
     } else {
-      // מודעות שמתאימות למחירון (בטווח הסביר) - הזולה מהן. מודעה חריגה (למשל מחיר לפני מע"מ או דגם אחר) לא קובעת.
-      const inWindow = prices.filter(
+      const inWindow = verified.filter(
         (p) =>
           p >= firstLow! * TRUST_RATIO[0] && p <= firstLow! * TRUST_RATIO[1],
       );
       if (inWindow.length) {
         firstLow = Math.min(...inWindow);
         source = "live";
+        uncertain = false;
       } else {
-        // אין התאמה: לא מציעים מתחת לשוק - לוקחים את הגבוה בין המחירון לזול שנמצא, ומסמנים "לא ודאי"
-        firstLow = Math.max(Math.min(...prices), firstLow);
-        uncertain = true;
+        // מאומת אך רחוק מהמחירון: לא מציעים מתחת לשוק - הגבוה מהשניים
+        firstLow = Math.max(Math.min(...verified), firstLow);
       }
       delta = firstLow - (guideLows[0] ?? firstLow);
     }
@@ -145,5 +152,27 @@ export async function priceOptions(
       g === null || g === undefined ? undefined : g + delta,
     );
   });
-  return { estimates, source, uncertain };
+  // הערכה זהירה: הטווח מורחב כלפי מעלה (לא מבטיחים מחיר נמוך שלא אומת)
+  const widened = uncertain
+    ? estimates.map((e) =>
+        e
+          ? {
+              ...e,
+              toILS: roundTen(
+                e.toILS + UNCERTAIN_EXTRA_RATIO * (firstLow ?? e.fromILS),
+              ),
+              totalToILS: roundTen(
+                e.totalToILS + UNCERTAIN_EXTRA_RATIO * (firstLow ?? e.fromILS),
+              ),
+              finalILS: roundTen(
+                (e.totalFromILS +
+                  e.totalToILS +
+                  UNCERTAIN_EXTRA_RATIO * (firstLow ?? e.fromILS)) /
+                  2,
+              ),
+            }
+          : e,
+      )
+    : estimates;
+  return { estimates: widened, source, uncertain };
 }

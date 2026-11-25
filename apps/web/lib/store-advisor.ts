@@ -498,7 +498,7 @@ export async function advisorChat(
       ? `\n\nלא כלול במחיר (ייבדק בנפרד): ${pendingLines.join("; ")}`
       : "";
     const uncertain = priced0?.uncertain
-      ? "\n\nשימו לב: מחירי השוק לא עקביים כרגע, לכן המחיר הוא הערכה זהירה והבעלים יאשר אותו בבדיקת המלאי."
+      ? "\n\nשימו לב: לא הצלחנו לאמת את המחיר מול חנות כרגע, לכן זו הערכה זהירה (טווח מורחב כלפי מעלה) והבעלים יאשר את המחיר בבדיקת המלאי."
       : "";
     if (single && priced.length) {
       const e = priced[0]!.estimate!;
