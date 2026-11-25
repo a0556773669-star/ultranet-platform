@@ -101,6 +101,7 @@ export function ChatAdvisor({ branchLabel }: { branchLabel: string }) {
   const [pending, startTransition] = useTransition();
   const [customerName, setCustomerName] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
+  const [customerEmail, setCustomerEmail] = useState("");
   const [showDetails, setShowDetails] = useState(true);
   const [msgs, setMsgs] = useState<Msg[]>([
     {
@@ -214,6 +215,7 @@ export function ChatAdvisor({ branchLabel }: { branchLabel: string }) {
         const res = await createChatRequestAction({
           customerName,
           customerPhone,
+          customerEmail,
           transcript: msgs
             .filter((m) => !m.local)
             .map(({ role, content }) => ({ role, content })),
@@ -288,6 +290,14 @@ export function ChatAdvisor({ branchLabel }: { branchLabel: string }) {
             placeholder="טלפון (רשות)"
             dir="ltr"
             className={FIELD}
+          />
+          <input
+            type="email"
+            value={customerEmail}
+            onChange={(e) => setCustomerEmail(e.target.value)}
+            placeholder="מייל הלקוח (רשות)"
+            dir="ltr"
+            className={`${FIELD} md:col-span-2`}
           />
         </div>
       ) : null}

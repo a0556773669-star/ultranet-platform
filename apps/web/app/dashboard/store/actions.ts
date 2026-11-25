@@ -90,6 +90,7 @@ export interface CreateStoreRequestInput {
   mode: StoreRequestMode;
   customerName: string;
   customerPhone?: string;
+  customerEmail?: string;
   budgetILS?: number;
   spec: Partial<StoreSpec>;
   /** שדות שהלקוח קבע בוודאות (במצב "לפי רצון הלקוח": כל שדה שמולא) */
@@ -98,6 +99,15 @@ export interface CreateStoreRequestInput {
   usage?: UsageKey;
   answers: { question: string; answer: string }[];
   notes?: string;
+}
+
+/** מייל תקין או undefined (רשות). */
+function cleanEmail(raw: string | undefined): string | undefined {
+  const v = (raw ?? "").trim().toLowerCase().slice(0, 120);
+  if (!v) return undefined;
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v))
+    throw new Error("כתובת המייל של הלקוח לא תקינה");
+  return v;
 }
 
 const LOCKABLE: (keyof StoreSpec)[] = [
@@ -171,6 +181,7 @@ export async function createStoreRequestAction(
       ?.trim()
       .replace(/[^\d+\-\s]/g, "")
       .slice(0, 20);
+    const email = cleanEmail(input.customerEmail);
     const budget =
       typeof input.budgetILS === "number" && input.budgetILS > 0
         ? Math.round(input.budgetILS)
@@ -186,6 +197,7 @@ export async function createStoreRequestAction(
       mode,
       customerName,
       ...(phone ? { customerPhone: phone } : {}),
+      ...(email ? { customerEmail: email } : {}),
       ...(budget ? { budgetILS: budget } : {}),
       spec,
       lockedFields: locked,
@@ -618,6 +630,7 @@ export async function advisorChatAction(
 export interface CreateChatRequestInput {
   customerName: string;
   customerPhone?: string;
+  customerEmail?: string;
   transcript: AdvisorTurn[];
   /** האפשרויות שהוצגו בצ'אט - נבנות מחדש בשרת (המחירים מחושבים כאן, לא נלקחים מהדפדפן) */
   options: Pick<
@@ -726,6 +739,7 @@ export async function createChatRequestAction(
       ?.trim()
       .replace(/[^\d+\-\s]/g, "")
       .slice(0, 20);
+    const email = cleanEmail(input.customerEmail);
     const budget =
       typeof input.budgetILS === "number" && input.budgetILS > 0
         ? Math.round(input.budgetILS)
@@ -745,6 +759,7 @@ export async function createChatRequestAction(
       createdVia: "chat",
       customerName,
       ...(phone ? { customerPhone: phone } : {}),
+      ...(email ? { customerEmail: email } : {}),
       ...(budget ? { budgetILS: budget } : {}),
       spec,
       lockedFields: input.lockedFields.filter((f): f is keyof StoreSpec =>
@@ -1071,6 +1086,7 @@ export async function startStorePaymentAction(
       Zeout: "",
       FirstName: request.customerName,
       Phone: request.customerPhone ?? "",
+      Mail: request.customerEmail ?? "",
       Comment: `חנות סניפים - ${request.customerName} (${request.branchName})`,
     });
     let res: Response;
