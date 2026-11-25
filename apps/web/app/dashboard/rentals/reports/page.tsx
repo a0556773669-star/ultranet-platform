@@ -3,6 +3,7 @@ import { requireOwner } from "@/lib/perms";
 import { loadRentalReport, todayIsrael, type PeriodTotals, type ReportPreset, type Trend } from "@/lib/rental-reports";
 import { ReportFilters } from "./report-filters";
 import { TrendChart } from "./trend-chart";
+import { BranchesTable } from "./branches-table";
 
 export const dynamic = "force-dynamic";
 
@@ -69,7 +70,8 @@ export default async function ReportsPage({
     month,
     from: one("from"),
     to: one("to"),
-    branchIds: (one("b") ?? "").split(",").filter(Boolean),
+    branchIds: (one("b") ?? "").split(",").filter((x) => x && x !== "none"),
+    none: one("b") === "none",
   });
 
   const t = report.totals;
@@ -85,13 +87,14 @@ export default async function ReportsPage({
         <p className="mt-0.5 text-[12.5px] text-muted">
           סניפי השכרת ניידים בלבד. {dmy(report.from)}
           {report.from !== report.to && ` – ${dmy(report.to)}`} ·{" "}
-          {report.selectedIds.length === 0 ? "כל הסניפים" : `${report.selectedIds.length} סניפים`}
+          {report.noneSelected ? "לא נבחרו סניפים (הטבלה למטה מציגה את כולם)" : report.selectedIds.length === 0 ? "כל הסניפים" : `${report.selectedIds.length} סניפים`}
         </p>
       </div>
 
       <ReportFilters
         branches={report.branches}
         selected={report.selectedIds}
+        none={report.noneSelected}
         preset={preset}
         month={month}
         from={report.from}
@@ -195,40 +198,8 @@ export default async function ReportsPage({
         </div>
       </section>
 
-      {/* ── לפי סניף ── */}
-      <section className="card overflow-x-auto">
-        <h3 className="mb-2 text-[16px] font-extrabold text-ink">פירוט לפי סניף</h3>
-        <table className="w-full min-w-[720px] text-[13px]">
-          <thead>
-            <tr className="border-b border-card-border text-right text-xs text-muted">
-              <th className="py-1.5 font-bold">סניף</th>
-              <th className="font-bold">תפוסה</th>
-              <th className="font-bold">מחזור</th>
-              <th className="font-bold">נטו (כולו)</th>
-              <th className="font-bold">שלי</th>
-              <th className="font-bold">נטו למחשב</th>
-              <th className="font-bold">שוכרים</th>
-              <th className="font-bold">ממוצע ימים</th>
-            </tr>
-          </thead>
-          <tbody>
-            {report.perBranch.map((b) => {
-              return (
-                <tr key={b.id} className="border-b border-card-border/60 last:border-0">
-                  <td className="py-1.5 font-bold text-ink">{b.name}</td>
-                  <td>{percent(b.occupancy)}</td>
-                  <td>{money(b.revenue)}</td>
-                  <td>{money(b.netProfit)}</td>
-                  <td>{money(b.myProfit)}</td>
-                  <td className="font-bold">{money(b.netPerComputer)}</td>
-                  <td>{nf.format(b.renters)}</td>
-                  <td>{num1(b.avgDays)}</td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </section>
+      {/* ── לפי סניף: תמיד כל הסניפים ── */}
+      <BranchesTable rows={report.perBranch} />
     </div>
   );
 }
