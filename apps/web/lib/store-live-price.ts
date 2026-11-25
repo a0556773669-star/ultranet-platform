@@ -1,5 +1,9 @@
 import { createHash } from "node:crypto";
-import type { StorePriceGuide, StoreSpec } from "@ultranet/shared-types";
+import type {
+  StoreListing,
+  StorePriceGuide,
+  StoreSpec,
+} from "@ultranet/shared-types";
 import { getAdminFirestore } from "./firebase-admin";
 import { findCheapestListings } from "./store-listings";
 import {
@@ -32,36 +36,43 @@ function withTimeout<T>(p: Promise<T>, ms: number): Promise<T | null> {
   ]);
 }
 
-async function cachedLow(spec: StoreSpec): Promise<number | null> {
+export type LiveQuote = {
+  lowILS: number;
+  listings: StoreListing[];
+  cached: boolean;
+};
+
+async function cachedQuote(spec: StoreSpec): Promise<LiveQuote | null> {
   try {
     const snap = await getAdminFirestore()
       .collection(COLLECTION)
       .doc(docId(specKey(spec)))
       .get();
-    const d = snap.data() as { lowILS?: number; at?: string } | undefined;
+    const d = snap.data() as
+      { lowILS?: number; at?: string; listings?: StoreListing[] } | undefined;
     if (
       d &&
       typeof d.lowILS === "number" &&
       d.at &&
       Date.now() - Date.parse(d.at) < TTL_MS
     )
-      return d.lowILS;
+      return { lowILS: d.lowILS, listings: d.listings ?? [], cached: true };
   } catch {
     // מטמון הוא בונוס
   }
   return null;
 }
 
-/** המחיר הנמוך האמין למחשב (בלי אביזרים) מחנויות ישראליות, או null. */
-export async function liveMarketLow(spec: StoreSpec): Promise<number | null> {
-  const cached = await cachedLow(spec);
-  if (cached !== null) return cached;
+/** המחיר הנמוך האמין למחשב (בלי אביזרים) מחנויות ישראליות + המודעות שעליהן הוא מבוסס, או null. */
+export async function liveQuote(spec: StoreSpec): Promise<LiveQuote | null> {
+  const cached = await cachedQuote(spec);
+  if (cached) return cached;
   const listings = await withTimeout(
     findCheapestListings(spec).catch(() => []),
     SEARCH_TIMEOUT_MS,
   );
   const prices = (listings ?? []).map((l) => l.priceILS).filter((n) => n > 500);
-  if (!prices.length) return null;
+  if (!listings || !prices.length) return null;
   const low = Math.min(...prices);
   await getAdminFirestore()
     .collection(COLLECTION)
@@ -71,10 +82,14 @@ export async function liveMarketLow(spec: StoreSpec): Promise<number | null> {
       spec,
       lowILS: low,
       at: new Date().toISOString(),
-      listings: (listings ?? []).slice(0, 3),
+      listings: listings.slice(0, 3),
     })
     .catch(() => {});
-  return low;
+  return { lowILS: low, listings: listings.slice(0, 3), cached: false };
+}
+
+export async function liveMarketLow(spec: StoreSpec): Promise<number | null> {
+  return (await liveQuote(spec))?.lowILS ?? null;
 }
 
 export type PricedOptions = {
