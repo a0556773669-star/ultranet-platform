@@ -10,8 +10,8 @@
  *   מוחרגים — אין במערכת לוח חגים.
  * - **מחזור (ברוטו)** = הכנסות שנגבו בפועל: השכרות ששולמו והוחזרו (לפי תאריך ההחזרה) + הכנסות ידניות
  *   של הבעלים — בדיוק אותן שורות שההנה"ח של הסניף סופרת.
- * - **רווחיות** — מגיעה מ-`computeBranchFinancials`, כלומר אחרי הוצאות הסניף וחלק השותף, **נטו בלי
- *   מע"מ** (כמו מעקב סניפי הניידים והיעד של 150 ₪). `myProfit` = הרווח שלי (אחרי אחוזי שותף ואחוזי
+ * - **רווחיות** — מגיעה מ-`computeBranchFinancials`, כלומר אחרי הוצאות הסניף וחלק השותף, **כפי שהם רשומים**
+ *   (בלי הורדת מע"מ). `myProfit` = הרווח שלי (אחרי אחוזי שותף ואחוזי
  *   ברוטו שאני מעביר); `netProfit` = רווח הסניף כולו (חלקי + חלק השותף). רכש (מחשבים, ציוד) לא נספר.
  * - **רווח למחשב** = רווח ÷ מחשב-חודשים שקולים (Σ ימי זמינות של כל מחשב ÷ ימי החודש) — אותו מכנה של
  *   `lib/laptop-branch-tracking.ts`, כך שתקופה של כמה חודשים מתחשבת בכמה מחשבים היו בכל חודש.
@@ -27,7 +27,6 @@ import {
   loadBranchAccountingRawData,
   type BranchAccountingRawData,
 } from "./branch-accounting-data";
-import { exVat, PROFIT_PER_COMPUTER_TARGET } from "./branch-accounting";
 
 const DAY_MS = 86_400_000;
 
@@ -92,7 +91,6 @@ export interface ReportResult {
   perBranch: (PeriodTotals & { id: string; name: string })[];
   /** הרווח חולק יחסית לימים כי הטווח אינו חודשים שלמים */
   profitIsEstimate: boolean;
-  target: number;
 }
 
 /* ───────────────────────── ימים ───────────────────────── */
@@ -278,8 +276,8 @@ function buildBranchDays(raw: BranchAccountingRawData, branch: Branch, start: nu
         const fin = computeBranchFinancials(branch, raw, m);
         // רווח הסניף כולו = חלקי התפעולי + התוצאה של השותף (הכנסה פחות הוצאה בחלקו)
         f = {
-          mine: exVat(fin.ownerOperatingProfitThisMonth),
-          net: exVat(fin.ownerOperatingProfitThisMonth + fin.balanceThisMonth),
+          mine: fin.ownerOperatingProfitThisMonth,
+          net: fin.ownerOperatingProfitThisMonth + fin.balanceThisMonth,
         };
       }
       cache.set(m, f);
@@ -502,7 +500,6 @@ export async function loadRentalReport(query: ReportQuery): Promise<ReportResult
     trends: computeTrends(totals, previous, series),
     perBranch,
     profitIsEstimate: !wholeMonths,
-    target: PROFIT_PER_COMPUTER_TARGET,
     allStart,
   };
 }

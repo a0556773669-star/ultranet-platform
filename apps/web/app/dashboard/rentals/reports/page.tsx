@@ -74,7 +74,6 @@ export default async function ReportsPage({
 
   const t = report.totals;
   const tiny = report.series.length < 2;
-  const target = report.target;
 
   return (
     <div className="flex flex-col gap-4">
@@ -132,7 +131,7 @@ export default async function ReportsPage({
           <div>
             <h3 className="text-[16px] font-extrabold text-ink">רווחיות</h3>
             <p className="text-[12px] text-muted">
-              אחרי הוצאות הסניפים, נטו בלי מע&quot;מ; בלי רכש (מחשבים וציוד).
+              הכנסות פחות הוצאות הסניפים, בלי רכש (מחשבים וציוד).
               {report.profitIsEstimate && " הטווח אינו חודשים שלמים — הרווח משוער לפי חלוקה לימים."}
             </p>
           </div>
@@ -142,11 +141,7 @@ export default async function ReportsPage({
           <div className="grid grid-cols-2 gap-2 self-start">
             <Stat label="רווח נטו" value={money(t.netProfit)} />
             <Stat label="הרווח שלי" value={money(t.myProfit)} hint="אחרי אחוזי שותף" />
-            <Stat
-              label="נטו למחשב"
-              value={money(t.netPerComputer)}
-              hint={t.netPerComputer !== null && t.netPerComputer >= target ? `מעל היעד (${target} ₪)` : `יעד ${target} ₪`}
-            />
+            <Stat label="נטו למחשב" value={money(t.netPerComputer)} />
             <Stat label="שלי למחשב" value={money(t.myPerComputer)} />
           </div>
           {tiny ? (
@@ -162,7 +157,7 @@ export default async function ReportsPage({
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <h3 className="text-[16px] font-extrabold text-ink">מחזור (הכנסות ברוטו)</h3>
-            <p className="text-[12px] text-muted">מה שנגבה בפועל מהשכרות — כולל מע&quot;מ, לפני הוצאות</p>
+            <p className="text-[12px] text-muted">מה שנגבה בפועל מהשכרות — לפני הוצאות</p>
           </div>
           <TrendBadge trend={report.trends.revenue} unit="pct" />
         </div>
@@ -213,7 +208,6 @@ export default async function ReportsPage({
           </thead>
           <tbody>
             {report.perBranch.map((b) => {
-              const low = b.netPerComputer !== null && b.netPerComputer < target;
               return (
                 <tr key={b.id} className="border-b border-card-border/60 last:border-0">
                   <td className="py-1.5 font-bold text-ink">{b.name}</td>
@@ -221,7 +215,7 @@ export default async function ReportsPage({
                   <td>{money(b.revenue)}</td>
                   <td>{money(b.netProfit)}</td>
                   <td>{money(b.myProfit)}</td>
-                  <td className={low ? "font-bold text-[#dc2626]" : "font-bold text-[#16a34a]"}>{money(b.netPerComputer)}</td>
+                  <td className="font-bold">{money(b.netPerComputer)}</td>
                   <td>{nf.format(b.renters)}</td>
                   <td>{num1(b.avgDays)}</td>
                 </tr>
@@ -229,7 +223,6 @@ export default async function ReportsPage({
             })}
           </tbody>
         </table>
-        <p className="mt-2 text-[11px] text-muted">אדום = מתחת ליעד של {target} ₪ נטו למחשב.</p>
       </section>
     </div>
   );
